@@ -1,0 +1,15 @@
+.git
+.github
+.graphify
+graphify-out
+node_modules
+**/node_modules
+**/.next
+**/__pycache__
+**/*.pyc
+**/.DS_Store
+**/db.sqlite3
+**/.env
+**/.env.local
+**/.env.production
+admin-mobile/node_modules

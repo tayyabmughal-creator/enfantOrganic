@@ -1,0 +1,44 @@
+# System
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.*
+!.env.example
+!.env.production.example
+!backend/.env.example
+!frontend/.env.example
+!frontend/.env.local.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# Django local/runtime
+backend/db.sqlite3
+backend/media/
+backend/staticfiles/
+
+# Node / Next / Expo
+node_modules/
+*/node_modules/
+frontend/.next/
+frontend/.next.*/
+frontend/out/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local assistant/graph cache
+.codex/
+.graphify/
+
+# Build artifacts
+dist/
+build/
+coverage/

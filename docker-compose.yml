@@ -1,0 +1,47 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-enfantorganic}
+      POSTGRES_USER: ${POSTGRES_USER:-enfantorganic}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-enfantorganic}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  backend:
+    build: ./backend
+    env_file:
+      - .env.example
+    environment:
+      POSTGRES_HOST: db
+      DJANGO_DEBUG: "0"
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
+             gunicorn enfant_backend.wsgi:application --bind 0.0.0.0:8000"
+    volumes:
+      - media-data:/app/media
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://127.0.0.1:8000/api}
+        API_INTERNAL_BASE_URL: ${API_INTERNAL_BASE_URL:-http://backend:8000/api}
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://127.0.0.1:8000/api}
+      API_INTERNAL_BASE_URL: ${API_INTERNAL_BASE_URL:-http://backend:8000/api}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  postgres-data:
+  media-data:

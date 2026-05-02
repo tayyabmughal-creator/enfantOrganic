@@ -1,0 +1,260 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { Alert, FlatList, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Notifications from "expo-notifications";
+import { StatusBar } from "expo-status-bar";
+
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api";
+
+const screens = [
+  "Dashboard",
+  "Orders",
+  "Products",
+  "Categories",
+  "Customers",
+  "Promotions",
+  "Reviews",
+  "Reports",
+  "Settings",
+];
+
+const screenEndpoints = {
+  Orders: "/admin/orders/",
+  Products: "/admin/products/",
+  Categories: "/admin/categories/",
+  Customers: "/admin/customers/",
+  Promotions: "/admin/promotions/",
+  Reviews: "/admin/reviews/",
+  Reports: "/admin/moderation/",
+  Settings: "/admin/settings/",
+};
+
+export default function App() {
+  const [activeScreen, setActiveScreen] = useState("Dashboard");
+  const [accessToken, setAccessToken] = useState("");
+  const [login, setLogin] = useState({ username: "", password: "" });
+  const [dashboard, setDashboard] = useState(null);
+  const [screenData, setScreenData] = useState(null);
+  const [pushToken, setPushToken] = useState("");
+
+  const headers = useMemo(
+    () => ({
+      "Content-Type": "application/json",
+      Authorization: accessToken ? `Bearer ${accessToken}` : "",
+    }),
+    [accessToken],
+  );
+
+  useEffect(() => {
+    AsyncStorage.getItem("accessToken").then((token) => {
+      if (token) setAccessToken(token);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    fetch(`${API_BASE_URL}/admin/dashboard/`, { headers })
+      .then((response) => response.json())
+      .then(setDashboard)
+      .catch(() => setDashboard(null));
+  }, [accessToken, headers]);
+
+  useEffect(() => {
+    if (!accessToken || activeScreen === "Dashboard") return;
+    const endpoint = screenEndpoints[activeScreen];
+    if (!endpoint) return;
+    setScreenData(null);
+    fetch(`${API_BASE_URL}${endpoint}`, { headers })
+      .then((response) => response.json())
+      .then(setScreenData)
+      .catch(() => setScreenData({ error: "Unable to load data." }));
+  }, [accessToken, activeScreen, headers]);
+
+  async function signIn() {
+    const response = await fetch(`${API_BASE_URL}/auth/token/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(login),
+    });
+
+    if (!response.ok) {
+      Alert.alert("Login failed", "Check your staff credentials and try again.");
+      return;
+    }
+
+    const data = await response.json();
+    await AsyncStorage.setItem("accessToken", data.access);
+    await AsyncStorage.setItem("refreshToken", data.refresh);
+    setAccessToken(data.access);
+    registerPushToken(data.access);
+  }
+
+  async function registerPushToken(token) {
+    const permission = await Notifications.requestPermissionsAsync();
+    if (!permission.granted) return;
+
+    const expoToken = await Notifications.getExpoPushTokenAsync();
+    setPushToken(expoToken.data);
+    await fetch(`${API_BASE_URL}/notifications/devices/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ token: expoToken.data, platform: Platform.OS === "android" ? "android" : "ios" }),
+    }).catch(() => {});
+  }
+
+  async function signOut() {
+    if (pushToken) {
+      await fetch(`${API_BASE_URL}/notifications/devices/deactivate/`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ token: pushToken }),
+      }).catch(() => {});
+    }
+    await AsyncStorage.multiRemove(["accessToken", "refreshToken"]);
+    setAccessToken("");
+  }
+
+  function renderScreenData() {
+    if (activeScreen === "Dashboard") {
+      return (
+        <>
+          <View style={styles.grid}>
+            {[
+              ["Revenue", dashboard?.revenue ?? "-"],
+              ["Orders", dashboard?.orders ?? "-"],
+              ["Pending", dashboard?.pending_orders ?? "-"],
+              ["Low stock", dashboard?.low_stock ?? "-"],
+            ].map(([label, value]) => (
+              <View style={styles.metric} key={label}>
+                <Text style={styles.metricLabel}>{label}</Text>
+                <Text style={styles.metricValue}>{String(value)}</Text>
+              </View>
+            ))}
+          </View>
+          <Text style={styles.sectionTitle}>Recent orders</Text>
+          {(dashboard?.recent_orders || []).map((order) => (
+            <View style={styles.rowCard} key={order.order_number}>
+              <Text style={styles.rowTitle}>{order.order_number}</Text>
+              <Text style={styles.rowMeta}>{order.customer_name} · {order.grand_total} {order.currency_code}</Text>
+            </View>
+          ))}
+        </>
+      );
+    }
+
+    if (!screenData) {
+      return <Text style={styles.emptyText}>Loading {activeScreen.toLowerCase()}...</Text>;
+    }
+
+    if (screenData.error) {
+      return <Text style={styles.emptyText}>{screenData.error}</Text>;
+    }
+
+    if (!Array.isArray(screenData)) {
+      return (
+        <View style={styles.empty}>
+          {Object.entries(screenData).slice(0, 8).map(([key, value]) => (
+            <Text style={styles.rowMeta} key={key}>{key}: {String(value)}</Text>
+          ))}
+        </View>
+      );
+    }
+
+    if (!screenData.length) {
+      return (
+        <View style={styles.empty}>
+          <Text style={styles.emptyTitle}>No {activeScreen.toLowerCase()} yet</Text>
+          <Text style={styles.emptyText}>When records are created, they will appear here.</Text>
+        </View>
+      );
+    }
+
+    return screenData.slice(0, 25).map((item, index) => {
+      const title = item.order_number || item.name_en || item.code || item.email || item.username || item.product_name || `${activeScreen} item`;
+      const status = item.status || item.payment_status || item.brand || item.customer_name || (item.is_approved !== undefined ? (item.is_approved ? "approved" : "pending") : "Ready");
+      return (
+        <View style={styles.rowCard} key={item.id || item.slug || item.order_number || index}>
+          <Text style={styles.rowTitle}>{title}</Text>
+          <Text style={styles.rowMeta}>Status: {status}</Text>
+        </View>
+      );
+    });
+  }
+
+  if (!accessToken) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <StatusBar style="dark" />
+        <View style={styles.loginCard}>
+          <Text style={styles.kicker}>EnfhantOrganic Admin</Text>
+          <Text style={styles.title}>Welcome back</Text>
+          <TextInput style={styles.input} placeholder="Username" value={login.username} onChangeText={(username) => setLogin({ ...login, username })} />
+          <TextInput style={styles.input} placeholder="Password" secureTextEntry value={login.password} onChangeText={(password) => setLogin({ ...login, password })} />
+          <Pressable style={styles.primaryButton} onPress={signIn}>
+            <Text style={styles.primaryButtonText}>Sign in</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      <StatusBar style="dark" />
+      <View style={styles.header}>
+        <Text style={styles.title}>Admin</Text>
+        <Pressable onPress={signOut}>
+          <Text style={styles.link}>Logout</Text>
+        </Pressable>
+      </View>
+      <FlatList
+        data={screens}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.tabs}
+        renderItem={({ item }) => (
+          <Pressable style={[styles.tab, activeScreen === item && styles.tabActive]} onPress={() => setActiveScreen(item)}>
+            <Text style={[styles.tabText, activeScreen === item && styles.tabTextActive]}>{item}</Text>
+          </Pressable>
+        )}
+        keyExtractor={(item) => item}
+      />
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.kicker}>{activeScreen}</Text>
+        {renderScreenData()}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: "#f7f3ea" },
+  loginCard: { margin: 24, marginTop: 72, padding: 24, borderRadius: 32, backgroundColor: "#fff" },
+  header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  kicker: { color: "#5f7f4f", fontWeight: "700", letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 8 },
+  title: { color: "#191817", fontSize: 30, fontWeight: "800", marginBottom: 18 },
+  input: { backgroundColor: "#fff", borderColor: "#eadfce", borderWidth: 1, borderRadius: 18, padding: 14, marginBottom: 12 },
+  primaryButton: { backgroundColor: "#5f7f4f", padding: 16, borderRadius: 999, alignItems: "center", marginTop: 8 },
+  primaryButtonText: { color: "#fff", fontWeight: "800" },
+  link: { color: "#5f7f4f", fontWeight: "800" },
+  tabs: { paddingHorizontal: 20, gap: 10, paddingVertical: 8 },
+  tab: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 999, backgroundColor: "#fff" },
+  tabActive: { backgroundColor: "#5f7f4f" },
+  tabText: { color: "#191817", fontWeight: "700" },
+  tabTextActive: { color: "#fff" },
+  content: { padding: 20, paddingBottom: 48 },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+  metric: { width: "47%", padding: 18, borderRadius: 24, backgroundColor: "#fff" },
+  metricLabel: { color: "#6d675f", marginBottom: 8 },
+  metricValue: { color: "#191817", fontSize: 26, fontWeight: "800" },
+  empty: { padding: 24, borderRadius: 28, backgroundColor: "#fff" },
+  emptyTitle: { fontSize: 22, fontWeight: "800", color: "#191817", marginBottom: 8 },
+  emptyText: { color: "#6d675f", lineHeight: 22 },
+  sectionTitle: { color: "#191817", fontSize: 18, fontWeight: "800", marginTop: 22, marginBottom: 10 },
+  rowCard: { padding: 16, borderRadius: 22, backgroundColor: "#fff", marginBottom: 10 },
+  rowTitle: { color: "#191817", fontSize: 16, fontWeight: "800", marginBottom: 4 },
+  rowMeta: { color: "#6d675f", lineHeight: 20 },
+});

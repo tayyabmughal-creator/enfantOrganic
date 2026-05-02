@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "EnfhantOrganic Admin",
+    "slug": "enfhantorganic-admin",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "enfhantadmin",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.enfhantorganic.admin"
+    },
+    "android": {
+      "package": "com.enfhantorganic.admin"
+    },
+    "plugins": [
+      "expo-notifications"
+    ]
+  }
+}

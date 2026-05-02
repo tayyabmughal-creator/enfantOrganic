@@ -1,0 +1,7 @@
+@import "./styles/tokens.css";
+@import "./styles/header.css";
+@import "./styles/home.css";
+@import "./styles/catalog-product.css";
+@import "./styles/overlays.css";
+@import "./styles/checkout-order.css";
+@import "./styles/admin-panel.css";
