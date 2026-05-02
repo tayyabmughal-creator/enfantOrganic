@@ -43,7 +43,7 @@ The app is a native Expo shell, not a WebView. It includes staff login, dashboar
 - `.env.production.example` documents production deployment variables.
 - `docker-compose.yml` runs PostgreSQL, Django/Gunicorn, and Next.js for local Docker usage.
 - `docker-compose.prod.yml` runs PostgreSQL, Django/Gunicorn, Next.js, and Nginx for VPS production usage.
-- `deploy/nginx/default.conf` proxies `/api/`, `/admin/`, `/static/`, and `/media/` to the correct service.
+- `deploy/nginx/default.conf` proxies `/api/`, `/django-admin/`, `/static/`, and `/media/` to the correct service.
 - `backend/Dockerfile` and `frontend/Dockerfile` build production containers.
 - `.github/workflows/ci.yml` runs backend checks and frontend builds on PRs.
 - `.github/workflows/deploy-hostinger.yml` deploys the Docker stack to a Hostinger VPS over SSH.
