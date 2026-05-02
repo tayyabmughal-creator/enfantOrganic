@@ -204,8 +204,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L1",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_productpriceinline",
@@ -213,8 +213,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L31",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_regionadmin",
@@ -222,8 +222,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L37",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_sitesettingsadmin",
@@ -231,8 +231,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L55",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_heropromocardadmin",
@@ -240,8 +240,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L60",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_categoryadmin",
@@ -249,8 +249,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L65",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_tagadmin",
@@ -258,8 +258,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L71",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_productadmin",
@@ -267,8 +267,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L77",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_testimonialadmin",
@@ -276,8 +276,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L197",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_instagrampostadmin",
@@ -285,8 +285,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L202",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_blogpostadmin",
@@ -294,8 +294,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L207",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_orderiteminline",
@@ -303,8 +303,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L212",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_orderiteminline_has_add_permission",
@@ -312,8 +312,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L225",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_mark_confirmed",
@@ -321,8 +321,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L230",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_mark_preparing",
@@ -330,8 +330,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L235",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_mark_out_for_delivery",
@@ -339,8 +339,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L240",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_mark_delivered",
@@ -348,8 +348,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L245",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_mark_cancelled",
@@ -357,8 +357,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L250",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_mark_paid",
@@ -366,8 +366,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L255",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_paymenttransactioninline",
@@ -375,8 +375,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L259",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_paymenttransactioninline_has_add_permission",
@@ -384,8 +384,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L273",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_orderadmin",
@@ -393,8 +393,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L278",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_couponadmin",
@@ -402,8 +402,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L409",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_customeraddressadmin",
@@ -411,8 +411,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L433",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_reviewadmin",
@@ -420,8 +420,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L440",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_pushdeviceadmin",
@@ -429,8 +429,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L455",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_notificationlogadmin",
@@ -438,8 +438,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L462",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_wishlistitemadmin",
@@ -447,8 +447,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L470",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_newslettersubscriptionadmin",
@@ -456,8 +456,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L476",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "admin_paymenttransactionadmin",
@@ -465,8 +465,8 @@
       "file_type": "code",
       "source_file": "backend/store/admin.py",
       "source_location": "L483",
-      "community": 5,
-      "community_name": "Community 5"
+      "community": 4,
+      "community_name": "Community 4"
     },
     {
       "id": "backend_store_api_serializers_init_py",
@@ -483,8 +483,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/account.py",
       "source_location": "L1",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "account_registerserializer",
@@ -492,8 +492,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/account.py",
       "source_location": "L15",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "account_meta",
@@ -501,8 +501,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/account.py",
       "source_location": "L19",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "account_registerserializer_create",
@@ -510,8 +510,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/account.py",
       "source_location": "L23",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "account_registerserializer_get_tokens",
@@ -519,8 +519,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/account.py",
       "source_location": "L28",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "account_profileserializer",
@@ -528,8 +528,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/account.py",
       "source_location": "L36",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "account_customeraddressserializer",
@@ -537,8 +537,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/account.py",
       "source_location": "L43",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "account_reviewcreateserializer",
@@ -546,8 +546,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/account.py",
       "source_location": "L61",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "account_pushdeviceserializer",
@@ -555,8 +555,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/account.py",
       "source_location": "L82",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "account_passwordresetrequestserializer",
@@ -564,8 +564,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/account.py",
       "source_location": "L89",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "account_passwordresetrequestserializer_save",
@@ -573,8 +573,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/account.py",
       "source_location": "L92",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "account_passwordresetconfirmserializer",
@@ -582,8 +582,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/account.py",
       "source_location": "L106",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "account_passwordresetconfirmserializer_validate",
@@ -591,8 +591,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/account.py",
       "source_location": "L111",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "account_passwordresetconfirmserializer_save",
@@ -600,8 +600,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/account.py",
       "source_location": "L124",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "account_wishlistitemserializer",
@@ -609,8 +609,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/account.py",
       "source_location": "L131",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "account_wishlistitemserializer_validate_product_slug",
@@ -618,8 +618,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/account.py",
       "source_location": "L140",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "account_wishlistitemserializer_create",
@@ -627,8 +627,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/account.py",
       "source_location": "L145",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "account_newslettersubscriptionserializer",
@@ -636,8 +636,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/account.py",
       "source_location": "L154",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "account_newslettersubscriptionserializer_create",
@@ -645,8 +645,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/account.py",
       "source_location": "L162",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "backend_store_api_serializers_admin_ops_py",
@@ -906,8 +906,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/catalog.py",
       "source_location": "L90",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 3,
+      "community_name": "Community 3"
     },
     {
       "id": "catalog_tagserializer_get_name",
@@ -915,8 +915,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/catalog.py",
       "source_location": "L97",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 3,
+      "community_name": "Community 3"
     },
     {
       "id": "catalog_productcardserializer",
@@ -924,8 +924,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/catalog.py",
       "source_location": "L101",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "catalog_productcardserializer_get_image",
@@ -933,8 +933,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/catalog.py",
       "source_location": "L133",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "catalog_productcardserializer_get_hover_image",
@@ -942,8 +942,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/catalog.py",
       "source_location": "L137",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "catalog_productcardserializer_find_price",
@@ -951,8 +951,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/catalog.py",
       "source_location": "L141",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "catalog_productcardserializer_get_name",
@@ -960,8 +960,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/catalog.py",
       "source_location": "L149",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "catalog_productcardserializer_get_vendor",
@@ -969,8 +969,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/catalog.py",
       "source_location": "L152",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "catalog_productcardserializer_get_short_description",
@@ -978,8 +978,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/catalog.py",
       "source_location": "L155",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "catalog_productcardserializer_get_badge",
@@ -987,8 +987,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/catalog.py",
       "source_location": "L158",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "catalog_productcardserializer_get_category",
@@ -1005,8 +1005,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/catalog.py",
       "source_location": "L165",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 3,
+      "community_name": "Community 3"
     },
     {
       "id": "catalog_productcardserializer_get_pricing",
@@ -1014,8 +1014,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/catalog.py",
       "source_location": "L168",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "catalog_productcardserializer_get_option_groups",
@@ -1023,8 +1023,8 @@
       "file_type": "code",
       "source_file": "backend/store/api_serializers/catalog.py",
       "source_location": "L184",
-      "community": 4,
-      "community_name": "Community 4"
+      "community": 5,
+      "community_name": "Community 5"
     },
     {
       "id": "catalog_productdetailserializer",
@@ -4190,7 +4190,7 @@
       "label": "request()",
       "file_type": "code",
       "source_file": "frontend/lib/api.js",
-      "source_location": "L4",
+      "source_location": "L5",
       "community": 13,
       "community_name": "Community 13"
     },
@@ -4199,7 +4199,7 @@
       "label": "getNavigationData()",
       "file_type": "code",
       "source_file": "frontend/lib/api.js",
-      "source_location": "L21",
+      "source_location": "L22",
       "community": 13,
       "community_name": "Community 13"
     },
@@ -4208,7 +4208,7 @@
       "label": "getHomePageData()",
       "file_type": "code",
       "source_file": "frontend/lib/api.js",
-      "source_location": "L25",
+      "source_location": "L26",
       "community": 13,
       "community_name": "Community 13"
     },
@@ -4217,7 +4217,7 @@
       "label": "getCatalogData()",
       "file_type": "code",
       "source_file": "frontend/lib/api.js",
-      "source_location": "L29",
+      "source_location": "L30",
       "community": 13,
       "community_name": "Community 13"
     },
@@ -4226,7 +4226,7 @@
       "label": "getProductBySlug()",
       "file_type": "code",
       "source_file": "frontend/lib/api.js",
-      "source_location": "L33",
+      "source_location": "L34",
       "community": 13,
       "community_name": "Community 13"
     },
@@ -9992,7 +9992,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "frontend/lib/api.js",
-      "source_location": "L4",
+      "source_location": "L5",
       "weight": 1,
       "_src": "frontend_lib_api_js",
       "_tgt": "api_request",
@@ -10004,7 +10004,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "frontend/lib/api.js",
-      "source_location": "L21",
+      "source_location": "L22",
       "weight": 1,
       "_src": "frontend_lib_api_js",
       "_tgt": "api_getnavigationdata",
@@ -10016,7 +10016,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "frontend/lib/api.js",
-      "source_location": "L25",
+      "source_location": "L26",
       "weight": 1,
       "_src": "frontend_lib_api_js",
       "_tgt": "api_gethomepagedata",
@@ -10028,7 +10028,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "frontend/lib/api.js",
-      "source_location": "L29",
+      "source_location": "L30",
       "weight": 1,
       "_src": "frontend_lib_api_js",
       "_tgt": "api_getcatalogdata",
@@ -10040,7 +10040,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "frontend/lib/api.js",
-      "source_location": "L33",
+      "source_location": "L34",
       "weight": 1,
       "_src": "frontend_lib_api_js",
       "_tgt": "api_getproductbyslug",
@@ -10052,7 +10052,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "frontend/lib/api.js",
-      "source_location": "L22",
+      "source_location": "L23",
       "weight": 1,
       "_src": "api_getnavigationdata",
       "_tgt": "api_request",
@@ -10064,7 +10064,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "frontend/lib/api.js",
-      "source_location": "L26",
+      "source_location": "L27",
       "weight": 1,
       "_src": "api_gethomepagedata",
       "_tgt": "api_request",
@@ -10076,7 +10076,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "frontend/lib/api.js",
-      "source_location": "L30",
+      "source_location": "L31",
       "weight": 1,
       "_src": "api_getcatalogdata",
       "_tgt": "api_request",
@@ -10088,7 +10088,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "frontend/lib/api.js",
-      "source_location": "L34",
+      "source_location": "L35",
       "weight": 1,
       "_src": "api_getproductbyslug",
       "_tgt": "api_request",

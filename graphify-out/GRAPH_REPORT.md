@@ -1,7 +1,7 @@
-# Graph Report - .  (2026-05-01)
+# Graph Report - .  (2026-05-02)
 
 ## Corpus Check
-- 108 files · ~107,045 words
+- 108 files · ~107,214 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -54,16 +54,16 @@ Cohesion: 0.07
 Nodes (19): AddressListCreateView, CancelOrderView, CustomerOrderListView, NewsletterSubscriptionView, PasswordResetConfirmView, PasswordResetRequestView, ProfileView, PushDeviceDeactivateView (+11 more)
 
 ### Community 3 - "Community 3"
-Cohesion: 0.06
-Nodes (12): BlogPostSerializer, CategorySerializer, HeroPromoCardSerializer, InstagramPostSerializer, ProductDetailSerializer, RegionSerializer, TestimonialSerializer, GuestOrderLookupSerializer (+4 more)
+Cohesion: 0.05
+Nodes (13): BlogPostSerializer, CategorySerializer, HeroPromoCardSerializer, InstagramPostSerializer, ProductDetailSerializer, RegionSerializer, TagSerializer, TestimonialSerializer (+5 more)
 
 ### Community 4 - "Community 4"
-Cohesion: 0.08
-Nodes (12): CustomerAddressSerializer, Meta, NewsletterSubscriptionSerializer, PasswordResetConfirmSerializer, PasswordResetRequestSerializer, ProfileSerializer, PushDeviceSerializer, RegisterSerializer (+4 more)
-
-### Community 5 - "Community 5"
 Cohesion: 0.07
 Nodes (21): BlogPostAdmin, CategoryAdmin, CouponAdmin, CustomerAddressAdmin, HeroPromoCardAdmin, InstagramPostAdmin, NewsletterSubscriptionAdmin, NotificationLogAdmin (+13 more)
+
+### Community 5 - "Community 5"
+Cohesion: 0.09
+Nodes (11): CustomerAddressSerializer, Meta, NewsletterSubscriptionSerializer, PasswordResetConfirmSerializer, PasswordResetRequestSerializer, ProfileSerializer, PushDeviceSerializer, RegisterSerializer (+3 more)
 
 ### Community 6 - "Community 6"
 Cohesion: 0.17
