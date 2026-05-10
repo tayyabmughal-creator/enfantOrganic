@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 
 import Icon from "@/components/icons/Icon";
@@ -9,6 +10,7 @@ import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
 export default function ProductCard({ locale, product, region }) {
   const { addItem, openCart, openQuickView } = useStore();
   const t = uiText(locale);
+  const [wishToast, setWishToast] = useState(false);
   const hasOptions = (product.option_groups || []).some((group) => group.values.length > 1);
   const rating = Number(product.rating || 0);
   const reviewLabel = locale === "ar" ? "تقييم" : "reviews";
@@ -58,9 +60,17 @@ export default function ProductCard({ locale, product, region }) {
           type="button"
           className="wishlist-button product-card-wishlist"
           aria-label={wishlistLabel}
-          onClick={() => openQuickView({ ...product, locale, region })}
+          onClick={() => {
+            setWishToast(true);
+            setTimeout(() => setWishToast(false), 2200);
+          }}
         >
           <Icon name="heart" size={17} />
+          {wishToast ? (
+            <span className="wishlist-toast">
+              {locale === "ar" ? "سجّل دخولك لحفظ المنتجات" : "Sign in to save items"}
+            </span>
+          ) : null}
         </button>
       </div>
       <div className="product-card-body">
@@ -68,21 +78,23 @@ export default function ProductCard({ locale, product, region }) {
         <Link href={buildStorePath(locale, `/product/${product.slug}`, region)}>
           <h4>{product.name}</h4>
         </Link>
-        {product.short_description ? (
-          <p className="product-card-description">{product.short_description}</p>
-        ) : null}
-        <div className="product-reviews">
-          <span className="review-stars small">★★★★★</span>
-          {rating ? <strong>{rating.toFixed(1).replace(".0", "")}</strong> : null}
-          <span>({product.review_count} {reviewLabel})</span>
+        <p className="product-card-description">{product.short_description || ""}</p>
+        <div className="product-card-meta">
+          {product.review_count > 0 ? (
+            <div className="product-reviews">
+              <span className="review-stars small">{"★".repeat(Math.round(rating || 5))}</span>
+              {rating ? <strong>{rating.toFixed(1).replace(".0", "")}</strong> : null}
+              <span>({product.review_count} {reviewLabel})</span>
+            </div>
+          ) : null}
+          {featurePills.length ? (
+            <div className="product-pill-row">
+              {featurePills.map((pill) => (
+                <span key={pill} className="product-feature-pill">{pill}</span>
+              ))}
+            </div>
+          ) : null}
         </div>
-        {featurePills.length ? (
-          <div className="product-pill-row">
-            {featurePills.map((pill) => (
-              <span key={pill} className="product-feature-pill">{pill}</span>
-            ))}
-          </div>
-        ) : null}
         <div className="product-price-panel">
           <div className="product-pricing">
             <strong>{formatMoney(product.pricing, locale)}</strong>

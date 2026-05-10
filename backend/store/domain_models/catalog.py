@@ -204,6 +204,8 @@ class BlogPost(OrderedModel):
     title_ar = models.CharField(max_length=255, default="")
     excerpt_en = models.TextField(default="")
     excerpt_ar = models.TextField(default="")
+    body_en = models.TextField(default="")
+    body_ar = models.TextField(default="")
     image = models.URLField(max_length=500, default="")
     image_file = models.ImageField(upload_to="blog/", blank=True, null=True)
     published_at = models.DateField()

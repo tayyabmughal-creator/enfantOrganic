@@ -375,6 +375,10 @@
   display: none;
 }
 
+.nav-mobile-footer {
+  display: none;
+}
+
 @media (max-width: 1120px) {
   .brand-copy {
     display: none;
@@ -382,5 +386,17 @@
 
   .header-main {
     grid-template-columns: auto 1fr auto;
+  }
+}
+
+@media (max-width: 900px) {
+  .nav-mobile-footer {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding-top: 14px;
+    margin-top: 6px;
+    border-top: 1px solid var(--line);
   }
 }

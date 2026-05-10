@@ -34,3 +34,11 @@ export function getCatalogData(locale, region) {
 export function getProductBySlug(slug, locale, region) {
   return request(`/products/${slug}/`, locale, region);
 }
+
+export function getBlogList(locale, region) {
+  return request("/blog/", locale, region);
+}
+
+export function getBlogBySlug(slug, locale, region) {
+  return request(`/blog/${slug}/`, locale, region);
+}

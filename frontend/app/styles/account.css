@@ -1,0 +1,339 @@
+/* ── Search modal ────────────────────────────────────────────── */
+.search-modal {
+  position: fixed;
+  top: 0;
+  inset-inline-start: 0;
+  inset-inline-end: 0;
+  z-index: 60;
+  padding: clamp(14px, 2vw, 22px) clamp(16px, 3vw, 32px);
+  background: rgba(248, 249, 244, 0.98);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 18px 40px rgba(25, 24, 23, 0.1);
+  animation: slide-down 0.18s ease;
+}
+
+@keyframes slide-down {
+  from { transform: translateY(-100%); opacity: 0; }
+  to   { transform: translateY(0);     opacity: 1; }
+}
+
+.search-modal-form {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 680px;
+  margin-inline: auto;
+}
+
+.search-modal-icon {
+  flex: 0 0 auto;
+  color: var(--brand-dark);
+}
+
+.search-modal-input {
+  flex: 1;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  font-size: 1rem;
+  background: white;
+  color: var(--text);
+}
+
+.search-modal-input:focus {
+  border-color: var(--brand);
+  box-shadow: var(--focus-ring);
+  outline: none;
+}
+
+.search-modal-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+/* ── Account page ────────────────────────────────────────────── */
+.account-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 40vh;
+}
+
+.account-layout {
+  max-width: 760px;
+  margin-inline: auto;
+  display: grid;
+  gap: clamp(24px, 3vw, 36px);
+}
+
+.account-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.account-title {
+  margin: 0;
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  letter-spacing: -0.04em;
+}
+
+.account-sub {
+  margin: 4px 0 0;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+
+.account-section h2 {
+  margin: 0 0 16px;
+  font-size: 1.15rem;
+  font-weight: 750;
+}
+
+.account-empty {
+  color: var(--text-soft);
+  margin: 0;
+}
+
+.order-list {
+  display: grid;
+  gap: 10px;
+}
+
+.order-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: white;
+  box-shadow: var(--shadow-soft);
+}
+
+.order-row-meta {
+  display: grid;
+  gap: 3px;
+}
+
+.order-number {
+  font-size: 0.9rem;
+  font-family: monospace;
+  letter-spacing: 0.03em;
+}
+
+.order-date {
+  font-size: 0.78rem;
+  color: var(--text-soft);
+}
+
+.order-row-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.order-status-badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: capitalize;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  border: 1px solid var(--line);
+}
+
+.order-status-badge.status-confirmed,
+.order-status-badge.payment-paid {
+  background: #eaf7ee;
+  color: var(--success);
+  border-color: rgba(31, 122, 77, 0.2);
+}
+
+.order-status-badge.status-cancelled,
+.order-status-badge.payment-failed {
+  background: #fff0ef;
+  color: var(--danger);
+  border-color: rgba(180, 35, 24, 0.18);
+}
+
+.order-total {
+  font-size: 0.96rem;
+  white-space: nowrap;
+}
+
+.order-view-link {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--brand-dark);
+  border-bottom: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+/* ── Auth card (login / register) ────────────────────────────── */
+.auth-card {
+  max-width: 440px;
+  margin: clamp(32px, 6vw, 64px) auto;
+  padding: clamp(28px, 4vw, 44px);
+  border-radius: var(--radius-2xl);
+  border: 1px solid var(--line);
+  background: white;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 22px;
+}
+
+.auth-tabs {
+  display: flex;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  padding: 4px;
+  gap: 4px;
+}
+
+.auth-tab {
+  flex: 1;
+  min-height: 40px;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+  color: var(--text-soft);
+  font-weight: 700;
+  font-size: 0.9rem;
+  transition: all 180ms ease;
+}
+
+.auth-tab.is-active {
+  background: white;
+  color: var(--text);
+  box-shadow: var(--shadow-soft);
+}
+
+.auth-form {
+  display: grid;
+  gap: 14px;
+}
+
+.auth-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.auth-form input {
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  font-size: 0.96rem;
+  color: var(--text);
+}
+
+.auth-form input:focus {
+  border-color: var(--brand);
+  box-shadow: var(--focus-ring);
+  outline: none;
+  background: white;
+}
+
+.full-width {
+  width: 100%;
+}
+
+/* ── Static pages ────────────────────────────────────────────── */
+.static-page-layout {
+  max-width: 760px;
+  margin-inline: auto;
+  display: grid;
+  gap: clamp(28px, 4vw, 42px);
+}
+
+.static-page-header h1 {
+  margin: 0;
+  font-size: clamp(1.8rem, 3.5vw, 2.8rem);
+  letter-spacing: -0.04em;
+}
+
+.static-page-body {
+  display: grid;
+  gap: 28px;
+}
+
+.static-section {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.static-section:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.static-section h2 {
+  margin: 0;
+  font-size: 1.08rem;
+  font-weight: 750;
+  color: var(--text);
+}
+
+.static-section p {
+  margin: 0;
+  color: var(--text-soft);
+  line-height: 1.75;
+}
+
+.static-page-footer {
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.whatsapp-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 14px;
+  background: #25D366;
+  color: white;
+  font-weight: 800;
+  font-size: 0.92rem;
+  box-shadow: 0 8px 20px rgba(37, 211, 102, 0.25);
+  transition: background 180ms ease, transform 180ms ease;
+}
+
+.whatsapp-cta:hover {
+  background: #1eb85a;
+  transform: translateY(-2px);
+}
+
+@media (max-width: 640px) {
+  .order-row {
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    row-gap: 8px;
+  }
+
+  .order-total {
+    grid-column: 1;
+  }
+
+  .order-view-link {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .order-row-badges {
+    grid-column: 1 / -1;
+  }
+}

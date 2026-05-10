@@ -1,5 +1,7 @@
 from django.urls import path
 
+from .api_views.payments import PaymentInitiateView, PaymobWebhookView, PaymentStatusView
+from .api_views.storefront import BlogDetailView, BlogListView
 from .views import (
     AddressListCreateView,
     AdminCategoryDetailView,
@@ -50,7 +52,12 @@ urlpatterns = [
     path("catalog/", CatalogPageView.as_view(), name="catalog"),
     path("products/", ProductListView.as_view(), name="products"),
     path("products/<slug:slug>/", ProductDetailView.as_view(), name="product-detail"),
+    path("blog/", BlogListView.as_view(), name="blog-list"),
+    path("blog/<slug:slug>/", BlogDetailView.as_view(), name="blog-detail"),
     path("checkout/", CheckoutView.as_view(), name="checkout"),
+    path("payments/initiate/", PaymentInitiateView.as_view(), name="payment-initiate"),
+    path("payments/webhook/", PaymobWebhookView.as_view(), name="payment-webhook"),
+    path("payments/status/<str:order_number>/", PaymentStatusView.as_view(), name="payment-status"),
     path("coupons/validate/", CouponValidationView.as_view(), name="coupon-validate"),
     path("orders/lookup/", GuestOrderLookupView.as_view(), name="guest-order-lookup"),
     path("orders/<str:order_number>/", OrderDetailView.as_view(), name="order-detail"),

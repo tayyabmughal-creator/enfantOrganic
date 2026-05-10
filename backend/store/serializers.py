@@ -1,4 +1,5 @@
 from .api_serializers import (
+    BlogPostDetailSerializer,
     BlogPostSerializer,
     CategorySerializer,
     CheckoutCreateSerializer,
@@ -32,6 +33,7 @@ from .api_serializers import (
 )
 
 __all__ = [
+    "BlogPostDetailSerializer",
     "BlogPostSerializer",
     "CategorySerializer",
     "CheckoutCreateSerializer",

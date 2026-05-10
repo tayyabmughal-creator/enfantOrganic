@@ -11,6 +11,7 @@ from ..models import (
     Testimonial,
 )
 from ..serializers import (
+    BlogPostDetailSerializer,
     BlogPostSerializer,
     CategorySerializer,
     HeroPromoCardSerializer,
@@ -171,6 +172,26 @@ class ProductDetailView(StorefrontContextMixin, APIView):
             "related_products": ProductCardSerializer(related, many=True, context=context).data,
         }
         return Response(payload)
+
+
+class BlogListView(StorefrontContextMixin, APIView):
+    serializer_class = BlogPostSerializer
+
+    def get(self, request):
+        context = self.get_serializer_context()
+        posts = BlogPost.objects.all()
+        return Response(BlogPostSerializer(posts, many=True, context=context).data)
+
+
+class BlogDetailView(StorefrontContextMixin, APIView):
+    serializer_class = BlogPostDetailSerializer
+
+    def get(self, request, slug):
+        context = self.get_serializer_context()
+        post = BlogPost.objects.filter(slug=slug).first()
+        if not post:
+            return Response({"detail": "Not found."}, status=404)
+        return Response(BlogPostDetailSerializer(post, context=context).data)
 
 
 def apply_catalog_filters(queryset, request, region):

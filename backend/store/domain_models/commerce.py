@@ -198,6 +198,7 @@ class PaymentTransaction(models.Model):
     PROVIDER_WHATSAPP = "whatsapp"
     PROVIDER_BANK_TRANSFER = "bank_transfer"
     PROVIDER_ONLINE = "online"
+    PROVIDER_PAYMOB = "paymob"
     PROVIDER_STRIPE = "stripe"
     PROVIDER_TAP = "tap"
     PROVIDER_PAYTABS = "paytabs"
@@ -209,6 +210,7 @@ class PaymentTransaction(models.Model):
         (PROVIDER_WHATSAPP, "WhatsApp confirmation"),
         (PROVIDER_BANK_TRANSFER, "Bank transfer"),
         (PROVIDER_ONLINE, "Online payment placeholder"),
+        (PROVIDER_PAYMOB, "Paymob"),
         (PROVIDER_STRIPE, "Stripe"),
         (PROVIDER_TAP, "Tap Payments"),
         (PROVIDER_PAYTABS, "PayTabs"),

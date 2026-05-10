@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import ProductCard from "@/components/cards/ProductCard";
 import TestimonialCard from "@/components/cards/TestimonialCard";
+import Icon from "@/components/icons/Icon";
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import CategoryCarousel from "@/components/store/CategoryCarousel";
+import NewsletterForm from "@/components/store/NewsletterForm";
+import ProductRail from "@/components/store/ProductRail";
 import { getHomePageData, getNavigationData } from "@/lib/api";
 import { buildStorePath, normalizeLocale, normalizeRegion, uiText } from "@/lib/storefront";
 
@@ -24,26 +26,139 @@ export default async function LocalizedHomePage({ params, searchParams }) {
   ]);
 
   const t = uiText(locale);
+  const isAr = locale === "ar";
+
+  const OFFER_LABELS = {
+    gift:     isAr ? "عرض حصري"       : "Exclusive Offer",
+    soft:     isAr ? "الأكثر مبيعاً"  : "Best Seller",
+    sets:     isAr ? "مجموعات مختارة" : "Curated Sets",
+    moisture: isAr ? "منتج مميز"      : "Top Rated",
+    choice:   isAr ? "اختيار الأمهات" : "Mom's Favourite",
+    relax:    isAr ? "روتين الليل"    : "Night Routine",
+    new:      isAr ? "وصل حديثاً"     : "New Arrival",
+    sun:      isAr ? "حماية يومية"    : "Daily Care",
+  };
+
+  const heroPrimary   = home.hero_cards.find((c) => c.size === "large");
+  const heroSecondary = home.hero_cards.filter((c) => c.size === "large").slice(1)[0];
+  const heroChips     = home.hero_cards.filter((c) => c.size !== "large");
 
   return (
     <StorefrontShell locale={locale} navigation={navigation}>
       <section className="section container">
-        <div className="hero-grid">
-          {home.hero_cards.map((card, index) => (
-            <Link
-              key={`${card.title}-${index}`}
-              href={buildStorePath(locale, card.href || "/collections", region)}
-              className={`hero-card hero-card-${card.size} accent-${card.accent}`}
-            >
-              <img src={card.image} alt={card.title} />
-              <div className="hero-card-overlay" />
-              <div className="hero-card-copy">
-                <h2>{card.title}</h2>
-                <p>{card.subtitle}</p>
-                {card.cta ? <span className="hero-card-cta">{card.cta}</span> : null}
-              </div>
-            </Link>
-          ))}
+        <div className="offers-showcase">
+
+          <div className="offers-main">
+            {heroPrimary ? (
+              <Link
+                href={buildStorePath(locale, heroPrimary.href || "/collections", region)}
+                className="offer-primary"
+              >
+                <img
+                  src={heroPrimary.image}
+                  alt={heroPrimary.title}
+                  className="offer-primary-img"
+                  loading="eager"
+                />
+                <div className="offer-copy">
+                  <span className="offer-eyebrow">
+                    {OFFER_LABELS[heroPrimary.accent] || "Featured"}
+                  </span>
+                  <h2>{heroPrimary.title}</h2>
+                  <p>{heroPrimary.subtitle}</p>
+                  {heroPrimary.cta ? (
+                    <span className="offer-cta-pill">{heroPrimary.cta}</span>
+                  ) : null}
+                </div>
+              </Link>
+            ) : null}
+
+            {heroSecondary ? (
+              <Link
+                href={buildStorePath(locale, heroSecondary.href || "/collections", region)}
+                className="offer-secondary"
+              >
+                <img
+                  src={heroSecondary.image}
+                  alt={heroSecondary.title}
+                  className="offer-secondary-img"
+                  loading="eager"
+                />
+                <div className="offer-secondary-copy">
+                  <span className="offer-secondary-eyebrow">
+                    {OFFER_LABELS[heroSecondary.accent] || "Featured"}
+                  </span>
+                  <h3>{heroSecondary.title}</h3>
+                  <p>{heroSecondary.subtitle}</p>
+                  {heroSecondary.cta ? (
+                    <span className="offer-secondary-cta">{heroSecondary.cta}</span>
+                  ) : null}
+                </div>
+              </Link>
+            ) : null}
+          </div>
+
+          {heroChips.length > 0 ? (
+            <div className="offers-grid">
+              {heroChips.map((card) => (
+                <Link
+                  key={card.title}
+                  href={buildStorePath(locale, card.href || "/collections", region)}
+                  className="offer-tile"
+                >
+                  <div className="offer-tile-img">
+                    <img src={card.image} alt={card.title} loading="lazy" />
+                  </div>
+                  <div className="offer-tile-body">
+                    <span className="offer-tile-eyebrow">
+                      {OFFER_LABELS[card.accent] || ""}
+                    </span>
+                    <h4>{card.title}</h4>
+                    {card.subtitle ? (
+                      <p className="offer-tile-sub">{card.subtitle}</p>
+                    ) : null}
+                    {card.cta ? (
+                      <span className="offer-tile-cta">{card.cta}</span>
+                    ) : null}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : null}
+
+        </div>
+      </section>
+
+      <section className="section container">
+        <div className="trust-strip">
+          <div className="trust-item">
+            <div className="trust-icon-wrap"><Icon name="leaf" size={22} /></div>
+            <div className="trust-text">
+              <strong>{locale === "ar" ? "مكونات طبيعية" : "Natural Ingredients"}</strong>
+              <span>{locale === "ar" ? "خالية من المواد الكيميائية الضارة" : "Free from harmful chemicals"}</span>
+            </div>
+          </div>
+          <div className="trust-item">
+            <div className="trust-icon-wrap"><Icon name="shield" size={22} /></div>
+            <div className="trust-text">
+              <strong>{locale === "ar" ? "آمن للأطفال" : "Safe for Babies"}</strong>
+              <span>{locale === "ar" ? "معتمد ومختبر طبيًا" : "Certified & dermatologically tested"}</span>
+            </div>
+          </div>
+          <div className="trust-item">
+            <div className="trust-icon-wrap"><Icon name="truck" size={22} /></div>
+            <div className="trust-text">
+              <strong>{t.freeShipping}</strong>
+              <span>{locale === "ar" ? "على جميع الطلبات" : "On all orders"}</span>
+            </div>
+          </div>
+          <div className="trust-item">
+            <div className="trust-icon-wrap"><Icon name="check" size={22} /></div>
+            <div className="trust-text">
+              <strong>{t.originalProducts}</strong>
+              <span>{locale === "ar" ? "ضمان الجودة 100%" : "100% quality guaranteed"}</span>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -74,16 +189,7 @@ export default async function LocalizedHomePage({ params, searchParams }) {
               {t.viewAll}
             </Link>
           </div>
-          <div className="product-rail">
-            {section.products.map((product) => (
-              <ProductCard
-                key={product.slug}
-                locale={locale}
-                product={product}
-                region={region}
-              />
-            ))}
-          </div>
+          <ProductRail products={section.products} locale={locale} region={region} />
         </section>
       ))}
 
@@ -125,13 +231,13 @@ export default async function LocalizedHomePage({ params, searchParams }) {
           <div>
             <h3>{home.blog.title}</h3>
           </div>
-          <Link href={buildStorePath(locale, "/collections", region)} className="section-link">
+          <Link href={buildStorePath(locale, "/blog", region)} className="section-link">
             {home.blog.cta}
           </Link>
         </div>
         <div className="blog-grid">
           {home.blog.posts.map((post) => (
-            <article key={post.slug} className="blog-card">
+            <Link key={post.slug} href={buildStorePath(locale, `/blog/${post.slug}`, region)} className="blog-card">
               <div className="blog-card-image">
                 <img src={post.image} alt={post.title} loading="lazy" />
               </div>
@@ -140,7 +246,7 @@ export default async function LocalizedHomePage({ params, searchParams }) {
                 <h4>{post.title}</h4>
                 <p>{post.excerpt}</p>
               </div>
-            </article>
+            </Link>
           ))}
         </div>
       </section>
@@ -151,10 +257,12 @@ export default async function LocalizedHomePage({ params, searchParams }) {
             <h3>{home.newsletter.title}</h3>
             <p>{home.newsletter.subtitle}</p>
           </div>
-          <form className="newsletter-form">
-            <input type="email" placeholder={home.newsletter.placeholder || t.newsletterPlaceholder} />
-            <button type="submit">{home.newsletter.cta}</button>
-          </form>
+          <NewsletterForm
+            placeholder={home.newsletter.placeholder || t.newsletterPlaceholder}
+            cta={home.newsletter.cta}
+            locale={locale}
+            region={region}
+          />
         </div>
       </section>
     </StorefrontShell>

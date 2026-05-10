@@ -30,6 +30,8 @@ function HeaderInner({ locale, navigation }) {
   const { itemCount, openCart } = useStore();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [isLocalePending, startLocaleTransition] = useTransition();
   const [isRegionPending, startRegionTransition] = useTransition();
 
@@ -116,7 +118,7 @@ function HeaderInner({ locale, navigation }) {
                 {navigation.menus.product_categories.map((category) => (
                   <Link
                     key={category.slug}
-                    href={buildStorePath(locale, "/collections", region)}
+                    href={`${buildStorePath(locale, "/collections", region)}&category=${category.slug}`}
                     className="dropdown-link dropdown-link-media"
                   >
                     <span className="dropdown-link-thumb">
@@ -163,6 +165,34 @@ function HeaderInner({ locale, navigation }) {
           <Link href={buildStorePath(locale, "/track-order", region)} className="nav-link">
             {locale === "en" ? "Track Order" : "تتبع الطلب"}
           </Link>
+
+          <div className="nav-mobile-footer">
+            <label className="control-select language-select">
+              <span className="visually-hidden">{t.language}</span>
+              <span className="control-select-icon" aria-hidden="true">
+                <Icon name="globe" size={15} />
+              </span>
+              <span className="control-select-value">{localeLabel}</span>
+              <select value={activeLocale} onChange={(event) => changeLocale(event.target.value)}>
+                <option value="en">English</option>
+                <option value="ar">العربية</option>
+              </select>
+              <Icon name="chevronDown" size={13} className="control-select-chevron" />
+            </label>
+            <label className="control-select region-select">
+              <span className="visually-hidden">{t.region}</span>
+              <span className="control-select-flag" aria-hidden="true">{currentFlag}</span>
+              <span className="control-select-value">{regionLabel}</span>
+              <select value={activeRegionCode} onChange={(event) => changeRegion(event.target.value)}>
+                {navigation.regions.map((item) => (
+                  <option key={item.code} value={item.code}>
+                    {REGION_FLAGS[item.code] ? `${REGION_FLAGS[item.code]} ` : ""}{item.name} · {item.currency_code}
+                  </option>
+                ))}
+              </select>
+              <Icon name="chevronDown" size={13} className="control-select-chevron" />
+            </label>
+          </div>
         </nav>
 
         <div className="header-controls">
@@ -196,12 +226,12 @@ function HeaderInner({ locale, navigation }) {
             </label>
           </div>
 
-          <button type="button" className="icon-link" aria-label={t.search}>
+          <button type="button" className="icon-link" aria-label={t.search} onClick={() => setSearchOpen(true)}>
             <Icon name="search" size={18} />
           </button>
-          <button type="button" className="icon-link" aria-label={t.wishlist}>
-            <Icon name="heart" size={18} />
-          </button>
+          <a href={buildStorePath(locale, "/account", region)} className="icon-link" aria-label={locale === "ar" ? "حسابي" : "My Account"}>
+            <Icon name="sparkle" size={18} />
+          </a>
           <button type="button" className="icon-link cart-link" aria-label={t.cart} onClick={openCart}>
             <Icon name="cart" size={18} />
             {itemCount > 0 ? <span className="cart-badge">{itemCount}</span> : null}
@@ -216,6 +246,46 @@ function HeaderInner({ locale, navigation }) {
           </button>
         </div>
       </div>
+
+      {searchOpen ? (
+        <>
+          <button
+            type="button"
+            className="overlay is-open"
+            onClick={() => { setSearchOpen(false); setSearchQuery(""); }}
+            aria-label="Close search"
+          />
+          <div className="search-modal">
+            <form
+              className="search-modal-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (searchQuery.trim()) {
+                  window.location.href = `${buildStorePath(locale, "/collections", region)}&search=${encodeURIComponent(searchQuery.trim())}`;
+                }
+              }}
+            >
+              <Icon name="search" size={20} className="search-modal-icon" />
+              <input
+                type="search"
+                className="search-modal-input"
+                placeholder={locale === "ar" ? "ابحث عن منتجات..." : "Search products..."}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                autoFocus
+              />
+              <button
+                type="button"
+                className="icon-link"
+                onClick={() => { setSearchOpen(false); setSearchQuery(""); }}
+                aria-label="Close"
+              >
+                <Icon name="close" size={18} />
+              </button>
+            </form>
+          </div>
+        </>
+      ) : null}
     </header>
   );
 }

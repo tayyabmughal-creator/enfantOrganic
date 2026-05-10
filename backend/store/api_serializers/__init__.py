@@ -21,6 +21,7 @@ from .admin_ops import (
     AdminSiteSettingsSerializer,
 )
 from .catalog import (
+    BlogPostDetailSerializer,
     BlogPostSerializer,
     CategorySerializer,
     HeroPromoCardSerializer,
@@ -43,6 +44,7 @@ from .localization import (
 from .orders import GuestOrderLookupSerializer, OrderItemSerializer, OrderSerializer, PaymentTransactionSerializer
 
 __all__ = [
+    "BlogPostDetailSerializer",
     "BlogPostSerializer",
     "AdminCategorySerializer",
     "AdminCouponSerializer",

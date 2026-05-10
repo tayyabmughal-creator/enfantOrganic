@@ -16,6 +16,13 @@ export default function CategoryCarousel({ categories, href }) {
     });
   }
 
+  function categoryHref(category) {
+    if (!href) return "#";
+    const base = href.split("?")[0];
+    const existing = href.includes("?") ? "&" + href.split("?")[1] : "";
+    return `${base}?category=${category.slug}${existing}`;
+  }
+
   return (
     <div className="category-carousel-shell">
       <button
@@ -29,7 +36,7 @@ export default function CategoryCarousel({ categories, href }) {
 
       <div className="category-carousel-rail" ref={railRef}>
         {categories.map((category) => (
-          <Link key={category.slug} href={href} className="category-round-card">
+          <Link key={category.slug} href={categoryHref(category)} className="category-round-card">
             <span className="category-round-image">
               <img src={category.image} alt={category.name} loading="lazy" />
             </span>

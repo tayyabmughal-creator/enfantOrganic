@@ -6,6 +6,25 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def _load_dotenv():
+    env_path = BASE_DIR / ".env"
+    if not env_path.exists():
+        return
+    with open(env_path) as f:
+        for raw_line in f:
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip()
+            if key and key not in os.environ:
+                os.environ[key] = value
+
+
+_load_dotenv()
+
+
 def env_bool(name, default=False):
     value = os.getenv(name)
     if value is None:
@@ -107,7 +126,15 @@ else:
         }
     }
 
-AUTH_PASSWORD_VALIDATORS = []
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 8},
+    },
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
@@ -191,3 +218,24 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS
 SECURE_HSTS_PRELOAD = env_bool("DJANGO_SECURE_HSTS_PRELOAD", False)
 
 EXPO_PUSH_ENDPOINT = os.getenv("EXPO_PUSH_ENDPOINT", "https://exp.host/--/api/v2/push/send")
+
+# ── Paymob payment gateway ──────────────────────────────────────────────────
+# Obtain these from your Paymob dashboard at https://accept.paymob.com
+PAYMOB_API_KEY = os.getenv("PAYMOB_API_KEY", "")
+PAYMOB_INTEGRATION_ID = os.getenv("PAYMOB_INTEGRATION_ID", "")
+PAYMOB_IFRAME_ID = os.getenv("PAYMOB_IFRAME_ID", "")
+PAYMOB_HMAC_SECRET = os.getenv("PAYMOB_HMAC_SECRET", "")
+PAYMOB_CURRENCY = os.getenv("PAYMOB_CURRENCY", "EGP")
+PAYMOB_BASE_URL = os.getenv("PAYMOB_BASE_URL", "https://accept.paymob.com/api")
+
+def _require_paymob_config():
+    """Call this inside views that need Paymob — raises ImproperlyConfigured if env keys are missing."""
+    from django.core.exceptions import ImproperlyConfigured
+    missing = [
+        name for name in ("PAYMOB_API_KEY", "PAYMOB_INTEGRATION_ID", "PAYMOB_IFRAME_ID", "PAYMOB_HMAC_SECRET")
+        if not globals()[name]
+    ]
+    if missing:
+        raise ImproperlyConfigured(
+            f"Paymob is not configured. Set these environment variables: {', '.join(missing)}"
+        )

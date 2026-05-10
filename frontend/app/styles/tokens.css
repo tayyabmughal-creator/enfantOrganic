@@ -39,13 +39,47 @@ body {
     var(--bg);
   color: var(--text);
   font-family:
+    var(--font-sans),
     "Helvetica Neue",
     Arial,
-    "Noto Sans Arabic",
     sans-serif;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/* Arabic locale — swap to Arabic variable font */
+.storefront-shell[dir="rtl"] body,
+[dir="rtl"] {
+  font-family:
+    var(--font-arabic),
+    "Noto Sans Arabic",
+    Arial,
+    sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family:
+    var(--font-serif),
+    Georgia,
+    "Times New Roman",
+    serif;
+  font-weight: 600;
+}
+
+/* Arabic headings — keep Arabic typeface for RTL */
+[dir="rtl"] h1,
+[dir="rtl"] h2,
+[dir="rtl"] h3,
+[dir="rtl"] h4,
+[dir="rtl"] h5,
+[dir="rtl"] h6 {
+  font-family:
+    var(--font-arabic),
+    "Noto Sans Arabic",
+    Arial,
+    sans-serif;
+  font-weight: 700;
 }
 
 a {
@@ -118,6 +152,30 @@ img {
 
 .section {
   padding: clamp(18px, 3vw, 34px) 0;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.text-center {
+  text-align: center;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.btn-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: currentColor;
+  animation: spin 0.65s linear infinite;
+  vertical-align: middle;
+  margin-inline-end: 8px;
 }
 
 .section-muted {

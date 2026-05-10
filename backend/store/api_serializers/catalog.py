@@ -301,3 +301,13 @@ class BlogPostSerializer(serializers.ModelSerializer):
 
     def get_excerpt(self, obj):
         return localized(obj, "excerpt", self.context.get("locale"))
+
+
+class BlogPostDetailSerializer(BlogPostSerializer):
+    body = serializers.SerializerMethodField()
+
+    class Meta(BlogPostSerializer.Meta):
+        fields = BlogPostSerializer.Meta.fields + ("body",)
+
+    def get_body(self, obj):
+        return localized(obj, "body", self.context.get("locale"))
