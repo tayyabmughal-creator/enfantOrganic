@@ -40,6 +40,7 @@ jobs:
           script_stop: false
           script: |
             cd "${{ secrets.HOSTINGER_DEPLOY_PATH }}"
+            set -e
 
             cat > /tmp/write_env.py <<'PYEOF'
             from pathlib import Path
@@ -82,5 +83,23 @@ jobs:
             fi
 
             docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build --remove-orphans
+            docker compose -f docker-compose.prod.yml --env-file .env.production restart nginx
+            docker compose -f docker-compose.prod.yml --env-file .env.production ps
             docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend python manage.py check
+            docker compose -f docker-compose.prod.yml --env-file .env.production exec -T frontend wget -S -O /dev/null http://127.0.0.1:3000/
+            docker compose -f docker-compose.prod.yml --env-file .env.production exec -T nginx nginx -t
+            docker compose -f docker-compose.prod.yml --env-file .env.production exec -T nginx wget -S -O /dev/null http://127.0.0.1/
             docker image prune -f
+
+      - name: Verify public site
+        run: |
+          set -e
+          url="${{ secrets.PRODUCTION_HEALTHCHECK_URL || 'http://enfantorganic.itwing.cloud/' }}"
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            if curl --fail --show-error --silent --location --head --max-time 20 "$url"; then
+              exit 0
+            fi
+            echo "Public site not ready yet (attempt ${attempt}/12)."
+            sleep 10
+          done
+          curl --verbose --location --max-time 20 "$url"
