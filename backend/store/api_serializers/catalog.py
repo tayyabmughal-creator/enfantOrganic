@@ -12,11 +12,18 @@ from ..models import (
     Testimonial,
 )
 from .localization import get_image_url, localized, localized_json
+from ..services.payment_router import get_region_provider_options, get_region_provider_warnings
+from ..services.carrier_router import get_region_carrier_options, get_region_carrier_warnings
+from ..services.stock import get_region_available_stock, get_region_warehouses
 
 
 class RegionSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
     address = serializers.SerializerMethodField()
+    payment_provider_options = serializers.SerializerMethodField()
+    payment_provider_warnings = serializers.SerializerMethodField()
+    carrier_options = serializers.SerializerMethodField()
+    carrier_warnings = serializers.SerializerMethodField()
 
     class Meta:
         model = Region
@@ -30,6 +37,18 @@ class RegionSerializer(serializers.ModelSerializer):
             "contact_email",
             "shipping_fee",
             "free_shipping_threshold",
+            "require_map_pin",
+            "payment_enabled_providers",
+            "default_payment_provider",
+            "payment_supported_methods",
+            "payment_mode",
+            "payment_provider_options",
+            "payment_provider_warnings",
+            "carrier_enabled",
+            "primary_carrier",
+            "fallback_carrier",
+            "carrier_options",
+            "carrier_warnings",
             "is_active",
             "contact_phone",
             "address",
@@ -41,6 +60,18 @@ class RegionSerializer(serializers.ModelSerializer):
 
     def get_address(self, obj):
         return localized(obj, "address", self.context.get("locale"))
+
+    def get_payment_provider_options(self, obj):
+        return get_region_provider_options(obj)
+
+    def get_payment_provider_warnings(self, obj):
+        return get_region_provider_warnings(obj)
+
+    def get_carrier_options(self, obj):
+        return get_region_carrier_options(obj)
+
+    def get_carrier_warnings(self, obj):
+        return get_region_carrier_warnings(obj)
 
 
 class HeroPromoCardSerializer(serializers.ModelSerializer):
@@ -109,6 +140,7 @@ class ProductCardSerializer(serializers.ModelSerializer):
     option_groups = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
     hover_image = serializers.SerializerMethodField()
+    stock_status = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -128,6 +160,7 @@ class ProductCardSerializer(serializers.ModelSerializer):
             "tags",
             "pricing",
             "option_groups",
+            "stock_status",
         )
 
     def get_image(self, obj):
@@ -184,6 +217,43 @@ class ProductCardSerializer(serializers.ModelSerializer):
     def get_option_groups(self, obj):
         return localized_json(obj, "option_groups", self.context.get("locale"))
 
+    def _get_region_stocks(self, obj):
+        region = self.context.get("region")
+        if not region or not obj.track_inventory:
+            return []
+        warehouses = set(get_region_warehouses(region).values_list("id", flat=True))
+        if not warehouses:
+            return []
+        prefetched = getattr(obj, "_prefetched_objects_cache", {}).get("warehouse_stocks")
+        if prefetched is not None:
+            return [stock for stock in prefetched if stock.warehouse_id in warehouses and stock.warehouse.active]
+        return list(
+            obj.warehouse_stocks.select_related("warehouse").filter(
+                warehouse_id__in=warehouses,
+                warehouse__active=True,
+            )
+        )
+
+    def get_stock_status(self, obj):
+        if not obj.track_inventory:
+            return {
+                "track_inventory": False,
+                "is_in_stock": True,
+                "available_quantity": None,
+                "is_low_stock": False,
+            }
+
+        region = self.context.get("region")
+        available_qty = get_region_available_stock(obj, region)
+        region_stocks = self._get_region_stocks(obj)
+        threshold = min([int(stock.low_stock_threshold or 0) for stock in region_stocks], default=10)
+        return {
+            "track_inventory": True,
+            "is_in_stock": int(available_qty or 0) > 0,
+            "available_quantity": int(available_qty or 0),
+            "is_low_stock": int(available_qty or 0) <= int(threshold),
+        }
+
 
 class ProductDetailSerializer(ProductCardSerializer):
     description = serializers.SerializerMethodField()
@@ -195,6 +265,7 @@ class ProductDetailSerializer(ProductCardSerializer):
     customer_reviews = serializers.SerializerMethodField()
     certification_file = serializers.SerializerMethodField()
     gallery = serializers.ReadOnlyField()
+    stock_quantity = serializers.SerializerMethodField()
 
     class Meta(ProductCardSerializer.Meta):
         fields = ProductCardSerializer.Meta.fields + (
@@ -254,6 +325,11 @@ class ProductDetailSerializer(ProductCardSerializer):
             return ""
         url = obj.organic_certification_file.url
         return request.build_absolute_uri(url) if request else url
+
+    def get_stock_quantity(self, obj):
+        if not obj.track_inventory:
+            return obj.stock_quantity
+        return int(get_region_available_stock(obj, self.context.get("region")) or 0)
 
 
 class TestimonialSerializer(serializers.ModelSerializer):

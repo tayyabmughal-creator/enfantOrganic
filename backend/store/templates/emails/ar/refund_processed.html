@@ -1,0 +1,12 @@
+{% extends "emails/ar/base.html" %}
+{% block header %}تمت معالجة الاسترداد{% endblock %}
+{% block content %}
+<p>مرحباً {{ order.customer_name }}،</p>
+<p>تمت معالجة مبلغ الاسترداد للطلب <strong>{{ order.order_number }}</strong>.</p>
+<p>
+  <strong>مبلغ الاسترداد:</strong> {{ order.refund_amount }} {{ order.currency_code }}<br>
+  {% if order.refund_reference %}<strong>المرجع:</strong> {{ order.refund_reference }}<br>{% endif %}
+  {% if order.refunded_at %}<strong>تاريخ الاسترداد:</strong> {{ order.refunded_at }}{% endif %}
+</p>
+{% include "emails/ar/_order_summary.html" %}
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends "emails/ar/base.html" %}
+{% block header %}تم شحن طلبك{% endblock %}
+{% block content %}
+<p>مرحباً {{ order.customer_name }}،</p>
+<p>خبر سعيد: طلبك الآن في الطريق إليك.</p>
+{% include "emails/ar/_order_summary.html" %}
+{% if order.tracking_number or order.tracking_url %}
+<p style="margin-top:12px;">
+  {% if order.tracking_number %}<strong>رقم التتبع:</strong> {{ order.tracking_number }}<br>{% endif %}
+  {% if order.tracking_url %}<strong>رابط التتبع:</strong> <a href="{{ order.tracking_url }}">{{ order.tracking_url }}</a>{% endif %}
+</p>
+{% endif %}
+{% endblock %}

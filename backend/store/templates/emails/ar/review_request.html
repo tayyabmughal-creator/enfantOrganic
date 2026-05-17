@@ -1,0 +1,8 @@
+{% extends "emails/ar/base.html" %}
+{% block header %}شاركي رأيك حول طلبك{% endblock %}
+{% block content %}
+<p>مرحباً {{ order.customer_name }}،</p>
+<p>تم تسليم طلبك <strong>{{ order.order_number }}</strong>.</p>
+<p>يسعدنا مشاركة تقييمك لتجربة المنتجات والتوصيل.</p>
+{% include "emails/ar/_order_summary.html" %}
+{% endblock %}

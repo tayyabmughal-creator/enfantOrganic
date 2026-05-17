@@ -1,9 +1,54 @@
 from django.db import models
+from django.utils import timezone
 
 from .base import OrderedModel
 
 
+def default_enabled_payment_providers():
+    return ["paymob"]
+
+
+def default_supported_payment_methods():
+    return {"cards": [], "wallets": [], "local": []}
+
+
 class Region(OrderedModel):
+    PAYMENT_PROVIDER_PAYMOB = "paymob"
+    PAYMENT_PROVIDER_PAYTABS = "paytabs"
+    PAYMENT_PROVIDER_HYPERPAY = "hyperpay"
+    PAYMENT_PROVIDER_TELR = "telr"
+    PAYMENT_PROVIDER_THAWANI = "thawani"
+    PAYMENT_PROVIDER_OMANNET = "omannet"
+
+    PAYMENT_PROVIDER_CHOICES = (
+        (PAYMENT_PROVIDER_PAYMOB, "Paymob"),
+        (PAYMENT_PROVIDER_PAYTABS, "PayTabs"),
+        (PAYMENT_PROVIDER_HYPERPAY, "HyperPay"),
+        (PAYMENT_PROVIDER_TELR, "Telr"),
+        (PAYMENT_PROVIDER_THAWANI, "Thawani"),
+        (PAYMENT_PROVIDER_OMANNET, "OmanNet"),
+    )
+
+    PAYMENT_MODE_SANDBOX = "sandbox"
+    PAYMENT_MODE_LIVE = "live"
+
+    PAYMENT_MODE_CHOICES = (
+        (PAYMENT_MODE_SANDBOX, "Sandbox"),
+        (PAYMENT_MODE_LIVE, "Live"),
+    )
+
+    CARRIER_MANUAL = "manual"
+    CARRIER_ARAMEX = "aramex"
+    CARRIER_SMSA = "smsa"
+    CARRIER_FETCHR = "fetchr"
+
+    CARRIER_CHOICES = (
+        (CARRIER_MANUAL, "Manual"),
+        (CARRIER_ARAMEX, "Aramex"),
+        (CARRIER_SMSA, "SMSA"),
+        (CARRIER_FETCHR, "Fetchr/Equivalent"),
+    )
+
     code = models.SlugField(unique=True, max_length=12)
     name_en = models.CharField(max_length=120)
     name_ar = models.CharField(max_length=120)
@@ -14,14 +59,178 @@ class Region(OrderedModel):
     contact_email = models.EmailField(blank=True)
     address_en = models.TextField()
     address_ar = models.TextField()
+    seller_legal_name = models.CharField(max_length=255, blank=True, default="")
+    seller_vat_number = models.CharField(max_length=64, blank=True, default="")
+    seller_cr_number = models.CharField(max_length=64, blank=True, default="")
+    seller_address_en = models.TextField(blank=True, default="")
+    seller_address_ar = models.TextField(blank=True, default="")
+    seller_phone = models.CharField(max_length=50, blank=True, default="")
+    seller_email = models.EmailField(blank=True)
     is_default = models.BooleanField(default=False)
     whatsapp_phone = models.CharField(max_length=32, blank=True)
     shipping_fee = models.DecimalField(max_digits=10, decimal_places=2, default=2.00)
     free_shipping_threshold = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    require_map_pin = models.BooleanField(default=False)
+    payment_enabled_providers = models.JSONField(default=default_enabled_payment_providers, blank=True)
+    default_payment_provider = models.CharField(
+        max_length=32,
+        choices=PAYMENT_PROVIDER_CHOICES,
+        default=PAYMENT_PROVIDER_PAYMOB,
+    )
+    payment_supported_methods = models.JSONField(default=default_supported_payment_methods, blank=True)
+    payment_mode = models.CharField(
+        max_length=12,
+        choices=PAYMENT_MODE_CHOICES,
+        default=PAYMENT_MODE_SANDBOX,
+    )
+    carrier_enabled = models.BooleanField(default=False)
+    primary_carrier = models.CharField(
+        max_length=24,
+        choices=CARRIER_CHOICES,
+        default=CARRIER_MANUAL,
+    )
+    fallback_carrier = models.CharField(
+        max_length=24,
+        choices=CARRIER_CHOICES,
+        default=CARRIER_MANUAL,
+    )
+    fulfillment_warehouses = models.ManyToManyField(
+        "Warehouse",
+        blank=True,
+        related_name="fulfillment_regions",
+    )
     is_active = models.BooleanField(default=True)
 
     def __str__(self):
         return f"{self.name_en} ({self.currency_code})"
+
+    @classmethod
+    def allowed_payment_provider_keys(cls):
+        return [choice[0] for choice in cls.PAYMENT_PROVIDER_CHOICES]
+
+    @classmethod
+    def allowed_carrier_keys(cls):
+        return [choice[0] for choice in cls.CARRIER_CHOICES]
+
+    def _normalize_enabled_payment_providers(self):
+        allowed = set(self.allowed_payment_provider_keys())
+        raw = self.payment_enabled_providers
+        if isinstance(raw, list):
+            candidates = raw
+        elif isinstance(raw, str):
+            candidates = raw.split(",")
+        else:
+            candidates = []
+        normalized = []
+        seen = set()
+        for item in candidates:
+            key = str(item or "").strip().lower()
+            if not key or key not in allowed or key in seen:
+                continue
+            seen.add(key)
+            normalized.append(key)
+        return normalized
+
+    def save(self, *args, **kwargs):
+        self.default_payment_provider = str(self.default_payment_provider or self.PAYMENT_PROVIDER_PAYMOB).strip().lower()
+        if self.default_payment_provider not in set(self.allowed_payment_provider_keys()):
+            self.default_payment_provider = self.PAYMENT_PROVIDER_PAYMOB
+
+        self.primary_carrier = str(self.primary_carrier or self.CARRIER_MANUAL).strip().lower()
+        if self.primary_carrier not in set(self.allowed_carrier_keys()):
+            self.primary_carrier = self.CARRIER_MANUAL
+
+        self.fallback_carrier = str(self.fallback_carrier or self.CARRIER_MANUAL).strip().lower()
+        if self.fallback_carrier not in set(self.allowed_carrier_keys()):
+            self.fallback_carrier = self.CARRIER_MANUAL
+
+        enabled = self._normalize_enabled_payment_providers()
+        if enabled and self.default_payment_provider not in enabled:
+            enabled = [self.default_payment_provider, *[item for item in enabled if item != self.default_payment_provider]]
+        self.payment_enabled_providers = enabled
+        super().save(*args, **kwargs)
+
+    def get_fulfillment_warehouses(self):
+        mapped = self.fulfillment_warehouses.filter(active=True)
+        if mapped.exists():
+            return mapped
+        return Warehouse.objects.filter(region=self, active=True)
+
+
+class ShippingRule(models.Model):
+    region = models.ForeignKey(Region, on_delete=models.CASCADE, related_name="shipping_rules")
+    city = models.CharField(max_length=120, blank=True, default="")
+    area = models.CharField(max_length=120, blank=True, default="")
+    min_order_value = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    max_order_value = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    shipping_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    free_shipping_threshold = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    eta_min_days = models.PositiveSmallIntegerField(blank=True, null=True)
+    eta_max_days = models.PositiveSmallIntegerField(blank=True, null=True)
+    carrier_name = models.CharField(max_length=120, blank=True, default="")
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = (
+            "region__sort_order",
+            "region__id",
+            "-active",
+            "city",
+            "area",
+            "-min_order_value",
+            "id",
+        )
+
+    def __str__(self):
+        location_bits = [item for item in [self.city, self.area] if item]
+        location = " / ".join(location_bits) if location_bits else "All locations"
+        ceiling = self.max_order_value if self.max_order_value is not None else "∞"
+        return f"{self.region.code.upper()} {location} [{self.min_order_value} - {ceiling}]"
+
+
+class TaxRate(models.Model):
+    region = models.ForeignKey(Region, on_delete=models.PROTECT, related_name="tax_rates")
+    country_code = models.CharField(max_length=12, blank=True)
+    label = models.CharField(max_length=120, default="VAT")
+    rate = models.DecimalField(max_digits=5, decimal_places=4, default=0)
+    is_active = models.BooleanField(default=True)
+    is_inclusive = models.BooleanField(default=False)
+    applies_to_shipping = models.BooleanField(default=True)
+    effective_from = models.DateField(default=timezone.localdate)
+    effective_to = models.DateField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("region__sort_order", "-effective_from", "-id")
+
+    def __str__(self):
+        return f"{self.label} {self.region.code.upper()} {self.rate}"
+
+    def save(self, *args, **kwargs):
+        if not self.country_code:
+            self.country_code = self.region.code.upper()
+        else:
+            self.country_code = self.country_code.upper()
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_effective_rate(cls, region, at_date=None):
+        if not region:
+            return None
+        target_date = at_date or timezone.localdate()
+        return (
+            cls.objects.filter(
+                region=region,
+                is_active=True,
+                effective_from__lte=target_date,
+            )
+            .filter(models.Q(effective_to__isnull=True) | models.Q(effective_to__gte=target_date))
+            .order_by("-effective_from", "-id")
+            .first()
+        )
 
 
 class SiteSettings(models.Model):
@@ -154,6 +363,49 @@ class Product(OrderedModel):
         return self.name_en
 
 
+class Warehouse(models.Model):
+    code = models.SlugField(unique=True, max_length=40)
+    name_en = models.CharField(max_length=160)
+    name_ar = models.CharField(max_length=160)
+    region = models.ForeignKey(Region, on_delete=models.CASCADE, related_name="warehouses")
+    city = models.CharField(max_length=120, blank=True, default="")
+    address = models.TextField(blank=True, default="")
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("region__sort_order", "region__id", "code")
+
+    def __str__(self):
+        return f"{self.code.upper()} ({self.region.code.upper()})"
+
+
+class ProductStock(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="warehouse_stocks")
+    warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE, related_name="product_stocks")
+    quantity = models.PositiveIntegerField(default=0)
+    reserved_quantity = models.PositiveIntegerField(default=0)
+    low_stock_threshold = models.PositiveIntegerField(default=10)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("product", "warehouse")
+        ordering = ("warehouse__region__sort_order", "warehouse__code", "product__sort_order")
+
+    def __str__(self):
+        return f"{self.product.slug} @ {self.warehouse.code} ({self.quantity})"
+
+    @property
+    def available_quantity(self):
+        return max(int(self.quantity or 0), 0)
+
+    @property
+    def is_low_stock(self):
+        return self.available_quantity <= int(self.low_stock_threshold or 0)
+
+
 class ProductPrice(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="prices")
     region = models.ForeignKey(Region, on_delete=models.CASCADE, related_name="product_prices")
@@ -208,7 +460,10 @@ class BlogPost(OrderedModel):
     body_ar = models.TextField(default="")
     image = models.URLField(max_length=500, default="")
     image_file = models.ImageField(upload_to="blog/", blank=True, null=True)
-    published_at = models.DateField()
+    category_en = models.CharField(max_length=120, default="", blank=True)
+    category_ar = models.CharField(max_length=120, default="", blank=True)
+    published_at = models.DateField(blank=True, null=True)
+    is_published = models.BooleanField(default=False, db_index=True)
 
     def __str__(self):
         return self.title_en

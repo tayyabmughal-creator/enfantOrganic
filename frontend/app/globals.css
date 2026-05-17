@@ -6,3 +6,34 @@
 @import "./styles/checkout-order.css";
 @import "./styles/admin-panel.css";
 @import "./styles/account.css";
+@import "./styles/analytics.css";
+
+@keyframes skeleton-pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+.skeleton-pulse {
+  animation: skeleton-pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Force Western/Latin digits (0–9) everywhere — even in Arabic locale.
+   Without this, browsers may render numbers as Eastern Arabic (٠–٩) which
+   the brand does not use. */
+html,
+body {
+  -moz-font-feature-settings: "lnum";
+  -webkit-font-feature-settings: "lnum";
+  font-feature-settings: "lnum";
+}
+
+input[type="tel"],
+input[type="number"],
+.cart-badge,
+.checkout-summary-total strong,
+.cart-line-total,
+.price,
+.product-price {
+  font-variant-numeric: lining-nums tabular-nums;
+}

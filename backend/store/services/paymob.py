@@ -121,6 +121,8 @@ def create_payment_key(
     currency: str,
     paymob_order_id: str,
     billing_data: dict,
+    *,
+    integration_id: int = None,
 ) -> str:
     """Request a payment key (one-time token) for the Paymob iframe."""
     try:
@@ -133,7 +135,7 @@ def create_payment_key(
                 "order_id": paymob_order_id,
                 "billing_data": billing_data,
                 "currency": currency,
-                "integration_id": int(settings.PAYMOB_INTEGRATION_ID),
+                "integration_id": integration_id if integration_id is not None else int(settings.PAYMOB_INTEGRATION_ID),
                 "lock_order_when_paid": True,
             },
             timeout=30,
@@ -195,6 +197,64 @@ def initiate_payment(order) -> dict:
 
     logger.info(
         "Paymob payment initiated: order=%s paymob_order=%s",
+        order.order_number,
+        paymob_order_id,
+    )
+
+    return {
+        "payment_key": payment_key,
+        "iframe_url": iframe_url,
+        "paymob_order_id": paymob_order_id,
+    }
+
+
+def initiate_apple_pay_payment(order) -> dict:
+    """
+    Paymob initiation flow using the Apple Pay integration ID.
+    Uses PAYMOB_APPLE_PAY_INTEGRATION_ID and PAYMOB_APPLE_PAY_IFRAME_ID.
+    Falls back to standard integration if Apple Pay IDs are not set.
+    """
+    apple_pay_integration_id = getattr(settings, "PAYMOB_APPLE_PAY_INTEGRATION_ID", "")
+    apple_pay_iframe_id = getattr(settings, "PAYMOB_APPLE_PAY_IFRAME_ID", "")
+
+    if not apple_pay_integration_id or not apple_pay_iframe_id:
+        raise PaymobError(
+            "Paymob Apple Pay is not configured. "
+            "Set PAYMOB_APPLE_PAY_INTEGRATION_ID and PAYMOB_APPLE_PAY_IFRAME_ID."
+        )
+
+    # Validate base Paymob config (API key, HMAC secret, base URL)
+    missing = [
+        key for key in ("PAYMOB_API_KEY", "PAYMOB_HMAC_SECRET")
+        if not getattr(settings, key, "")
+    ]
+    if missing:
+        raise PaymobError(
+            f"Paymob is not configured. Missing environment variables: {', '.join(missing)}"
+        )
+
+    amount_cents = int(order.grand_total * 100)
+    currency = order.currency_code or settings.PAYMOB_CURRENCY
+
+    auth_token = get_auth_token()
+    paymob_order_id = create_paymob_order(auth_token, amount_cents, currency, order.order_number)
+    billing_data = build_billing_data(order)
+    payment_key = create_payment_key(
+        auth_token,
+        amount_cents,
+        currency,
+        paymob_order_id,
+        billing_data,
+        integration_id=int(apple_pay_integration_id),
+    )
+
+    iframe_url = (
+        f"{settings.PAYMOB_BASE_URL}/acceptance/iframes/{apple_pay_iframe_id}"
+        f"?payment_token={payment_key}"
+    )
+
+    logger.info(
+        "Paymob Apple Pay payment initiated: order=%s paymob_order=%s",
         order.order_number,
         paymob_order_id,
     )

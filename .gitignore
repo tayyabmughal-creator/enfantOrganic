@@ -2,7 +2,7 @@
 .DS_Store
 Thumbs.db
 
-# Environment files
+# Environment files — never commit real .env values. Only the templates are tracked.
 .env
 .env.*
 !.env.example
@@ -10,6 +10,14 @@ Thumbs.db
 !backend/.env.example
 !frontend/.env.example
 !frontend/.env.local.example
+
+# Secrets & TLS material — never commit
+*.pem
+*.key
+!frontend/public/**/*.key
+deploy/nginx/certs/
+secrets/
+credentials.json
 
 # Python
 __pycache__/
@@ -20,7 +28,9 @@ venv/
 env/
 
 # Django local/runtime
+db.sqlite3
 backend/db.sqlite3
+media/
 backend/media/
 backend/staticfiles/
 

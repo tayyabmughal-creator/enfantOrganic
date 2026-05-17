@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="{{ lang_code }}" dir="{{ direction }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}Enfant Organics{% endblock %}</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f6ef;font-family:Tahoma,Arial,Helvetica,sans-serif;color:#1f2937;direction:rtl;text-align:right;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f6ef;padding:24px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="640" cellspacing="0" cellpadding="0" style="width:640px;max-width:92%;background:#ffffff;border:1px solid #dde5d7;border-radius:8px;overflow:hidden;">
+          <tr>
+            <td style="background:#1f4d3f;color:#ffffff;padding:20px 24px;font-size:20px;font-weight:700;text-align:right;">
+              {{ site_name }}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px;text-align:right;">
+              <h1 style="margin:0 0 12px;font-size:22px;line-height:1.3;color:#111827;text-align:right;">{% block header %}{% endblock %}</h1>
+              <div style="font-size:15px;line-height:1.9;color:#374151;text-align:right;">
+                {% block content %}{% endblock %}
+              </div>
+              <p style="margin:20px 0 0;font-size:14px;line-height:1.9;color:#4b5563;text-align:right;">
+                {% block closing %}شكراً لاختيارك Enfant Organics.<br>فريق Enfant Organics{% endblock %}
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:16px 24px;background:#f9fafb;color:#6b7280;font-size:12px;text-align:right;">
+              {{ site_name }} · {{ support_email }} · {{ current_year }}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

@@ -1,0 +1,8 @@
+{% extends "emails/ar/base.html" %}
+{% block header %}تم استلام طلب الإرجاع{% endblock %}
+{% block content %}
+<p>مرحباً {{ order.customer_name }}،</p>
+<p>تم استلام طلب الإرجاع الخاص بالطلب <strong>{{ order.order_number }}</strong>.</p>
+<p>سيقوم فريق الدعم بمراجعة الطلب وإرسال التحديث قريباً.</p>
+{% include "emails/ar/_order_summary.html" %}
+{% endblock %}

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+export const revalidate = 86400; // 24 hours
+
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import { getBlogList, getNavigationData } from "@/lib/api";
 import { buildStorePath, normalizeLocale, normalizeRegion } from "@/lib/storefront";

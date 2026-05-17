@@ -1,0 +1,13 @@
+{% extends "emails/en/base.html" %}
+{% block header %}Your order has shipped{% endblock %}
+{% block content %}
+<p>Hi {{ order.customer_name }},</p>
+<p>Good news. Your order is now on the way.</p>
+{% include "emails/en/_order_summary.html" %}
+{% if order.tracking_number or order.tracking_url %}
+<p style="margin-top:12px;">
+  {% if order.tracking_number %}<strong>Tracking Number:</strong> {{ order.tracking_number }}<br>{% endif %}
+  {% if order.tracking_url %}<strong>Track:</strong> <a href="{{ order.tracking_url }}">{{ order.tracking_url }}</a>{% endif %}
+</p>
+{% endif %}
+{% endblock %}

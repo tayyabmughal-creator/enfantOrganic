@@ -4,10 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 
 import Icon from "@/components/icons/Icon";
 import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
+import { API_BASE_URL, CUSTOMER_TOKEN_KEY, CUSTOMER_REFRESH_KEY } from "@/lib/config";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api";
-const TOKEN_KEY = "enfant-auth-token";
-const REFRESH_KEY = "enfant-auth-refresh";
+const API_BASE = API_BASE_URL;
+const TOKEN_KEY = CUSTOMER_TOKEN_KEY;
+const REFRESH_KEY = CUSTOMER_REFRESH_KEY;
 
 function getToken() {
   try { return localStorage.getItem(TOKEN_KEY) || ""; } catch { return ""; }
@@ -49,6 +50,11 @@ export default function AccountClient({ locale, region }) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [activeReturnOrder, setActiveReturnOrder] = useState("");
+  const [returnReasonByOrder, setReturnReasonByOrder] = useState({});
+  const [returnSubmittingOrder, setReturnSubmittingOrder] = useState("");
+  const [returnErrorByOrder, setReturnErrorByOrder] = useState({});
+  const [returnSuccessByOrder, setReturnSuccessByOrder] = useState({});
 
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
   const [regForm, setRegForm] = useState({ username: "", email: "", password: "", password2: "" });
@@ -125,6 +131,56 @@ export default function AccountClient({ locale, region }) {
     clearTokens(); setProfile(null); setOrders([]); setView("login");
   }
 
+  function hasOpenReturnRequest(order) {
+    const requests = Array.isArray(order?.return_requests) ? order.return_requests : [];
+    return requests.some((item) => ["requested", "approved"].includes(String(item?.status || "").toLowerCase()));
+  }
+
+  function canRequestReturn(order) {
+    const status = String(order?.status || "").toLowerCase();
+    return ["shipped", "delivered"].includes(status) && !hasOpenReturnRequest(order);
+  }
+
+  async function submitReturnRequest(orderNumber) {
+    const reason = String(returnReasonByOrder[orderNumber] || "").trim();
+    if (reason.length < 10) {
+      setReturnErrorByOrder((prev) => ({
+        ...prev,
+        [orderNumber]: isAr ? "يرجى كتابة سبب لا يقل عن 10 أحرف." : "Please enter at least 10 characters.",
+      }));
+      return;
+    }
+
+    setReturnSubmittingOrder(orderNumber);
+    setReturnErrorByOrder((prev) => ({ ...prev, [orderNumber]: "" }));
+    setReturnSuccessByOrder((prev) => ({ ...prev, [orderNumber]: "" }));
+    try {
+      const response = await authFetch(`/account/orders/${orderNumber}/returns/`, {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.detail || payload?.reason?.[0] || (isAr ? "تعذر إرسال طلب الإرجاع." : "Unable to submit return request."));
+      }
+      setReturnSuccessByOrder((prev) => ({
+        ...prev,
+        [orderNumber]: isAr ? "تم إرسال طلب الإرجاع." : "Return request submitted.",
+      }));
+      setReturnReasonByOrder((prev) => ({ ...prev, [orderNumber]: "" }));
+      setActiveReturnOrder("");
+      const refreshed = await loadOrders();
+      setOrders(refreshed || []);
+    } catch (err) {
+      setReturnErrorByOrder((prev) => ({
+        ...prev,
+        [orderNumber]: err.message || (isAr ? "حدث خطأ غير متوقع." : "Unexpected error."),
+      }));
+    } finally {
+      setReturnSubmittingOrder("");
+    }
+  }
+
   if (loading) {
     return (
       <section className="section-shell">
@@ -172,12 +228,88 @@ export default function AccountClient({ locale, region }) {
                     <strong className="order-total">
                       {order.grand_total} {order.currency_code}
                     </strong>
-                    <a
-                      href={`${buildStorePath(locale, `/thank-you/${order.order_number}`, region)}&email_or_phone=${encodeURIComponent(profile.email || "")}`}
-                      className="order-view-link"
-                    >
-                      {isAr ? "عرض" : "View"}
-                    </a>
+                    <div className="order-row-actions">
+                      <a
+                        href={`${buildStorePath(locale, `/thank-you/${order.order_number}`, region)}&email_or_phone=${encodeURIComponent(profile.email || "")}`}
+                        className="order-view-link"
+                      >
+                        {isAr ? "عرض" : "View"}
+                      </a>
+                      {order.invoice_download_url && order.payment_status === "paid" ? (
+                        <a
+                          href={order.invoice_download_url}
+                          className="order-view-link"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {isAr ? "فاتورة" : "Invoice"}
+                        </a>
+                      ) : null}
+                      {order.tracking_url ? (
+                        <a
+                          href={order.tracking_url}
+                          className="order-view-link"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {isAr ? "تتبع" : "Track"}
+                        </a>
+                      ) : null}
+                      {canRequestReturn(order) ? (
+                        <button
+                          type="button"
+                          className="order-view-link"
+                          style={{ border: 0, background: "transparent", cursor: "pointer", padding: 0 }}
+                          onClick={() => setActiveReturnOrder((current) => (current === order.order_number ? "" : order.order_number))}
+                        >
+                          {isAr ? "طلب إرجاع" : "Request Return"}
+                        </button>
+                      ) : null}
+                    </div>
+                    {hasOpenReturnRequest(order) ? (
+                      <p style={{ margin: "6px 0 0", fontSize: "0.82rem", color: "var(--text-soft)" }}>
+                        {isAr ? "طلب الإرجاع قيد المراجعة." : "Return request is under review."}
+                      </p>
+                    ) : null}
+                    {returnSuccessByOrder[order.order_number] ? (
+                      <p className="form-success" style={{ marginTop: 8 }}>{returnSuccessByOrder[order.order_number]}</p>
+                    ) : null}
+                    {activeReturnOrder === order.order_number ? (
+                      <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+                        <textarea
+                          value={returnReasonByOrder[order.order_number] || ""}
+                          onChange={(e) =>
+                            setReturnReasonByOrder((prev) => ({
+                              ...prev,
+                              [order.order_number]: e.target.value,
+                            }))
+                          }
+                          placeholder={isAr ? "سبب الإرجاع" : "Reason for return"}
+                          rows={3}
+                          style={{
+                            width: "100%",
+                            border: "1px solid var(--line)",
+                            borderRadius: "10px",
+                            padding: "10px 12px",
+                            font: "inherit",
+                            resize: "vertical",
+                          }}
+                        />
+                        {returnErrorByOrder[order.order_number] ? (
+                          <p className="form-error" style={{ margin: 0 }}>{returnErrorByOrder[order.order_number]}</p>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="secondary-action"
+                          disabled={returnSubmittingOrder === order.order_number}
+                          onClick={() => submitReturnRequest(order.order_number)}
+                        >
+                          {returnSubmittingOrder === order.order_number
+                            ? (isAr ? "جارٍ الإرسال..." : "Submitting...")
+                            : (isAr ? "إرسال الطلب" : "Submit Request")}
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -221,6 +353,7 @@ export default function AccountClient({ locale, region }) {
                 onChange={(e) => setLoginForm((f) => ({ ...f, username: e.target.value }))}
                 required
                 autoComplete="username"
+                className="field-ltr"
               />
             </label>
             <label>
@@ -248,6 +381,7 @@ export default function AccountClient({ locale, region }) {
                 onChange={(e) => setRegForm((f) => ({ ...f, username: e.target.value }))}
                 required
                 autoComplete="username"
+                className="field-ltr"
               />
             </label>
             <label>
@@ -258,6 +392,7 @@ export default function AccountClient({ locale, region }) {
                 onChange={(e) => setRegForm((f) => ({ ...f, email: e.target.value }))}
                 required
                 autoComplete="email"
+                className="field-ltr"
               />
             </label>
             <label>

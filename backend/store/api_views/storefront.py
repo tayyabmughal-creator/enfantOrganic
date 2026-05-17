@@ -23,6 +23,8 @@ from ..serializers import (
     TestimonialSerializer,
     serialize_site_settings,
 )
+from ..services.search import apply_ranked_product_search
+from ..services.stock import filter_products_fulfillable_for_region
 from .context import StorefrontContextMixin, product_queryset
 
 
@@ -174,6 +176,55 @@ class ProductDetailView(StorefrontContextMixin, APIView):
         return Response(payload)
 
 
+class SearchSuggestionsView(StorefrontContextMixin, APIView):
+    serializer_class = ProductCardSerializer
+
+    def get(self, request):
+        locale = self.get_locale()
+        context = self.get_serializer_context()
+        query = str(
+            request.query_params.get("q")
+            or request.query_params.get("search")
+            or ""
+        ).strip()
+
+        if not query:
+            return Response(
+                {
+                    "query": "",
+                    "locale": locale,
+                    "suggestions": [],
+                }
+            )
+
+        region = context["region"]
+        matches = apply_ranked_product_search(product_queryset(), query)
+        matches = filter_products_fulfillable_for_region(matches, region).distinct()[:8]
+
+        suggestions = []
+        for item in ProductCardSerializer(matches, many=True, context=context).data:
+            pricing = item.get("pricing") or {}
+            suggestions.append(
+                {
+                    "type": "product",
+                    "slug": item["slug"],
+                    "name": item["name"],
+                    "category": item["category"]["name"],
+                    "image": item.get("image", ""),
+                    "currency_code": pricing.get("currency_code"),
+                    "price": pricing.get("amount"),
+                }
+            )
+
+        return Response(
+            {
+                "query": query,
+                "locale": locale,
+                "suggestions": suggestions,
+            }
+        )
+
+
 class BlogListView(StorefrontContextMixin, APIView):
     serializer_class = BlogPostSerializer
 
@@ -204,7 +255,7 @@ def apply_catalog_filters(queryset, request, region):
     ordering = request.query_params.get("ordering", "").strip()
 
     if search:
-        queryset = queryset.filter(name_en__icontains=search) | queryset.filter(name_ar__icontains=search)
+        queryset = apply_ranked_product_search(queryset, search)
     if category:
         queryset = queryset.filter(category__slug=category)
     if brand:
@@ -215,6 +266,8 @@ def apply_catalog_filters(queryset, request, region):
         queryset = queryset.filter(prices__region=region, prices__price__gte=min_price)
     if max_price:
         queryset = queryset.filter(prices__region=region, prices__price__lte=max_price)
+
+    queryset = filter_products_fulfillable_for_region(queryset, region)
 
     if ordering == "price_asc":
         queryset = queryset.order_by("prices__price")

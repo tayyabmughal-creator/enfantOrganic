@@ -1,14 +1,57 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+export const revalidate = 86400; // 24 hours
+
 import TestimonialCard from "@/components/cards/TestimonialCard";
 import Icon from "@/components/icons/Icon";
+import JsonLd from "@/components/seo/JsonLd";
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import CategoryCarousel from "@/components/store/CategoryCarousel";
 import NewsletterForm from "@/components/store/NewsletterForm";
 import ProductRail from "@/components/store/ProductRail";
 import { getHomePageData, getNavigationData } from "@/lib/api";
+import { buildSeoMetadata, SITE_NAME, toAbsoluteUrl, buildLocalizedPath } from "@/lib/seo";
 import { buildStorePath, normalizeLocale, normalizeRegion, uiText } from "@/lib/storefront";
+
+export async function generateMetadata({ params, searchParams }) {
+  const { locale: localeParam } = await params;
+  const locale = normalizeLocale(localeParam);
+  const resolvedSearchParams = await searchParams;
+  const region = normalizeRegion(resolvedSearchParams?.region || "om");
+  const isAr = locale === "ar";
+
+  let description = isAr
+    ? "متجر إنفانت أورجانيك لمنتجات العناية الطبيعية والآمنة بالأطفال في الخليج."
+    : "Enfant Organics baby-care essentials across Oman, UAE, and KSA.";
+  let image = "/enfant/enfant-logo.png";
+
+  try {
+    const home = await getHomePageData(locale, region);
+    const primaryHero = home.hero_cards?.find((item) => item.size === "large") || home.hero_cards?.[0];
+    if (primaryHero?.subtitle) {
+      description = primaryHero.subtitle;
+    }
+    if (primaryHero?.image) {
+      image = primaryHero.image;
+    }
+  } catch {
+    // Keep fallback metadata when API is unavailable.
+  }
+
+  const title = isAr
+    ? "إنفانت أورجانيك | منتجات عناية طبيعية للأطفال"
+    : "Enfant Organics | Natural Baby Care Essentials";
+
+  return buildSeoMetadata({
+    locale,
+    region,
+    path: "",
+    title,
+    description,
+    image,
+  });
+}
 
 export default async function LocalizedHomePage({ params, searchParams }) {
   const { locale: localeParam } = await params;
@@ -42,9 +85,20 @@ export default async function LocalizedHomePage({ params, searchParams }) {
   const heroPrimary   = home.hero_cards.find((c) => c.size === "large");
   const heroSecondary = home.hero_cards.filter((c) => c.size === "large").slice(1)[0];
   const heroChips     = home.hero_cards.filter((c) => c.size !== "large");
+  const organizationJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: SITE_NAME,
+    url: toAbsoluteUrl(buildLocalizedPath(locale, "", region)),
+    logo: toAbsoluteUrl("/enfant/enfant-logo.png"),
+    email: navigation?.current_region?.contact_email || undefined,
+    telephone: navigation?.current_region?.contact_phone || undefined,
+    sameAs: ["https://www.instagram.com/enfant_middle_east/"],
+  };
 
   return (
     <StorefrontShell locale={locale} navigation={navigation}>
+      <JsonLd data={organizationJsonLd} />
       <section className="section container">
         <div className="offers-showcase">
 
@@ -175,6 +229,7 @@ export default async function LocalizedHomePage({ params, searchParams }) {
         <CategoryCarousel
           categories={home.categories}
           href={buildStorePath(locale, "/collections", region)}
+          locale={locale}
         />
       </section>
 
@@ -189,7 +244,13 @@ export default async function LocalizedHomePage({ params, searchParams }) {
               {t.viewAll}
             </Link>
           </div>
-          <ProductRail products={section.products} locale={locale} region={region} />
+          <ProductRail
+            products={section.products}
+            locale={locale}
+            region={region}
+            listId={`home_${section.key}`}
+            listName={section.title}
+          />
         </section>
       ))}
 

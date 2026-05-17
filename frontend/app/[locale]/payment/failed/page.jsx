@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import StorefrontShell from "@/components/layout/StorefrontShell";
+import RetryPaymentButton from "@/components/store/payment/RetryPaymentButton";
 import { getNavigationData } from "@/lib/api";
 import { buildStorePath, normalizeLocale, normalizeRegion } from "@/lib/storefront";
 
@@ -12,7 +13,24 @@ export default async function PaymentFailedPage({ params, searchParams }) {
 
   const resolvedSearchParams = await searchParams;
   const region = normalizeRegion(resolvedSearchParams?.region || "om");
-  const orderNumber = resolvedSearchParams?.merchant_order_id || resolvedSearchParams?.order_number || "";
+  const orderNumber =
+    resolvedSearchParams?.merchant_order_id ||
+    resolvedSearchParams?.order_number ||
+    resolvedSearchParams?.cart_id ||
+    resolvedSearchParams?.cartId ||
+    "";
+  const lookupToken =
+    resolvedSearchParams?.lookup_token ||
+    resolvedSearchParams?.t ||
+    resolvedSearchParams?.token ||
+    "";
+  const emailOrPhone = resolvedSearchParams?.email_or_phone || "";
+  const trackOrderSuffix = lookupToken
+    ? `&t=${encodeURIComponent(lookupToken)}`
+    : emailOrPhone
+      ? `&email_or_phone=${encodeURIComponent(emailOrPhone)}`
+      : "";
+  const requestedProvider = String(resolvedSearchParams?.provider || "").trim().toLowerCase();
   const navigation = await getNavigationData(locale, region);
   const isAr = locale === "ar";
 
@@ -56,12 +74,20 @@ export default async function PaymentFailedPage({ params, searchParams }) {
           </p>
 
           <div className="payment-page-actions">
-            <Link href={buildStorePath(locale, "/checkout", region)} className="primary-action">
-              {isAr ? "إعادة المحاولة" : "Try Again"}
-            </Link>
+            {orderNumber ? (
+              <RetryPaymentButton
+                orderNumber={orderNumber}
+                provider={requestedProvider}
+                isAr={isAr}
+              />
+            ) : (
+              <Link href={buildStorePath(locale, "/checkout", region)} className="primary-action">
+                {isAr ? "إعادة المحاولة" : "Try Again"}
+              </Link>
+            )}
             {orderNumber ? (
               <Link
-                href={`${buildStorePath(locale, `/track-order`, region)}&order=${orderNumber}`}
+                href={`${buildStorePath(locale, "/track-order", region)}&order_number=${encodeURIComponent(orderNumber)}${trackOrderSuffix}`}
                 className="secondary-action"
               >
                 {isAr ? "تتبع الطلب" : "Track Order"}

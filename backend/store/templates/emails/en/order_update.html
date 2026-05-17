@@ -1,0 +1,7 @@
+{% extends "emails/en/base.html" %}
+{% block header %}Order update{% endblock %}
+{% block content %}
+<p>Hi {{ order.customer_name }},</p>
+<p>Your order status has been updated to <strong>{{ status_label }}</strong>.</p>
+{% include "emails/en/_order_summary.html" %}
+{% endblock %}

@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import ProductCard from "@/components/cards/ProductCard";
+import { buildAnalyticsItems, pushDataLayerEvent } from "@/lib/analytics";
 import { uiText } from "@/lib/storefront";
 
 const sortKeys = ["featured", "price-asc", "price-desc", "reviews"];
@@ -31,6 +32,7 @@ export default function ProductCollectionClient({ data, locale, region }) {
   const [selectedTag, setSelectedTag] = useState("all");
   const [sortBy, setSortBy] = useState("featured");
   const [maxPrice, setMaxPrice] = useState(absoluteMaxPrice);
+  const lastTrackedListSignatureRef = useRef("");
 
   const filteredProducts = useMemo(() => {
     const nextProducts = data.products
@@ -60,6 +62,33 @@ export default function ProductCollectionClient({ data, locale, region }) {
 
     return nextProducts;
   }, [data.products, maxPrice, selectedCategory, selectedTag, sortBy]);
+
+  useEffect(() => {
+    if (!filteredProducts.length) {
+      return;
+    }
+    const signature = filteredProducts.map((product) => product.slug).join("|");
+    if (signature === lastTrackedListSignatureRef.current) {
+      return;
+    }
+    const items = buildAnalyticsItems(filteredProducts, (product, index) => ({
+      index,
+      item_list_id: "catalog_collection",
+      item_list_name: data?.hero?.title || "Collection",
+    }));
+    const didPush = pushDataLayerEvent("view_item_list", {
+      locale,
+      region,
+      ecommerce: {
+        item_list_id: "catalog_collection",
+        item_list_name: data?.hero?.title || "Collection",
+        items,
+      },
+    });
+    if (didPush) {
+      lastTrackedListSignatureRef.current = signature;
+    }
+  }, [data?.hero?.title, filteredProducts, locale, region]);
 
   return (
     <div className="catalog-layout">

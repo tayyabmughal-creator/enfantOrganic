@@ -4,9 +4,11 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 import CartDrawer from "@/components/store/cart/CartDrawer";
 import QuickViewModal from "@/components/store/product/QuickViewModal";
+import { buildAnalyticsItem, pushDataLayerEvent } from "@/lib/analytics";
+import { API_BASE_URL as CONFIG_API_BASE_URL } from "@/lib/config";
 
 const CART_STORAGE_KEY = "enfant-organics-cart";
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api";
+const API_BASE_URL = CONFIG_API_BASE_URL;
 const StoreContext = createContext(null);
 
 export default function StoreProvider({ children }) {
@@ -139,6 +141,7 @@ export default function StoreProvider({ children }) {
         }
       },
       addItem: (product, quantity = 1, selectedOptions = {}) => {
+        const nextQuantity = Math.max(Number(quantity) || 1, 1);
         const selectedOptionsText = Object.entries(selectedOptions)
           .map(([name, value]) => `${name}: ${value}`)
           .join(" · ");
@@ -150,7 +153,7 @@ export default function StoreProvider({ children }) {
           if (existing) {
             return current.map((item) =>
               item.lineId === lineId
-                ? { ...item, quantity: item.quantity + quantity }
+                ? { ...item, quantity: item.quantity + nextQuantity }
                 : item,
             );
           }
@@ -162,15 +165,59 @@ export default function StoreProvider({ children }) {
               slug: product.slug,
               name: product.name,
               image: product.image,
-              quantity,
+              quantity: nextQuantity,
               pricing: product.pricing,
               locale: product.locale || "en",
               selectedOptionsText,
             },
           ];
         });
+
+        const item = buildAnalyticsItem({
+          ...product,
+          selected_options_text: selectedOptionsText,
+          quantity: nextQuantity,
+        });
+        if (item) {
+          pushDataLayerEvent("add_to_cart", {
+            locale: product.locale || "en",
+            region: product.pricing?.region_code || "",
+            ecommerce: {
+              currency: product.pricing?.currency_code || "",
+              value: (Number(product.pricing?.amount) || 0) * nextQuantity,
+              items: [item],
+            },
+          });
+        }
       },
       updateQuantity: (lineId, nextQuantity) => {
+        const existingItem = cartItems.find((item) => item.lineId === lineId);
+        if (existingItem) {
+          const delta = Math.abs(Number(nextQuantity) - Number(existingItem.quantity));
+          if (delta > 0) {
+            const eventName =
+              Number(nextQuantity) > Number(existingItem.quantity)
+                ? "add_to_cart"
+                : "remove_from_cart";
+            const eventItem = buildAnalyticsItem({
+              ...existingItem,
+              selected_options_text: existingItem.selectedOptionsText,
+              quantity: delta,
+            });
+            if (eventItem) {
+              pushDataLayerEvent(eventName, {
+                locale: existingItem.locale || "en",
+                region: existingItem.pricing?.region_code || "",
+                ecommerce: {
+                  currency: existingItem.pricing?.currency_code || "",
+                  value: (Number(existingItem.pricing?.amount) || 0) * delta,
+                  items: [eventItem],
+                },
+              });
+            }
+          }
+        }
+
         if (nextQuantity <= 0) {
           setCartItems((current) => current.filter((item) => item.lineId !== lineId));
           return;
@@ -183,6 +230,27 @@ export default function StoreProvider({ children }) {
         );
       },
       removeItem: (lineId) => {
+        const existingItem = cartItems.find((item) => item.lineId === lineId);
+        if (existingItem) {
+          const eventItem = buildAnalyticsItem({
+            ...existingItem,
+            selected_options_text: existingItem.selectedOptionsText,
+            quantity: existingItem.quantity,
+          });
+          if (eventItem) {
+            pushDataLayerEvent("remove_from_cart", {
+              locale: existingItem.locale || "en",
+              region: existingItem.pricing?.region_code || "",
+              ecommerce: {
+                currency: existingItem.pricing?.currency_code || "",
+                value:
+                  (Number(existingItem.pricing?.amount) || 0) *
+                  Number(existingItem.quantity || 1),
+                items: [eventItem],
+              },
+            });
+          }
+        }
         setCartItems((current) => current.filter((item) => item.lineId !== lineId));
       },
       clearCart: () => {

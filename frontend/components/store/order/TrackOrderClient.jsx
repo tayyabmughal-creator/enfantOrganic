@@ -1,40 +1,83 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { buildStorePath } from "@/lib/storefront";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api";
+import { API_BASE_URL } from "@/lib/config";
 
 export default function TrackOrderClient({ locale, region }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [orderNumber, setOrderNumber] = useState("");
   const [emailOrPhone, setEmailOrPhone] = useState("");
+  const [lookupToken, setLookupToken] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // Auto-fill from order confirmation email link: /track-order?o=EO-...&t=TOKEN
+  useEffect(() => {
+    if (!searchParams) return;
+    const o = searchParams.get("o") || searchParams.get("order_number") || searchParams.get("order") || "";
+    const t = searchParams.get("t") || searchParams.get("token") || "";
+    const contact = searchParams.get("email_or_phone") || "";
+    if (o) setOrderNumber(o);
+    if (t) setLookupToken(t);
+    if (contact) setEmailOrPhone(contact);
+
+    // If both are present, look the order up immediately so the user lands on
+    // their order detail without re-typing anything.
+    if (o && t) {
+      void lookupWithToken(o, t);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function lookupWithToken(o, t) {
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_BASE_URL}/orders/lookup/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order_number: o, lookup_token: t }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || "Order not found.");
+      }
+      router.push(
+        `${buildStorePath(locale, `/thank-you/${data.order_number}`, region)}&t=${encodeURIComponent(t)}`,
+      );
+    } catch (err) {
+      setError(err.message || "Order not found.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   async function submitHandler(event) {
     event.preventDefault();
 
     const cleanOrderNumber = orderNumber.trim();
     const cleanEmailOrPhone = emailOrPhone.trim();
+    const cleanToken = lookupToken.trim();
 
-    if (!cleanOrderNumber || !cleanEmailOrPhone) return;
+    if (!cleanOrderNumber) return;
+    if (!cleanToken && !cleanEmailOrPhone) return;
 
     setSubmitting(true);
     setError("");
 
     try {
+      const body = { order_number: cleanOrderNumber };
+      if (cleanToken) body.lookup_token = cleanToken;
+      if (cleanEmailOrPhone) body.email_or_phone = cleanEmailOrPhone;
+
       const response = await fetch(`${API_BASE_URL}/orders/lookup/`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          order_number: cleanOrderNumber,
-          email_or_phone: cleanEmailOrPhone,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
       const data = await response.json();
 
@@ -42,7 +85,10 @@ export default function TrackOrderClient({ locale, region }) {
         throw new Error(data.detail || "Order not found.");
       }
 
-      router.push(`${buildStorePath(locale, `/thank-you/${data.order_number}`, region)}&email_or_phone=${encodeURIComponent(cleanEmailOrPhone)}`);
+      const suffix = cleanToken
+        ? `&t=${encodeURIComponent(cleanToken)}`
+        : `&email_or_phone=${encodeURIComponent(cleanEmailOrPhone)}`;
+      router.push(`${buildStorePath(locale, `/thank-you/${data.order_number}`, region)}${suffix}`);
     } catch (err) {
       setError(err.message || "Order not found.");
     } finally {
@@ -64,7 +110,11 @@ export default function TrackOrderClient({ locale, region }) {
             value={orderNumber}
             onChange={(event) => setOrderNumber(event.target.value)}
             placeholder="Example: EO-20260426-0001"
+            className="field-ltr"
             required
+            pattern="EO-\d{8}-\d{4}"
+            title="Order numbers look like EO-20260426-0001"
+            maxLength={24}
           />
         </label>
 
@@ -74,7 +124,8 @@ export default function TrackOrderClient({ locale, region }) {
             value={emailOrPhone}
             onChange={(event) => setEmailOrPhone(event.target.value)}
             placeholder="Use the same email or phone from checkout"
-            required
+            className="field-ltr"
+            maxLength={120}
           />
         </label>
 

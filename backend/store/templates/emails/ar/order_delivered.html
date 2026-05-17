@@ -1,0 +1,8 @@
+{% extends "emails/ar/base.html" %}
+{% block header %}تم تسليم الطلب{% endblock %}
+{% block content %}
+<p>مرحباً {{ order.customer_name }}،</p>
+<p>تم تسليم طلبك. نتمنى أن تكون تجربتك ممتازة.</p>
+{% include "emails/ar/_order_summary.html" %}
+<p>يسعدنا مشاركة تقييمك للمنتجات وخدمة التوصيل.</p>
+{% endblock %}

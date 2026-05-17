@@ -5,6 +5,12 @@ export const metadata = {
   description: "EnfhantOrganic staff operations panel.",
 };
 
+import ErrorBoundary from "@/components/ErrorBoundary";
+
 export default function AdminPage() {
-  return <AdminPanelClient />;
+  return (
+    <ErrorBoundary>
+      <AdminPanelClient />
+    </ErrorBoundary>
+  );
 }

@@ -12,7 +12,23 @@ export default async function PaymentSuccessPage({ params, searchParams }) {
 
   const resolvedSearchParams = await searchParams;
   const region = normalizeRegion(resolvedSearchParams?.region || "om");
-  const orderNumber = resolvedSearchParams?.merchant_order_id || resolvedSearchParams?.order_number || "";
+  const orderNumber =
+    resolvedSearchParams?.merchant_order_id ||
+    resolvedSearchParams?.order_number ||
+    resolvedSearchParams?.cart_id ||
+    resolvedSearchParams?.cartId ||
+    "";
+  const lookupToken =
+    resolvedSearchParams?.lookup_token ||
+    resolvedSearchParams?.t ||
+    resolvedSearchParams?.token ||
+    "";
+  const emailOrPhone = resolvedSearchParams?.email_or_phone || "";
+  const detailSuffix = lookupToken
+    ? `&lookup_token=${encodeURIComponent(lookupToken)}`
+    : emailOrPhone
+      ? `&email_or_phone=${encodeURIComponent(emailOrPhone)}`
+      : "";
   const navigation = await getNavigationData(locale, region);
   const isAr = locale === "ar";
 
@@ -58,7 +74,7 @@ export default async function PaymentSuccessPage({ params, searchParams }) {
           <div className="payment-page-actions">
             {orderNumber ? (
               <Link
-                href={`${buildStorePath(locale, `/thank-you/${orderNumber}`, region)}`}
+                href={`${buildStorePath(locale, `/thank-you/${orderNumber}`, region)}${detailSuffix}`}
                 className="primary-action"
               >
                 {isAr ? "عرض تفاصيل الطلب" : "View Order Details"}

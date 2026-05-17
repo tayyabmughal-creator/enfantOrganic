@@ -1,18 +1,19 @@
 "use client";
 
 import { Suspense, useEffect } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 import Icon from "@/components/icons/Icon";
+import CartApplePayButton from "@/components/store/cart/CartApplePayButton";
 import { useStore } from "@/components/store/cart/StoreProvider";
-import { buildStorePath, formatMoney, normalizeLocale, uiText } from "@/lib/storefront";
+import { useLocale } from "@/contexts/LocaleContext";
+import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
 
 function CartDrawerInner() {
-  const pathname = usePathname();
   const searchParams = useSearchParams();
   const region = searchParams.get("region") || "om";
-  const locale = normalizeLocale(pathname.split("/")[1]);
+  const { locale } = useLocale();
   const t = uiText(locale);
   const { cartItems, closeCart, drawerOpen, refreshCartPricing, removeItem, subtotal, updateQuantity } = useStore();
 
@@ -102,6 +103,7 @@ function CartDrawerInner() {
                   </strong>
                 </div>
                 <p>{t.shipping}</p>
+                <CartApplePayButton />
                 <Link
                   href={buildStorePath(locale, "/checkout", region)}
                   className="primary-action full-width"

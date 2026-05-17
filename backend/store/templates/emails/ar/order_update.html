@@ -1,0 +1,7 @@
+{% extends "emails/ar/base.html" %}
+{% block header %}تحديث حالة الطلب{% endblock %}
+{% block content %}
+<p>مرحباً {{ order.customer_name }}،</p>
+<p>تم تحديث حالة طلبك إلى <strong>{{ status_label }}</strong>.</p>
+{% include "emails/ar/_order_summary.html" %}
+{% endblock %}

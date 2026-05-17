@@ -11,6 +11,33 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: ${DB_MEMORY_LIMIT:-2g}
+          cpus: "${DB_CPU_LIMIT:-2.0}"
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Production REQUIRES a Redis password. Fail fast if not provided.
+    command: >
+      sh -c "if [ -z \"$$REDIS_PASSWORD\" ]; then
+               echo 'REDIS_PASSWORD must be set in production' >&2; exit 1;
+             fi;
+             redis-server --requirepass \"$$REDIS_PASSWORD\""
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: ${REDIS_MEMORY_LIMIT:-512m}
+          cpus: "${REDIS_CPU_LIMIT:-0.5}"
 
   backend:
     build:
@@ -20,11 +47,14 @@ services:
       - .env.production
     environment:
       POSTGRES_HOST: db
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
       DJANGO_DEBUG: "0"
     command: >
       sh -c "python manage.py migrate &&
              python manage.py collectstatic --noinput &&
-             gunicorn enfant_backend.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 60"
+             gunicorn enfant_backend.wsgi:application --bind 0.0.0.0:8000 --workers ${GUNICORN_WORKERS:-3} --timeout ${GUNICORN_TIMEOUT:-60}"
     volumes:
       - media-data:/app/media
       - static-data:/app/staticfiles
@@ -33,25 +63,82 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python manage.py check >/dev/null 2>&1"]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: ${BACKEND_MEMORY_LIMIT:-1.5g}
+          cpus: "${BACKEND_CPU_LIMIT:-2.0}"
+
+  celery_worker:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      POSTGRES_HOST: db
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      DJANGO_DEBUG: "0"
+    command: celery -A enfant_backend worker -l INFO --concurrency=${CELERY_CONCURRENCY:-2}
+    volumes:
+      - media-data:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: ${CELERY_MEMORY_LIMIT:-1g}
+          cpus: "${CELERY_CPU_LIMIT:-1.0}"
+
+  celery_beat:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      POSTGRES_HOST: db
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      DJANGO_DEBUG: "0"
+    command: celery -A enfant_backend beat -l INFO
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.25"
 
   frontend:
     build:
       context: ./frontend
       args:
-        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://127.0.0.1:8000/api}
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
         API_INTERNAL_BASE_URL: ${API_INTERNAL_BASE_URL:-http://backend:8000/api}
     restart: unless-stopped
     env_file:
       - .env.production
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://127.0.0.1:8000/api}
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
       API_INTERNAL_BASE_URL: ${API_INTERNAL_BASE_URL:-http://backend:8000/api}
     expose:
       - "3000"
@@ -64,16 +151,24 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: ${FRONTEND_MEMORY_LIMIT:-1g}
+          cpus: "${FRONTEND_CPU_LIMIT:-1.0}"
 
   nginx:
     image: nginx:1.27-alpine
     restart: unless-stopped
     ports:
       - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
     volumes:
       - ./deploy/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - media-data:/var/www/media:ro
       - static-data:/var/www/static:ro
+      # Mount a host directory with your TLS certs (fullchain.pem + privkey.pem). Optional in dev.
+      - ${TLS_CERT_DIR:-./deploy/nginx/certs}:/etc/nginx/certs:ro
     depends_on:
       frontend:
         condition: service_healthy
@@ -84,6 +179,11 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.5"
 
 volumes:
   postgres-data:

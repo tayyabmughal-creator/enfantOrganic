@@ -1,0 +1,8 @@
+{% extends "emails/en/base.html" %}
+{% block header %}Return request received{% endblock %}
+{% block content %}
+<p>Hi {{ order.customer_name }},</p>
+<p>We received your return request for order <strong>{{ order.order_number }}</strong>.</p>
+<p>Our support team will review your request and update you shortly.</p>
+{% include "emails/en/_order_summary.html" %}
+{% endblock %}

@@ -1,0 +1,8 @@
+{% extends "emails/en/base.html" %}
+{% block header %}Your order is confirmed{% endblock %}
+{% block content %}
+<p>Hi {{ order.customer_name }},</p>
+<p>Thanks for shopping with us. We received your order and started processing it.</p>
+{% include "emails/en/_order_summary.html" %}
+<p>We will send another update as your order progresses.</p>
+{% endblock %}

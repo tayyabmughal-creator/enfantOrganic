@@ -84,5 +84,9 @@ const translations = {
 };
 
 export function uiText(locale) {
-  return translations[normalizeLocale(locale)];
+  const normalized = normalizeLocale(locale);
+  return {
+    ...translations.en,
+    ...(translations[normalized] || {}),
+  };
 }

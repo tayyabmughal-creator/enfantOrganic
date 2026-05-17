@@ -19,7 +19,11 @@ export default async function CheckoutPage({ params, searchParams }) {
 
   return (
     <StorefrontShell locale={normalizedLocale} navigation={navigation}>
-      <CheckoutClient locale={normalizedLocale} region={region} />
+      <CheckoutClient
+        locale={normalizedLocale}
+        region={region}
+        regionConfig={navigation?.current_region || null}
+      />
     </StorefrontShell>
   );
 }

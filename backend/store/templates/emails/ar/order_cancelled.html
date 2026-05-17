@@ -1,0 +1,8 @@
+{% extends "emails/ar/base.html" %}
+{% block header %}تم إلغاء الطلب{% endblock %}
+{% block content %}
+<p>مرحباً {{ order.customer_name }}،</p>
+<p>تم إلغاء طلبك.</p>
+{% include "emails/ar/_order_summary.html" %}
+<p>إذا كان الإلغاء غير متوقع، يرجى الرد على هذه الرسالة وسنساعدك فوراً.</p>
+{% endblock %}

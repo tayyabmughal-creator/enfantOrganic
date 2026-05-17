@@ -1,0 +1,12 @@
+{% extends "emails/en/base.html" %}
+{% block header %}Refund processed{% endblock %}
+{% block content %}
+<p>Hi {{ order.customer_name }},</p>
+<p>Your refund has been processed for order <strong>{{ order.order_number }}</strong>.</p>
+<p>
+  <strong>Refund Amount:</strong> {{ order.refund_amount }} {{ order.currency_code }}<br>
+  {% if order.refund_reference %}<strong>Reference:</strong> {{ order.refund_reference }}<br>{% endif %}
+  {% if order.refunded_at %}<strong>Refunded At:</strong> {{ order.refunded_at }}{% endif %}
+</p>
+{% include "emails/en/_order_summary.html" %}
+{% endblock %}

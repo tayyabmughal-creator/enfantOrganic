@@ -7,8 +7,33 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-enfantorganic}
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    # Local dev: expose to host. In production, use docker-compose.prod.yml (no exposed port).
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: "1.0"
+
+  redis:
+    image: redis:7-alpine
+    # Require a password if one is configured; otherwise run open for local dev convenience.
+    command: >
+      sh -c "if [ -n \"$$REDIS_PASSWORD\" ]; then
+               redis-server --requirepass \"$$REDIS_PASSWORD\";
+             else
+               redis-server;
+             fi"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    ports:
+      - "127.0.0.1:6379:6379"
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "0.5"
 
   backend:
     build: ./backend
@@ -16,6 +41,9 @@ services:
       - .env.example
     environment:
       POSTGRES_HOST: db
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       DJANGO_DEBUG: "0"
     command: >
       sh -c "python manage.py migrate &&
@@ -27,6 +55,54 @@ services:
       - "8000:8000"
     depends_on:
       - db
+      - redis
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: "1.5"
+
+  celery_worker:
+    build: ./backend
+    env_file:
+      - .env.example
+    environment:
+      POSTGRES_HOST: db
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      DJANGO_DEBUG: "0"
+    command: celery -A enfant_backend worker -l INFO
+    volumes:
+      - media-data:/app/media
+    depends_on:
+      - db
+      - redis
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1.0"
+
+  celery_beat:
+    build: ./backend
+    env_file:
+      - .env.example
+    environment:
+      POSTGRES_HOST: db
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      DJANGO_DEBUG: "0"
+    command: celery -A enfant_backend beat -l INFO
+    depends_on:
+      - db
+      - redis
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.25"
 
   frontend:
     build:
@@ -41,6 +117,11 @@ services:
       - "3000:3000"
     depends_on:
       - backend
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: "1.0"
 
 volumes:
   postgres-data:

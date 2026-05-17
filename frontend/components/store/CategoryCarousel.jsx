@@ -3,15 +3,16 @@
 import { useRef } from "react";
 import Link from "next/link";
 
-export default function CategoryCarousel({ categories, href }) {
+export default function CategoryCarousel({ categories, href, locale = "en" }) {
   const railRef = useRef(null);
+  const isRtl = locale === "ar";
 
   function scrollByCard(direction) {
     const rail = railRef.current;
     if (!rail) return;
 
     rail.scrollBy({
-      left: direction * Math.min(rail.clientWidth * 0.72, 420),
+      left: (isRtl ? -direction : direction) * Math.min(rail.clientWidth * 0.72, 420),
       behavior: "smooth",
     });
   }
@@ -29,9 +30,9 @@ export default function CategoryCarousel({ categories, href }) {
         type="button"
         className="category-carousel-button"
         onClick={() => scrollByCard(-1)}
-        aria-label="Previous categories"
+        aria-label={isRtl ? "الفئة التالية" : "Previous categories"}
       >
-        ‹
+        {isRtl ? "›" : "‹"}
       </button>
 
       <div className="category-carousel-rail" ref={railRef}>
@@ -49,9 +50,9 @@ export default function CategoryCarousel({ categories, href }) {
         type="button"
         className="category-carousel-button"
         onClick={() => scrollByCard(1)}
-        aria-label="Next categories"
+        aria-label={isRtl ? "الفئة السابقة" : "Next categories"}
       >
-        ›
+        {isRtl ? "‹" : "›"}
       </button>
     </div>
   );

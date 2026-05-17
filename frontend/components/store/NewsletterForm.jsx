@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api";
+import { API_BASE_URL } from "@/lib/config";
 
 export default function NewsletterForm({ placeholder, cta, locale, region }) {
   const [email, setEmail] = useState("");
@@ -49,6 +49,7 @@ export default function NewsletterForm({ placeholder, cta, locale, region }) {
         onChange={(e) => setEmail(e.target.value)}
         placeholder={placeholder}
         required
+        className="field-ltr"
         aria-label={placeholder}
       />
       <button type="submit" disabled={submitting || !email.trim()}>

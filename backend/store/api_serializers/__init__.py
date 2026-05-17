@@ -1,4 +1,5 @@
 from .account import (
+    CustomerReturnRequestSerializer,
     CustomerAddressSerializer,
     NewsletterSubscriptionSerializer,
     PasswordResetConfirmSerializer,
@@ -10,15 +11,21 @@ from .account import (
     WishlistItemSerializer,
 )
 from .admin_ops import (
+    AdminAuditLogSerializer,
+    AdminBlogPostSerializer,
     AdminCategorySerializer,
     AdminCouponSerializer,
     AdminCustomerSerializer,
     AdminOrderSerializer,
     AdminPaymentTransactionSerializer,
+    AdminProductStockSerializer,
     AdminProductSerializer,
     AdminRegionSerializer,
+    AdminReturnRequestSerializer,
     AdminReviewSerializer,
+    AdminShippingRuleSerializer,
     AdminSiteSettingsSerializer,
+    AdminWarehouseSerializer,
 )
 from .catalog import (
     BlogPostDetailSerializer,
@@ -41,23 +48,37 @@ from .localization import (
     normalize_locale,
     serialize_site_settings,
 )
-from .orders import GuestOrderLookupSerializer, OrderItemSerializer, OrderSerializer, PaymentTransactionSerializer
+from .orders import (
+    GuestOrderLookupSerializer,
+    OrderItemSerializer,
+    OrderSerializer,
+    OrderStatusHistorySerializer,
+    PaymentTransactionSerializer,
+    ReturnRequestSerializer,
+)
 
 __all__ = [
     "BlogPostDetailSerializer",
     "BlogPostSerializer",
+    "AdminAuditLogSerializer",
+    "AdminBlogPostSerializer",
     "AdminCategorySerializer",
     "AdminCouponSerializer",
     "AdminCustomerSerializer",
     "AdminOrderSerializer",
     "AdminPaymentTransactionSerializer",
+    "AdminProductStockSerializer",
     "AdminProductSerializer",
     "AdminRegionSerializer",
+    "AdminReturnRequestSerializer",
     "AdminReviewSerializer",
+    "AdminShippingRuleSerializer",
     "AdminSiteSettingsSerializer",
+    "AdminWarehouseSerializer",
     "CategorySerializer",
     "CheckoutCreateSerializer",
     "CouponValidationSerializer",
+    "CustomerReturnRequestSerializer",
     "CustomerAddressSerializer",
     "get_image_url",
     "GuestOrderLookupSerializer",
@@ -70,6 +91,7 @@ __all__ = [
     "normalize_locale",
     "OrderItemSerializer",
     "OrderSerializer",
+    "OrderStatusHistorySerializer",
     "PasswordResetConfirmSerializer",
     "PasswordResetRequestSerializer",
     "PaymentTransactionSerializer",
@@ -79,6 +101,7 @@ __all__ = [
     "PushDeviceSerializer",
     "RegionSerializer",
     "RegisterSerializer",
+    "ReturnRequestSerializer",
     "ReviewCreateSerializer",
     "serialize_site_settings",
     "TagSerializer",

@@ -1330,6 +1330,13 @@
   color: #8a9580;
 }
 
+.admin-snapshot-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
 /* ─── Loading / empty ─────────────────────────────────────────────────────── */
 
 .admin-loading {

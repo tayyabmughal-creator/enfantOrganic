@@ -1,0 +1,8 @@
+{% extends "emails/en/base.html" %}
+{% block header %}Payment received{% endblock %}
+{% block content %}
+<p>Hi {{ order.customer_name }},</p>
+<p>Your payment for order <strong>{{ order.order_number }}</strong> is confirmed.</p>
+{% include "emails/en/_order_summary.html" %}
+<p>Your invoice PDF is attached to this email.</p>
+{% endblock %}

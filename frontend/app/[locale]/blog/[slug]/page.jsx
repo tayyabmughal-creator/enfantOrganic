@@ -1,9 +1,52 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+export const revalidate = 86400; // 24 hours
+
+import JsonLd from "@/components/seo/JsonLd";
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import { getBlogBySlug, getNavigationData } from "@/lib/api";
+import { buildSeoMetadata, buildLocalizedPath, toAbsoluteUrl } from "@/lib/seo";
 import { buildStorePath, normalizeLocale, normalizeRegion } from "@/lib/storefront";
+
+export async function generateMetadata({ params, searchParams }) {
+  const { locale: localeParam, slug } = await params;
+  const locale = normalizeLocale(localeParam);
+  const resolvedSearchParams = await searchParams;
+  const region = normalizeRegion(resolvedSearchParams?.region || "om");
+  const isAr = locale === "ar";
+
+  let title = isAr ? "مقالة | إنفانت أورجانيك" : "Blog Article | Enfant Organics";
+  let description = isAr
+    ? "اقرئي نصائح العناية وصحة الأطفال من إنفانت أورجانيك."
+    : "Read baby-care and parenting insights from Enfant Organics.";
+  let image = "/enfant/enfant-logo.png";
+
+  try {
+    const post = await getBlogBySlug(slug, locale, region);
+    if (post?.title) {
+      title = `${post.title} | Enfant Organics`;
+    }
+    if (post?.excerpt) {
+      description = post.excerpt;
+    }
+    if (post?.image) {
+      image = post.image;
+    }
+  } catch {
+    // Keep fallback metadata when API is unavailable.
+  }
+
+  return buildSeoMetadata({
+    locale,
+    region,
+    path: `/blog/${slug}`,
+    title,
+    description,
+    image,
+    type: "article",
+  });
+}
 
 export default async function BlogDetailPage({ params, searchParams }) {
   const { locale: localeParam, slug } = await params;
@@ -27,9 +70,34 @@ export default async function BlogDetailPage({ params, searchParams }) {
   }
 
   const paragraphs = (post.body || post.excerpt || "").split("\n").filter(Boolean);
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: isAr ? "الرئيسية" : "Home",
+        item: toAbsoluteUrl(buildLocalizedPath(locale, "", region)),
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: isAr ? "المدونة" : "Blog",
+        item: toAbsoluteUrl(buildLocalizedPath(locale, "/blog", region)),
+      },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: post.title,
+        item: toAbsoluteUrl(buildLocalizedPath(locale, `/blog/${slug}`, region)),
+      },
+    ],
+  };
 
   return (
     <StorefrontShell locale={locale} navigation={navigation_}>
+      <JsonLd data={breadcrumbJsonLd} />
       <article className="section container">
         <div className="blog-detail-layout">
           <nav className="blog-breadcrumb">
@@ -70,7 +138,7 @@ export default async function BlogDetailPage({ params, searchParams }) {
 
           <div className="blog-detail-footer">
             <Link href={buildStorePath(locale, "/blog", region)} className="section-link">
-              {isAr ? "← العودة إلى المدونة" : "← Back to Blog"}
+              {isAr ? "→ العودة إلى المدونة" : "← Back to Blog"}
             </Link>
           </div>
         </div>

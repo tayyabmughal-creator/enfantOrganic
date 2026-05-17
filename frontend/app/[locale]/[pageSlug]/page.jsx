@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import { getNavigationData } from "@/lib/api";
+import { buildSeoMetadata } from "@/lib/seo";
 import { buildStorePath, normalizeLocale, normalizeRegion } from "@/lib/storefront";
 
 const WHATSAPP_PHONE = process.env.NEXT_PUBLIC_WHATSAPP_PHONE || "";
@@ -393,6 +394,34 @@ const STATIC_CONTENT = {
   },
 };
 
+export async function generateMetadata({ params, searchParams }) {
+  const { locale: localeParam, pageSlug } = await params;
+  const locale = normalizeLocale(localeParam);
+  const resolvedSearchParams = await searchParams;
+  const region = normalizeRegion(resolvedSearchParams?.region || "om");
+  const content = STATIC_CONTENT?.[pageSlug]?.[locale];
+  const isAr = locale === "ar";
+
+  if (!content) {
+    return {};
+  }
+
+  const title = `${content.title} | Enfant Organics`;
+  const fallbackDescription = isAr
+    ? "معلومات ومتطلبات الشراء من إنفانت أورجانيك."
+    : "Important storefront information from Enfant Organics.";
+  const description = content.sections?.[0]?.body || fallbackDescription;
+
+  return buildSeoMetadata({
+    locale,
+    region,
+    path: `/${pageSlug}`,
+    title,
+    description,
+    image: "/enfant/enfant-logo.png",
+  });
+}
+
 export default async function StaticPage({ params, searchParams }) {
   const { locale: localeParam, pageSlug } = await params;
   const resolvedSearchParams = await searchParams;
@@ -443,7 +472,7 @@ export default async function StaticPage({ params, searchParams }) {
 
           <div className="static-page-footer">
             <Link href={buildStorePath(locale, "/", region)} className="section-link">
-              {isAr ? "← العودة للرئيسية" : "← Back to Home"}
+              {isAr ? "→ العودة للرئيسية" : "← Back to Home"}
             </Link>
           </div>
         </div>

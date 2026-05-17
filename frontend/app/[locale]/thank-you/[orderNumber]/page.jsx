@@ -2,13 +2,15 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 
 import StorefrontShell from "@/components/layout/StorefrontShell";
+import PurchaseEventTracker from "@/components/store/analytics/PurchaseEventTracker";
 import { getNavigationData } from "@/lib/api";
 import { buildStorePath, normalizeLocale, normalizeRegion, formatMoney } from "@/lib/storefront";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api";
 
-async function getOrder(orderNumber, emailOrPhone) {
+async function getOrder(orderNumber, { lookupToken = "", emailOrPhone = "" } = {}) {
   const params = new URLSearchParams();
+  if (lookupToken) params.set("lookup_token", lookupToken);
   if (emailOrPhone) params.set("email_or_phone", emailOrPhone);
   const query = params.toString();
   const response = await fetch(
@@ -38,11 +40,14 @@ const PAYMENT_STATUS_LABELS = {
 const ORDER_STATUS_LABELS = {
   pending: { label: "Pending", labelAr: "معلق", cls: "" },
   confirmed: { label: "Confirmed", labelAr: "مؤكد", cls: "status-confirmed" },
-  preparing: { label: "Preparing", labelAr: "قيد التحضير", cls: "status-preparing" },
-  ready: { label: "Ready", labelAr: "جاهز", cls: "status-ready" },
-  out_for_delivery: { label: "Out for Delivery", labelAr: "في الطريق", cls: "status-out_for_delivery" },
+  paid: { label: "Paid", labelAr: "مدفوع", cls: "status-paid" },
+  processing: { label: "Processing", labelAr: "قيد المعالجة", cls: "status-processing" },
+  shipped: { label: "Shipped", labelAr: "تم الشحن", cls: "status-shipped" },
   delivered: { label: "Delivered", labelAr: "تم التسليم", cls: "status-delivered" },
   cancelled: { label: "Cancelled", labelAr: "ملغي", cls: "status-cancelled" },
+  returned: { label: "Returned", labelAr: "مرتجع", cls: "status-returned" },
+  refunded: { label: "Refunded", labelAr: "مسترد", cls: "status-refunded" },
+  failed: { label: "Failed", labelAr: "فشل", cls: "status-failed" },
 };
 
 const PAYMENT_METHOD_LABELS = {
@@ -61,8 +66,13 @@ export default async function ThankYouPage({ params, searchParams }) {
 
   const isAr = locale === "ar";
   const requestedRegion = normalizeRegion(resolvedSearchParams?.region || "om");
+  const lookupToken =
+    resolvedSearchParams?.lookup_token ||
+    resolvedSearchParams?.t ||
+    resolvedSearchParams?.token ||
+    "";
   const emailOrPhone = resolvedSearchParams?.email_or_phone || "";
-  const order = await getOrder(orderNumber, emailOrPhone);
+  const order = await getOrder(orderNumber, { lookupToken, emailOrPhone });
   const orderRegion = normalizeRegion(order?.region_code || requestedRegion);
   const navigation = await getNavigationData(locale, orderRegion);
 
@@ -100,10 +110,13 @@ export default async function ThankYouPage({ params, searchParams }) {
   };
   const orderStatusInfo = ORDER_STATUS_LABELS[order.status] || { label: order.status, cls: "" };
   const paymentMethodInfo = PAYMENT_METHOD_LABELS[order.payment_method] || { label: order.payment_method };
+  const canDownloadInvoice = Boolean(order.invoice_download_url && order.payment_status === "paid");
+  const hasTracking = Boolean(order.tracking_number || order.tracking_url);
 
   return (
     <StorefrontShell locale={locale} navigation={navigation}>
       <section className="section-shell thank-you-page">
+        <PurchaseEventTracker order={order} locale={locale} region={orderRegion} />
         <div className="section-heading">
           <div>
             <p style={{ margin: "0 0 4px", color: "var(--text-soft)", fontSize: "0.9rem" }}>
@@ -165,9 +178,55 @@ export default async function ThankYouPage({ params, searchParams }) {
                   className={`timeline-step ${step.is_completed ? "completed" : ""} ${step.is_current ? "current" : ""}`}
                 >
                   <span className="timeline-dot" />
-                  <p>{step.label}</p>
+                  <p>
+                    {isAr ? (step.label_ar || step.label) : step.label}
+                    {step.timestamp ? (
+                      <small style={{ display: "block", marginTop: "2px", opacity: 0.72 }}>
+                        {new Date(step.timestamp).toLocaleString(isAr ? "ar" : "en")}
+                      </small>
+                    ) : null}
+                    {step.note ? (
+                      <small style={{ display: "block", marginTop: "2px", opacity: 0.72 }}>
+                        {step.note}
+                      </small>
+                    ) : null}
+                  </p>
                 </div>
               ))}
+            </div>
+          ) : null}
+
+          {canDownloadInvoice ? (
+            <a
+              href={order.invoice_download_url}
+              className="secondary-action full-width thank-you-invoice"
+              target="_blank"
+              rel="noreferrer"
+            >
+              {isAr ? "تحميل الفاتورة" : "Download Invoice"}
+            </a>
+          ) : null}
+
+          {hasTracking ? (
+            <div className="tracking-block">
+              <p style={{ margin: "0 0 8px", fontWeight: 700 }}>
+                {isAr ? "بيانات الشحنة" : "Shipment Tracking"}
+              </p>
+              {order.tracking_number ? (
+                <p style={{ margin: "0 0 8px", color: "var(--text-soft)" }}>
+                  {isAr ? "رقم التتبع" : "Tracking number"}: <strong>{order.tracking_number}</strong>
+                </p>
+              ) : null}
+              {order.tracking_url ? (
+                <a
+                  href={order.tracking_url}
+                  className="secondary-action full-width"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {isAr ? "تتبع الشحنة" : "Track Shipment"}
+                </a>
+              ) : null}
             </div>
           ) : null}
 
@@ -240,6 +299,15 @@ export default async function ThankYouPage({ params, searchParams }) {
                   ? money(order.shipping_total, order.currency_code, orderRegion, locale)
                   : isAr ? "مجاناً" : "Free"}
               </b>
+            </div>
+            <div className="total-line">
+              <span>
+                {order.tax_label || (isAr ? "ضريبة القيمة المضافة" : "VAT")}
+                {order.tax_rate
+                  ? ` (${(Number(order.tax_rate) * 100).toFixed(2)}%)`
+                  : ""}
+              </span>
+              <b>{money(order.tax_total || 0, order.currency_code, orderRegion, locale)}</b>
             </div>
             <div className="total-line order-grand-total">
               <strong>{isAr ? "الإجمالي الكلي" : "Grand Total"}</strong>

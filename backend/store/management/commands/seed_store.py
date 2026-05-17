@@ -10,6 +10,7 @@ from store.models import (
     ProductPrice,
     Region,
     SiteSettings,
+    TaxRate,
     Tag,
     Testimonial,
 )
@@ -21,6 +22,7 @@ from store.sample_data import (
     PRODUCTS,
     REGIONS,
     SITE_SETTINGS,
+    TAX_RATES,
     TAGS,
     TESTIMONIALS,
 )
@@ -43,6 +45,19 @@ class Command(BaseCommand):
                 defaults=payload,
             )
             region_map[payload["code"]] = region
+
+        for payload in TAX_RATES:
+            defaults = payload.copy()
+            region_code = defaults.pop("region_code")
+            region = region_map.get(region_code) or Region.objects.filter(code=region_code).first()
+            if not region:
+                continue
+            TaxRate.objects.update_or_create(
+                region=region,
+                label=defaults["label"],
+                effective_from=defaults["effective_from"],
+                defaults=defaults,
+            )
 
         for payload in HERO_PROMO_CARDS:
             HeroPromoCard.objects.update_or_create(

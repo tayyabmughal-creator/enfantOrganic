@@ -1,15 +1,34 @@
 import logging
-from decimal import Decimal
+import re
+from decimal import Decimal, ROUND_HALF_UP
 
+from django.core.validators import RegexValidator
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers
 
-from ..emails import send_order_confirmation_email
-from ..models import Coupon, Order, OrderItem, PaymentTransaction, Product, ProductPrice, Region
-from ..notifications import notify_admins_new_order
+# E.164-ish phone validator: optional leading +, 8–15 digits, allows separators
+# common in GCC numbers. Storage normalizes to a single sanitized string.
+PHONE_PATTERN = re.compile(r"^\+?[0-9 ()\-]{8,32}$")
+NAME_PATTERN = re.compile(r"^[\w\s'\.\-؀-ۿ]{2,160}$", re.UNICODE)
+
+from ..models import Coupon, Order, OrderItem, PaymentTransaction, Product, ProductPrice, Region, ShippingRule, TaxRate
+from ..services import carrier_router
+from ..services.stock import StockError, ensure_region_stock_available, reserve_and_deduct_stock_for_item
 
 logger = logging.getLogger(__name__)
+
+MONEY_QUANTIZER = Decimal("0.01")
+RATE_QUANTIZER = Decimal("0.0001")
+
+
+def quantize_money(value):
+    return Decimal(value).quantize(MONEY_QUANTIZER, rounding=ROUND_HALF_UP)
+
+
+def quantize_rate(value):
+    return Decimal(value).quantize(RATE_QUANTIZER, rounding=ROUND_HALF_UP)
 
 
 class CheckoutItemInputSerializer(serializers.Serializer):
@@ -19,13 +38,84 @@ class CheckoutItemInputSerializer(serializers.Serializer):
 
 
 class CheckoutCustomerSerializer(serializers.Serializer):
-    name = serializers.CharField(max_length=160)
+    name = serializers.CharField(min_length=2, max_length=160)
     email = serializers.EmailField(required=False, allow_blank=True)
-    phone = serializers.CharField(max_length=60)
+    phone = serializers.CharField(min_length=8, max_length=32)
+
+    def validate_name(self, value):
+        cleaned = (value or "").strip()
+        if not cleaned or len(cleaned) < 2:
+            raise serializers.ValidationError("Name is required (min 2 characters).")
+        if not NAME_PATTERN.match(cleaned):
+            raise serializers.ValidationError("Name contains unsupported characters.")
+        return cleaned
+
+    def validate_phone(self, value):
+        cleaned = (value or "").strip()
+        if not PHONE_PATTERN.match(cleaned):
+            raise serializers.ValidationError("Enter a valid phone number (digits, optional +, 8–15 digits).")
+        return cleaned
+    sms_opt_in = serializers.BooleanField(required=False, default=False)
+    whatsapp_opt_in = serializers.BooleanField(required=False, default=False)
     address_line_1 = serializers.CharField(max_length=255)
     address_line_2 = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    building = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    floor = serializers.CharField(max_length=60, required=False, allow_blank=True)
+    apartment = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    landmark = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    area = serializers.CharField(max_length=120, required=False, allow_blank=True)
     city = serializers.CharField(max_length=120)
+    postcode = serializers.CharField(max_length=40, required=False, allow_blank=True)
     country = serializers.CharField(max_length=120)
+    formatted_address = serializers.CharField(max_length=500, required=False, allow_blank=True)
+    place_id = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    latitude = serializers.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        required=False,
+        allow_null=True,
+    )
+    longitude = serializers.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        required=False,
+        allow_null=True,
+    )
+    lat = serializers.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+    lng = serializers.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+    location_notes = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        latitude = attrs.get("latitude")
+        longitude = attrs.get("longitude")
+        lat_alias = attrs.pop("lat", None)
+        lng_alias = attrs.pop("lng", None)
+
+        if latitude is None and lat_alias is not None:
+            latitude = lat_alias
+            attrs["latitude"] = latitude
+        if longitude is None and lng_alias is not None:
+            longitude = lng_alias
+            attrs["longitude"] = longitude
+
+        if latitude is not None and (latitude < -90 or latitude > 90):
+            raise serializers.ValidationError({"latitude": "Latitude must be between -90 and 90."})
+        if longitude is not None and (longitude < -180 or longitude > 180):
+            raise serializers.ValidationError({"longitude": "Longitude must be between -180 and 180."})
+
+        return attrs
 
 
 def resolve_region(value):
@@ -35,10 +125,15 @@ def resolve_region(value):
         raise serializers.ValidationError("Invalid region.")
 
 
+def get_tax_rate_for_region(region, at_date=None):
+    return TaxRate.get_effective_rate(region=region, at_date=at_date)
+
+
 def prepare_checkout_items(items_data, region, lock_products=False):
     subtotal = Decimal("0.00")
     prepared_items = []
     requested_quantities = {}
+    validated_inventory_slugs = set()
 
     for item_data in items_data:
         slug = item_data["slug"]
@@ -71,15 +166,19 @@ def prepare_checkout_items(items_data, region, lock_products=False):
 
         quantity = item_data["quantity"]
 
-        if product.track_inventory and requested_quantities[product.slug] > product.stock_quantity:
-            raise serializers.ValidationError(
-                {
-                    "items": f"Only {product.stock_quantity} item(s) available for {product.name_en}."
-                }
-            )
+        if product.track_inventory and product.slug not in validated_inventory_slugs:
+            try:
+                ensure_region_stock_available(
+                    product,
+                    region,
+                    requested_quantities[product.slug],
+                )
+            except StockError as exc:
+                raise serializers.ValidationError({"items": str(exc)})
+            validated_inventory_slugs.add(product.slug)
 
         unit_price = price_obj.price
-        line_total = unit_price * quantity
+        line_total = quantize_money(unit_price * quantity)
         subtotal += line_total
 
         prepared_items.append(
@@ -94,7 +193,7 @@ def prepare_checkout_items(items_data, region, lock_products=False):
             }
         )
 
-    return subtotal, prepared_items
+    return quantize_money(subtotal), prepared_items
 
 
 def validate_coupon_for_checkout(coupon_code, region, subtotal, prepared_items, lock_coupon=False):
@@ -154,36 +253,227 @@ def validate_coupon_for_checkout(coupon_code, region, subtotal, prepared_items, 
     if discount_total > subtotal:
         discount_total = subtotal
 
-    return coupon, discount_total
+    return coupon, quantize_money(discount_total)
 
 
-def calculate_shipping_total(region, subtotal, coupon=None):
-    free_threshold = getattr(region, "free_shipping_threshold", Decimal("0.00")) or Decimal("0.00")
+def _normalized_location(value):
+    return str(value or "").strip().casefold()
 
-    if free_threshold <= 0:
-        free_threshold = getattr(region, "shipping_threshold", Decimal("0.00")) or Decimal("0.00")
 
-    shipping_fee = getattr(region, "shipping_fee", Decimal("0.00")) or Decimal("0.00")
+def resolve_shipping_rule(region, subtotal, *, city="", area=""):
+    city_key = _normalized_location(city)
+    area_key = _normalized_location(area)
+
+    rules = (
+        ShippingRule.objects.filter(
+            region=region,
+            active=True,
+            min_order_value__lte=quantize_money(subtotal),
+        )
+        .filter(Q(max_order_value__isnull=True) | Q(max_order_value__gte=quantize_money(subtotal)))
+        .order_by("-min_order_value", "id")
+    )
+
+    best_match = None
+    best_rank = None
+    for rule in rules:
+        rule_city = _normalized_location(rule.city)
+        rule_area = _normalized_location(rule.area)
+
+        if rule_city and rule_city != city_key:
+            continue
+        if rule_area and rule_area != area_key:
+            continue
+
+        specificity = 0
+        if rule_city:
+            specificity += 1
+        if rule_area:
+            specificity += 2
+
+        max_value_rank = rule.max_order_value if rule.max_order_value is not None else Decimal("999999999.99")
+        rank = (specificity, rule.min_order_value, -max_value_rank, -rule.id)
+        if best_rank is None or rank > best_rank:
+            best_rank = rank
+            best_match = rule
+
+    return best_match
+
+
+def calculate_shipping_quote(region, subtotal, coupon=None, *, city="", area=""):
+    subtotal = quantize_money(subtotal)
+    carrier_quote = None
+    if getattr(region, "carrier_enabled", False):
+        try:
+            carrier_quote = carrier_router.get_rate(
+                region=region,
+                subtotal=subtotal,
+                city=city,
+                area=area,
+            )
+        except carrier_router.CarrierRouterError as exc:
+            logger.warning(
+                "Carrier quote unavailable for region=%s city=%s area=%s: %s",
+                getattr(region, "code", "unknown"),
+                city,
+                area,
+                exc,
+            )
+        except Exception:
+            logger.exception(
+                "Unexpected carrier quote failure for region=%s city=%s area=%s",
+                getattr(region, "code", "unknown"),
+                city,
+                area,
+            )
+
+    if carrier_quote:
+        free_threshold = quantize_money(carrier_quote.get("free_shipping_threshold") or Decimal("0.00"))
+        base_shipping_fee = quantize_money(carrier_quote.get("shipping_fee") or Decimal("0.00"))
+        shipping_method = Order.SHIPPING_METHOD_CARRIER
+        carrier_name = str(
+            carrier_quote.get("carrier_name")
+            or carrier_quote.get("carrier_key")
+            or ""
+        ).strip()
+        eta_min_days = carrier_quote.get("eta_min_days")
+        eta_max_days = carrier_quote.get("eta_max_days")
+        rule = None
+    else:
+        rule = resolve_shipping_rule(region, subtotal, city=city, area=area)
+
+        if rule:
+            free_threshold = quantize_money(rule.free_shipping_threshold or Decimal("0.00"))
+            base_shipping_fee = quantize_money(rule.shipping_fee or Decimal("0.00"))
+            shipping_method = Order.SHIPPING_METHOD_RULE
+            carrier_name = rule.carrier_name or ""
+            eta_min_days = rule.eta_min_days
+            eta_max_days = rule.eta_max_days
+        else:
+            free_threshold = quantize_money(
+                getattr(region, "free_shipping_threshold", Decimal("0.00")) or Decimal("0.00")
+            )
+            if free_threshold <= 0:
+                free_threshold = quantize_money(
+                    getattr(region, "shipping_threshold", Decimal("0.00")) or Decimal("0.00")
+                )
+            base_shipping_fee = quantize_money(getattr(region, "shipping_fee", Decimal("0.00")) or Decimal("0.00"))
+            shipping_method = Order.SHIPPING_METHOD_FLAT
+            carrier_name = ""
+            eta_min_days = None
+            eta_max_days = None
+
     shipping_total = Decimal("0.00")
-
-    if free_threshold <= 0:
-        shipping_total = shipping_fee
-    elif subtotal < free_threshold:
-        shipping_total = shipping_fee
+    if free_threshold <= 0 or subtotal < free_threshold:
+        shipping_total = base_shipping_fee
 
     if coupon and coupon.discount_type == Coupon.DISCOUNT_FREE_SHIPPING:
         shipping_total = Decimal("0.00")
 
-    return shipping_total
+    return {
+        "shipping_rule": rule,
+        "shipping_fee": quantize_money(base_shipping_fee),
+        "shipping_total": quantize_money(shipping_total),
+        "free_shipping_threshold": free_threshold,
+        "shipping_method": shipping_method,
+        "carrier_name": carrier_name,
+        "eta_min_days": eta_min_days,
+        "eta_max_days": eta_max_days,
+    }
+
+
+def calculate_tax_totals(region, subtotal, discount_total, shipping_total):
+    subtotal_after_discount = quantize_money(max(subtotal - discount_total, Decimal("0.00")))
+    tax_rate_obj = get_tax_rate_for_region(region)
+
+    if not tax_rate_obj:
+        return {
+            "tax_rate_obj": None,
+            "tax_label": "",
+            "tax_rate": Decimal("0.0000"),
+            "tax_inclusive": False,
+            "tax_applies_to_shipping": False,
+            "subtotal_after_discount": subtotal_after_discount,
+            "taxable_amount": subtotal_after_discount,
+            "tax_total": Decimal("0.00"),
+            "taxable_shipping_amount": Decimal("0.00"),
+        }
+
+    rate = quantize_rate(tax_rate_obj.rate or Decimal("0.00"))
+    tax_inclusive = bool(tax_rate_obj.is_inclusive)
+    applies_to_shipping = bool(tax_rate_obj.applies_to_shipping)
+    taxable_shipping_amount = quantize_money(shipping_total) if applies_to_shipping else Decimal("0.00")
+    taxable_base = quantize_money(subtotal_after_discount + taxable_shipping_amount)
+
+    if taxable_base <= 0 or rate <= 0:
+        taxable_amount = Decimal("0.00")
+        tax_total = Decimal("0.00")
+    elif tax_inclusive:
+        divisor = Decimal("1.00") + rate
+        taxable_amount = quantize_money(taxable_base / divisor)
+        tax_total = quantize_money(taxable_base - taxable_amount)
+    else:
+        taxable_amount = taxable_base
+        tax_total = quantize_money(taxable_amount * rate)
+
+    return {
+        "tax_rate_obj": tax_rate_obj,
+        "tax_label": tax_rate_obj.label,
+        "tax_rate": rate,
+        "tax_inclusive": tax_inclusive,
+        "tax_applies_to_shipping": applies_to_shipping,
+        "subtotal_after_discount": subtotal_after_discount,
+        "taxable_amount": taxable_amount,
+        "tax_total": tax_total,
+        "taxable_shipping_amount": taxable_shipping_amount,
+    }
+
+
+def calculate_checkout_totals(region, subtotal, discount_total, shipping_total):
+    summary = calculate_tax_totals(region, subtotal, discount_total, shipping_total)
+    base_total = quantize_money(subtotal - discount_total + shipping_total)
+    if summary["tax_inclusive"]:
+        grand_total = base_total
+    else:
+        grand_total = quantize_money(base_total + summary["tax_total"])
+
+    summary.update(
+        {
+            "subtotal": quantize_money(subtotal),
+            "discount_total": quantize_money(discount_total),
+            "shipping_total": quantize_money(shipping_total),
+            "grand_total": grand_total,
+        }
+    )
+    return summary
+
+
+def build_tax_breakdown(summary):
+    rate_percent = quantize_money(summary["tax_rate"] * Decimal("100"))
+    return {
+        "label": summary["tax_label"],
+        "rate": str(summary["tax_rate"]),
+        "rate_percent": str(rate_percent),
+        "is_inclusive": summary["tax_inclusive"],
+        "applies_to_shipping": summary["tax_applies_to_shipping"],
+        "subtotal_after_discount": str(summary["subtotal_after_discount"]),
+        "shipping_total": str(summary["shipping_total"]),
+        "taxable_shipping_amount": str(summary["taxable_shipping_amount"]),
+        "taxable_amount": str(summary["taxable_amount"]),
+        "tax_total": str(summary["tax_total"]),
+        "grand_total": str(summary["grand_total"]),
+    }
 
 
 def serialize_money(value):
-    return str(Decimal(value).quantize(Decimal("0.01")))
+    return str(quantize_money(value))
 
 
 class CouponValidationSerializer(serializers.Serializer):
     region = serializers.SlugField()
-    coupon_code = serializers.CharField()
+    coupon_code = serializers.CharField(required=False, allow_blank=True, default="")
+    city = serializers.CharField(required=False, allow_blank=True, default="")
+    area = serializers.CharField(required=False, allow_blank=True, default="")
     items = CheckoutItemInputSerializer(many=True)
 
     def validate_region(self, value):
@@ -202,24 +492,48 @@ class CouponValidationSerializer(serializers.Serializer):
             lock_products=False,
         )
         coupon, discount_total = validate_coupon_for_checkout(
-            self.validated_data["coupon_code"],
+            self.validated_data.get("coupon_code", ""),
             region,
             subtotal,
             prepared_items,
             lock_coupon=False,
         )
-        shipping_total = calculate_shipping_total(region, subtotal, coupon)
-        final_total = subtotal - discount_total + shipping_total
+        shipping_quote = calculate_shipping_quote(
+            region,
+            subtotal,
+            coupon,
+            city=self.validated_data.get("city", ""),
+            area=self.validated_data.get("area", ""),
+        )
+        totals = calculate_checkout_totals(
+            region=region,
+            subtotal=subtotal,
+            discount_total=discount_total,
+            shipping_total=shipping_quote["shipping_total"],
+        )
 
         return {
             "valid": True,
-            "coupon_code": coupon.code,
-            "discount_amount": serialize_money(discount_total),
-            "shipping_amount": serialize_money(shipping_total),
-            "subtotal": serialize_money(subtotal),
-            "final_total": serialize_money(final_total),
+            "coupon_code": coupon.code if coupon else "",
+            "discount_amount": serialize_money(totals["discount_total"]),
+            "shipping_amount": serialize_money(totals["shipping_total"]),
+            "shipping_fee": serialize_money(shipping_quote["shipping_total"]),
+            "shipping_method": shipping_quote["shipping_method"],
+            "carrier_name": shipping_quote["carrier_name"],
+            "eta_min_days": shipping_quote["eta_min_days"],
+            "eta_max_days": shipping_quote["eta_max_days"],
+            "free_shipping_threshold": serialize_money(shipping_quote["free_shipping_threshold"]),
+            "subtotal": serialize_money(totals["subtotal"]),
+            "taxable_amount": serialize_money(totals["taxable_amount"]),
+            "tax_amount": serialize_money(totals["tax_total"]),
+            "tax_rate": str(totals["tax_rate"]),
+            "tax_label": totals["tax_label"],
+            "tax_inclusive": totals["tax_inclusive"],
+            "tax_applies_to_shipping": totals["tax_applies_to_shipping"],
+            "final_total": serialize_money(totals["grand_total"]),
             "currency_code": region.currency_code,
-            "message": "Coupon applied.",
+            "tax_breakdown": build_tax_breakdown(totals),
+            "message": "Coupon applied." if coupon else "Totals updated.",
         }
 
 
@@ -243,6 +557,24 @@ class CheckoutCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError("Cart is empty.")
         return value
 
+    def validate(self, attrs):
+        region = attrs.get("region")
+        customer = attrs.get("customer", {})
+        latitude = customer.get("latitude")
+        longitude = customer.get("longitude")
+
+        if region and region.require_map_pin and (latitude is None or longitude is None):
+            raise serializers.ValidationError(
+                {
+                    "customer": (
+                        "Map pin is required for this region. "
+                        "Please provide latitude and longitude from map selection."
+                    )
+                }
+            )
+
+        return attrs
+
     @transaction.atomic
     def create(self, validated_data):
         region = validated_data["region"]
@@ -262,8 +594,19 @@ class CheckoutCreateSerializer(serializers.Serializer):
             lock_coupon=True,
         )
 
-        shipping_total = calculate_shipping_total(region, subtotal, coupon)
-        grand_total = subtotal - discount_total + shipping_total
+        shipping_quote = calculate_shipping_quote(
+            region,
+            subtotal,
+            coupon,
+            city=customer.get("city", ""),
+            area=customer.get("area", ""),
+        )
+        totals = calculate_checkout_totals(
+            region=region,
+            subtotal=subtotal,
+            discount_total=discount_total,
+            shipping_total=shipping_quote["shipping_total"],
+        )
 
         order = Order.objects.create(
             user=self.context.get("request").user
@@ -274,34 +617,156 @@ class CheckoutCreateSerializer(serializers.Serializer):
             customer_name=customer["name"],
             customer_email=customer.get("email", ""),
             customer_phone=customer["phone"],
+            sms_opt_in=bool(customer.get("sms_opt_in", False)),
+            whatsapp_opt_in=bool(customer.get("whatsapp_opt_in", False)),
             address_line_1=customer["address_line_1"],
             address_line_2=customer.get("address_line_2", ""),
+            building=customer.get("building", ""),
+            floor=customer.get("floor", ""),
+            apartment=customer.get("apartment", ""),
+            landmark=customer.get("landmark", ""),
+            area=customer.get("area", ""),
             city=customer["city"],
+            postcode=customer.get("postcode", ""),
             country=customer["country"],
+            formatted_address=customer.get("formatted_address", ""),
+            place_id=customer.get("place_id", ""),
+            latitude=customer.get("latitude"),
+            longitude=customer.get("longitude"),
+            location_notes=customer.get("location_notes", ""),
             notes=validated_data.get("notes", ""),
+            address_snapshot={
+                "address_line_1": customer["address_line_1"],
+                "address_line_2": customer.get("address_line_2", ""),
+                "building": customer.get("building", ""),
+                "floor": customer.get("floor", ""),
+                "apartment": customer.get("apartment", ""),
+                "landmark": customer.get("landmark", ""),
+                "area": customer.get("area", ""),
+                "city": customer["city"],
+                "postcode": customer.get("postcode", ""),
+                "country": customer["country"],
+                "formatted_address": customer.get("formatted_address", ""),
+                "place_id": customer.get("place_id", ""),
+                "latitude": str(customer.get("latitude")) if customer.get("latitude") is not None else None,
+                "longitude": str(customer.get("longitude")) if customer.get("longitude") is not None else None,
+                "location_notes": customer.get("location_notes", ""),
+            },
             coupon_code=coupon_code,
-            discount_total=discount_total,
-            subtotal=subtotal,
-            shipping_total=shipping_total,
-            grand_total=grand_total,
+            discount_total=totals["discount_total"],
+            subtotal=totals["subtotal"],
+            shipping_fee=shipping_quote["shipping_total"],
+            shipping_method=shipping_quote["shipping_method"],
+            shipping_carrier_name=shipping_quote["carrier_name"],
+            shipping_eta_min_days=shipping_quote["eta_min_days"],
+            shipping_eta_max_days=shipping_quote["eta_max_days"],
+            shipping_total=totals["shipping_total"],
+            taxable_amount=totals["taxable_amount"],
+            tax_rate=totals["tax_rate"],
+            tax_total=totals["tax_total"],
+            tax_inclusive=totals["tax_inclusive"],
+            tax_applies_to_shipping=totals["tax_applies_to_shipping"],
+            tax_label=totals["tax_label"],
+            tax_breakdown=build_tax_breakdown(totals),
+            grand_total=totals["grand_total"],
             currency_code=region.currency_code,
             payment_method=validated_data.get("payment_method", Order.PAYMENT_COD),
         )
 
+        subtotal_after_discount = totals["subtotal_after_discount"]
+        item_entries = []
+
         for prepared_item in prepared_items:
+            line_total = quantize_money(prepared_item["line_total"])
+            if subtotal > 0:
+                discount_share = quantize_money(
+                    totals["discount_total"] * line_total / subtotal
+                )
+            else:
+                discount_share = Decimal("0.00")
+            line_after_discount = quantize_money(max(line_total - discount_share, Decimal("0.00")))
+
+            if totals["tax_applies_to_shipping"] and subtotal_after_discount > 0:
+                shipping_share = quantize_money(
+                    totals["shipping_total"] * line_after_discount / subtotal_after_discount
+                )
+            else:
+                shipping_share = Decimal("0.00")
+
+            item_entries.append(
+                {
+                    "prepared_item": prepared_item,
+                    "line_total": line_total,
+                    "discount_share": discount_share,
+                    "shipping_share": shipping_share,
+                }
+            )
+
+        allocated_taxable = Decimal("0.00")
+        allocated_tax = Decimal("0.00")
+        for index, entry in enumerate(item_entries):
+            taxable_base = quantize_money(
+                max(entry["line_total"] - entry["discount_share"], Decimal("0.00")) + entry["shipping_share"]
+            )
+            is_last = index == len(item_entries) - 1
+
+            if totals["tax_rate"] > 0 and taxable_base > 0:
+                if is_last:
+                    item_taxable = quantize_money(totals["taxable_amount"] - allocated_taxable)
+                    item_tax = quantize_money(totals["tax_total"] - allocated_tax)
+                elif totals["tax_inclusive"]:
+                    divisor = Decimal("1.00") + totals["tax_rate"]
+                    item_taxable = quantize_money(taxable_base / divisor)
+                    item_tax = quantize_money(taxable_base - item_taxable)
+                else:
+                    item_taxable = taxable_base
+                    item_tax = quantize_money(item_taxable * totals["tax_rate"])
+            else:
+                item_taxable = taxable_base
+                item_tax = Decimal("0.00")
+
+            entry["item_taxable"] = item_taxable
+            entry["item_tax"] = item_tax
+            allocated_taxable += item_taxable
+            allocated_tax += item_tax
+
+        for entry in item_entries:
+            prepared_item = entry["prepared_item"]
             product = prepared_item["product"]
+            allocations = []
+            if product and product.track_inventory:
+                try:
+                    allocations = reserve_and_deduct_stock_for_item(
+                        product,
+                        region,
+                        prepared_item["quantity"],
+                    )
+                except StockError as exc:
+                    raise serializers.ValidationError({"items": str(exc)})
+
             OrderItem.objects.create(
                 order=order,
+                taxable_amount=entry["item_taxable"],
+                tax_rate=totals["tax_rate"],
+                tax_total=entry["item_tax"],
+                tax_inclusive=totals["tax_inclusive"],
+                tax_breakdown={
+                    "taxable_amount": str(entry["item_taxable"]),
+                    "tax_total": str(entry["item_tax"]),
+                    "discount_share": str(entry["discount_share"]),
+                    "shipping_share": str(entry["shipping_share"]),
+                    "tax_rate": str(totals["tax_rate"]),
+                    "tax_label": totals["tax_label"],
+                    "tax_inclusive": totals["tax_inclusive"],
+                },
                 price_snapshot={
                     "unit_price": str(prepared_item["unit_price"]),
                     "line_total": str(prepared_item["line_total"]),
                     "currency_code": region.currency_code,
+                    "warehouse_allocations": allocations,
                 },
                 **prepared_item,
             )
-            if product and product.track_inventory:
-                product.stock_quantity = max(product.stock_quantity - prepared_item["quantity"], 0)
-                product.save(update_fields=["stock_quantity"])
 
         if coupon:
             coupon.used_count += 1
@@ -309,17 +774,14 @@ class CheckoutCreateSerializer(serializers.Serializer):
 
         PaymentTransaction.objects.create(
             order=order,
-            provider=order.payment_method,
+            provider=(
+                region.default_payment_provider
+                if order.payment_method == Order.PAYMENT_ONLINE and getattr(region, "default_payment_provider", "")
+                else order.payment_method
+            ),
             amount=order.grand_total,
             currency_code=order.currency_code,
             status=PaymentTransaction.STATUS_PENDING,
         )
-
-        try:
-            send_order_confirmation_email(order)
-        except Exception:
-            logger.exception("Order confirmation email failed for order %s", order.order_number)
-
-        transaction.on_commit(lambda: notify_admins_new_order(order))
 
         return order

@@ -1,0 +1,8 @@
+{% extends "emails/ar/base.html" %}
+{% block header %}تم تأكيد طلبك{% endblock %}
+{% block content %}
+<p>مرحباً {{ order.customer_name }}،</p>
+<p>شكراً لتسوقك معنا. تم استلام طلبك وبدأنا تجهيزه.</p>
+{% include "emails/ar/_order_summary.html" %}
+<p>سنرسل لك تحديثاً جديداً مع تقدم حالة الطلب.</p>
+{% endblock %}

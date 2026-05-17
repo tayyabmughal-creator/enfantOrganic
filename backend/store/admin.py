@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from .models import (
+    AdminAuditLog,
     BlogPost,
     Category,
     HeroPromoCard,
@@ -8,20 +9,31 @@ from .models import (
     CustomerAddress,
     NewsletterSubscription,
     NotificationLog,
+    WhatsAppLog,
     Order,
+    OrderStatusHistory,
     OrderItem,
     Product,
     ProductPrice,
     PushDevice,
     Region,
+    ReturnRequest,
     Review,
+    ShippingRule,
     SiteSettings,
+    TaxRate,
     Tag,
     Testimonial,
     Coupon,
     PaymentTransaction,
+    ProductStock,
     WishlistItem,
+    Warehouse,
 )
+from .services.admin_audit import log_admin_action, serialize_for_audit
+from .services.carrier_router import get_region_carrier_warnings
+from .services.payment_router import get_region_provider_warnings
+from .services.shipment import create_order_shipment, refresh_order_tracking
 
 admin.site.site_header = "EnfhantOrganic Admin"
 admin.site.site_title = "EnfhantOrganic"
@@ -33,22 +45,123 @@ class ProductPriceInline(admin.TabularInline):
     extra = 1
 
 
+def _product_price_snapshot(product):
+    rows = (
+        ProductPrice.objects.filter(product=product)
+        .order_by("region__sort_order", "region_id", "id")
+        .values(
+            "id",
+            "region_id",
+            "price",
+            "compare_at_price",
+            "price_prefix_en",
+            "price_prefix_ar",
+            "unit_price_text_en",
+            "unit_price_text_ar",
+        )
+    )
+    return serialize_for_audit(list(rows))
+
+
 @admin.register(Region)
 class RegionAdmin(admin.ModelAdmin):
     list_display = (
         "name_en",
         "code",
         "currency_code",
+        "seller_legal_name",
+        "seller_vat_number",
+        "default_payment_provider",
+        "payment_mode",
+        "payment_config_warnings",
+        "carrier_enabled",
+        "primary_carrier",
+        "fallback_carrier",
+        "carrier_config_warnings",
         "shipping_threshold",
         "whatsapp_phone",
         "shipping_fee",
         "free_shipping_threshold",
+        "require_map_pin",
         "is_active",
         "is_default",
     )
-    list_editable = ("is_default", "is_active")
-    list_filter = ("is_active",)
+    list_editable = ("is_default", "is_active", "require_map_pin", "carrier_enabled")
+    list_filter = ("is_active", "payment_mode", "carrier_enabled")
     prepopulated_fields = {"code": ("name_en",)}
+    readonly_fields = ("payment_config_warnings", "carrier_config_warnings")
+
+    @admin.display(description="Payment warnings")
+    def payment_config_warnings(self, obj):
+        warnings = get_region_provider_warnings(obj)
+        return "; ".join(warnings) if warnings else "OK"
+
+    @admin.display(description="Carrier warnings")
+    def carrier_config_warnings(self, obj):
+        warnings = get_region_carrier_warnings(obj)
+        return "; ".join(warnings) if warnings else "OK"
+
+
+@admin.register(TaxRate)
+class TaxRateAdmin(admin.ModelAdmin):
+    list_display = (
+        "label",
+        "region",
+        "country_code",
+        "rate",
+        "is_active",
+        "is_inclusive",
+        "applies_to_shipping",
+        "effective_from",
+        "effective_to",
+    )
+    list_filter = ("is_active", "is_inclusive", "applies_to_shipping", "region")
+    search_fields = ("label", "country_code", "region__code", "region__name_en")
+
+
+@admin.register(ShippingRule)
+class ShippingRuleAdmin(admin.ModelAdmin):
+    list_display = (
+        "region",
+        "city",
+        "area",
+        "min_order_value",
+        "max_order_value",
+        "shipping_fee",
+        "free_shipping_threshold",
+        "eta_min_days",
+        "eta_max_days",
+        "carrier_name",
+        "active",
+    )
+    list_filter = ("region", "active", "city", "area")
+    search_fields = ("region__code", "region__name_en", "city", "area", "carrier_name")
+
+
+@admin.register(Warehouse)
+class WarehouseAdmin(admin.ModelAdmin):
+    list_display = (
+        "code",
+        "name_en",
+        "region",
+        "city",
+        "active",
+    )
+    list_filter = ("active", "region")
+    search_fields = ("code", "name_en", "name_ar", "city")
+
+
+@admin.register(ProductStock)
+class ProductStockAdmin(admin.ModelAdmin):
+    list_display = (
+        "product",
+        "warehouse",
+        "quantity",
+        "reserved_quantity",
+        "low_stock_threshold",
+    )
+    list_filter = ("warehouse__region", "warehouse", "warehouse__active")
+    search_fields = ("product__slug", "product__name_en", "warehouse__code")
 
 
 @admin.register(SiteSettings)
@@ -192,6 +305,21 @@ class ProductAdmin(admin.ModelAdmin):
         ),
     )
 
+    def save_related(self, request, form, formsets, change):
+        before_prices = _product_price_snapshot(form.instance)
+        super().save_related(request, form, formsets, change)
+        after_prices = _product_price_snapshot(form.instance)
+        if before_prices != after_prices:
+            log_admin_action(
+                request=request,
+                actor=request.user,
+                action=AdminAuditLog.ACTION_PRODUCT_PRICE_CHANGED,
+                resource_type="product",
+                resource_id=str(form.instance.pk),
+                before_snapshot={"prices": before_prices},
+                after_snapshot={"prices": after_prices},
+            )
+
 
 @admin.register(Testimonial)
 class TestimonialAdmin(admin.ModelAdmin):
@@ -220,6 +348,11 @@ class OrderItemInline(admin.TabularInline):
         "quantity",
         "unit_price",
         "line_total",
+        "taxable_amount",
+        "tax_rate",
+        "tax_total",
+        "tax_inclusive",
+        "tax_breakdown",
     )
 
     def has_add_permission(self, request, obj=None):
@@ -228,32 +361,126 @@ class OrderItemInline(admin.TabularInline):
 
 @admin.action(description="Mark selected orders as confirmed")
 def mark_confirmed(modeladmin, request, queryset):
-    queryset.update(status=Order.STATUS_CONFIRMED)
+    updated_count = 0
+    for order in queryset:
+        if order.status == Order.STATUS_CONFIRMED:
+            continue
+        if order.can_transition_to(Order.STATUS_CONFIRMED):
+            order.transition_to(
+                Order.STATUS_CONFIRMED,
+                actor=request.user,
+                note="Status updated from Django admin bulk action.",
+            )
+            updated_count += 1
+    modeladmin.message_user(request, f"Marked {updated_count} order(s) as confirmed.")
 
 
-@admin.action(description="Mark selected orders as preparing")
-def mark_preparing(modeladmin, request, queryset):
-    queryset.update(status=Order.STATUS_PREPARING)
+@admin.action(description="Mark selected orders as processing")
+def mark_processing(modeladmin, request, queryset):
+    updated_count = 0
+    for order in queryset:
+        if order.status != Order.STATUS_PROCESSING and order.can_transition_to(Order.STATUS_PROCESSING):
+            order.transition_to(
+                Order.STATUS_PROCESSING,
+                actor=request.user,
+                note="Status updated from Django admin bulk action.",
+            )
+            updated_count += 1
+        try:
+            create_order_shipment(order)
+        except Exception:
+            continue
+    modeladmin.message_user(request, f"Marked {updated_count} order(s) as processing.")
 
 
-@admin.action(description="Mark selected orders as out for delivery")
-def mark_out_for_delivery(modeladmin, request, queryset):
-    queryset.update(status=Order.STATUS_OUT_FOR_DELIVERY)
+@admin.action(description="Mark selected orders as shipped")
+def mark_shipped(modeladmin, request, queryset):
+    updated_count = 0
+    for order in queryset:
+        if order.status != Order.STATUS_SHIPPED and order.can_transition_to(Order.STATUS_SHIPPED):
+            order.transition_to(
+                Order.STATUS_SHIPPED,
+                actor=request.user,
+                note="Status updated from Django admin bulk action.",
+            )
+            updated_count += 1
+        try:
+            create_order_shipment(order)
+        except Exception:
+            continue
+    modeladmin.message_user(request, f"Marked {updated_count} order(s) as shipped.")
 
 
 @admin.action(description="Mark selected orders as delivered")
 def mark_delivered(modeladmin, request, queryset):
-    queryset.update(status=Order.STATUS_DELIVERED)
+    updated_count = 0
+    for order in queryset:
+        if order.status == Order.STATUS_DELIVERED:
+            continue
+        if order.can_transition_to(Order.STATUS_DELIVERED):
+            order.transition_to(
+                Order.STATUS_DELIVERED,
+                actor=request.user,
+                note="Status updated from Django admin bulk action.",
+            )
+            updated_count += 1
+    modeladmin.message_user(request, f"Marked {updated_count} order(s) as delivered.")
 
 
 @admin.action(description="Mark selected orders as cancelled")
 def mark_cancelled(modeladmin, request, queryset):
-    queryset.update(status=Order.STATUS_CANCELLED)
+    cancelled_count = 0
+    for order in queryset:
+        if order.status == Order.STATUS_CANCELLED:
+            continue
+        order.cancel(
+            actor=request.user,
+            note="Order cancelled from Django admin bulk action.",
+        )
+        cancelled_count += 1
+    modeladmin.message_user(request, f"Cancelled {cancelled_count} order(s).")
 
 
 @admin.action(description="Mark selected orders as paid")
 def mark_paid(modeladmin, request, queryset):
-    queryset.update(payment_status=Order.PAYMENT_PAID)
+    from .services.invoice import ensure_paid_order_invoice
+
+    for order in queryset:
+        if order.payment_status != Order.PAYMENT_PAID:
+            order.payment_status = Order.PAYMENT_PAID
+            order.save(update_fields=["payment_status", "updated_at"])
+        if order.can_transition_to(Order.STATUS_PAID):
+            order.transition_to(
+                Order.STATUS_PAID,
+                actor=request.user,
+                note="Payment marked paid from Django admin bulk action.",
+            )
+        ensure_paid_order_invoice(order)
+
+
+@admin.action(description="Create shipment for selected orders")
+def create_shipments(modeladmin, request, queryset):
+    created_count = 0
+    for order in queryset:
+        try:
+            result = create_order_shipment(order)
+            if result.get("created"):
+                created_count += 1
+        except Exception:
+            continue
+    modeladmin.message_user(request, f"Shipment processing executed for {created_count} order(s).")
+
+
+@admin.action(description="Refresh tracking for selected orders")
+def refresh_tracking(modeladmin, request, queryset):
+    refreshed_count = 0
+    for order in queryset:
+        try:
+            refresh_order_tracking(order)
+            refreshed_count += 1
+        except Exception:
+            continue
+    modeladmin.message_user(request, f"Tracking refreshed for {refreshed_count} order(s).")
 
 
 class PaymentTransactionInline(admin.TabularInline):
@@ -274,6 +501,22 @@ class PaymentTransactionInline(admin.TabularInline):
         return False
 
 
+class OrderStatusHistoryInline(admin.TabularInline):
+    model = OrderStatusHistory
+    extra = 0
+    readonly_fields = (
+        "old_status",
+        "new_status",
+        "actor",
+        "note",
+        "timestamp",
+    )
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
     list_display = (
@@ -286,7 +529,12 @@ class OrderAdmin(admin.ModelAdmin):
         "status",
         "payment_method",
         "payment_status",
+        "invoice_status",
+        "refund_status",
+        "carrier",
+        "shipment_status",
         "tracking_number",
+        "delivered_at",
         "created_at",
     )
 
@@ -310,9 +558,33 @@ class OrderAdmin(admin.ModelAdmin):
         "order_number",
         "subtotal",
         "discount_total",
+        "shipping_fee",
+        "shipping_method",
+        "shipping_carrier_name",
+        "shipping_eta_min_days",
+        "shipping_eta_max_days",
         "shipping_total",
+        "taxable_amount",
+        "tax_rate",
+        "tax_total",
+        "tax_inclusive",
+        "tax_applies_to_shipping",
+        "tax_label",
+        "tax_breakdown",
         "grand_total",
         "currency_code",
+        "invoice_number",
+        "invoice_date",
+        "invoice_pdf",
+        "invoice_status",
+        "invoice_access_token",
+        "shipment_created_at",
+        "delivered_at",
+        "refund_amount",
+        "refund_status",
+        "refund_reference",
+        "refunded_at",
+        "inventory_released",
         "coupon_code",
         "created_at",
         "updated_at",
@@ -365,8 +637,42 @@ class OrderAdmin(admin.ModelAdmin):
                 "fields": (
                     "payment_method",
                     "payment_status",
+                )
+            },
+        ),
+        (
+            "Shipment",
+            {
+                "fields": (
+                    "carrier",
                     "tracking_number",
                     "tracking_url",
+                    "shipment_status",
+                    "shipment_created_at",
+                    "delivered_at",
+                )
+            },
+        ),
+        (
+            "Invoice",
+            {
+                "fields": (
+                    "invoice_number",
+                    "invoice_date",
+                    "invoice_status",
+                    "invoice_pdf",
+                    "invoice_access_token",
+                )
+            },
+        ),
+        (
+            "Refund",
+            {
+                "fields": (
+                    "refund_amount",
+                    "refund_status",
+                    "refund_reference",
+                    "refunded_at",
                 )
             },
         ),
@@ -376,7 +682,19 @@ class OrderAdmin(admin.ModelAdmin):
                 "fields": (
                     "subtotal",
                     "discount_total",
+                    "shipping_fee",
+                    "shipping_method",
+                    "shipping_carrier_name",
+                    "shipping_eta_min_days",
+                    "shipping_eta_max_days",
                     "shipping_total",
+                    "taxable_amount",
+                    "tax_rate",
+                    "tax_total",
+                    "tax_inclusive",
+                    "tax_applies_to_shipping",
+                    "tax_label",
+                    "tax_breakdown",
                     "grand_total",
                     "currency_code",
                 )
@@ -386,6 +704,7 @@ class OrderAdmin(admin.ModelAdmin):
             "Timeline",
             {
                 "fields": (
+                    "inventory_released",
                     "created_at",
                     "updated_at",
                 )
@@ -393,15 +712,17 @@ class OrderAdmin(admin.ModelAdmin):
         ),
     )
 
-    inlines = [OrderItemInline, PaymentTransactionInline]
+    inlines = [OrderItemInline, PaymentTransactionInline, OrderStatusHistoryInline]
 
     actions = [
         mark_confirmed,
-        mark_preparing,
-        mark_out_for_delivery,
+        mark_processing,
+        mark_shipped,
         mark_delivered,
         mark_cancelled,
         mark_paid,
+        create_shipments,
+        refresh_tracking,
     ]
 
 
@@ -460,10 +781,94 @@ class PushDeviceAdmin(admin.ModelAdmin):
 
 @admin.register(NotificationLog)
 class NotificationLogAdmin(admin.ModelAdmin):
-    list_display = ("event", "title", "success", "created_at")
-    list_filter = ("event", "success", "created_at")
-    search_fields = ("title", "body", "error_message")
-    readonly_fields = ("event", "title", "body", "payload", "success", "error_message", "created_at")
+    list_display = ("event", "channel", "recipient", "status", "provider", "order", "created_at")
+    list_filter = ("event", "channel", "status", "provider", "created_at")
+    search_fields = (
+        "title",
+        "body",
+        "recipient",
+        "provider_message_id",
+        "error_message",
+        "order__order_number",
+    )
+    readonly_fields = (
+        "event",
+        "channel",
+        "recipient",
+        "status",
+        "provider",
+        "provider_message_id",
+        "order",
+        "title",
+        "body",
+        "payload",
+        "success",
+        "error_message",
+        "created_at",
+    )
+
+
+@admin.register(AdminAuditLog)
+class AdminAuditLogAdmin(admin.ModelAdmin):
+    list_display = (
+        "timestamp",
+        "actor",
+        "action",
+        "resource_type",
+        "resource_id",
+        "ip_address",
+    )
+    list_filter = ("action", "resource_type", "timestamp")
+    search_fields = ("resource_id", "actor__username", "actor__email", "ip_address", "user_agent")
+    readonly_fields = (
+        "actor",
+        "action",
+        "resource_type",
+        "resource_id",
+        "before_snapshot",
+        "after_snapshot",
+        "ip_address",
+        "user_agent",
+        "timestamp",
+    )
+
+
+@admin.register(WhatsAppLog)
+class WhatsAppLogAdmin(admin.ModelAdmin):
+    list_display = (
+        "event",
+        "recipient",
+        "status",
+        "template_name",
+        "provider",
+        "provider_message_id",
+        "order",
+        "created_at",
+    )
+    list_filter = ("event", "status", "provider", "locale", "created_at")
+    search_fields = (
+        "recipient",
+        "template_name",
+        "provider_message_id",
+        "error_message",
+        "order__order_number",
+    )
+    readonly_fields = (
+        "order",
+        "event",
+        "recipient",
+        "locale",
+        "template_name",
+        "provider",
+        "provider_message_id",
+        "status",
+        "request_payload",
+        "response_payload",
+        "webhook_payload",
+        "error_message",
+        "created_at",
+        "updated_at",
+    )
 
 
 @admin.register(WishlistItem)
@@ -499,3 +904,17 @@ class PaymentTransactionAdmin(admin.ModelAdmin):
         "order__order_number",
         "provider_reference",
     )
+
+
+@admin.register(ReturnRequest)
+class ReturnRequestAdmin(admin.ModelAdmin):
+    list_display = (
+        "order",
+        "customer_name",
+        "customer_email",
+        "status",
+        "requested_at",
+        "reviewed_by",
+    )
+    list_filter = ("status", "requested_at")
+    search_fields = ("order__order_number", "customer_name", "customer_email", "reason", "admin_note")

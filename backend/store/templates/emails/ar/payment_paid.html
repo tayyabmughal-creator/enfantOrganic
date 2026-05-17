@@ -1,0 +1,8 @@
+{% extends "emails/ar/base.html" %}
+{% block header %}تم تأكيد الدفع{% endblock %}
+{% block content %}
+<p>مرحباً {{ order.customer_name }}،</p>
+<p>تم تأكيد دفعتك للطلب <strong>{{ order.order_number }}</strong>.</p>
+{% include "emails/ar/_order_summary.html" %}
+<p>تم إرفاق ملف الفاتورة PDF مع هذه الرسالة.</p>
+{% endblock %}

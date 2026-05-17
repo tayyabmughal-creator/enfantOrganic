@@ -1,0 +1,8 @@
+{% extends "emails/en/base.html" %}
+{% block header %}Order cancelled{% endblock %}
+{% block content %}
+<p>Hi {{ order.customer_name }},</p>
+<p>Your order has been cancelled.</p>
+{% include "emails/en/_order_summary.html" %}
+<p>If this was unexpected, please reply to this message and our team will help right away.</p>
+{% endblock %}

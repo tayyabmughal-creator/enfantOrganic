@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, FlatList, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
@@ -6,17 +6,20 @@ import { StatusBar } from "expo-status-bar";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api";
 
-const screens = [
-  "Dashboard",
-  "Orders",
-  "Products",
-  "Categories",
-  "Customers",
-  "Promotions",
-  "Reviews",
-  "Reports",
-  "Settings",
-];
+/** Maps mobile tabs to `modules` keys from GET /api/admin/me/ */
+const SCREEN_MODULE_KEYS = {
+  Dashboard: null,
+  Orders: "orders",
+  Products: "products",
+  Categories: "categories",
+  Customers: "customers",
+  Promotions: "promotions",
+  Reviews: "reviews",
+  Reports: "reports",
+  Settings: "content",
+};
+
+const allScreens = Object.keys(SCREEN_MODULE_KEYS);
 
 const screenEndpoints = {
   Orders: "/admin/orders/",
@@ -29,20 +32,79 @@ const screenEndpoints = {
   Settings: "/admin/settings/",
 };
 
+function canViewScreen(screen, adminMe) {
+  const moduleKey = SCREEN_MODULE_KEYS[screen];
+  if (!moduleKey) {
+    return true;
+  }
+  return Boolean(adminMe?.modules?.[moduleKey]?.view);
+}
+
+function unwrapListPayload(data) {
+  if (Array.isArray(data)) {
+    return data;
+  }
+  if (data && Array.isArray(data.results)) {
+    return data.results;
+  }
+  return data;
+}
+
 export default function App() {
   const [activeScreen, setActiveScreen] = useState("Dashboard");
   const [accessToken, setAccessToken] = useState("");
   const [login, setLogin] = useState({ username: "", password: "" });
+  const [adminMe, setAdminMe] = useState(null);
   const [dashboard, setDashboard] = useState(null);
   const [screenData, setScreenData] = useState(null);
   const [pushToken, setPushToken] = useState("");
+  const [visibleScreens, setVisibleScreens] = useState(["Dashboard"]);
 
-  const headers = useMemo(
-    () => ({
+  const buildHeaders = useCallback(
+    (token = accessToken) => ({
       "Content-Type": "application/json",
-      Authorization: accessToken ? `Bearer ${accessToken}` : "",
+      Authorization: token ? `Bearer ${token}` : "",
     }),
     [accessToken],
+  );
+
+  const authorizedFetch = useCallback(
+    async (url, options = {}) => {
+      let token = accessToken;
+      let response = await fetch(url, {
+        ...options,
+        headers: { ...buildHeaders(token), ...(options.headers || {}) },
+      });
+
+      if (response.status !== 401) {
+        return response;
+      }
+
+      const refresh = await AsyncStorage.getItem("refreshToken");
+      if (!refresh) {
+        return response;
+      }
+
+      const refreshResponse = await fetch(`${API_BASE_URL}/auth/token/refresh/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh }),
+      });
+      if (!refreshResponse.ok) {
+        return response;
+      }
+
+      const refreshData = await refreshResponse.json();
+      token = refreshData.access;
+      await AsyncStorage.setItem("accessToken", token);
+      setAccessToken(token);
+
+      return fetch(url, {
+        ...options,
+        headers: { ...buildHeaders(token), ...(options.headers || {}) },
+      });
+    },
+    [accessToken, buildHeaders],
   );
 
   useEffect(() => {
@@ -53,22 +115,33 @@ export default function App() {
 
   useEffect(() => {
     if (!accessToken) return;
-    fetch(`${API_BASE_URL}/admin/dashboard/`, { headers })
+
+    authorizedFetch(`${API_BASE_URL}/admin/me/`)
+      .then((response) => response.json())
+      .then((data) => {
+        setAdminMe(data);
+        const vis = allScreens.filter((screen) => canViewScreen(screen, data));
+        setVisibleScreens(vis);
+        if (!vis.includes(activeScreen)) setActiveScreen("Dashboard");
+      })
+      .catch(() => setAdminMe(null));
+
+    authorizedFetch(`${API_BASE_URL}/admin/dashboard/`)
       .then((response) => response.json())
       .then(setDashboard)
       .catch(() => setDashboard(null));
-  }, [accessToken, headers]);
+  }, [accessToken, authorizedFetch]);
 
   useEffect(() => {
     if (!accessToken || activeScreen === "Dashboard") return;
     const endpoint = screenEndpoints[activeScreen];
     if (!endpoint) return;
     setScreenData(null);
-    fetch(`${API_BASE_URL}${endpoint}`, { headers })
+    authorizedFetch(`${API_BASE_URL}${endpoint}`)
       .then((response) => response.json())
-      .then(setScreenData)
+      .then((data) => setScreenData(unwrapListPayload(data)))
       .catch(() => setScreenData({ error: "Unable to load data." }));
-  }, [accessToken, activeScreen, headers]);
+  }, [accessToken, activeScreen, authorizedFetch]);
 
   async function signIn() {
     const response = await fetch(`${API_BASE_URL}/auth/token/`, {
@@ -97,15 +170,13 @@ export default function App() {
     setPushToken(expoToken.data);
     await fetch(`${API_BASE_URL}/notifications/devices/`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
+      headers: buildHeaders(token),
       body: JSON.stringify({ token: expoToken.data, platform: Platform.OS === "android" ? "android" : "ios" }),
     }).catch(() => {});
   }
 
   async function signOut() {
+    const headers = buildHeaders();
     if (pushToken) {
       await fetch(`${API_BASE_URL}/notifications/devices/deactivate/`, {
         method: "POST",
@@ -115,6 +186,9 @@ export default function App() {
     }
     await AsyncStorage.multiRemove(["accessToken", "refreshToken"]);
     setAccessToken("");
+    setAdminMe(null);
+    setVisibleScreens(["Dashboard"]);
+    setActiveScreen("Dashboard");
   }
 
   function renderScreenData() {
@@ -172,6 +246,8 @@ export default function App() {
       );
     }
 
+    const canEditOrders = Boolean(adminMe?.modules?.orders?.edit);
+
     return screenData.slice(0, 25).map((item, index) => {
       const title = item.order_number || item.name_en || item.code || item.email || item.username || item.product_name || `${activeScreen} item`;
       const status = item.status || item.payment_status || item.brand || item.customer_name || (item.is_approved !== undefined ? (item.is_approved ? "approved" : "pending") : "Ready");
@@ -179,9 +255,36 @@ export default function App() {
         <View style={styles.rowCard} key={item.id || item.slug || item.order_number || index}>
           <Text style={styles.rowTitle}>{title}</Text>
           <Text style={styles.rowMeta}>Status: {status}</Text>
+          {activeScreen === "Orders" && canEditOrders && item.order_number ? (
+            <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+              <Pressable style={styles.actionBtn} onPress={() => updateOrderStatus(item.order_number, "processing")}>
+                <Text style={styles.actionBtnText}>Processing</Text>
+              </Pressable>
+              <Pressable style={styles.actionBtn} onPress={() => updateOrderStatus(item.order_number, "shipped")}>
+                <Text style={styles.actionBtnText}>Shipped</Text>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
       );
     });
+  }
+
+  async function updateOrderStatus(orderNumber, newStatus) {
+    try {
+      const res = await authorizedFetch(`${API_BASE_URL}/admin/orders/${orderNumber}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error("Failed to update status");
+      const endpoint = screenEndpoints[activeScreen];
+      const refreshRes = await authorizedFetch(`${API_BASE_URL}${endpoint}`);
+      const data = await refreshRes.json();
+      setScreenData(unwrapListPayload(data));
+      Alert.alert("Success", `Order updated to ${newStatus}`);
+    } catch (e) {
+      Alert.alert("Error", "Could not update order.");
+    }
   }
 
   if (!accessToken) {
@@ -211,7 +314,7 @@ export default function App() {
         </Pressable>
       </View>
       <FlatList
-        data={screens}
+        data={visibleScreens}
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.tabs}
@@ -257,4 +360,6 @@ const styles = StyleSheet.create({
   rowCard: { padding: 16, borderRadius: 22, backgroundColor: "#fff", marginBottom: 10 },
   rowTitle: { color: "#191817", fontSize: 16, fontWeight: "800", marginBottom: 4 },
   rowMeta: { color: "#6d675f", lineHeight: 20 },
+  actionBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: "#f0f3ed", alignSelf: "flex-start" },
+  actionBtnText: { color: "#5f7f4f", fontSize: 13, fontWeight: "700" },
 });

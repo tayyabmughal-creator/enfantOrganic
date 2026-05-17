@@ -1,0 +1,8 @@
+{% extends "emails/en/base.html" %}
+{% block header %}How was your order?{% endblock %}
+{% block content %}
+<p>Hi {{ order.customer_name }},</p>
+<p>Your order <strong>{{ order.order_number }}</strong> has been delivered.</p>
+<p>We would love to hear your feedback about the products and delivery experience.</p>
+{% include "emails/en/_order_summary.html" %}
+{% endblock %}

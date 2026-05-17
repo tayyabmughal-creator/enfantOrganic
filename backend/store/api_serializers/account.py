@@ -8,7 +8,7 @@ from django.utils.encoding import force_bytes
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from ..models import CustomerAddress, NewsletterSubscription, Product, PushDevice, Region, Review, WishlistItem
+from ..models import CustomerAddress, NewsletterSubscription, Product, PushDevice, Region, ReturnRequest, Review, WishlistItem
 from .catalog import ProductCardSerializer
 
 
@@ -41,6 +41,21 @@ class ProfileSerializer(serializers.ModelSerializer):
 
 
 class CustomerAddressSerializer(serializers.ModelSerializer):
+    lat = serializers.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+    lng = serializers.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+
     class Meta:
         model = CustomerAddress
         fields = (
@@ -49,13 +64,46 @@ class CustomerAddressSerializer(serializers.ModelSerializer):
             "phone",
             "address_line_1",
             "address_line_2",
+            "building",
+            "floor",
+            "apartment",
+            "landmark",
+            "area",
             "city",
+            "postcode",
             "country",
+            "formatted_address",
+            "place_id",
+            "latitude",
+            "longitude",
+            "lat",
+            "lng",
+            "location_notes",
             "is_default",
             "created_at",
             "updated_at",
         )
         read_only_fields = ("id", "created_at", "updated_at")
+
+    def validate(self, attrs):
+        latitude = attrs.get("latitude")
+        longitude = attrs.get("longitude")
+        lat_alias = attrs.pop("lat", None)
+        lng_alias = attrs.pop("lng", None)
+
+        if latitude is None and lat_alias is not None:
+            latitude = lat_alias
+            attrs["latitude"] = latitude
+        if longitude is None and lng_alias is not None:
+            longitude = lng_alias
+            attrs["longitude"] = longitude
+
+        if latitude is not None and (latitude < -90 or latitude > 90):
+            raise serializers.ValidationError({"latitude": "Latitude must be between -90 and 90."})
+        if longitude is not None and (longitude < -180 or longitude > 180):
+            raise serializers.ValidationError({"longitude": "Longitude must be between -180 and 180."})
+
+        return attrs
 
 
 class ReviewCreateSerializer(serializers.ModelSerializer):
@@ -90,17 +138,45 @@ class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
     def save(self):
-        user = get_user_model().objects.filter(email__iexact=self.validated_data["email"], is_active=True).first()
-        if user:
-            uid = urlsafe_base64_encode(force_bytes(user.pk))
-            token = default_token_generator.make_token(user)
-            send_mail(
-                "Reset your EnfhantOrganic password",
-                f"Use this uid and token to reset your password.\nuid: {uid}\ntoken: {token}",
-                settings.DEFAULT_FROM_EMAIL,
-                [user.email],
-                fail_silently=True,
+        user = get_user_model().objects.filter(
+            email__iexact=self.validated_data["email"], is_active=True
+        ).first()
+        if not user:
+            return
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        # default_token_generator produces tokens that are time-limited by
+        # settings.PASSWORD_RESET_TIMEOUT (Django default: 3 days).
+        token = default_token_generator.make_token(user)
+
+        frontend_base = getattr(settings, "FRONTEND_PUBLIC_URL", "").rstrip("/")
+        if frontend_base:
+            reset_url = f"{frontend_base}/en/account/reset-password?uid={uid}&token={token}"
+        else:
+            # Fallback for misconfigured environments — send a generic instruction without
+            # the raw token. The user should contact support.
+            reset_url = ""
+
+        if reset_url:
+            body = (
+                "We received a request to reset your Enfant Organics password.\n\n"
+                f"Reset link (valid for a limited time): {reset_url}\n\n"
+                "If you did not request this, you can safely ignore this email — your "
+                "password will remain unchanged."
             )
+        else:
+            body = (
+                "We received a request to reset your Enfant Organics password but the "
+                "site is not configured to send reset links right now. Please contact "
+                "support to complete the reset."
+            )
+
+        send_mail(
+            "Reset your Enfant Organics password",
+            body,
+            settings.DEFAULT_FROM_EMAIL,
+            [user.email],
+            fail_silently=True,
+        )
 
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
@@ -167,3 +243,35 @@ class NewsletterSubscriptionSerializer(serializers.ModelSerializer):
             defaults={**validated_data, "region": region, "is_active": True},
         )
         return subscription
+
+
+class CustomerReturnRequestSerializer(serializers.ModelSerializer):
+    order_number = serializers.CharField(source="order.order_number", read_only=True)
+
+    class Meta:
+        model = ReturnRequest
+        fields = (
+            "id",
+            "order_number",
+            "customer_name",
+            "customer_email",
+            "reason",
+            "status",
+            "requested_at",
+            "admin_note",
+        )
+        read_only_fields = (
+            "id",
+            "order_number",
+            "customer_name",
+            "customer_email",
+            "status",
+            "requested_at",
+            "admin_note",
+        )
+
+    def validate_reason(self, value):
+        text = str(value or "").strip()
+        if len(text) < 10:
+            raise serializers.ValidationError("Please provide at least 10 characters.")
+        return text

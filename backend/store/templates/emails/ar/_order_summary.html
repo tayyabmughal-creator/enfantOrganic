@@ -1,0 +1,36 @@
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:14px 0;border:1px solid #e5e7eb;">
+  <tr>
+    <td style="padding:10px;background:#f9fafb;border-bottom:1px solid #e5e7eb;font-weight:600;">رقم الطلب</td>
+    <td style="padding:10px;border-bottom:1px solid #e5e7eb;">{{ order.order_number }}</td>
+  </tr>
+  <tr>
+    <td style="padding:10px;background:#f9fafb;border-bottom:1px solid #e5e7eb;font-weight:600;">طريقة الدفع</td>
+    <td style="padding:10px;border-bottom:1px solid #e5e7eb;">{{ order.get_payment_method_display }}</td>
+  </tr>
+  <tr>
+    <td style="padding:10px;background:#f9fafb;border-bottom:1px solid #e5e7eb;font-weight:600;">الحالة</td>
+    <td style="padding:10px;border-bottom:1px solid #e5e7eb;">{{ status_label }}</td>
+  </tr>
+  <tr>
+    <td style="padding:10px;background:#f9fafb;font-weight:600;">الإجمالي</td>
+    <td style="padding:10px;">{{ order.grand_total }} {{ order.currency_code }}</td>
+  </tr>
+</table>
+
+{% if items %}
+<p style="margin:0 0 8px;font-weight:600;">المنتجات</p>
+<ul style="margin:0 18px 12px 0;padding:0;">
+  {% for item in items %}
+  <li style="margin-bottom:6px;">
+    {{ item.name }}{% if item.options_text %} ({{ item.options_text }}){% endif %} × {{ item.quantity }} — {{ item.line_total }} {{ order.currency_code }}
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<p style="margin:0;">
+  المجموع الفرعي: {{ order.subtotal }} {{ order.currency_code }}<br>
+  الشحن: {{ order.shipping_total }} {{ order.currency_code }}<br>
+  {{ tax_label }}: {{ order.tax_total }} {{ order.currency_code }}<br>
+  الإجمالي: {{ order.grand_total }} {{ order.currency_code }}
+</p>

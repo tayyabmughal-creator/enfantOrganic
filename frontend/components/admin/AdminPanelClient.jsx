@@ -1,12 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import DashboardView from "./DashboardView";
+import AnalyticsView from "./AnalyticsView";
+import { SettingsPanel, Reports, AuditLogsPanel, IntegrationsHub, InventoryView, InsightsView, NewsletterPanel, PlaceholderModule } from "./OtherViews";
+import { CrudPanel, CrudFormModal } from "./CrudViews";
+import { AdminToast } from "./SharedUI";
+import SkeletonLoader from "../SkeletonLoader";
+import { API_BASE_URL, ADMIN_TOKEN_KEY, ADMIN_REFRESH_KEY } from "@/lib/config";
 
-const API_BASE    = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api";
-const TOKEN_KEY   = "enfhant-admin-token";
-const REFRESH_KEY = "enfhant-admin-refresh";
-
-// ─── Navigation ───────────────────────────────────────────────────────────────
+const API_BASE    = API_BASE_URL;
+const TOKEN_KEY   = ADMIN_TOKEN_KEY;
+const REFRESH_KEY = ADMIN_REFRESH_KEY;
 
 const NAV_GROUPS = [
   {
@@ -48,6 +53,7 @@ const NAV_GROUPS = [
       { key: "analytics",  label: "Analytics",  icon: "▥", endpoint: "/admin/dashboard/",  desc: "Revenue, funnels, and trends." },
       { key: "insights",   label: "Insights",   icon: "◑", endpoint: "/admin/customers/",   desc: "Segments, LTV, and cohorts." },
       { key: "reports",    label: "Reports",    icon: "⇩", endpoint: "/admin/moderation/",  desc: "CSV exports and health checks." },
+      { key: "audit_logs", label: "Audit Logs", icon: "⌁", endpoint: "/admin/audit-logs/",  desc: "Sensitive action timeline and traceability." },
     ],
   },
   {
@@ -55,7 +61,7 @@ const NAV_GROUPS = [
     items: [
       { key: "reviews",  label: "Reviews",  icon: "★", endpoint: "/admin/reviews/", desc: "Approve and moderate reviews." },
       { key: "returns",  label: "Returns",  icon: "↩", endpoint: null,               desc: "Return requests and refunds." },
-      { key: "shipping", label: "Shipping", icon: "◁", endpoint: null,               desc: "Zones, carriers, and rates." },
+      { key: "shipping", label: "Shipping", icon: "◁", endpoint: "/admin/shipping-rules/", desc: "Rules-based rates and delivery ETA." },
     ],
   },
   {
@@ -79,11 +85,59 @@ const NAV_GROUPS = [
 
 const ALL_NAV = NAV_GROUPS.flatMap((g) => g.items);
 
+const NAV_READ_CAPABILITY = {
+  dashboard: "dashboard.view",
+  orders: "orders.view",
+  customers: "customers.view",
+  products: "products.view",
+  categories: "categories.view",
+  inventory: "inventory.view",
+  blog: "content.view",
+  homepage: "content.view",
+  seo: "content.view",
+  deals: "coupons.view",
+  giftcards: "coupons.view",
+  abandoned: "coupons.view",
+  newsletter: "moderation.view",
+  analytics: "dashboard.view",
+  insights: "customers.view",
+  reports: "reports.view",
+  audit_logs: "audit.view",
+  reviews: "reviews.view",
+  returns: "returns.view",
+  shipping: "shipping.view",
+  social: "content.view",
+  marketing_tools: "content.view",
+  apps: "content.view",
+  payments: "payments.view",
+  taxes: "regions.view",
+  staff: "staff.manage",
+  regions: "regions.view",
+};
+
+const NAV_WRITE_CAPABILITY = {
+  orders: "orders.edit",
+  customers: "customers.edit",
+  products: "products.edit",
+  categories: "categories.edit",
+  inventory: "inventory.edit",
+  blog: "content.edit",
+  homepage: "content.edit",
+  deals: "coupons.edit",
+  reviews: "reviews.edit",
+  returns: "returns.edit",
+  shipping: "shipping.edit",
+  payments: "payments.edit",
+  staff: "staff.manage",
+  regions: "regions.edit",
+};
+
 // ─── Field configs ─────────────────────────────────────────────────────────────
 
-const ORDER_STATUS    = [["pending","Pending"],["confirmed","Confirmed"],["preparing","Preparing"],["ready","Ready"],["out_for_delivery","Out for delivery"],["delivered","Delivered"],["cancelled","Cancelled"]];
+const ORDER_STATUS    = [["pending","Pending"],["confirmed","Confirmed"],["paid","Paid"],["processing","Processing"],["shipped","Shipped"],["delivered","Delivered"],["cancelled","Cancelled"],["returned","Returned"],["refunded","Refunded"],["failed","Failed"]];
 const PAYMENT_STATUS  = [["unpaid","Unpaid"],["review","Needs review"],["paid","Paid"],["refunded","Refunded"]];
 const PAYMENT_METHOD  = [["cod","Cash on delivery"],["whatsapp","WhatsApp"],["bank_transfer","Bank transfer"],["online","Online"]];
+const SHIPMENT_STATUS = [["pending","Pending"],["created","Created"],["in_transit","In transit"],["delivered","Delivered"],["failed","Failed"],["manual","Manual"]];
 const PAYMENT_PROVIDER = [["cod","Cash on delivery"],["whatsapp","WhatsApp"],["bank_transfer","Bank transfer"],["online","Online"],["stripe","Stripe"],["tap","Tap"],["paytabs","PayTabs"],["hyperpay","HyperPay"],["checkout_com","Checkout.com"]];
 
 const FIELD_CONFIGS = {
@@ -122,8 +176,11 @@ const FIELD_CONFIGS = {
   ],
   orders: [
     ["status","Order status","select",ORDER_STATUS],
+    ["status_note","Status note","textarea"],
     ["payment_method","Payment method","select",PAYMENT_METHOD],
     ["payment_status","Payment status","select",PAYMENT_STATUS],
+    ["carrier","Carrier","text"],
+    ["shipment_status","Shipment status","select",SHIPMENT_STATUS],
     ["tracking_number","Tracking number","text"],["tracking_url","Tracking URL","text"],
     ["notes","Notes","textarea"],
   ],
@@ -144,6 +201,19 @@ const FIELD_CONFIGS = {
     ["customer_name","Customer name","text"],["rating","Rating","number"],
     ["title","Title","text"],["comment","Comment","textarea"],
     ["is_verified_purchase","Verified purchase","checkbox"],["is_approved","Approved","checkbox"],
+  ],
+  shipping: [
+    ["region","Region ID","number"],
+    ["city","City","text"],
+    ["area","Area","text"],
+    ["min_order_value","Min order value","number"],
+    ["max_order_value","Max order value","number"],
+    ["shipping_fee","Shipping fee","number"],
+    ["free_shipping_threshold","Free shipping threshold","number"],
+    ["eta_min_days","ETA min days","number"],
+    ["eta_max_days","ETA max days","number"],
+    ["carrier_name","Carrier name","text"],
+    ["active","Active","checkbox"],
   ],
   blog: [
     ["slug","Slug","text"],["title_en","Title EN","text"],["title_ar","Title AR","text"],
@@ -177,11 +247,12 @@ const CREATE_DEFAULTS = {
   customers:  { username:"",email:"",password:"",first_name:"",last_name:"",is_active:true,is_staff:false },
   payments:   { order:"",provider:"cod",provider_reference:"",amount:0,currency_code:"OMR",status:"pending",raw_response:{} },
   reviews:    { product:"",order:"",customer_name:"",rating:5,title:"",comment:"",is_verified_purchase:false,is_approved:false },
+  shipping:   { region:"",city:"",area:"",min_order_value:0,max_order_value:"",shipping_fee:0,free_shipping_threshold:0,eta_min_days:"",eta_max_days:"",carrier_name:"",active:true },
   blog:       { slug:"",title_en:"",title_ar:"",excerpt_en:"",excerpt_ar:"",body_en:"",body_ar:"",image:"",category_en:"",category_ar:"",published_at:"",is_published:false,sort_order:0 },
 };
 
-const CRUD_KEYS     = ["products","categories","deals","customers","payments","reviews","blog"];
-const DELETABLE     = ["products","categories","deals","customers","payments","reviews","blog"];
+const CRUD_KEYS     = ["products","categories","deals","customers","payments","reviews","shipping","blog"];
+const DELETABLE     = ["products","categories","deals","customers","payments","reviews","shipping","blog"];
 const REPORT_TYPES  = ["orders","customers","inventory","low-stock"];
 
 // ─── Placeholder configs ───────────────────────────────────────────────────────
@@ -206,11 +277,6 @@ const PLACEHOLDER_CONFIGS = {
     icon: "↩", badge: "Planned", title: "Returns & Refunds",
     description: "Process return requests, issue full or partial refunds, and track returned inventory. Complete audit trail of all return operations.",
     features: ["Return request submission portal","Approve / reject / escalate workflow","Full and partial refund processing","Auto-restock returned inventory","Return reason analytics","Customer notification on status change","Payment provider refund integration"],
-  },
-  shipping: {
-    icon: "◁", badge: "Planned", title: "Shipping & Delivery",
-    description: "Define shipping zones, carriers, and rate tables. Set flat-rate, weight-based, or free-shipping thresholds per region and product category.",
-    features: ["Multi-region zones (GCC, MENA, Global)","Flat-rate, weight-based, and free-shipping rules","Carrier integrations (Aramex, DHL, SMSA, Fetchr)","Real-time rate calculation at checkout","Estimated delivery time display","Click & collect support","White-label tracking page"],
   },
   taxes: {
     icon: "◫", badge: "Planned", title: "Tax & VAT Configuration",
@@ -277,8 +343,8 @@ function labelFor(key) {
 
 function statusTone(value = "") {
   const v = String(value).toLowerCase();
-  if (["paid","delivered","active","ready","approved","confirmed","published"].some((s) => v.includes(s))) return "success";
-  if (["pending","review","preparing","unpaid","draft"].some((s) => v.includes(s))) return "warning";
+  if (["paid","delivered","active","approved","confirmed","published","shipped","processing"].some((s) => v.includes(s))) return "success";
+  if (["pending","review","unpaid","draft","returned"].some((s) => v.includes(s))) return "warning";
   if (["cancelled","failed","inactive","rejected","hidden"].some((s) => v.includes(s))) return "danger";
   return "neutral";
 }
@@ -324,6 +390,8 @@ function buildPayload(editor, key) {
 export default function AdminPanelClient() {
   const [token, setToken]           = useState("");
   const [login, setLogin]           = useState({ username: "", password: "" });
+  const [adminMe, setAdminMe]       = useState(null);
+  const [meLoading, setMeLoading]   = useState(false);
   const [activeKey, setActiveKey]   = useState("dashboard");
   const [data, setData]             = useState(null);
   const [selected, setSelected]     = useState(null);
@@ -334,9 +402,35 @@ export default function AdminPanelClient() {
   const [toast, setToast]           = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const active    = ALL_NAV.find((n) => n.key === activeKey) || ALL_NAV[0];
-  const canCreate = CRUD_KEYS.includes(activeKey);
-  const canDelete = DELETABLE.includes(activeKey);
+  const capabilitySet = useMemo(() => new Set(adminMe?.capabilities || []), [adminMe]);
+
+  const hasCapability = useCallback((capability) => {
+    if (!capability) return true;
+    if (adminMe?.is_superuser) return true;
+    return capabilitySet.has(capability);
+  }, [adminMe?.is_superuser, capabilitySet]);
+
+  const canViewKey = useCallback((key) => hasCapability(NAV_READ_CAPABILITY[key]), [hasCapability]);
+  const canWriteKey = useCallback((key) => hasCapability(NAV_WRITE_CAPABILITY[key]), [hasCapability]);
+
+  const visibleNavGroups = useMemo(() => (
+    NAV_GROUPS
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) => canViewKey(item.key)),
+      }))
+      .filter((group) => group.items.length)
+  ), [canViewKey]);
+
+  const visibleNavItems = useMemo(
+    () => visibleNavGroups.flatMap((group) => group.items),
+    [visibleNavGroups],
+  );
+
+  const active    = visibleNavItems.find((n) => n.key === activeKey) || visibleNavItems[0] || null;
+  const canCreate = Boolean(active && CRUD_KEYS.includes(activeKey) && canWriteKey(activeKey));
+  const canDelete = Boolean(active && DELETABLE.includes(activeKey) && canWriteKey(activeKey));
+  const canEdit   = Boolean(active && canWriteKey(activeKey));
 
   const authHeaders = useMemo(() => ({
     "Content-Type": "application/json",
@@ -353,16 +447,51 @@ export default function AdminPanelClient() {
   }, []);
 
   useEffect(() => {
-    if (token) loadScreen(active);
+    if (!token) {
+      setAdminMe(null);
+      return;
+    }
+    void loadAdminMe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, activeKey]);
+  }, [token]);
 
-  async function request(path, options = {}) {
+  useEffect(() => {
+    if (!active && visibleNavItems.length) {
+      setActiveKey(visibleNavItems[0].key);
+    }
+  }, [active, visibleNavItems]);
+
+  useEffect(() => {
+    if (token && adminMe && active) loadScreen(active);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, adminMe, activeKey]);
+
+  async function request(path, options = {}, _isRetry = false) {
     const isFormData = options.body instanceof FormData;
-    const reqHeaders = { ...authHeaders, ...(options.headers || {}) };
+    const currentToken = window.localStorage.getItem(TOKEN_KEY) || token;
+    const reqHeaders = { "Content-Type": "application/json", Authorization: currentToken ? `Bearer ${currentToken}` : "", ...(options.headers || {}) };
     if (isFormData) delete reqHeaders["Content-Type"];
-    const res = await fetch(`${API_BASE}${path}`, { ...options, headers: reqHeaders });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    let res;
+    try {
+      res = await fetch(`${API_BASE}${path}`, { ...options, headers: reqHeaders, signal: controller.signal });
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err.name === "AbortError") throw new Error("Request timed out. Please try again.");
+      throw err;
+    }
+    clearTimeout(timeoutId);
     if (res.status === 204) return null;
+    if (res.status === 401 && !_isRetry) {
+      const refreshed = await attemptTokenRefresh();
+      if (refreshed) return request(path, options, true);
+      window.localStorage.removeItem(TOKEN_KEY);
+      window.localStorage.removeItem(REFRESH_KEY);
+      setToken("");
+      setData(null);
+      return null;
+    }
     if (res.status === 401) {
       window.localStorage.removeItem(TOKEN_KEY);
       window.localStorage.removeItem(REFRESH_KEY);
@@ -370,10 +499,57 @@ export default function AdminPanelClient() {
       setData(null);
       return null;
     }
-    const text = await res.text();
-    const payload = text ? JSON.parse(text) : null;
+    let payload = null;
+    try {
+      const text = await res.text();
+      payload = text ? JSON.parse(text) : null;
+    } catch { payload = null; }
     if (!res.ok) throw new Error(payload?.detail || JSON.stringify(payload) || "Request failed");
     return payload;
+  }
+
+  async function attemptTokenRefresh() {
+    const refresh = window.localStorage.getItem(REFRESH_KEY);
+    if (!refresh) return false;
+    try {
+      const res = await fetch(`${API_BASE}/auth/token/refresh/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh }),
+      });
+      if (!res.ok) return false;
+      const payload = await res.json();
+      if (payload.access) {
+        window.localStorage.setItem(TOKEN_KEY, payload.access);
+        if (payload.refresh) window.localStorage.setItem(REFRESH_KEY, payload.refresh);
+        setToken(payload.access);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
+  async function loadAdminMe() {
+    setMeLoading(true);
+    try {
+      const payload = await request("/admin/me/");
+      if (!payload) {
+        setAdminMe(null);
+        return;
+      }
+      setAdminMe(payload);
+    } catch (err) {
+      showToast(err.message || "You do not have admin access.", "error");
+      window.localStorage.removeItem(TOKEN_KEY);
+      window.localStorage.removeItem(REFRESH_KEY);
+      setToken("");
+      setData(null);
+      setAdminMe(null);
+    } finally {
+      setMeLoading(false);
+    }
   }
 
   async function signIn(e) {
@@ -404,15 +580,22 @@ export default function AdminPanelClient() {
     window.localStorage.removeItem(REFRESH_KEY);
     setToken("");
     setData(null);
+    setAdminMe(null);
     closeForm();
   }
 
   async function loadScreen(screen = active) {
-    if (!screen.endpoint) { setData(null); setLoading(false); return; }
+    if (!screen || !screen.endpoint) { setData(null); setLoading(false); return; }
     setLoading(true);
     closeForm();
     try {
-      setData(await request(screen.endpoint));
+      const raw = await request(screen.endpoint);
+      // Handle DRF paginated response {count, next, previous, results}
+      if (raw && typeof raw === "object" && Array.isArray(raw.results)) {
+        setData(raw.results);
+      } else {
+        setData(raw);
+      }
     } catch (err) {
       showToast(err.message, "error");
     } finally {
@@ -429,11 +612,16 @@ export default function AdminPanelClient() {
     if (activeKey === "payments")   return `/admin/payments/${item.id}/`;
     if (activeKey === "customers")  return `/admin/customers/${item.id}/`;
     if (activeKey === "reviews")    return `/admin/reviews/${item.id}/`;
+    if (activeKey === "shipping")   return `/admin/shipping-rules/${item.id}/`;
     if (activeKey === "blog")       return `/admin/blog-posts/${item.slug || item.id}/`;
     return "";
   }
 
   async function openDetail(item) {
+    if (!canEdit) {
+      showToast("You can view this section but cannot edit it.", "info");
+      return;
+    }
     setMode("edit");
     setSelected(item);
     setEditor(makeEditor(item));
@@ -458,6 +646,10 @@ export default function AdminPanelClient() {
   }
 
   function startCreate() {
+    if (!canWriteKey(activeKey)) {
+      showToast("You do not have permission to create records in this section.", "error");
+      return;
+    }
     setMode("create");
     setSelected(null);
     setEditor(makeEditor(CREATE_DEFAULTS[activeKey] || {}, activeKey));
@@ -465,6 +657,10 @@ export default function AdminPanelClient() {
   }
 
   function openHomepageSettings() {
+    if (!canWriteKey("homepage")) {
+      showToast("You do not have permission to edit homepage settings.", "error");
+      return;
+    }
     setMode("edit");
     setSelected(data || {});
     setEditor(makeEditor(data || {}, "homepage"));
@@ -479,6 +675,10 @@ export default function AdminPanelClient() {
   }
 
   async function saveRecord() {
+    if (!canWriteKey(activeKey)) {
+      showToast("You do not have permission to save changes in this section.", "error");
+      return;
+    }
     setLoading(true);
     try {
       const path = mode === "create" ? active.endpoint : activeKey === "homepage" ? active.endpoint : detailPath();
@@ -511,6 +711,10 @@ export default function AdminPanelClient() {
   }
 
   async function downloadReport(type) {
+    if (!canViewKey("reports")) {
+      showToast("You do not have permission to download reports.", "error");
+      return;
+    }
     try {
       const res = await fetch(`${API_BASE}/admin/reports/${type}/`, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error("Report download failed");
@@ -527,7 +731,38 @@ export default function AdminPanelClient() {
     }
   }
 
+  async function downloadOrderInvoice(order) {
+    if (!order?.order_number) return;
+    try {
+      const res = await fetch(`${API_BASE}/admin/orders/${order.order_number}/invoice/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        let detail = "Invoice download failed";
+        try {
+          const payload = await res.json();
+          detail = payload?.detail || detail;
+        } catch {}
+        throw new Error(detail);
+      }
+      const blob = await res.blob();
+      const href = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = href;
+      a.download = `${order.invoice_number || order.order_number}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(href);
+      showToast("Invoice downloaded.", "success");
+    } catch (err) {
+      showToast(err.message, "error");
+    }
+  }
+
   function navigate(key) {
+    if (!canViewKey(key)) {
+      showToast("You do not have access to this section.", "error");
+      return;
+    }
     setActiveKey(key);
     setSidebarOpen(false);
   }
@@ -565,6 +800,33 @@ export default function AdminPanelClient() {
     );
   }
 
+  if (meLoading) {
+    return (
+      <main className="admin-login-page">
+        {toast ? <AdminToast toast={toast} /> : null}
+        <section className="admin-login-card">
+          <h1 className="admin-login-title">Enfant Organics</h1>
+          <p className="admin-login-sub">Loading admin permissions…</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (!visibleNavItems.length) {
+    return (
+      <main className="admin-login-page">
+        {toast ? <AdminToast toast={toast} /> : null}
+        <section className="admin-login-card">
+          <h1 className="admin-login-title">No Admin Modules</h1>
+          <p className="admin-login-sub">Your account is authenticated but has no assigned admin role.</p>
+          <button type="button" className="admin-btn-primary admin-login-submit" onClick={logout}>
+            Sign out
+          </button>
+        </section>
+      </main>
+    );
+  }
+
   // ─── Authenticated shell ───────────────────────────────────────────────────
 
   return (
@@ -585,7 +847,7 @@ export default function AdminPanelClient() {
         </div>
 
         <nav className="admin-nav-scroll">
-          {NAV_GROUPS.map((group) => (
+          {visibleNavGroups.map((group) => (
             <div key={group.label} className="admin-nav-group">
               <span className="admin-nav-group-label">{group.label}</span>
               {group.items.map((item) => (
@@ -608,8 +870,8 @@ export default function AdminPanelClient() {
           <div className="admin-sidebar-user">
             <div className="admin-avatar">A</div>
             <div>
-              <strong>Admin</strong>
-              <span>Store Manager</span>
+              <strong>{adminMe?.full_name || adminMe?.username || "Admin"}</strong>
+              <span>{adminMe?.roles?.[0] || "Staff"}</span>
             </div>
           </div>
           <button type="button" className="admin-signout-btn" onClick={logout}>Sign out</button>
@@ -628,14 +890,14 @@ export default function AdminPanelClient() {
           </div>
           {canCreate ? (
             <button type="button" className="admin-btn-primary admin-topbar-cta" onClick={startCreate}>
-              + {activeKey === "blog" ? "New article" : activeKey === "deals" ? "Add deal" : `Add ${activeKey.slice(0, -1)}`}
+              + {activeKey === "blog" ? "New article" : activeKey === "deals" ? "Add deal" : activeKey === "shipping" ? "Add rule" : `Add ${activeKey.slice(0, -1)}`}
             </button>
           ) : null}
         </header>
 
         <div className="admin-content">
           {loading
-            ? <div className="admin-loading"><span className="admin-spinner" /> Loading {active.label.toLowerCase()}…</div>
+            ? <div className="admin-loading" style={{ padding: "2rem" }}><SkeletonLoader count={5} type={activeKey === "dashboard" || activeKey === "analytics" ? "grid" : "list"} /></div>
             : renderSection()}
         </div>
       </main>
@@ -651,6 +913,10 @@ export default function AdminPanelClient() {
           onClose={closeForm}
           onSave={saveRecord}
           onDelete={() => deleteRecord(selected)}
+          onDownloadInvoice={downloadOrderInvoice}
+          titleFor={titleFor}
+          metaFor={metaFor}
+          fields={FIELD_CONFIGS[activeKey]}
         />
       ) : null}
     </div>
@@ -667,653 +933,24 @@ export default function AdminPanelClient() {
     if (activeKey === "insights")               return <InsightsView rows={Array.isArray(data) ? data : []} />;
     if (activeKey === "newsletter")             return <NewsletterPanel data={data} />;
     if (activeKey === "reports")               return <Reports data={data} onDownload={downloadReport} />;
-    if (activeKey === "homepage")               return <SettingsPanel data={data} onEdit={openHomepageSettings} />;
+    if (activeKey === "audit_logs")            return <AuditLogsPanel rows={Array.isArray(data) ? data : []} />;
+    if (activeKey === "homepage")               return <SettingsPanel data={data} onEdit={openHomepageSettings} canEdit={canWriteKey("homepage")} />;
     return (
       <CrudPanel
         rows={Array.isArray(data) ? data : []}
         activeKey={activeKey}
         canCreate={canCreate}
+        canEdit={canEdit}
         canDelete={canDelete}
         onCreate={startCreate}
         onEdit={openDetail}
         onDelete={deleteRecord}
+        onDownloadInvoice={downloadOrderInvoice}
+        titleFor={titleFor}
+        metaFor={metaFor}
+        labelFor={labelFor}
       />
     );
   }
 }
 
-// ─── Toast ────────────────────────────────────────────────────────────────────
-
-function AdminToast({ toast }) {
-  const icons = { success: "✓", error: "✕", info: "●" };
-  return (
-    <div className={`admin-toast toast-${toast.type}`} role="alert">
-      <span className="toast-icon">{icons[toast.type] || "●"}</span>
-      {toast.message}
-    </div>
-  );
-}
-
-// ─── Dashboard ────────────────────────────────────────────────────────────────
-
-function DashboardView({ data }) {
-  const kpis = [
-    { label: "Total Revenue",    value: `OMR ${Number(data?.revenue || 0).toLocaleString()}`,          tone: "gold",   delta: "+12.4%", up: true },
-    { label: "Monthly Revenue",  value: `OMR ${Number(data?.monthly_revenue || 0).toLocaleString()}`,  tone: "green",  delta: "+8.1%",  up: true },
-    { label: "Total Orders",     value: data?.orders ?? 0,                                             tone: "blue",   delta: "+5.3%",  up: true },
-    { label: "Customers",        value: data?.customers ?? 0,                                          tone: "violet", delta: "+22.7%", up: true },
-    { label: "Avg Order Value",  value: `OMR ${Number(data?.avg_order_value || 0).toFixed(2)}`,        tone: "amber",  delta: "+3.9%",  up: true },
-    { label: "Conversion Rate",  value: `${Number(data?.conversion_rate || 0).toFixed(1)}%`,          tone: "teal",   delta: "+0.8%",  up: true },
-    { label: "Cart Abandonment", value: `${Number(data?.abandonment_rate || 68).toFixed(1)}%`,        tone: "rose",   delta: "-2.1%",  up: false },
-    { label: "Repeat Purchase",  value: `${Number(data?.repeat_rate || 0).toFixed(1)}%`,              tone: "indigo", delta: "+4.2%",  up: true },
-  ];
-
-  return (
-    <div className="admin-dashboard">
-      <div className="admin-kpi-grid">
-        {kpis.map((k) => (
-          <article key={k.label} className="admin-kpi-card">
-            <span className="admin-kpi-label">{k.label}</span>
-            <strong className="admin-kpi-value">{k.value}</strong>
-            <span className={`admin-kpi-delta ${k.up ? "up" : "down"}`}>{k.delta} vs last period</span>
-          </article>
-        ))}
-      </div>
-
-      <div className="admin-chart-row">
-        <section className="admin-chart-card span-2">
-          <h3>Revenue Trend</h3>
-          <RevenueChart values={data?.revenue_trend || []} />
-        </section>
-        <section className="admin-chart-card">
-          <h3>Order Status Mix</h3>
-          <DonutChart values={data?.status_mix || []} />
-        </section>
-      </div>
-
-      <div className="admin-data-row">
-        <section className="admin-data-card">
-          <div className="admin-data-head"><h3>Recent Orders</h3></div>
-          <div className="admin-record-list compact">
-            {(data?.recent_orders || []).length
-              ? data.recent_orders.map((o) => (
-                  <div key={o.order_number} className="admin-record-row">
-                    <div className="admin-record-info">
-                      <strong>{o.order_number}</strong>
-                      <span>{o.customer_name} · {o.grand_total} {o.currency_code}</span>
-                    </div>
-                    <span className={`admin-badge ${statusTone(o.status)}`}>{o.status}</span>
-                  </div>
-                ))
-              : <AdminEmpty label="recent orders" />}
-          </div>
-        </section>
-
-        <section className="admin-data-card">
-          <div className="admin-data-head"><h3>Top Products</h3></div>
-          <div className="admin-record-list compact">
-            {(data?.top_products || []).length
-              ? data.top_products.map((p, i) => (
-                  <div key={p.name || i} className="admin-record-row">
-                    <div className="admin-record-info">
-                      <strong>{p.name || p.name_en}</strong>
-                      <span>OMR {p.revenue || 0}</span>
-                    </div>
-                    <span className="admin-badge success">{p.units_sold || p.orders || 0} sold</span>
-                  </div>
-                ))
-              : <AdminEmpty label="product data" />}
-          </div>
-        </section>
-      </div>
-    </div>
-  );
-}
-
-// ─── Analytics ────────────────────────────────────────────────────────────────
-
-function AnalyticsView({ data }) {
-  const funnel = [
-    { label: "Store Visitors", value: data?.visitors       || 8420, pct: 100 },
-    { label: "Product Views",  value: data?.product_views  || 5130, pct: 61 },
-    { label: "Add to Cart",    value: data?.cart_adds      || 2840, pct: 34 },
-    { label: "Checkout",       value: data?.checkouts      || 1560, pct: 19 },
-    { label: "Orders",         value: data?.orders         || 890,  pct: 11 },
-  ];
-  const regions = [
-    { label: "Oman",         value: data?.region_om || 43, color: "var(--brand)" },
-    { label: "UAE",          value: data?.region_ae || 33, color: "var(--brand-dark)" },
-    { label: "Saudi Arabia", value: data?.region_sa || 24, color: "#c9a84c" },
-  ];
-  const acqBars = [40, 55, 30, 70, 60, 85];
-  const acqLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
-
-  return (
-    <div className="admin-analytics">
-      <div className="admin-chart-row">
-        <section className="admin-chart-card span-2">
-          <h3>Revenue Analytics</h3>
-          <RevenueChart values={data?.revenue_trend || []} />
-        </section>
-        <section className="admin-chart-card">
-          <h3>Regional Revenue Split</h3>
-          <div className="admin-regional">
-            {regions.map((r) => (
-              <div key={r.label} className="admin-regional-row">
-                <span>{r.label}</span>
-                <div className="admin-regional-track">
-                  <div className="admin-regional-fill" style={{ width: `${r.value}%`, background: r.color }} />
-                </div>
-                <strong>{r.value}%</strong>
-              </div>
-            ))}
-          </div>
-        </section>
-      </div>
-
-      <div className="admin-chart-row">
-        <section className="admin-chart-card">
-          <h3>Conversion Funnel</h3>
-          <div className="admin-funnel">
-            {funnel.map((step, i) => (
-              <div key={step.label} className="admin-funnel-step">
-                <div className="admin-funnel-bar" style={{ "--fw": `${step.pct}%` }}>
-                  <span>{step.label}</span>
-                  <strong>{step.value.toLocaleString()}</strong>
-                </div>
-                {i < funnel.length - 1
-                  ? <div className="admin-funnel-rate">{((funnel[i + 1].value / step.value) * 100).toFixed(1)}% pass-through</div>
-                  : null}
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="admin-chart-card">
-          <h3>Order Status Distribution</h3>
-          <DonutChart values={data?.status_mix || []} />
-        </section>
-      </div>
-
-      <section className="admin-chart-card">
-        <h3>Customer Acquisition (6 months)</h3>
-        <div className="admin-bar-chart">
-          {acqBars.map((h, i) => (
-            <div key={acqLabels[i]} className="admin-bar-col">
-              <div className="admin-bar" style={{ "--bh": `${h}%` }}>
-                <span className="admin-bar-val">{Math.round(h * 1.2)}</span>
-              </div>
-              <span className="admin-bar-label">{acqLabels[i]}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-    </div>
-  );
-}
-
-// ─── Inventory ────────────────────────────────────────────────────────────────
-
-function InventoryView({ rows }) {
-  const sorted   = [...rows].sort((a, b) => (a.stock_quantity || 0) - (b.stock_quantity || 0));
-  const low      = sorted.filter((p) => (p.stock_quantity || 0) < 10 && (p.stock_quantity || 0) > 0 && p.track_inventory);
-  const out      = sorted.filter((p) => (p.stock_quantity || 0) === 0 && p.track_inventory);
-  const healthy  = sorted.filter((p) => (p.stock_quantity || 0) >= 10);
-
-  return (
-    <div className="admin-inventory">
-      <div className="admin-kpi-grid four-col">
-        <article className="admin-kpi-card"><span className="admin-kpi-label">Total SKUs</span><strong className="admin-kpi-value">{rows.length}</strong></article>
-        <article className="admin-kpi-card kpi-success"><span className="admin-kpi-label">In Stock</span><strong className="admin-kpi-value">{healthy.length}</strong></article>
-        <article className="admin-kpi-card kpi-warning"><span className="admin-kpi-label">Low Stock</span><strong className="admin-kpi-value">{low.length}</strong></article>
-        <article className="admin-kpi-card kpi-danger"><span className="admin-kpi-label">Out of Stock</span><strong className="admin-kpi-value">{out.length}</strong></article>
-      </div>
-
-      <section className="admin-panel-card">
-        <div className="admin-panel-head">
-          <h3>Stock Levels</h3>
-          <span>{rows.length} products</span>
-        </div>
-        <div className="admin-inv-table">
-          <div className="admin-inv-head">
-            <span>Product</span><span>SKU</span><span>Qty</span><span>Status</span>
-          </div>
-          {sorted.map((p) => {
-            const qty   = p.stock_quantity || 0;
-            const tone  = qty === 0 ? "danger" : qty < 10 ? "warning" : "success";
-            const label = qty === 0 ? "Out of stock" : qty < 10 ? "Low stock" : "In stock";
-            return (
-              <div key={p.slug || p.id} className="admin-inv-row">
-                <div className="admin-inv-product">
-                  {p.image
-                    ? <img src={p.image} alt="" className="admin-inv-thumb" />
-                    : <div className="admin-inv-thumb-ph" />}
-                  <span>{p.name_en}</span>
-                </div>
-                <span className="admin-inv-sku">{p.slug || "—"}</span>
-                <strong>{qty}</strong>
-                <span className={`admin-badge ${tone}`}>{label}</span>
-              </div>
-            );
-          })}
-          {!rows.length ? <AdminEmpty label="products" /> : null}
-        </div>
-      </section>
-    </div>
-  );
-}
-
-// ─── Customer Insights ────────────────────────────────────────────────────────
-
-function InsightsView({ rows }) {
-  const active = rows.filter((c) => c.is_active !== false).length;
-  const staff  = rows.filter((c) => c.is_staff).length;
-  return (
-    <div className="admin-insights">
-      <div className="admin-kpi-grid four-col">
-        <article className="admin-kpi-card"><span className="admin-kpi-label">Total Customers</span><strong className="admin-kpi-value">{rows.length}</strong></article>
-        <article className="admin-kpi-card kpi-success"><span className="admin-kpi-label">Active</span><strong className="admin-kpi-value">{active}</strong></article>
-        <article className="admin-kpi-card"><span className="admin-kpi-label">Staff Accounts</span><strong className="admin-kpi-value">{staff}</strong></article>
-        <article className="admin-kpi-card"><span className="admin-kpi-label">New (30 days)</span><strong className="admin-kpi-value">—</strong></article>
-      </div>
-
-      <section className="admin-panel-card">
-        <div className="admin-panel-head">
-          <h3>Customer List</h3>
-          <span>{rows.length} customers</span>
-        </div>
-        <div className="admin-record-list">
-          {rows.length ? (
-            <>
-              <div className="admin-list-head"><span>Customer</span><span>Status</span></div>
-              {rows.map((c) => (
-                <div key={c.id || c.email} className="admin-record-row">
-                  <div className="admin-record-info with-avatar">
-                    <div className="admin-avatar-sm">{(c.first_name || c.username || "?")[0].toUpperCase()}</div>
-                    <div>
-                      <strong>{c.first_name && c.last_name ? `${c.first_name} ${c.last_name}` : c.username || c.email}</strong>
-                      <span>{c.email}</span>
-                    </div>
-                  </div>
-                  <span className={`admin-badge ${c.is_active !== false ? "success" : "neutral"}`}>{c.is_active !== false ? "Active" : "Inactive"}</span>
-                </div>
-              ))}
-            </>
-          ) : <AdminEmpty label="customers" />}
-        </div>
-      </section>
-    </div>
-  );
-}
-
-// ─── Newsletter ───────────────────────────────────────────────────────────────
-
-function NewsletterPanel({ data }) {
-  return (
-    <div className="admin-newsletter">
-      <div className="admin-kpi-grid four-col">
-        <article className="admin-kpi-card"><span className="admin-kpi-label">Push Devices</span><strong className="admin-kpi-value">{data?.active_push_devices ?? "—"}</strong></article>
-        <article className="admin-kpi-card"><span className="admin-kpi-label">Failures</span><strong className="admin-kpi-value">{data?.notification_failures ?? "—"}</strong></article>
-        <article className="admin-kpi-card"><span className="admin-kpi-label">Push Events</span><strong className="admin-kpi-value">4</strong></article>
-        <article className="admin-kpi-card"><span className="admin-kpi-label">Campaigns</span><strong className="admin-kpi-value">—</strong></article>
-      </div>
-      <PlaceholderModule config={{
-        icon: "▢", badge: "Planned", title: "Email Campaign Builder",
-        description: "Design and schedule email campaigns to your subscriber list. Set up automated flows for welcome series, order follow-ups, and re-engagement.",
-        features: ["Drag-and-drop email editor","Subscriber segments and lists","Welcome series automation","Post-purchase follow-up flows","A/B subject line testing","Open rate and click analytics","Unsubscribe management"],
-      }} />
-    </div>
-  );
-}
-
-// ─── Placeholder ──────────────────────────────────────────────────────────────
-
-function PlaceholderModule({ config }) {
-  return (
-    <section className="admin-placeholder">
-      <div className="admin-placeholder-icon">{config.icon}</div>
-      <span className="admin-placeholder-badge">{config.badge}</span>
-      <h2>{config.title}</h2>
-      <p>{config.description}</p>
-      <ul className="admin-placeholder-features">
-        {config.features.map((f) => (
-          <li key={f}><span className="feature-check">✓</span>{f}</li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-// ─── Integrations Hub ─────────────────────────────────────────────────────────
-
-function IntegrationsHub({ title, integrations }) {
-  return (
-    <div className="admin-integrations">
-      <p className="admin-int-note">Connect third-party platforms. Your developer handles the API keys — this panel shows connection status and configuration options.</p>
-      <div className="admin-int-grid">
-        {integrations.map((int) => (
-          <article key={int.name} className="admin-int-card">
-            <div className="admin-int-logo" style={{ background: int.color, color: int.iconColor || "#fff" }}>
-              {int.abbr}
-            </div>
-            <div className="admin-int-info">
-              <strong>{int.name}</strong>
-              <p>{int.desc}</p>
-            </div>
-            <div className="admin-int-action">
-              {int.status === "active"
-                ? <span className="admin-badge success">Active</span>
-                : int.status === "available"
-                ? <button type="button" className="admin-btn-outline">Connect</button>
-                : <span className="admin-badge neutral">Coming soon</span>}
-            </div>
-          </article>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── CRUD Panel ───────────────────────────────────────────────────────────────
-
-function CrudPanel({ rows, activeKey, canCreate, canDelete, onCreate, onEdit, onDelete }) {
-  const label = labelFor(activeKey);
-  return (
-    <section className="admin-panel-card">
-      <div className="admin-panel-head">
-        <div>
-          <h3>{activeKey === "deals" ? "Promotions" : activeKey === "blog" ? "Blog Articles" : activeKey.charAt(0).toUpperCase() + activeKey.slice(1)}</h3>
-          <span>{rows.length} record{rows.length === 1 ? "" : "s"}</span>
-        </div>
-        {canCreate ? (
-          <button type="button" className="admin-btn-primary" onClick={onCreate}>
-            + {activeKey === "blog" ? "New article" : `Add ${activeKey === "deals" ? "deal" : activeKey.slice(0, -1)}`}
-          </button>
-        ) : null}
-      </div>
-      <div className="admin-record-list">
-        {rows.length ? (
-          <>
-            <div className="admin-list-head"><span>Record</span><span>Status</span><span>Actions</span></div>
-            {rows.map((item) => {
-              const meta = metaFor(item);
-              return (
-                <div key={item.id || item.slug || item.order_number || item.email} className="admin-record-row">
-                  <button type="button" className="admin-record-main" onClick={() => onEdit(item)}>
-                    {item.image ? <img src={item.image} alt="" className="admin-record-thumb" /> : null}
-                    <div>
-                      <strong>{titleFor(item, activeKey)}</strong>
-                      <span>{item.email || item.customer_phone || item.currency_code || item.slug || "—"}</span>
-                    </div>
-                  </button>
-                  <span className={`admin-badge ${statusTone(meta)}`}>{meta || "—"}</span>
-                  <div className="admin-row-actions">
-                    <button type="button" className="admin-btn-sm" onClick={() => onEdit(item)}>Edit</button>
-                    {canDelete ? <button type="button" className="admin-btn-sm danger" onClick={() => onDelete(item)}>Delete</button> : null}
-                  </div>
-                </div>
-              );
-            })}
-          </>
-        ) : <AdminEmpty label={label} />}
-      </div>
-    </section>
-  );
-}
-
-// ─── CRUD Form Modal ──────────────────────────────────────────────────────────
-
-function CrudFormModal({ activeKey, mode, selected, editor, setEditor, canDelete, onClose, onSave, onDelete }) {
-  const fields = FIELD_CONFIGS[activeKey] || [];
-  const title  = mode === "create"
-    ? `Add ${activeKey === "deals" ? "promotion" : activeKey === "blog" ? "article" : activeKey.slice(0, -1)}`
-    : titleFor(selected, activeKey);
-
-  return (
-    <div className="admin-modal-backdrop" role="presentation" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <section className="admin-modal" role="dialog" aria-modal="true" aria-label={title}>
-        <div className="admin-modal-head">
-          <div>
-            <p className="admin-modal-eyebrow">{mode === "create" ? "Create record" : "Edit record"}</p>
-            <h2>{title}</h2>
-            {selected ? <span className="admin-modal-meta">{metaFor(selected)}</span> : null}
-          </div>
-          <button type="button" className="admin-modal-close" onClick={onClose} aria-label="Close">✕</button>
-        </div>
-
-        {activeKey === "orders" && selected ? <OrderSnapshot order={selected} /> : null}
-
-        <div className="admin-modal-form">
-          {fields.map((field) => (
-            <FormField key={field[0]} field={field} value={editor[field[0]]} editor={editor} setEditor={setEditor} />
-          ))}
-          <div className="admin-modal-actions">
-            <button type="button" className="admin-btn-primary" onClick={onSave}>Save changes</button>
-            {canDelete ? <button type="button" className="admin-btn-danger" onClick={onDelete}>Delete</button> : null}
-            <button type="button" className="admin-btn-secondary" onClick={onClose}>Cancel</button>
-          </div>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-// ─── Order Snapshot ───────────────────────────────────────────────────────────
-
-function OrderSnapshot({ order }) {
-  const cells = [
-    ["Customer", order.customer_name || "—", order.customer_email || order.customer_phone || "—"],
-    ["Address",  order.city || "—",          [order.address_line_1, order.address_line_2, order.country].filter(Boolean).join(", ") || "—"],
-    ["Totals",   `${order.shipping_total} ${order.currency_code}`, `Grand total: ${order.grand_total} ${order.currency_code}`],
-    ["Payment",  order.payment_status || "—", order.payment_method || "—"],
-  ];
-  return (
-    <div className="admin-order-snapshot">
-      {cells.map(([label, main, sub]) => (
-        <div key={label} className="admin-snapshot-cell">
-          <span>{label}</span>
-          <strong>{main}</strong>
-          <p>{sub}</p>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ─── Form Field ───────────────────────────────────────────────────────────────
-
-function FormField({ field, value, editor, setEditor }) {
-  const [name, label, type, options] = field;
-
-  if (type === "checkbox") {
-    return (
-      <label className="admin-label admin-check-label">
-        <input type="checkbox" className="admin-checkbox" checked={Boolean(value)} onChange={(e) => setEditor({ ...editor, [name]: e.target.checked })} />
-        <span>{label}</span>
-      </label>
-    );
-  }
-  if (type === "select") {
-    return (
-      <label className="admin-label">
-        {label}
-        <select className="admin-input" value={value || ""} onChange={(e) => setEditor({ ...editor, [name]: e.target.value })}>
-          {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-        </select>
-      </label>
-    );
-  }
-  if (type === "textarea" || type === "json") {
-    return (
-      <label className="admin-label full-width">
-        {label}
-        <textarea className="admin-input admin-textarea" value={value || ""} onChange={(e) => setEditor({ ...editor, [name]: e.target.value })} />
-      </label>
-    );
-  }
-  if (type === "file") {
-    return (
-      <label className="admin-label">
-        {label}
-        <input type="file" className="admin-input" onChange={(e) => setEditor({ ...editor, [name]: e.target.files[0] })} />
-        {value instanceof File ? <span className="admin-file-name">{value.name}</span> : null}
-      </label>
-    );
-  }
-  return (
-    <label className="admin-label">
-      {label}
-      <input
-        type={type}
-        className="admin-input"
-        value={value ?? ""}
-        onChange={(e) => setEditor({ ...editor, [name]: type === "number" ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value })}
-      />
-    </label>
-  );
-}
-
-// ─── Settings Panel ───────────────────────────────────────────────────────────
-
-function SettingsPanel({ data, onEdit }) {
-  const rows = [
-    ["Brand name",            data?.brand_name             || "Enfant Organics"],
-    ["Announcement (EN)",     data?.announcement_en        || "Not configured"],
-    ["Newsletter title (EN)", data?.newsletter_title_en    || "Not configured"],
-    ["Footer about (EN)",     data?.footer_about_en        || "Not configured"],
-    ["Instagram title (EN)",  data?.instagram_title_en     || "Not configured"],
-    ["Blog title (EN)",       data?.blog_title_en          || "Not configured"],
-  ];
-  return (
-    <section className="admin-panel-card admin-settings-card">
-      <div className="admin-panel-head">
-        <div>
-          <h3>Homepage Settings</h3>
-          <span>Storefront content, footer, newsletter, and link groups.</span>
-        </div>
-        <button type="button" className="admin-btn-primary" onClick={onEdit}>Edit settings</button>
-      </div>
-      <div className="admin-settings-preview">
-        {rows.map(([label, val]) => (
-          <div key={label} className="admin-settings-row">
-            <strong>{label}</strong>
-            <span>{val}</span>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-// ─── Reports ──────────────────────────────────────────────────────────────────
-
-function Reports({ data, onDownload }) {
-  return (
-    <div className="admin-reports">
-      <section className="admin-panel-card">
-        <div className="admin-panel-head">
-          <h3>CSV Exports</h3>
-          <span>Download reports as comma-separated files.</span>
-        </div>
-        <div className="admin-report-grid">
-          {REPORT_TYPES.map((type) => (
-            <button key={type} type="button" className="admin-report-btn" onClick={() => onDownload(type)}>
-              <span className="admin-report-icon">⇩</span>
-              <div>
-                <strong>{type.replace("-", " ").replace(/\b\w/g, (l) => l.toUpperCase())}</strong>
-                <span>Download as CSV</span>
-              </div>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="admin-panel-card">
-        <div className="admin-panel-head">
-          <h3>Push Notifications</h3>
-          <span>Expo mobile push delivery status.</span>
-        </div>
-        <div className="admin-push-stats">
-          <div className="admin-push-row"><span>Active devices</span><strong>{data?.active_push_devices ?? "—"}</strong></div>
-          <div className="admin-push-row"><span>Delivery failures</span><strong>{data?.notification_failures ?? "—"}</strong></div>
-        </div>
-        <div className="admin-push-events">
-          <p className="admin-push-events-label">Tracked push events</p>
-          {["New order placed","Order payment confirmed","Payment review needed","Low stock alert"].map((ev) => (
-            <div key={ev} className="admin-push-event"><span className="admin-badge success">Active</span> {ev}</div>
-          ))}
-        </div>
-      </section>
-    </div>
-  );
-}
-
-// ─── Empty state ──────────────────────────────────────────────────────────────
-
-function AdminEmpty({ label }) {
-  return (
-    <div className="admin-empty">
-      <strong>No {label} yet</strong>
-      <span>Records will appear here with status labels and quick actions.</span>
-    </div>
-  );
-}
-
-// ─── Revenue Chart ────────────────────────────────────────────────────────────
-
-function RevenueChart({ values }) {
-  const fallback = [{ label: "Feb", value: 0 }, { label: "Mar", value: 4200 }, { label: "Apr", value: 2800 }, { label: "May", value: 6100 }];
-  const pts  = values.length ? values : fallback;
-  const max  = Math.max(...pts.map((p) => p.value), 1);
-  const step = 300 / Math.max(pts.length - 1, 1);
-  const coords = pts.map((p, i) => `${40 + i * step},${180 - (p.value / max) * 150}`).join(" ");
-  const last = 40 + (pts.length - 1) * step;
-
-  return (
-    <svg className="admin-line-chart" viewBox="0 0 380 220" role="img" aria-label="Revenue trend chart">
-      {[30, 80, 130, 180].map((y) => <line key={y} x1="38" x2="350" y1={y} y2={y} />)}
-      <defs>
-        <linearGradient id="rev-grad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--brand)" stopOpacity="0.28" />
-          <stop offset="100%" stopColor="var(--brand)" stopOpacity="0.02" />
-        </linearGradient>
-      </defs>
-      <polygon points={`40,180 ${coords} ${last},180`} fill="url(#rev-grad)" />
-      <polyline points={coords} fill="none" stroke="var(--brand)" strokeWidth="2.5" strokeLinejoin="round" />
-      {pts.map((p, i) => (
-        <g key={p.label}>
-          <circle cx={40 + i * step} cy={180 - (p.value / max) * 150} r="4" fill="var(--brand)" />
-          <text x={40 + i * step} y="210">{p.label}</text>
-        </g>
-      ))}
-    </svg>
-  );
-}
-
-// ─── Donut Chart ──────────────────────────────────────────────────────────────
-
-function DonutChart({ values }) {
-  const items  = values.length ? values : [{ status: "pending", count: 4 }, { status: "delivered", count: 2 }, { status: "confirmed", count: 1 }];
-  const total  = items.reduce((s, i) => s + i.count, 0) || 1;
-  const colors = ["#c9a84c", "#92ab69", "#607a42", "#62b5e8", "#df5750", "#8a82ff"];
-  let offset   = 25;
-  return (
-    <svg className="admin-donut-chart" viewBox="0 0 220 220" role="img" aria-label="Order status donut chart">
-      <circle cx="110" cy="110" r="66" fill="none" stroke="#f0f3ed" strokeWidth="28" />
-      {items.map((item, i) => {
-        const len = (item.count / total) * 315;
-        const el  = (
-          <circle key={item.status} cx="110" cy="110" r="66"
-            fill="none" stroke={colors[i % colors.length]} strokeWidth="28"
-            strokeDasharray={`${len} 315`} strokeDashoffset={-offset}
-            style={{ transform: "rotate(-90deg)", transformOrigin: "110px 110px" }}
-          />
-        );
-        offset += len;
-        return el;
-      })}
-      <text x="110" y="105" textAnchor="middle" fill="#65705f" fontSize="13" fontWeight="700">Orders</text>
-      <text x="110" y="124" textAnchor="middle" fill="#191817" fontSize="26" fontWeight="800">{total}</text>
-    </svg>
-  );
-}

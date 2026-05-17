@@ -23,16 +23,16 @@
   height: 100vh;
   transform: translateX(100%);
   transition: 220ms ease;
+  visibility: hidden;
 }
 
-.storefront-shell[dir="rtl"] .cart-drawer {
-  inset-inline-end: auto;
-  inset-inline-start: 0;
+[dir="rtl"] .cart-drawer {
   transform: translateX(-100%);
 }
 
 .cart-drawer.is-open {
   transform: translateX(0);
+  visibility: visible;
 }
 
 .cart-drawer-panel {
@@ -44,6 +44,10 @@
   background: var(--surface);
   border-inline-start: 1px solid var(--line);
   box-shadow: -18px 0 46px rgba(37, 49, 27, 0.12);
+}
+
+[dir="rtl"] .cart-drawer-panel {
+  box-shadow: 18px 0 46px rgba(37, 49, 27, 0.12);
 }
 
 .cart-drawer-items {
@@ -202,6 +206,148 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* ── Apple Pay button ──────────────────────── */
+
+.cart-apple-pay-button {
+  -webkit-appearance: -apple-pay-button;
+  -apple-pay-button-type: plain;
+  -apple-pay-button-style: black;
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: opacity 160ms ease;
+}
+
+.cart-apple-pay-button:disabled {
+  opacity: 0.5;
+}
+
+.cart-apple-pay-button--buy {
+  -apple-pay-button-type: buy;
+  min-height: 46px;
+  border-radius: 10px;
+}
+
+/* Fallback for non-Safari (button won't render but also won't break layout) */
+@supports not (-webkit-appearance: -apple-pay-button) {
+  .cart-apple-pay-button {
+    display: none;
+  }
+}
+
+.apple-pay-overlay {
+  z-index: 65;
+}
+
+.apple-pay-quick-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  pointer-events: none;
+}
+
+.apple-pay-quick-panel {
+  width: min(400px, 100%);
+  background: #fff;
+  border-radius: 24px;
+  padding: 24px;
+  box-shadow: 0 24px 72px rgba(25, 24, 23, 0.18);
+  display: grid;
+  gap: 16px;
+  pointer-events: all;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+}
+
+.apple-pay-quick-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.apple-pay-quick-logo {
+  width: 60px;
+  height: 28px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 165 42'%3E%3Cpath d='M31.9 5.7c1.7-2 2.9-4.8 2.6-7.7-2.5.1-5.5 1.7-7.3 3.7-1.6 1.8-3 4.7-2.6 7.5 2.7.2 5.5-1.4 7.3-3.5z' fill='%23000'/%3E%3Cpath d='M34.4 9.9c-4-.2-7.5 2.3-9.4 2.3-2 0-4.9-2.2-8.1-2.1-4.2.1-8 2.4-10.2 6.2C2.7 22 4 31.5 8.5 36.9c2.2 3.2 4.8 6.7 8.2 6.6 3.2-.1 4.5-2.1 8.4-2.1 3.9 0 5 2.1 8.4 2 3.5-.1 5.7-3.2 7.9-6.4 2.5-3.7 3.5-7.2 3.5-7.4-.1 0-6.8-2.6-6.9-10.3 0-6.5 5.3-9.6 5.6-9.8-3.1-4.5-7.8-5-9.2-5.1z' fill='%23000'/%3E%3Ctext x='55' y='32' font-family='-apple-system,BlinkMacSystemFont' font-size='24' font-weight='500' fill='%23000'%3EPay%3C/text%3E%3C/svg%3E") no-repeat center/contain;
+}
+
+.apple-pay-quick-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #f7f8f3;
+  border-radius: 12px;
+  font-size: 0.9rem;
+}
+
+.apple-pay-quick-total span {
+  color: var(--text-soft);
+  font-weight: 500;
+}
+
+.apple-pay-quick-total strong {
+  font-weight: 750;
+  color: var(--text);
+}
+
+.apple-pay-quick-form {
+  display: grid;
+  gap: 12px;
+}
+
+.apple-pay-quick-fields {
+  display: grid;
+  gap: 10px;
+}
+
+.apple-pay-quick-fields label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.apple-pay-quick-fields input {
+  width: 100%;
+  min-height: 40px;
+  border: 1.5px solid rgba(30, 30, 30, 0.09);
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: #fafbf8;
+  font-size: 0.88rem;
+  color: var(--text);
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.apple-pay-quick-fields input:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(146, 171, 105, 0.15);
+  background: #fff;
+  outline: none;
+}
+
+.apple-pay-quick-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.apple-pay-quick-note {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text-soft);
+  text-align: center;
+  line-height: 1.5;
 }
 
 @media (max-width: 1100px) {

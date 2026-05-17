@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import Icon from "@/components/icons/Icon";
 import { useStore } from "@/components/store/cart/StoreProvider";
+import { buildAnalyticsItem, pushDataLayerEvent } from "@/lib/analytics";
 import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
 
 export default function ProductDetailClient({ locale, product, region }) {
@@ -15,9 +16,33 @@ export default function ProductDetailClient({ locale, product, region }) {
   const [selectedImage, setSelectedImage] = useState(galleryImages[0] || product.image);
   const [selectedTab, setSelectedTab] = useState("description");
   const [quantity, setQuantity] = useState(1);
+  const lastTrackedViewItemRef = useRef("");
   const [selectedOptions, setSelectedOptions] = useState(
     Object.fromEntries((product.option_groups || []).map((group) => [group.name, group.values[0]])),
   );
+
+  useEffect(() => {
+    const key = `${region}:${product.slug}`;
+    if (lastTrackedViewItemRef.current === key) {
+      return;
+    }
+    const item = buildAnalyticsItem(product);
+    if (!item) {
+      return;
+    }
+    const didPush = pushDataLayerEvent("view_item", {
+      locale,
+      region,
+      ecommerce: {
+        currency: product.pricing?.currency_code || "",
+        value: Number(product.pricing?.amount || 0),
+        items: [item],
+      },
+    });
+    if (didPush) {
+      lastTrackedViewItemRef.current = key;
+    }
+  }, [locale, product, region]);
 
   const addCurrentProduct = () => {
     addItem({ ...product, locale }, quantity, selectedOptions);

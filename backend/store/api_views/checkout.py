@@ -19,16 +19,26 @@ def validation_error_message(error):
 
 class CheckoutView(APIView):
     serializer_class = CheckoutCreateSerializer
+    throttle_scope = "checkout"
 
     def post(self, request):
         serializer = CheckoutCreateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         order = serializer.save()
-        return Response(OrderSerializer(order, context={"request": request}).data, status=201)
+        # Expose the per-order lookup_token only on the just-placed order response
+        # so the customer (especially a guest) can save it for later tracking.
+        return Response(
+            OrderSerializer(
+                order,
+                context={"request": request, "expose_lookup_token": True},
+            ).data,
+            status=201,
+        )
 
 
 class CouponValidationView(APIView):
     serializer_class = CouponValidationSerializer
+    throttle_scope = "checkout"
 
     def post(self, request):
         serializer = CouponValidationSerializer(data=request.data)

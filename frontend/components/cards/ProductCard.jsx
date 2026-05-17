@@ -31,7 +31,7 @@ export default function ProductCard({ locale, product, region }) {
       return;
     }
 
-    addItem(product, 1, {});
+    addItem({ ...product, locale }, 1, {});
     openCart();
   };
 
