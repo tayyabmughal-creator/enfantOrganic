@@ -22,14 +22,20 @@ services:
     restart: unless-stopped
     # Production REQUIRES a Redis password. Fail fast if not provided.
     command: >
-      sh -c "if [ -z \"$$REDIS_PASSWORD\" ]; then
-               echo 'REDIS_PASSWORD must be set in production' >&2; exit 1;
-             fi;
-             redis-server --requirepass \"$$REDIS_PASSWORD\""
+      sh -c 'if [ -z "$$REDIS_PASSWORD" ]; then
+        echo "REDIS_PASSWORD must be set in production" >&2;
+        exit 1;
+      fi;
+      exec redis-server --requirepass "$$REDIS_PASSWORD"'
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      test: >
+        if [ -n "$$REDIS_PASSWORD" ]; then
+          redis-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG;
+        else
+          redis-cli ping | grep -q PONG;
+        fi
       interval: 10s
       timeout: 5s
       retries: 5
