@@ -1428,6 +1428,42 @@
   color: var(--text);
 }
 
+.footer-social-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.footer-social-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.7);
+  border: 1px solid var(--line);
+  color: var(--text-soft);
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
+}
+
+.footer-social-link:hover {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+
+.footer-copyright-row {
+  justify-content: flex-end;
+}
+
+.footer-copyright {
+  font-size: 0.78rem;
+  color: var(--text-soft);
+  margin-inline-start: auto;
+}
+
 @media (max-width: 860px) {
   .trust-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -943,7 +943,210 @@
   margin-top: 1px;
 }
 
-/* ─── Integrations ────────────────────────────────────────────────────────── */
+/* ─── Integrations v2 ────────────────────────────────────────────────────── */
+
+.admin-integrations-view {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 880px;
+}
+
+.admin-iv-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.admin-iv-title {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1a1f17;
+  letter-spacing: -0.02em;
+}
+
+.admin-iv-sub {
+  margin: 0;
+  font-size: 13px;
+  color: #8a9580;
+}
+
+.admin-iv-note {
+  flex: 1;
+  min-width: 220px;
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #fffcf4;
+  border: 1px solid #f2dfad;
+  color: #8a661a;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.admin-iv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ── Card ── */
+
+.admin-iv-card {
+  border: 1px solid #e8eddf;
+  border-radius: 18px;
+  background: #fff;
+  overflow: hidden;
+  transition: border-color 200ms, box-shadow 200ms;
+}
+
+.admin-iv-card:hover {
+  border-color: #c8d9b0;
+  box-shadow: 0 4px 16px rgba(25, 24, 23, 0.05);
+}
+
+.admin-iv-card.connected {
+  border-color: #b8d4a0;
+}
+
+.admin-iv-card.connected:hover {
+  box-shadow: 0 4px 20px rgba(100, 160, 80, 0.10);
+}
+
+.admin-iv-card.expanded {
+  border-color: #a8c990;
+  box-shadow: 0 6px 24px rgba(25, 24, 23, 0.07);
+}
+
+.admin-iv-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+}
+
+.admin-iv-logo {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  font-size: 15px;
+  font-weight: 800;
+  flex-shrink: 0;
+  letter-spacing: -0.02em;
+}
+
+.admin-iv-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-iv-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.admin-iv-name-row strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1f17;
+}
+
+.admin-iv-desc {
+  margin: 0;
+  font-size: 12px;
+  color: #8a9580;
+  line-height: 1.45;
+}
+
+.admin-iv-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* ── Status chips ── */
+
+.admin-iv-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.admin-iv-chip.connected { background: #e2f0d9; color: #2d6a20; }
+.admin-iv-chip.active    { background: #dbeeff; color: #1a5fa8; }
+.admin-iv-chip.soon      { background: #f4f4f4; color: #999;    }
+.admin-iv-chip.idle      { background: #fafafa; color: #bbb; border: 1px solid #eee; }
+
+/* ── Inline config form ── */
+
+.admin-iv-form {
+  padding: 16px 20px 20px;
+  border-top: 1px solid #f0f4e9;
+  background: #f9fcf6;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-iv-form-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.admin-iv-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.admin-iv-field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4a5546;
+}
+
+.admin-iv-field .admin-input {
+  font-size: 13px;
+  font-family: "SF Mono", "Fira Mono", ui-monospace, monospace;
+  letter-spacing: 0.01em;
+  border-radius: 10px;
+}
+
+.admin-iv-field-hint {
+  font-size: 11px;
+  color: #92ab69;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.admin-iv-form-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.admin-btn-sm.active-outline {
+  border-color: #92ab69;
+  color: #507038;
+  background: #f0f7e8;
+}
+
+/* ─── Integrations (legacy hub) ───────────────────────────────────────────── */
 
 .admin-integrations {
   display: grid;
@@ -1043,6 +1246,94 @@
 .admin-settings-row strong { color: #5e6859; font-weight: 600; }
 
 .admin-settings-row span { color: #191817; }
+
+.admin-settings-link {
+  color: #3f7a52;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.admin-settings-link:hover { text-decoration: underline; }
+
+.admin-settings-empty {
+  display: block;
+  padding: 8px 18px;
+  color: #9aaa8e;
+  font-size: 13px;
+  font-style: italic;
+}
+
+.admin-settings-group-label {
+  padding: 6px 18px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #9aaa8e;
+  background: #f9faf6;
+  border-bottom: 1px solid #f0f3ed;
+}
+
+.admin-settings-multi {
+  display: grid;
+  gap: 20px;
+  max-width: 960px;
+}
+
+.admin-color-swatch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-color-swatch {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid #e5ead8;
+  flex-shrink: 0;
+}
+
+.admin-logo-preview-row { align-items: center; }
+
+.admin-logo-preview {
+  max-height: 40px;
+  max-width: 180px;
+  object-fit: contain;
+}
+
+.admin-link-preview-list {
+  display: grid;
+  gap: 0;
+}
+
+.admin-link-preview-item {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 12px;
+  padding: 9px 18px;
+  border-bottom: 1px solid #f0f3ed;
+  font-size: 13px;
+}
+
+.admin-link-label { font-weight: 600; color: #3f5236; }
+
+.admin-link-href { color: #3f7a52; word-break: break-all; }
+
+/* ─── Regions ────────────────────────────────────────────────────────────── */
+
+.admin-regions {
+  display: grid;
+  gap: 20px;
+  max-width: 960px;
+}
+
+.admin-region-card .admin-panel-head h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 
 /* ─── Reports ─────────────────────────────────────────────────────────────── */
 
@@ -1335,6 +1626,41 @@
   display: flex;
   justify-content: flex-end;
   padding-top: 4px;
+}
+
+.admin-snapshot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ─── Search bar ──────────────────────────────────────────────────────────── */
+
+.admin-search-bar {
+  padding: 0 0 8px;
+}
+
+.admin-search-bar .admin-input {
+  width: 100%;
+  max-width: 380px;
+}
+
+/* ─── Pagination ──────────────────────────────────────────────────────────── */
+
+.admin-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px 0 4px;
+  border-top: 1px solid #edf2e6;
+  margin-top: 8px;
+}
+
+.admin-pagination span {
+  font-size: 13px;
+  font-weight: 600;
+  color: #8a9580;
 }
 
 /* ─── Loading / empty ─────────────────────────────────────────────────────── */

@@ -257,8 +257,167 @@ class SiteSettings(models.Model):
     policy_links = models.JSONField(default=list, blank=True)
     static_links = models.JSONField(default=list, blank=True)
 
+    # Branding & Identity
+    logo_url = models.CharField(max_length=500, blank=True, default="")
+    favicon_url = models.CharField(max_length=500, blank=True, default="")
+    tagline_en = models.CharField(max_length=255, blank=True, default="")
+    tagline_ar = models.CharField(max_length=255, blank=True, default="")
+    primary_color = models.CharField(max_length=20, blank=True, default="")
+    accent_color = models.CharField(max_length=20, blank=True, default="")
+
+    # Navigation
+    nav_links = models.JSONField(default=list, blank=True)
+
+    # Social Media
+    facebook_url = models.CharField(max_length=500, blank=True, default="")
+    instagram_url = models.CharField(max_length=500, blank=True, default="")
+    twitter_url = models.CharField(max_length=500, blank=True, default="")
+    youtube_url = models.CharField(max_length=500, blank=True, default="")
+    tiktok_url = models.CharField(max_length=500, blank=True, default="")
+    whatsapp_number = models.CharField(max_length=30, blank=True, default="")
+
+    # Footer
+    copyright_en = models.CharField(max_length=255, blank=True, default="")
+    copyright_ar = models.CharField(max_length=255, blank=True, default="")
+
+    # Global Contact
+    contact_email = models.EmailField(blank=True, default="")
+    contact_phone = models.CharField(max_length=30, blank=True, default="")
+    address_en = models.CharField(max_length=500, blank=True, default="")
+    address_ar = models.CharField(max_length=500, blank=True, default="")
+
+    # SEO
+    seo_title_en = models.CharField(max_length=255, blank=True, default="")
+    seo_title_ar = models.CharField(max_length=255, blank=True, default="")
+    seo_description_en = models.TextField(blank=True, default="")
+    seo_description_ar = models.TextField(blank=True, default="")
+    og_image_url = models.CharField(max_length=500, blank=True, default="")
+
+    # Legal Pages
+    return_policy_en = models.TextField(blank=True, default="")
+    return_policy_ar = models.TextField(blank=True, default="")
+    privacy_policy_en = models.TextField(blank=True, default="")
+    privacy_policy_ar = models.TextField(blank=True, default="")
+
+    # Social Pixels
+    facebook_pixel_id = models.CharField(max_length=50, blank=True, default="")
+    facebook_app_id = models.CharField(max_length=50, blank=True, default="")
+    tiktok_pixel_id = models.CharField(max_length=50, blank=True, default="")
+    snapchat_pixel_id = models.CharField(max_length=50, blank=True, default="")
+    pinterest_tag_id = models.CharField(max_length=50, blank=True, default="")
+    twitter_pixel_id = models.CharField(max_length=50, blank=True, default="")
+
+    # Analytics & Ads
+    google_analytics_id = models.CharField(max_length=30, blank=True, default="")
+    google_ads_id = models.CharField(max_length=30, blank=True, default="")
+    google_tag_manager_id = models.CharField(max_length=20, blank=True, default="")
+
+    # Email Marketing
+    klaviyo_public_key = models.CharField(max_length=50, blank=True, default="")
+    mailchimp_api_key = models.CharField(max_length=120, blank=True, default="")
+    mailchimp_list_id = models.CharField(max_length=50, blank=True, default="")
+
+    # Instagram Shopping
+    instagram_catalog_id = models.CharField(max_length=50, blank=True, default="")
+    instagram_business_id = models.CharField(max_length=50, blank=True, default="")
+
+    # WhatsApp Business Cloud API
+    whatsapp_api_token = models.CharField(max_length=255, blank=True, default="")
+    whatsapp_phone_number_id = models.CharField(max_length=50, blank=True, default="")
+
+    # Zendesk
+    zendesk_subdomain = models.CharField(max_length=80, blank=True, default="")
+    zendesk_api_key = models.CharField(max_length=120, blank=True, default="")
+
+    # Cloudinary
+    cloudinary_cloud_name = models.CharField(max_length=80, blank=True, default="")
+    cloudinary_api_key = models.CharField(max_length=50, blank=True, default="")
+
+    # Algolia
+    algolia_app_id = models.CharField(max_length=20, blank=True, default="")
+    algolia_search_key = models.CharField(max_length=80, blank=True, default="")
+
+    # Zapier
+    zapier_order_webhook = models.CharField(max_length=500, blank=True, default="")
+
+    # Stripe
+    stripe_publishable_key = models.CharField(max_length=255, blank=True, default="")
+
+    # Shippo
+    shippo_api_token = models.CharField(max_length=120, blank=True, default="")
+
+    # ── Payment Gateway Credentials ──────────────────────────────────────────
+    # Stored in DB so admins can configure credentials without a redeploy.
+    # Each service reads DB first, falls back to environment variables.
+
+    # Paymob
+    paymob_api_key              = models.CharField(max_length=200, blank=True, default="")
+    paymob_integration_id       = models.CharField(max_length=20,  blank=True, default="")
+    paymob_iframe_id            = models.CharField(max_length=20,  blank=True, default="")
+    paymob_hmac_secret          = models.CharField(max_length=100, blank=True, default="")
+    paymob_currency             = models.CharField(max_length=5,   blank=True, default="")
+    paymob_apple_pay_integration_id = models.CharField(max_length=20, blank=True, default="")
+    paymob_apple_pay_iframe_id  = models.CharField(max_length=20,  blank=True, default="")
+
+    # PayTabs (global credentials; per-region keys stay in env vars)
+    paytabs_profile_id          = models.CharField(max_length=20,  blank=True, default="")
+    paytabs_server_key          = models.CharField(max_length=100, blank=True, default="")
+    paytabs_region              = models.CharField(max_length=10,  blank=True, default="", help_text="e.g. SA, AE, OM")
+
+    # HyperPay
+    hyperpay_entity_id          = models.CharField(max_length=100, blank=True, default="")
+    hyperpay_access_token       = models.CharField(max_length=200, blank=True, default="")
+
+    # Telr
+    telr_store_id               = models.CharField(max_length=20,  blank=True, default="")
+    telr_auth_key               = models.CharField(max_length=100, blank=True, default="")
+
+    # Thawani
+    thawani_publishable_key     = models.CharField(max_length=100, blank=True, default="")
+    thawani_secret_key          = models.CharField(max_length=100, blank=True, default="")
+    thawani_webhook_secret      = models.CharField(max_length=100, blank=True, default="")
+    thawani_base_url            = models.CharField(max_length=200, blank=True, default="")
+
+    # OmanNet
+    omannet_merchant_id         = models.CharField(max_length=50,  blank=True, default="")
+    omannet_access_code         = models.CharField(max_length=100, blank=True, default="")
+    omannet_sha_request         = models.CharField(max_length=100, blank=True, default="")
+    omannet_sha_response        = models.CharField(max_length=100, blank=True, default="")
+    omannet_webhook_secret      = models.CharField(max_length=100, blank=True, default="")
+
     def __str__(self):
         return self.brand_name
+
+
+class TaxRule(models.Model):
+    region = models.ForeignKey(
+        "Region",
+        on_delete=models.CASCADE,
+        related_name="tax_rules",
+        null=True,
+        blank=True,
+        help_text="Leave blank to apply globally across all regions.",
+    )
+    name_en = models.CharField(max_length=120, default="VAT")
+    name_ar = models.CharField(max_length=120, blank=True, default="ضريبة القيمة المضافة")
+    rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=4,
+        help_text="Decimal rate, e.g. 0.05 for 5%.",
+    )
+    is_inclusive = models.BooleanField(
+        default=False,
+        help_text="True if prices already include this tax.",
+    )
+    is_active = models.BooleanField(default=True)
+    description = models.TextField(blank=True, default="")
+
+    class Meta:
+        ordering = ("region__code", "name_en")
+
+    def __str__(self):
+        pct = round(float(self.rate) * 100, 2)
+        return f"{self.name_en} ({pct}%)"
 
 
 class HeroPromoCard(OrderedModel):

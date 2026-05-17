@@ -9,13 +9,12 @@ This module centralizes provider selection and exposes a stable interface:
 """
 from decimal import Decimal
 
-from django.conf import settings
-
 from ..models import PaymentTransaction
 from . import omannet
 from . import paymob
 from . import paytabs
 from . import thawani
+from .payment_config import get_hyperpay_config, get_paymob_config, get_telr_config
 
 
 PROVIDER_LABELS = {
@@ -52,14 +51,9 @@ class PaymentProviderNotImplementedError(PaymentProviderError):
 
 class BasePaymentProvider:
     key = ""
-    required_settings = ()
 
     def check_configuration(self):
-        missing = [name for name in self.required_settings if not getattr(settings, name, "")]
-        if missing:
-            raise PaymentProviderConfigError(
-                f"{self.key} is not configured. Missing settings: {', '.join(missing)}"
-            )
+        pass
 
     def initiate_payment(self, order):
         raise PaymentProviderNotImplementedError(f"{self.key} payment initiation is not implemented.")
@@ -81,12 +75,22 @@ class BasePaymentProvider:
 
 class PaymobPaymentProvider(BasePaymentProvider):
     key = PaymentTransaction.PROVIDER_PAYMOB
-    required_settings = (
-        "PAYMOB_API_KEY",
-        "PAYMOB_INTEGRATION_ID",
-        "PAYMOB_IFRAME_ID",
-        "PAYMOB_HMAC_SECRET",
-    )
+
+    def check_configuration(self):
+        cfg = get_paymob_config()
+        missing = [
+            label for key, label in [
+                ("api_key",        "PAYMOB_API_KEY"),
+                ("integration_id", "PAYMOB_INTEGRATION_ID"),
+                ("iframe_id",      "PAYMOB_IFRAME_ID"),
+                ("hmac_secret",    "PAYMOB_HMAC_SECRET"),
+            ]
+            if not cfg.get(key)
+        ]
+        if missing:
+            raise PaymentProviderConfigError(
+                f"{self.key} is not configured. Missing settings: {', '.join(missing)}"
+            )
 
     def initiate_payment(self, order):
         self.check_configuration()
@@ -200,12 +204,38 @@ class PaytabsPaymentProvider(BasePaymentProvider):
 
 class HyperpayPaymentProvider(PlaceholderPaymentProvider):
     key = PaymentTransaction.PROVIDER_HYPERPAY
-    required_settings = ("HYPERPAY_ENTITY_ID", "HYPERPAY_ACCESS_TOKEN")
+
+    def check_configuration(self):
+        cfg = get_hyperpay_config()
+        missing = [
+            label for key, label in [
+                ("entity_id",    "HYPERPAY_ENTITY_ID"),
+                ("access_token", "HYPERPAY_ACCESS_TOKEN"),
+            ]
+            if not cfg.get(key)
+        ]
+        if missing:
+            raise PaymentProviderConfigError(
+                f"{self.key} is not configured. Missing settings: {', '.join(missing)}"
+            )
 
 
 class TelrPaymentProvider(PlaceholderPaymentProvider):
     key = PaymentTransaction.PROVIDER_TELR
-    required_settings = ("TELR_STORE_ID", "TELR_AUTH_KEY")
+
+    def check_configuration(self):
+        cfg = get_telr_config()
+        missing = [
+            label for key, label in [
+                ("store_id", "TELR_STORE_ID"),
+                ("auth_key", "TELR_AUTH_KEY"),
+            ]
+            if not cfg.get(key)
+        ]
+        if missing:
+            raise PaymentProviderConfigError(
+                f"{self.key} is not configured. Missing settings: {', '.join(missing)}"
+            )
 
 
 class ThawaniPaymentProvider(BasePaymentProvider):

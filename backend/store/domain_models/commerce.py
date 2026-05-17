@@ -901,3 +901,102 @@ class NewsletterSubscription(models.Model):
 
     def __str__(self):
         return self.email
+
+
+class GiftCard(models.Model):
+    STATUS_ACTIVE = "active"
+    STATUS_REDEEMED = "redeemed"
+    STATUS_EXPIRED = "expired"
+    STATUS_CANCELLED = "cancelled"
+
+    STATUS_CHOICES = (
+        (STATUS_ACTIVE, "Active"),
+        (STATUS_REDEEMED, "Redeemed"),
+        (STATUS_EXPIRED, "Expired"),
+        (STATUS_CANCELLED, "Cancelled"),
+    )
+
+    code = models.CharField(max_length=32, unique=True, db_index=True)
+    initial_balance = models.DecimalField(max_digits=10, decimal_places=2)
+    remaining_balance = models.DecimalField(max_digits=10, decimal_places=2)
+    currency_code = models.CharField(max_length=3, default="OMR")
+    region = models.ForeignKey(Region, on_delete=models.SET_NULL, null=True, blank=True, related_name="gift_cards")
+    recipient_name = models.CharField(max_length=160, blank=True)
+    recipient_email = models.EmailField(blank=True)
+    recipient_phone = models.CharField(max_length=60, blank=True)
+    sender_name = models.CharField(max_length=160, blank=True)
+    message = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+    expiry_date = models.DateTimeField(blank=True, null=True)
+    redeemed_at = models.DateTimeField(blank=True, null=True)
+    redeemed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="redeemed_gift_cards",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"{self.code} ({self.status})"
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            self.code = self._generate_code()
+        if self.remaining_balance is None:
+            self.remaining_balance = self.initial_balance
+        super().save(*args, **kwargs)
+
+    def _generate_code(self):
+        prefix = "EOG"
+        token = secrets.token_hex(6).upper()
+        return f"{prefix}-{token[:4]}-{token[4:8]}-{token[8:12]}"
+
+
+class AbandonedCart(models.Model):
+    STATUS_ABANDONED = "abandoned"
+    STATUS_CONTACTED = "contacted"
+    STATUS_RECOVERED = "recovered"
+    STATUS_LOST = "lost"
+
+    STATUS_CHOICES = (
+        (STATUS_ABANDONED, "Abandoned"),
+        (STATUS_CONTACTED, "Contacted"),
+        (STATUS_RECOVERED, "Recovered"),
+        (STATUS_LOST, "Lost"),
+    )
+
+    session_token = models.CharField(max_length=64, db_index=True)
+    customer_name = models.CharField(max_length=160, blank=True)
+    customer_email = models.EmailField(blank=True)
+    customer_phone = models.CharField(max_length=60, blank=True)
+    cart_items = models.JSONField(default=list, blank=True)
+    subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    currency_code = models.CharField(max_length=3, default="OMR")
+    region = models.ForeignKey(Region, on_delete=models.SET_NULL, null=True, blank=True, related_name="abandoned_carts")
+    locale = models.CharField(max_length=8, default="en")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_ABANDONED)
+    abandoned_at = models.DateTimeField(auto_now_add=True)
+    recovered_at = models.DateTimeField(blank=True, null=True)
+    recovery_sent_count = models.PositiveIntegerField(default=0)
+    last_recovery_sent_at = models.DateTimeField(blank=True, null=True)
+    recovery_notes = models.TextField(blank=True)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="abandoned_carts",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-abandoned_at",)
+
+    def __str__(self):
+        return f"Abandoned cart {self.customer_email or self.session_token[:12]} ({self.status})"

@@ -1,9 +1,11 @@
 from django.contrib import admin
 
 from .models import (
+    AbandonedCart,
     AdminAuditLog,
     BlogPost,
     Category,
+    GiftCard,
     HeroPromoCard,
     InstagramPost,
     CustomerAddress,
@@ -22,6 +24,7 @@ from .models import (
     ShippingRule,
     SiteSettings,
     TaxRate,
+    TaxRule,
     Tag,
     Testimonial,
     Coupon,
@@ -119,6 +122,14 @@ class TaxRateAdmin(admin.ModelAdmin):
     search_fields = ("label", "country_code", "region__code", "region__name_en")
 
 
+@admin.register(TaxRule)
+class TaxRuleAdmin(admin.ModelAdmin):
+    list_display = ("name_en", "region", "rate", "is_inclusive", "is_active")
+    list_filter = ("is_active", "is_inclusive", "region")
+    search_fields = ("name_en", "name_ar", "description")
+    list_editable = ("is_active",)
+
+
 @admin.register(ShippingRule)
 class ShippingRuleAdmin(admin.ModelAdmin):
     list_display = (
@@ -167,6 +178,22 @@ class ProductStockAdmin(admin.ModelAdmin):
 @admin.register(SiteSettings)
 class SiteSettingsAdmin(admin.ModelAdmin):
     list_display = ("brand_name",)
+    fieldsets = (
+        ("Branding", {"fields": ("brand_name", "logo_url", "favicon_url", "tagline_en", "tagline_ar", "primary_color", "accent_color")}),
+        ("SEO & Legal", {"fields": ("seo_title_en", "seo_title_ar", "seo_description_en", "seo_description_ar", "og_image_url", "return_policy_en", "return_policy_ar", "privacy_policy_en", "privacy_policy_ar")}),
+        ("Navigation", {"fields": ("nav_links", "static_links")}),
+        ("Footer & Social", {"fields": ("footer_about_en", "footer_about_ar", "copyright_en", "copyright_ar", "policy_links", "facebook_url", "instagram_url", "twitter_url", "youtube_url", "tiktok_url", "whatsapp_number", "contact_email", "contact_phone", "address_en", "address_ar")}),
+        ("Homepage Content", {"fields": ("announcement_en", "announcement_ar", "newsletter_title_en", "newsletter_title_ar", "newsletter_subtitle_en", "newsletter_subtitle_ar", "instagram_title_en", "instagram_title_ar", "instagram_cta_en", "instagram_cta_ar", "blog_title_en", "blog_title_ar", "free_gift_title_en", "free_gift_title_ar", "free_gift_subtitle_en", "free_gift_subtitle_ar", "why_choose_links")}),
+        ("Paymob", {"fields": ("paymob_api_key", "paymob_integration_id", "paymob_iframe_id", "paymob_hmac_secret", "paymob_currency", "paymob_apple_pay_integration_id", "paymob_apple_pay_iframe_id"), "classes": ("collapse",)}),
+        ("PayTabs", {"fields": ("paytabs_profile_id", "paytabs_server_key", "paytabs_region"), "classes": ("collapse",)}),
+        ("HyperPay", {"fields": ("hyperpay_entity_id", "hyperpay_access_token"), "classes": ("collapse",)}),
+        ("Telr", {"fields": ("telr_store_id", "telr_auth_key"), "classes": ("collapse",)}),
+        ("Thawani", {"fields": ("thawani_publishable_key", "thawani_secret_key", "thawani_webhook_secret", "thawani_base_url"), "classes": ("collapse",)}),
+        ("OmanNet", {"fields": ("omannet_merchant_id", "omannet_access_code", "omannet_sha_request", "omannet_sha_response", "omannet_webhook_secret"), "classes": ("collapse",)}),
+        ("Social Pixels", {"fields": ("facebook_pixel_id", "tiktok_pixel_id", "instagram_access_token", "snapchat_pixel_id", "pinterest_tag_id", "twitter_pixel_id"), "classes": ("collapse",)}),
+        ("Marketing Tools", {"fields": ("ga4_measurement_id", "gtm_container_id", "google_ads_conversion_id", "klaviyo_public_key", "mailchimp_api_key", "whatsapp_cloud_phone_id", "zendesk_key"), "classes": ("collapse",)}),
+        ("Apps", {"fields": ("expo_push_token", "cloudinary_cloud_name", "cloudinary_api_key", "cloudinary_api_secret", "algolia_app_id", "algolia_api_key", "zapier_webhook_url", "stripe_publishable_key", "stripe_secret_key", "shippo_api_token"), "classes": ("collapse",)}),
+    )
 
 
 @admin.register(HeroPromoCard)
@@ -918,3 +945,37 @@ class ReturnRequestAdmin(admin.ModelAdmin):
     )
     list_filter = ("status", "requested_at")
     search_fields = ("order__order_number", "customer_name", "customer_email", "reason", "admin_note")
+
+
+@admin.register(GiftCard)
+class GiftCardAdmin(admin.ModelAdmin):
+    list_display = (
+        "code",
+        "initial_balance",
+        "remaining_balance",
+        "currency_code",
+        "status",
+        "recipient_email",
+        "expiry_date",
+        "created_at",
+    )
+    list_filter = ("status", "currency_code", "created_at")
+    search_fields = ("code", "recipient_name", "recipient_email", "sender_name")
+    readonly_fields = ("code", "created_at", "updated_at")
+
+
+@admin.register(AbandonedCart)
+class AbandonedCartAdmin(admin.ModelAdmin):
+    list_display = (
+        "customer_email",
+        "customer_phone",
+        "subtotal",
+        "currency_code",
+        "status",
+        "recovery_sent_count",
+        "abandoned_at",
+        "recovered_at",
+    )
+    list_filter = ("status", "currency_code", "abandoned_at")
+    search_fields = ("customer_email", "customer_name", "customer_phone", "session_token")
+    readonly_fields = ("session_token", "abandoned_at", "updated_at")

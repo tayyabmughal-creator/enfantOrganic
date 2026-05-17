@@ -13,14 +13,17 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from django.db import transaction
-from django.db.models import Count, F, Sum
+from django.db.models import Count, F, Sum, Q
 from django.db.models.functions import TruncMonth
 
 from ..models import (
+    AbandonedCart,
     AdminAuditLog,
     BlogPost,
     Category,
     Coupon,
+    GiftCard,
+    NewsletterSubscription,
     NotificationLog,
     Order,
     PaymentTransaction,
@@ -32,14 +35,17 @@ from ..models import (
     Review,
     ShippingRule,
     SiteSettings,
+    TaxRule,
     Warehouse,
 )
 from ..api_serializers.admin_ops import (
+    AdminAbandonedCartSerializer,
     AdminAuditLogSerializer,
     AdminBlogPostSerializer,
     AdminCategorySerializer,
     AdminCouponSerializer,
     AdminCustomerSerializer,
+    AdminGiftCardSerializer,
     AdminOrderSerializer,
     AdminPaymentTransactionSerializer,
     AdminProductSerializer,
@@ -49,10 +55,14 @@ from ..api_serializers.admin_ops import (
     AdminShippingRuleSerializer,
     AdminSiteSettingsSerializer,
     AdminProductStockSerializer,
+    AdminStaffSerializer,
+    AdminTaxRuleSerializer,
     AdminWarehouseSerializer,
 )
 from ..notifications import notify_admins_low_stock, notify_admins_paid_order, notify_admins_payment_review
 from ..services.admin_roles import (
+    CAP_ABANDONED_EDIT,
+    CAP_ABANDONED_VIEW,
     CAP_AUDIT_VIEW,
     CAP_CATEGORIES_EDIT,
     CAP_CATEGORIES_VIEW,
@@ -63,6 +73,8 @@ from ..services.admin_roles import (
     CAP_CUSTOMERS_EDIT,
     CAP_CUSTOMERS_VIEW,
     CAP_DASHBOARD_VIEW,
+    CAP_GIFTCARDS_EDIT,
+    CAP_GIFTCARDS_VIEW,
     CAP_INVENTORY_EDIT,
     CAP_INVENTORY_VIEW,
     CAP_MODERATION_VIEW,
@@ -74,6 +86,7 @@ from ..services.admin_roles import (
     CAP_PRODUCTS_VIEW,
     CAP_REFUNDS_EDIT,
     CAP_REFUNDS_VIEW,
+    CAP_REGIONS_EDIT,
     CAP_REGIONS_VIEW,
     CAP_REPORTS_VIEW,
     CAP_RETURNS_EDIT,
@@ -199,6 +212,23 @@ class AdminDashboardView(APIView):
 
         avg_order_value = round(total_revenue / total_orders, 2) if total_orders else 0
 
+        # Real conversion rate: paid orders / total orders
+        conversion_rate = round((paid_orders.count() / total_orders) * 100, 1) if total_orders else 0
+
+        # Real repeat rate: customers with >1 order / customers with any order
+        customers_with_orders = (
+            User.objects.filter(is_staff=False)
+            .annotate(order_count=Count("orders"))
+            .filter(order_count__gt=0)
+        )
+        repeat_customers = customers_with_orders.filter(order_count__gt=1).count()
+        total_customers_with_orders = customers_with_orders.count()
+        repeat_rate = round((repeat_customers / total_customers_with_orders) * 100, 1) if total_customers_with_orders else 0
+
+        # Abandonment rate: orders with status 'cancelled' / total orders
+        cancelled_orders = orders.filter(status=Order.STATUS_CANCELLED).count()
+        abandonment_rate = round((cancelled_orders / total_orders) * 100, 1) if total_orders else 0
+
         revenue_trend = [
             {
                 "label": item["month"].strftime("%b %Y"),
@@ -224,9 +254,9 @@ class AdminDashboardView(APIView):
                 "customers_delta": pct_change(monthly_customers, prev_customers),
                 "products": total_products,
                 "avg_order_value": avg_order_value,
-                "conversion_rate": 0,
-                "abandonment_rate": 0,
-                "repeat_rate": 0,
+                "conversion_rate": conversion_rate,
+                "abandonment_rate": abandonment_rate,
+                "repeat_rate": repeat_rate,
                 "low_stock": low_stock.count(),
                 "low_stock_products": low_stock.values("product_id").distinct().count(),
                 "revenue_trend": revenue_trend,
@@ -254,6 +284,70 @@ class AdminDashboardView(APIView):
                 ),
             }
         )
+
+
+class AdminAnalyticsView(APIView):
+    permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
+    admin_read_capabilities = (CAP_DASHBOARD_VIEW,)
+
+    @extend_schema(responses=dict)
+    def get(self, request):
+        now = timezone.now()
+        this_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        orders = Order.objects.all()
+        paid_orders = orders.filter(payment_status=Order.PAYMENT_PAID)
+
+        # Regional revenue split
+        regional_revenue = {}
+        for region in Region.objects.filter(is_active=True):
+            region_orders = paid_orders.filter(region=region)
+            regional_revenue[region.code] = {
+                "name": region.name_en or region.code.upper(),
+                "revenue": float(region_orders.aggregate(total=Sum("grand_total"))["total"] or 0),
+                "orders": region_orders.count(),
+            }
+
+        # Conversion funnel (all-time)
+        total_customers = get_user_model().objects.filter(is_staff=False).count()
+        total_orders_count = orders.count()
+        paid_orders_count = paid_orders.count()
+        cancelled_orders_count = orders.filter(status=Order.STATUS_CANCELLED).count()
+
+        # Revenue trend (monthly)
+        revenue_trend = [
+            {
+                "label": item["month"].strftime("%b %Y"),
+                "value": float(item["total"] or 0),
+            }
+            for item in paid_orders.annotate(month=TruncMonth("created_at"))
+            .values("month")
+            .annotate(total=Sum("grand_total"))
+            .order_by("month")[:12]
+        ]
+
+        return Response({
+            "visitors": total_customers,  # best available proxy
+            "product_views": total_orders_count,  # proxy: order count
+            "cart_adds": total_orders_count,  # proxy
+            "checkouts": total_orders_count,  # all orders represent checkouts
+            "completed_orders": paid_orders_count,
+            "abandoned_orders": cancelled_orders_count,
+            "conversion_rate": round((paid_orders_count / total_orders_count) * 100, 1) if total_orders_count else 0,
+            "region_om": regional_revenue.get("om", {}),
+            "region_ae": regional_revenue.get("ae", {}),
+            "region_sa": regional_revenue.get("sa", {}),
+            "regional_revenue": regional_revenue,
+            "revenue_trend": revenue_trend,
+            "status_mix": list(orders.values("status").annotate(count=Count("id")).order_by("status")),
+            "top_products": list(
+                Product.objects.filter(is_published=True)
+                .order_by("-review_count", "-rating")
+                .values("slug", "name_en", "review_count", "rating")[:8]
+            ),
+            "order_status_distribution": list(
+                orders.values("status").annotate(count=Count("id")).order_by("status")
+            ),
+        })
 
 
 class ReportCsvView(APIView):
@@ -295,6 +389,47 @@ class ReportCsvView(APIView):
                     order.customer_phone,
                     order.status,
                     order.payment_status,
+                    order.grand_total,
+                    order.currency_code,
+                ]):
+                    break
+        elif report_type == "sales":
+            writer.writerow(["date", "orders", "revenue", "avg_order_value", "currency"])
+            sales_data = (
+                Order.objects.filter(payment_status=Order.PAYMENT_PAID)
+                .annotate(day=TruncMonth("created_at"))
+                .values("day")
+                .annotate(
+                    order_count=Count("id"),
+                    total_revenue=Sum("grand_total"),
+                )
+                .order_by("-day")[: max_rows + 1]
+            )
+            for row in sales_data:
+                day = row["day"]
+                count_val = row["order_count"]
+                revenue_val = float(row["total_revenue"] or 0)
+                aov = round(revenue_val / count_val, 2) if count_val else 0
+                if not write_row([
+                    day.strftime("%Y-%m") if day else "",
+                    count_val,
+                    revenue_val,
+                    aov,
+                    "OMR",
+                ]):
+                    break
+        elif report_type == "abandoned-carts":
+            writer.writerow(["order_number", "customer", "phone", "created_at", "total", "currency"])
+            queryset = Order.objects.filter(status=Order.STATUS_CANCELLED).order_by("-created_at").only(
+                "order_number", "customer_name", "customer_phone",
+                "created_at", "grand_total", "currency_code",
+            )[: max_rows + 1]
+            for order in queryset:
+                if not write_row([
+                    order.order_number,
+                    order.customer_name,
+                    order.customer_phone,
+                    order.created_at.isoformat(),
                     order.grand_total,
                     order.currency_code,
                 ]):
@@ -374,6 +509,29 @@ class AdminModerationSummaryView(APIView):
         )
 
 
+class AdminNewsletterSubscriberListView(generics.ListAPIView):
+    permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
+    admin_read_capabilities = (CAP_MODERATION_VIEW,)
+
+    def get_queryset(self):
+        return NewsletterSubscription.objects.select_related("region").order_by("-created_at")
+
+    def list(self, request, *args, **kwargs):
+        qs = self.get_queryset()
+        data = [
+            {
+                "id": sub.id,
+                "email": sub.email,
+                "locale": sub.locale,
+                "region": sub.region.code if sub.region else None,
+                "is_active": sub.is_active,
+                "subscribed_at": sub.created_at.isoformat(),
+            }
+            for sub in qs
+        ]
+        return Response(data)
+
+
 class AdminAuditLogListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
     admin_read_capabilities = (CAP_AUDIT_VIEW,)
@@ -402,6 +560,48 @@ class StaffListCreateView(AdminCapabilityMixin, generics.ListCreateAPIView):
 class StaffRetrieveUpdateDestroyView(AdminCapabilityMixin, generics.RetrieveUpdateDestroyAPIView):
     admin_read_capabilities = ()
     admin_write_capabilities = ()
+
+
+class AdminStaffListCreateView(StaffListCreateView):
+    admin_read_capabilities = (CAP_STAFF_MANAGE,)
+    admin_write_capabilities = (CAP_STAFF_MANAGE,)
+    serializer_class = AdminStaffSerializer
+
+    def get_queryset(self):
+        User = get_user_model()
+        return User.objects.filter(is_staff=True).prefetch_related("groups").order_by("email")
+
+
+class AdminStaffDetailView(StaffRetrieveUpdateDestroyView):
+    admin_read_capabilities = (CAP_STAFF_MANAGE,)
+    admin_write_capabilities = (CAP_STAFF_MANAGE,)
+    serializer_class = AdminStaffSerializer
+
+    def get_queryset(self):
+        User = get_user_model()
+        return User.objects.filter(is_staff=True).prefetch_related("groups")
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance == request.user:
+            raise PermissionDenied("You cannot delete your own account.")
+        if instance.is_superuser:
+            raise PermissionDenied("Superuser accounts cannot be deleted via the admin API.")
+        return super().destroy(request, *args, **kwargs)
+
+
+class AdminTaxRuleListCreateView(StaffListCreateView):
+    admin_read_capabilities = (CAP_REGIONS_VIEW,)
+    admin_write_capabilities = (CAP_REGIONS_EDIT,)
+    queryset = TaxRule.objects.select_related("region").all()
+    serializer_class = AdminTaxRuleSerializer
+
+
+class AdminTaxRuleDetailView(StaffRetrieveUpdateDestroyView):
+    admin_read_capabilities = (CAP_REGIONS_VIEW,)
+    admin_write_capabilities = (CAP_REGIONS_EDIT,)
+    queryset = TaxRule.objects.select_related("region").all()
+    serializer_class = AdminTaxRuleSerializer
 
 
 class AdminProductListCreateView(StaffListCreateView):
@@ -1067,11 +1267,21 @@ class AdminPaymentDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = PaymentTransaction.objects.select_related("order").all()
 
 
-class AdminRegionListView(generics.ListAPIView):
+class AdminRegionListCreateView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
     admin_read_capabilities = (CAP_REGIONS_VIEW,)
+    admin_write_capabilities = (CAP_REGIONS_EDIT,)
     serializer_class = AdminRegionSerializer
     queryset = Region.objects.all()
+
+
+class AdminRegionDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
+    admin_read_capabilities = (CAP_REGIONS_VIEW,)
+    admin_write_capabilities = (CAP_REGIONS_EDIT,)
+    serializer_class = AdminRegionSerializer
+    queryset = Region.objects.all()
+    lookup_field = "code"
 
 
 class AdminShippingRuleListCreateView(generics.ListCreateAPIView):
@@ -1229,3 +1439,63 @@ class AdminSettingsView(APIView):
             after_snapshot=snapshot_instance(updated_settings),
         )
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class AdminGiftCardListCreateView(StaffListCreateView):
+    admin_read_capabilities = (CAP_GIFTCARDS_VIEW,)
+    admin_write_capabilities = (CAP_GIFTCARDS_EDIT,)
+    queryset = GiftCard.objects.all()
+    serializer_class = AdminGiftCardSerializer
+
+
+class AdminGiftCardDetailView(StaffRetrieveUpdateDestroyView):
+    admin_read_capabilities = (CAP_GIFTCARDS_VIEW,)
+    admin_write_capabilities = (CAP_GIFTCARDS_EDIT,)
+    queryset = GiftCard.objects.all()
+    serializer_class = AdminGiftCardSerializer
+
+
+class AdminAbandonedCartListView(generics.ListAPIView):
+    permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
+    admin_read_capabilities = (CAP_ABANDONED_VIEW,)
+    serializer_class = AdminAbandonedCartSerializer
+
+    def get_queryset(self):
+        queryset = AbandonedCart.objects.all()
+        status_filter = self.request.query_params.get("status")
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        return queryset
+
+
+class AdminAbandonedCartDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
+    admin_read_capabilities = (CAP_ABANDONED_VIEW,)
+    admin_write_capabilities = (CAP_ABANDONED_EDIT,)
+    queryset = AbandonedCart.objects.all()
+    serializer_class = AdminAbandonedCartSerializer
+
+
+class AbandonedCartCreateView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    @extend_schema(responses=dict)
+    def post(self, request):
+        data = request.data
+        region_code = data.get("region")
+        region = None
+        if region_code:
+            region = Region.objects.filter(code=region_code).first()
+
+        cart = AbandonedCart.objects.create(
+            session_token=data.get("session_token", ""),
+            customer_name=data.get("customer_name", ""),
+            customer_email=data.get("customer_email", ""),
+            customer_phone=data.get("customer_phone", ""),
+            cart_items=data.get("cart_items", []),
+            subtotal=data.get("subtotal", 0),
+            currency_code=data.get("currency_code", "OMR"),
+            region=region,
+            locale=data.get("locale", "en"),
+        )
+        return Response({"id": cart.id, "status": cart.status}, status=status.HTTP_201_CREATED)

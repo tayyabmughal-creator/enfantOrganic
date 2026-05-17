@@ -3,10 +3,12 @@ from django.urls import reverse
 from rest_framework import serializers
 
 from ..models import (
+    AbandonedCart,
     AdminAuditLog,
     BlogPost,
     Category,
     Coupon,
+    GiftCard,
     Order,
     PaymentTransaction,
     Product,
@@ -17,6 +19,7 @@ from ..models import (
     Review,
     ShippingRule,
     SiteSettings,
+    TaxRule,
     Warehouse,
 )
 from ..services.payment_router import get_region_provider_options, get_region_provider_warnings
@@ -229,6 +232,7 @@ class AdminReviewSerializer(serializers.ModelSerializer):
 
 class AdminCustomerSerializer(serializers.ModelSerializer):
     orders_count = serializers.IntegerField(source="orders.count", read_only=True)
+    total_spent = serializers.SerializerMethodField(read_only=True)
     password = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
@@ -244,8 +248,14 @@ class AdminCustomerSerializer(serializers.ModelSerializer):
             "is_staff",
             "date_joined",
             "orders_count",
+            "total_spent",
         )
-        read_only_fields = ("id", "date_joined", "orders_count")
+        read_only_fields = ("id", "date_joined", "orders_count", "total_spent")
+
+    def get_total_spent(self, obj):
+        from django.db.models import Sum
+        total = obj.orders.filter(payment_status="paid").aggregate(total=Sum("grand_total"))["total"]
+        return float(total) if total else 0
 
     def create(self, validated_data):
         password = validated_data.pop("password", "")
@@ -369,6 +379,108 @@ class AdminBlogPostSerializer(serializers.ModelSerializer):
         }
 
 
+class AdminTaxRuleSerializer(serializers.ModelSerializer):
+    region_code = serializers.CharField(source="region.code", read_only=True, default="")
+    rate_pct = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = TaxRule
+        fields = (
+            "id",
+            "region",
+            "region_code",
+            "name_en",
+            "name_ar",
+            "rate",
+            "rate_pct",
+            "is_inclusive",
+            "is_active",
+            "description",
+        )
+
+    def get_rate_pct(self, obj):
+        return round(float(obj.rate) * 100, 4)
+
+
+class AdminStaffSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    role = serializers.ChoiceField(
+        choices=[
+            ("Owner/Super Admin", "Owner/Super Admin"),
+            ("Manager", "Manager"),
+            ("Product Editor", "Product Editor"),
+            ("Order Support", "Order Support"),
+            ("Finance", "Finance"),
+            ("Marketing", "Marketing"),
+        ],
+        write_only=True,
+        required=False,
+        allow_blank=True,
+    )
+    roles = serializers.SerializerMethodField(read_only=True)
+    capabilities = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = get_user_model()
+        fields = (
+            "id",
+            "username",
+            "email",
+            "password",
+            "first_name",
+            "last_name",
+            "is_active",
+            "is_staff",
+            "date_joined",
+            "role",
+            "roles",
+            "capabilities",
+        )
+        read_only_fields = ("id", "date_joined", "roles", "capabilities")
+
+    def get_roles(self, obj):
+        return list(obj.groups.values_list("name", flat=True))
+
+    def get_capabilities(self, obj):
+        from ..services.admin_roles import get_user_admin_capabilities
+        return list(get_user_admin_capabilities(obj))
+
+    def _assign_role(self, user, role_name):
+        from django.contrib.auth.models import Group
+        from ..services.admin_roles import ensure_default_admin_roles
+        if not role_name:
+            return
+        ensure_default_admin_roles()
+        user.groups.clear()
+        try:
+            group = Group.objects.get(name=role_name)
+            user.groups.add(group)
+        except Group.DoesNotExist:
+            pass
+
+    def create(self, validated_data):
+        role = validated_data.pop("role", "")
+        password = validated_data.pop("password", "")
+        if not validated_data.get("username"):
+            validated_data["username"] = validated_data.get("email") or ""
+        validated_data.setdefault("is_staff", True)
+        user = get_user_model().objects.create_user(password=password or None, **validated_data)
+        self._assign_role(user, role)
+        return user
+
+    def update(self, instance, validated_data):
+        role = validated_data.pop("role", None)
+        password = validated_data.pop("password", "")
+        for key, value in validated_data.items():
+            setattr(instance, key, value)
+        if password:
+            instance.set_password(password)
+        instance.save()
+        if role is not None:
+            self._assign_role(instance, role)
+        return instance
+
+
 class AdminAuditLogSerializer(serializers.ModelSerializer):
     actor_name = serializers.SerializerMethodField(read_only=True)
     actor_email = serializers.EmailField(source="actor.email", read_only=True)
@@ -395,3 +507,15 @@ class AdminAuditLogSerializer(serializers.ModelSerializer):
         if not obj.actor_id:
             return "System"
         return obj.actor.get_full_name() or obj.actor.username or obj.actor.email or "Staff"
+
+
+class AdminGiftCardSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GiftCard
+        fields = "__all__"
+
+
+class AdminAbandonedCartSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AbandonedCart
+        fields = "__all__"

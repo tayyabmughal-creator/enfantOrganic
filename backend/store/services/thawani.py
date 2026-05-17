@@ -16,9 +16,9 @@ from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 
 import requests
-from django.conf import settings
 
 from ..models import PaymentTransaction
+from .payment_config import get_thawani_config
 
 logger = logging.getLogger(__name__)
 
@@ -47,19 +47,14 @@ def _to_money(value):
 
 
 def _build_config():
-    publishable_key = str(getattr(settings, "THAWANI_PUBLISHABLE_KEY", "") or "").strip()
-    secret_key = str(getattr(settings, "THAWANI_SECRET_KEY", "") or "").strip()
-    base_url = str(getattr(settings, "THAWANI_BASE_URL", "") or "").strip().rstrip("/")
-    webhook_secret = str(getattr(settings, "THAWANI_WEBHOOK_SECRET", "") or "").strip()
-    enable_real_api = str(getattr(settings, "THAWANI_ENABLE_REAL_API", "0")).lower() in {"1", "true", "yes", "on"}
-    create_session_path = str(getattr(settings, "THAWANI_CREATE_SESSION_PATH", "/api/v1/checkout/session") or "/api/v1/checkout/session")
+    cfg = get_thawani_config()
     return ThawaniConfig(
-        publishable_key=publishable_key,
-        secret_key=secret_key,
-        base_url=base_url,
-        webhook_secret=webhook_secret,
-        enable_real_api=enable_real_api,
-        create_session_path=create_session_path,
+        publishable_key=cfg["publishable_key"],
+        secret_key=cfg["secret_key"],
+        base_url=cfg["base_url"].rstrip("/"),
+        webhook_secret=cfg["webhook_secret"],
+        enable_real_api=cfg["enable_real_api"],
+        create_session_path=cfg["create_session_path"],
     )
 
 

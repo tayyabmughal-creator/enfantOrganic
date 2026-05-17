@@ -17,7 +17,7 @@ import {
 import { pushDataLayerEvent } from "@/lib/analytics";
 import { API_BASE_URL as CONFIG_API_BASE_URL } from "@/lib/config";
 
-const BRAND_LOGO_SRC = "/enfant/enfant-logo.png";
+const DEFAULT_LOGO_SRC = "/enfant/enfant-logo.png";
 const API_BASE_URL = CONFIG_API_BASE_URL;
 const REGION_FLAGS = {
   ae: "🇦🇪",
@@ -182,7 +182,7 @@ function HeaderInner({ navigation }) {
 
       <div className="container header-main">
         <Link href={buildStorePath(locale, "", region)} className="brand-mark">
-          <img src={BRAND_LOGO_SRC} alt="Enfant Organics" className="brand-logo" />
+          <img src={navigation?.settings?.logo_url || DEFAULT_LOGO_SRC} alt={navigation?.settings?.brand_name || "Enfant Organics"} className="brand-logo" />
           <span className="brand-copy">
             <strong>ENFANT ORGANICS</strong>
             <small>{locale === "en" ? "Pure • Gentle • Safe" : "نقي • لطيف • آمن"}</small>

@@ -15,9 +15,9 @@ from decimal import Decimal, ROUND_HALF_UP
 from urllib.parse import urlencode
 
 import requests
-from django.conf import settings
 
 from ..models import Order, PaymentTransaction
+from .payment_config import get_paytabs_config
 
 logger = logging.getLogger(__name__)
 
@@ -80,10 +80,10 @@ def _region_settings_suffix(region_code):
 
 def get_region_config(region_code):
     suffix = _region_settings_suffix(region_code)
-    profile_id = getattr(settings, f"PAYTABS_PROFILE_ID_{suffix}", "") or getattr(settings, "PAYTABS_PROFILE_ID", "")
-    server_key = getattr(settings, f"PAYTABS_SERVER_KEY_{suffix}", "") or getattr(settings, "PAYTABS_SERVER_KEY", "")
-    region_setting = getattr(settings, f"PAYTABS_REGION_{suffix}", "") or getattr(settings, "PAYTABS_BASE_URL", "")
-    base_url = _resolve_base_url(region_setting)
+    cfg = get_paytabs_config(region_code)
+    profile_id = cfg["profile_id"]
+    server_key = cfg["server_key"]
+    base_url = _resolve_base_url(cfg["region"])
 
     missing = []
     if not profile_id:
@@ -118,8 +118,9 @@ def _country_code_for_order(order):
 
 
 def _build_urls(order):
-    return_base = (getattr(settings, "PAYTABS_RETURN_BASE_URL", "") or "").rstrip("/")
-    callback_base = (getattr(settings, "PAYTABS_CALLBACK_BASE_URL", "") or "").rstrip("/")
+    pt_cfg = get_paytabs_config()
+    return_base = pt_cfg["return_base"]
+    callback_base = pt_cfg["callback_base"]
     if not return_base:
         raise PaytabsError(
             "PAYTABS_RETURN_BASE_URL is required to build redirect URLs.",

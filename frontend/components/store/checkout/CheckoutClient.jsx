@@ -1219,7 +1219,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
           </form>
 
           <aside className="order-summary-card">
-            <h2 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 750 }}>
+            <h2 className="order-summary-heading">
               {isAr ? "ملخص الطلب" : "Order Summary"}
             </h2>
 
@@ -1251,7 +1251,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
               <>
                 <div className="subtotal-row">
                   <span>{isAr ? "الخصم" : "Discount"}</span>
-                  <strong style={{ color: "var(--success)" }}>
+                  <strong className="summary-amount--discount">
                     -{previewMoney(couponPreview.discount_amount)}
                   </strong>
                 </div>
@@ -1329,7 +1329,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                   </button>
                 </div>
                 {couponMessage ? (
-                  <p className={couponPreview?.valid ? "form-success" : "form-error"} style={{ margin: 0 }}>
+                  <p className={couponPreview?.valid ? "form-success" : "form-error"}>
                     {couponMessage}
                   </p>
                 ) : null}

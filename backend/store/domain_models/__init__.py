@@ -11,14 +11,17 @@ from .catalog import (
     ShippingRule,
     SiteSettings,
     TaxRate,
+    TaxRule,
     Tag,
     Testimonial,
     Warehouse,
 )
 from .commerce import (
+    AbandonedCart,
     AdminAuditLog,
     Coupon,
     CustomerAddress,
+    GiftCard,
     NewsletterSubscription,
     NotificationLog,
     WhatsAppLog,
@@ -33,11 +36,13 @@ from .commerce import (
 )
 
 __all__ = [
+    "AbandonedCart",
     "BlogPost",
     "AdminAuditLog",
     "Category",
     "Coupon",
     "CustomerAddress",
+    "GiftCard",
     "HeroPromoCard",
     "InstagramPost",
     "NewsletterSubscription",
@@ -58,6 +63,7 @@ __all__ = [
     "Review",
     "SiteSettings",
     "TaxRate",
+    "TaxRule",
     "Tag",
     "Testimonial",
     "Warehouse",

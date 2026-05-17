@@ -5,14 +5,14 @@ import { AdminEmpty, statusTone } from "./SharedUI";
 // For simplicity, we assume they are passed as props or imported if needed.
 // To keep it clean, we'll pass the specific field configs and helper functions as props.
 
-export function CrudPanel({ rows, activeKey, canCreate, canEdit, canDelete, onCreate, onEdit, onDelete, onDownloadInvoice, titleFor, metaFor, labelFor }) {
+export function CrudPanel({ rows, activeKey, canCreate, canEdit, canDelete, onCreate, onEdit, onDelete, onDownloadInvoice, titleFor, metaFor, labelFor, searchQuery, onSearchChange, page, totalPages, onPageChange }) {
   const label = labelFor ? labelFor(activeKey) : activeKey;
   return (
     <section className="admin-panel-card">
       <div className="admin-panel-head">
         <div>
           <h3>{activeKey === "deals" ? "Promotions" : activeKey === "blog" ? "Blog Articles" : activeKey.charAt(0).toUpperCase() + activeKey.slice(1)}</h3>
-          <span>{rows.length} record{rows.length === 1 ? "" : "s"}</span>
+          <span>{rows.length} record{rows.length === 1 ? "" : "s"}{totalPages > 1 ? ` · Page ${page} of ${totalPages}` : ""}</span>
         </div>
         {canCreate ? (
           <button type="button" className="admin-btn-primary" onClick={onCreate}>
@@ -20,12 +20,23 @@ export function CrudPanel({ rows, activeKey, canCreate, canEdit, canDelete, onCr
           </button>
         ) : null}
       </div>
+      {onSearchChange ? (
+        <div className="admin-search-bar">
+          <input
+            type="text"
+            className="admin-input"
+            placeholder="Search records…"
+            value={searchQuery || ""}
+            onChange={(e) => onSearchChange(e.target.value)}
+          />
+        </div>
+      ) : null}
       <div className="admin-record-list">
         {rows.length ? (
           <>
             <div className="admin-list-head"><span>Record</span><span>Status</span><span>Actions</span></div>
             {rows.map((item) => {
-              const meta = metaFor ? metaFor(item) : "";
+              const meta = metaFor ? metaFor(item, activeKey) : "";
               const title = titleFor ? titleFor(item, activeKey) : (item.name_en || item.title_en || item.order_number || item.email || "Item");
               return (
                 <div key={item.id || item.slug || item.order_number || item.email} className="admin-record-row">
@@ -50,9 +61,11 @@ export function CrudPanel({ rows, activeKey, canCreate, canEdit, canDelete, onCr
                   <div className="admin-row-actions">
                     {canEdit ? <button type="button" className="admin-btn-sm" onClick={() => onEdit(item)}>Edit</button> : null}
                     {activeKey === "orders" ? (
-                      <button type="button" className="admin-btn-sm" onClick={() => onDownloadInvoice(item)}>
-                        Invoice
-                      </button>
+                      <>
+                        <button type="button" className="admin-btn-sm" onClick={() => onDownloadInvoice(item)}>
+                          Invoice
+                        </button>
+                      </>
                     ) : null}
                     {canDelete ? <button type="button" className="admin-btn-sm danger" onClick={() => onDelete(item)}>Delete</button> : null}
                   </div>
@@ -62,28 +75,37 @@ export function CrudPanel({ rows, activeKey, canCreate, canEdit, canDelete, onCr
           </>
         ) : <AdminEmpty label={label} />}
       </div>
+      {totalPages > 1 ? (
+        <div className="admin-pagination">
+          <button type="button" className="admin-btn-sm" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>← Prev</button>
+          <span>Page {page} of {totalPages}</span>
+          <button type="button" className="admin-btn-sm" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>Next →</button>
+        </div>
+      ) : null}
     </section>
   );
 }
 
-export function CrudFormModal({ activeKey, mode, selected, editor, setEditor, canDelete, onClose, onSave, onDelete, onDownloadInvoice, titleFor, metaFor, fields }) {
+export function CrudFormModal({ activeKey, isSettings, mode, selected, editor, setEditor, canDelete, onClose, onSave, onDelete, onDownloadInvoice, onRefundOrder, onCreateShipment, onRefreshTracking, titleFor, metaFor, fields }) {
   const title  = mode === "create"
-    ? `Add ${activeKey === "deals" ? "promotion" : activeKey === "blog" ? "article" : activeKey.slice(0, -1)}`
-    : (titleFor ? titleFor(selected, activeKey) : "Edit Item");
+    ? `Add ${activeKey === "deals" ? "promotion" : activeKey === "blog" ? "article" : activeKey.replace(/_/g, " ")}`
+    : (titleFor ? titleFor(selected, activeKey) : "Edit");
+
+  const eyebrow = isSettings ? "Store settings" : mode === "create" ? "Create record" : "Edit record";
 
   return (
     <div className="admin-modal-backdrop" role="presentation" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <section className="admin-modal" role="dialog" aria-modal="true" aria-label={title}>
         <div className="admin-modal-head">
           <div>
-            <p className="admin-modal-eyebrow">{mode === "create" ? "Create record" : "Edit record"}</p>
+            <p className="admin-modal-eyebrow">{eyebrow}</p>
             <h2>{title}</h2>
-            {selected && metaFor ? <span className="admin-modal-meta">{metaFor(selected)}</span> : null}
+            {!isSettings && selected && metaFor ? <span className="admin-modal-meta">{metaFor(selected, activeKey)}</span> : null}
           </div>
           <button type="button" className="admin-modal-close" onClick={onClose} aria-label="Close">✕</button>
         </div>
 
-        {activeKey === "orders" && selected ? <OrderSnapshot order={selected} onDownloadInvoice={onDownloadInvoice} /> : null}
+        {activeKey === "orders" && selected ? <OrderSnapshot order={selected} onDownloadInvoice={onDownloadInvoice} onRefundOrder={onRefundOrder} onCreateShipment={onCreateShipment} onRefreshTracking={onRefreshTracking} /> : null}
 
         <div className="admin-modal-form">
           {(fields || []).map((field) => (
@@ -100,7 +122,7 @@ export function CrudFormModal({ activeKey, mode, selected, editor, setEditor, ca
   );
 }
 
-function OrderSnapshot({ order, onDownloadInvoice }) {
+function OrderSnapshot({ order, onDownloadInvoice, onRefundOrder, onCreateShipment, onRefreshTracking }) {
   const vatLabel = order.tax_label || "VAT";
   const vatRate = order.tax_rate ? `${(Number(order.tax_rate) * 100).toFixed(2)}%` : "0.00%";
   const cells = [
@@ -126,6 +148,21 @@ function OrderSnapshot({ order, onDownloadInvoice }) {
         <button type="button" className="admin-btn-sm" onClick={() => onDownloadInvoice(order)}>
           Download Invoice
         </button>
+        {onRefundOrder ? (
+          <button type="button" className="admin-btn-sm warning" onClick={() => onRefundOrder(order)}>
+            Issue Refund
+          </button>
+        ) : null}
+        {onCreateShipment ? (
+          <button type="button" className="admin-btn-sm" onClick={() => onCreateShipment(order)}>
+            Create Shipment
+          </button>
+        ) : null}
+        {onRefreshTracking ? (
+          <button type="button" className="admin-btn-sm" onClick={() => onRefreshTracking(order)}>
+            Refresh Tracking
+          </button>
+        ) : null}
       </div>
     </div>
   );

@@ -37,6 +37,10 @@ CAP_REFUNDS_VIEW = "refunds.view"
 CAP_REFUNDS_EDIT = "refunds.edit"
 CAP_COUPONS_VIEW = "coupons.view"
 CAP_COUPONS_EDIT = "coupons.edit"
+CAP_GIFTCARDS_VIEW = "giftcards.view"
+CAP_GIFTCARDS_EDIT = "giftcards.edit"
+CAP_ABANDONED_VIEW = "abandoned.view"
+CAP_ABANDONED_EDIT = "abandoned.edit"
 CAP_REPORTS_VIEW = "reports.view"
 CAP_AUDIT_VIEW = "audit.view"
 CAP_REVIEWS_VIEW = "reviews.view"
@@ -70,6 +74,10 @@ ALL_CAPABILITIES = {
     CAP_REFUNDS_EDIT,
     CAP_COUPONS_VIEW,
     CAP_COUPONS_EDIT,
+    CAP_GIFTCARDS_VIEW,
+    CAP_GIFTCARDS_EDIT,
+    CAP_ABANDONED_VIEW,
+    CAP_ABANDONED_EDIT,
     CAP_REPORTS_VIEW,
     CAP_AUDIT_VIEW,
     CAP_REVIEWS_VIEW,
@@ -106,6 +114,10 @@ ROLE_CAPABILITIES = {
         CAP_REFUNDS_EDIT,
         CAP_COUPONS_VIEW,
         CAP_COUPONS_EDIT,
+        CAP_GIFTCARDS_VIEW,
+        CAP_GIFTCARDS_EDIT,
+        CAP_ABANDONED_VIEW,
+        CAP_ABANDONED_EDIT,
         CAP_REPORTS_VIEW,
         CAP_AUDIT_VIEW,
         CAP_REVIEWS_VIEW,
@@ -152,6 +164,10 @@ ROLE_CAPABILITIES = {
     ROLE_MARKETING: {
         CAP_COUPONS_VIEW,
         CAP_COUPONS_EDIT,
+        CAP_GIFTCARDS_VIEW,
+        CAP_GIFTCARDS_EDIT,
+        CAP_ABANDONED_VIEW,
+        CAP_ABANDONED_EDIT,
         CAP_CONTENT_VIEW,
         CAP_MODERATION_VIEW,
     },
@@ -176,6 +192,10 @@ CAPABILITY_TO_PERMISSION_SLUGS = {
     CAP_REFUNDS_EDIT: {"store.change_paymenttransaction", "store.change_order"},
     CAP_COUPONS_VIEW: {"store.view_coupon"},
     CAP_COUPONS_EDIT: {"store.change_coupon"},
+    CAP_GIFTCARDS_VIEW: {"store.view_giftcard"},
+    CAP_GIFTCARDS_EDIT: {"store.change_giftcard"},
+    CAP_ABANDONED_VIEW: {"store.view_abandonedcart"},
+    CAP_ABANDONED_EDIT: {"store.change_abandonedcart"},
     CAP_REPORTS_VIEW: {"store.view_order"},
     CAP_REVIEWS_VIEW: {"store.view_review"},
     CAP_REVIEWS_EDIT: {"store.change_review"},
@@ -200,6 +220,8 @@ MODULE_PERMISSION_MAP = {
     "inventory": {"view": CAP_INVENTORY_VIEW, "edit": CAP_INVENTORY_EDIT},
     "content": {"view": CAP_CONTENT_VIEW, "edit": CAP_CONTENT_EDIT},
     "promotions": {"view": CAP_COUPONS_VIEW, "edit": CAP_COUPONS_EDIT},
+    "giftcards": {"view": CAP_GIFTCARDS_VIEW, "edit": CAP_GIFTCARDS_EDIT},
+    "abandoned": {"view": CAP_ABANDONED_VIEW, "edit": CAP_ABANDONED_EDIT},
     "payments": {"view": CAP_PAYMENTS_VIEW, "edit": CAP_PAYMENTS_EDIT},
     "refunds": {"view": CAP_REFUNDS_VIEW, "edit": CAP_REFUNDS_EDIT},
     "returns": {"view": CAP_RETURNS_VIEW, "edit": CAP_RETURNS_EDIT},

@@ -9,7 +9,8 @@ Flow:
 5. Frontend redirects user to iframe URL
 6. Paymob POSTs webhook → verify_hmac() → update order status
 
-All secrets come from Django settings (PAYMOB_*).
+Credentials are loaded from SiteSettings (DB) first, with fallback to
+Django settings (environment variables). Use the admin panel or env vars.
 No Paymob credentials are ever exposed to the frontend.
 """
 import hashlib
@@ -17,7 +18,8 @@ import hmac as _hmac
 import logging
 
 import requests
-from django.conf import settings
+
+from .payment_config import get_paymob_config
 
 logger = logging.getLogger(__name__)
 
@@ -52,10 +54,14 @@ class PaymobError(Exception):
 
 
 def _check_config():
-    missing = [
-        key for key in ("PAYMOB_API_KEY", "PAYMOB_INTEGRATION_ID", "PAYMOB_IFRAME_ID", "PAYMOB_HMAC_SECRET")
-        if not getattr(settings, key, "")
-    ]
+    cfg = get_paymob_config()
+    missing_map = {
+        "api_key":        "PAYMOB_API_KEY",
+        "integration_id": "PAYMOB_INTEGRATION_ID",
+        "iframe_id":      "PAYMOB_IFRAME_ID",
+        "hmac_secret":    "PAYMOB_HMAC_SECRET",
+    }
+    missing = [label for key, label in missing_map.items() if not cfg.get(key)]
     if missing:
         raise PaymobError(
             f"Paymob is not configured. Missing environment variables: {', '.join(missing)}"
@@ -74,10 +80,11 @@ def _get(data: dict, dotted_key: str) -> str:
 def get_auth_token() -> str:
     """Authenticate with Paymob and return a short-lived auth token."""
     _check_config()
+    cfg = get_paymob_config()
     try:
         response = requests.post(
-            f"{settings.PAYMOB_BASE_URL}/auth/tokens",
-            json={"api_key": settings.PAYMOB_API_KEY},
+            f"{cfg['base_url']}/auth/tokens",
+            json={"api_key": cfg["api_key"]},
             timeout=30,
         )
         response.raise_for_status()
@@ -92,9 +99,10 @@ def get_auth_token() -> str:
 
 def create_paymob_order(auth_token: str, amount_cents: int, currency: str, merchant_order_id: str) -> str:
     """Register an order with Paymob and return the Paymob order ID."""
+    cfg = get_paymob_config()
     try:
         response = requests.post(
-            f"{settings.PAYMOB_BASE_URL}/ecommerce/orders",
+            f"{cfg['base_url']}/ecommerce/orders",
             json={
                 "auth_token": auth_token,
                 "delivery_needed": False,
@@ -125,9 +133,10 @@ def create_payment_key(
     integration_id: int = None,
 ) -> str:
     """Request a payment key (one-time token) for the Paymob iframe."""
+    cfg = get_paymob_config()
     try:
         response = requests.post(
-            f"{settings.PAYMOB_BASE_URL}/acceptance/payment_keys",
+            f"{cfg['base_url']}/acceptance/payment_keys",
             json={
                 "auth_token": auth_token,
                 "amount_cents": amount_cents,
@@ -135,7 +144,7 @@ def create_payment_key(
                 "order_id": paymob_order_id,
                 "billing_data": billing_data,
                 "currency": currency,
-                "integration_id": integration_id if integration_id is not None else int(settings.PAYMOB_INTEGRATION_ID),
+                "integration_id": integration_id if integration_id is not None else int(cfg["integration_id"]),
                 "lock_order_when_paid": True,
             },
             timeout=30,
@@ -182,8 +191,9 @@ def initiate_payment(order) -> dict:
       - paymob_order_id: the Paymob-side order ID (store this for reconciliation)
     """
     _check_config()
+    cfg = get_paymob_config()
     amount_cents = int(order.grand_total * 100)
-    currency = order.currency_code or settings.PAYMOB_CURRENCY
+    currency = order.currency_code or cfg["currency"]
 
     auth_token = get_auth_token()
     paymob_order_id = create_paymob_order(auth_token, amount_cents, currency, order.order_number)
@@ -191,7 +201,7 @@ def initiate_payment(order) -> dict:
     payment_key = create_payment_key(auth_token, amount_cents, currency, paymob_order_id, billing_data)
 
     iframe_url = (
-        f"{settings.PAYMOB_BASE_URL}/acceptance/iframes/{settings.PAYMOB_IFRAME_ID}"
+        f"{cfg['base_url']}/acceptance/iframes/{cfg['iframe_id']}"
         f"?payment_token={payment_key}"
     )
 
@@ -211,11 +221,12 @@ def initiate_payment(order) -> dict:
 def initiate_apple_pay_payment(order) -> dict:
     """
     Paymob initiation flow using the Apple Pay integration ID.
-    Uses PAYMOB_APPLE_PAY_INTEGRATION_ID and PAYMOB_APPLE_PAY_IFRAME_ID.
+    Uses the apple_pay_integration_id and apple_pay_iframe_id from config.
     Falls back to standard integration if Apple Pay IDs are not set.
     """
-    apple_pay_integration_id = getattr(settings, "PAYMOB_APPLE_PAY_INTEGRATION_ID", "")
-    apple_pay_iframe_id = getattr(settings, "PAYMOB_APPLE_PAY_IFRAME_ID", "")
+    cfg = get_paymob_config()
+    apple_pay_integration_id = cfg["apple_pay_integration_id"]
+    apple_pay_iframe_id = cfg["apple_pay_iframe_id"]
 
     if not apple_pay_integration_id or not apple_pay_iframe_id:
         raise PaymobError(
@@ -223,10 +234,12 @@ def initiate_apple_pay_payment(order) -> dict:
             "Set PAYMOB_APPLE_PAY_INTEGRATION_ID and PAYMOB_APPLE_PAY_IFRAME_ID."
         )
 
-    # Validate base Paymob config (API key, HMAC secret, base URL)
     missing = [
-        key for key in ("PAYMOB_API_KEY", "PAYMOB_HMAC_SECRET")
-        if not getattr(settings, key, "")
+        label for key, label in [
+            ("api_key", "PAYMOB_API_KEY"),
+            ("hmac_secret", "PAYMOB_HMAC_SECRET"),
+        ]
+        if not cfg.get(key)
     ]
     if missing:
         raise PaymobError(
@@ -234,7 +247,7 @@ def initiate_apple_pay_payment(order) -> dict:
         )
 
     amount_cents = int(order.grand_total * 100)
-    currency = order.currency_code or settings.PAYMOB_CURRENCY
+    currency = order.currency_code or cfg["currency"]
 
     auth_token = get_auth_token()
     paymob_order_id = create_paymob_order(auth_token, amount_cents, currency, order.order_number)
@@ -249,7 +262,7 @@ def initiate_apple_pay_payment(order) -> dict:
     )
 
     iframe_url = (
-        f"{settings.PAYMOB_BASE_URL}/acceptance/iframes/{apple_pay_iframe_id}"
+        f"{cfg['base_url']}/acceptance/iframes/{apple_pay_iframe_id}"
         f"?payment_token={payment_key}"
     )
 
@@ -273,13 +286,14 @@ def verify_hmac(transaction_data: dict, received_hmac: str) -> bool:
     Paymob concatenates specific fields in a fixed order and computes
     HMAC-SHA512 with the HMAC secret as the key.
     """
-    if not settings.PAYMOB_HMAC_SECRET:
+    cfg = get_paymob_config()
+    if not cfg["hmac_secret"]:
         logger.warning("PAYMOB_HMAC_SECRET is not set — skipping HMAC verification.")
         return False
 
     concat = "".join(_get(transaction_data, field) for field in _HMAC_FIELDS)
     expected = _hmac.new(
-        settings.PAYMOB_HMAC_SECRET.encode("utf-8"),
+        cfg["hmac_secret"].encode("utf-8"),
         concat.encode("utf-8"),
         hashlib.sha512,
     ).hexdigest()

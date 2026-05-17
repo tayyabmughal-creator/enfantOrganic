@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import DashboardView from "./DashboardView";
 import AnalyticsView from "./AnalyticsView";
-import { SettingsPanel, Reports, AuditLogsPanel, IntegrationsHub, InventoryView, InsightsView, NewsletterPanel, PlaceholderModule } from "./OtherViews";
+import { StoreSettingsSection, SettingsPanel, Reports, AuditLogsPanel, IntegrationsView, PaymentGatewaysView, InventoryView, InsightsView, NewsletterPanel, RegionsView, PlaceholderModule } from "./OtherViews";
 import { CrudPanel, CrudFormModal } from "./CrudViews";
 import { AdminToast } from "./SharedUI";
 import SkeletonLoader from "../SkeletonLoader";
@@ -28,23 +28,32 @@ const NAV_GROUPS = [
       { key: "products",   label: "Products",    icon: "◇", endpoint: "/admin/products/",    desc: "Create and manage product listings." },
       { key: "categories", label: "Categories",  icon: "☰", endpoint: "/admin/categories/",  desc: "Organise products into categories." },
       { key: "inventory",  label: "Inventory",   icon: "▦", endpoint: "/admin/products/",    desc: "Stock levels and reorder alerts." },
+      { key: "warehouses", label: "Warehouses",  icon: "⌂", endpoint: "/admin/warehouses/",  desc: "Fulfilment centres and regions." },
     ],
   },
   {
     label: "Content",
     items: [
-      { key: "blog",       label: "Blog",        icon: "✍", endpoint: "/admin/blog-posts/",  desc: "Articles, guides, and brand stories." },
-      { key: "homepage",   label: "Homepage",    icon: "⌂", endpoint: "/admin/settings/",    desc: "Hero cards, footer, and announcements." },
-      { key: "seo",        label: "SEO",         icon: "◎", endpoint: null,                  desc: "Meta tags, sitemap, and indexing." },
+      { key: "blog",          label: "Blog",           icon: "✍", endpoint: "/admin/blog-posts/",  desc: "Articles, guides, and brand stories." },
+      { key: "homepage",      label: "Content",        icon: "⌂", endpoint: "/admin/settings/",    desc: "Announcements, newsletter, and homepage sections." },
+    ],
+  },
+  {
+    label: "Store Setup",
+    items: [
+      { key: "branding",      label: "Branding",       icon: "◈", endpoint: "/admin/settings/",    desc: "Logo, colors, tagline, and store identity." },
+      { key: "nav_settings",  label: "Navigation",     icon: "☰", endpoint: "/admin/settings/",    desc: "Header nav links and utility menu." },
+      { key: "footer_social", label: "Footer & Social",icon: "⊟", endpoint: "/admin/settings/",    desc: "Footer content, social media, and contact info." },
+      { key: "seo_legal",     label: "SEO & Legal",    icon: "◎", endpoint: "/admin/settings/",    desc: "Meta tags, Open Graph, return policy, privacy." },
     ],
   },
   {
     label: "Marketing",
     items: [
       { key: "deals",      label: "Promotions",     icon: "✺", endpoint: "/admin/promotions/", desc: "Coupons, codes, and deals." },
-      { key: "giftcards",  label: "Gift Cards",     icon: "◈", endpoint: null,                 desc: "Issue and track gift cards." },
-      { key: "abandoned",  label: "Abandoned Cart", icon: "◷", endpoint: null,                 desc: "Recover abandoned checkouts." },
-      { key: "newsletter", label: "Newsletter",     icon: "▢", endpoint: "/admin/moderation/", desc: "Subscribers and campaigns." },
+      { key: "giftcards",  label: "Gift Cards",     icon: "◈", endpoint: "/admin/gift-cards/", desc: "Issue and track gift cards." },
+      { key: "abandoned",  label: "Abandoned Cart", icon: "◷", endpoint: "/admin/abandoned-carts/", desc: "Recover abandoned checkouts." },
+      { key: "newsletter", label: "Newsletter",     icon: "▢", endpoint: "/admin/newsletter-subscribers/", desc: "Subscribers and campaigns." },
     ],
   },
   {
@@ -60,25 +69,26 @@ const NAV_GROUPS = [
     label: "Operations",
     items: [
       { key: "reviews",  label: "Reviews",  icon: "★", endpoint: "/admin/reviews/", desc: "Approve and moderate reviews." },
-      { key: "returns",  label: "Returns",  icon: "↩", endpoint: null,               desc: "Return requests and refunds." },
+      { key: "returns",  label: "Returns",  icon: "↩", endpoint: "/admin/returns/",  desc: "Return requests and refunds." },
       { key: "shipping", label: "Shipping", icon: "◁", endpoint: "/admin/shipping-rules/", desc: "Rules-based rates and delivery ETA." },
     ],
   },
   {
     label: "Integrations",
     items: [
-      { key: "social",          label: "Social Media",    icon: "◉", endpoint: null, desc: "Facebook, TikTok, and Instagram." },
-      { key: "marketing_tools", label: "Marketing Tools", icon: "⊗", endpoint: null, desc: "Google Ads, Analytics, and email." },
-      { key: "apps",            label: "App Store",       icon: "⊕", endpoint: null, desc: "Third-party apps and extensions." },
+      { key: "social",          label: "Social Media",    icon: "◉", endpoint: "/admin/settings/", desc: "Facebook, TikTok, Snapchat, and Pinterest pixels." },
+      { key: "marketing_tools", label: "Marketing Tools", icon: "⊗", endpoint: "/admin/settings/", desc: "GA4, Google Ads, GTM, Klaviyo, and Mailchimp." },
+      { key: "apps",            label: "App Store",       icon: "⊕", endpoint: "/admin/settings/", desc: "Push notifications, search, and fulfilment apps." },
     ],
   },
   {
     label: "Settings",
     items: [
-      { key: "payments", label: "Payments", icon: "▭", endpoint: "/admin/payments/", desc: "Providers and transactions." },
-      { key: "taxes",    label: "Taxes",    icon: "◫", endpoint: null,               desc: "Tax zones and VAT compliance." },
-      { key: "staff",    label: "Staff",    icon: "⚙", endpoint: null,               desc: "Accounts, roles, and permissions." },
-      { key: "regions",  label: "Regions",  icon: "◌", endpoint: null,               desc: "Currencies and locale config." },
+      { key: "payments",        label: "Payments",        icon: "▭", endpoint: "/admin/payments/",  desc: "Providers and transactions." },
+      { key: "payment_setup",   label: "Payment Setup",   icon: "⊞", endpoint: "/admin/settings/",  desc: "Configure payment gateway credentials from the admin panel." },
+      { key: "taxes",           label: "Taxes",           icon: "◫", endpoint: "/admin/tax-rules/", desc: "Tax zones, VAT rates, and inclusive/exclusive pricing." },
+      { key: "staff",           label: "Staff",           icon: "⚙", endpoint: "/admin/staff/",    desc: "Team accounts, roles, and permissions." },
+      { key: "regions",         label: "Regions",         icon: "◌", endpoint: "/admin/regions/",  desc: "Active regions, currencies, and locale config." },
     ],
   },
 ];
@@ -92,9 +102,13 @@ const NAV_READ_CAPABILITY = {
   products: "products.view",
   categories: "categories.view",
   inventory: "inventory.view",
+  warehouses: "inventory.view",
   blog: "content.view",
   homepage: "content.view",
-  seo: "content.view",
+  branding: "content.view",
+  nav_settings: "content.view",
+  footer_social: "content.view",
+  seo_legal: "content.view",
   deals: "coupons.view",
   giftcards: "coupons.view",
   abandoned: "coupons.view",
@@ -110,6 +124,7 @@ const NAV_READ_CAPABILITY = {
   marketing_tools: "content.view",
   apps: "content.view",
   payments: "payments.view",
+  payment_setup: "payments.view",
   taxes: "regions.view",
   staff: "staff.manage",
   regions: "regions.view",
@@ -121,15 +136,27 @@ const NAV_WRITE_CAPABILITY = {
   products: "products.edit",
   categories: "categories.edit",
   inventory: "inventory.edit",
+  warehouses: "inventory.edit",
   blog: "content.edit",
   homepage: "content.edit",
+  branding: "content.edit",
+  nav_settings: "content.edit",
+  footer_social: "content.edit",
+  seo_legal: "content.edit",
   deals: "coupons.edit",
+  giftcards: "giftcards.edit",
+  abandoned: "abandoned.edit",
   reviews: "reviews.edit",
   returns: "returns.edit",
   shipping: "shipping.edit",
-  payments: "payments.edit",
-  staff: "staff.manage",
   regions: "regions.edit",
+  taxes: "regions.edit",
+  payments: "payments.edit",
+  payment_setup: "payments.edit",
+  staff: "staff.manage",
+  social: "content.edit",
+  marketing_tools: "content.edit",
+  apps: "content.edit",
 };
 
 // ─── Field configs ─────────────────────────────────────────────────────────────
@@ -225,9 +252,7 @@ const FIELD_CONFIGS = {
     ["sort_order","Sort order","number"],
   ],
   homepage: [
-    ["brand_name","Brand name","text"],
     ["announcement_en","Announcement EN","text"],["announcement_ar","Announcement AR","text"],
-    ["footer_about_en","Footer about EN","textarea"],["footer_about_ar","Footer about AR","textarea"],
     ["newsletter_title_en","Newsletter title EN","text"],["newsletter_title_ar","Newsletter title AR","text"],
     ["newsletter_subtitle_en","Newsletter subtitle EN","textarea"],["newsletter_subtitle_ar","Newsletter subtitle AR","textarea"],
     ["instagram_title_en","Instagram title EN","text"],["instagram_title_ar","Instagram title AR","text"],
@@ -235,8 +260,104 @@ const FIELD_CONFIGS = {
     ["blog_title_en","Blog title EN","text"],["blog_title_ar","Blog title AR","text"],
     ["free_gift_title_en","Free gift title EN","text"],["free_gift_title_ar","Free gift title AR","text"],
     ["free_gift_subtitle_en","Free gift subtitle EN","textarea"],["free_gift_subtitle_ar","Free gift subtitle AR","textarea"],
-    ["why_choose_links","Why choose links JSON","json"],["policy_links","Policy links JSON","json"],
-    ["static_links","Static links JSON","json"],
+    ["why_choose_links","Why choose links (JSON)","json"],
+  ],
+  branding: [
+    ["brand_name","Brand name","text"],
+    ["logo_url","Logo image URL","text"],
+    ["favicon_url","Favicon URL","text"],
+    ["tagline_en","Tagline EN","text"],["tagline_ar","Tagline AR","text"],
+    ["primary_color","Primary color (hex, e.g. #4a7c59)","text"],
+    ["accent_color","Accent color (hex)","text"],
+  ],
+  nav_settings: [
+    ["nav_links","Nav links JSON — [{\"label_en\":\"Home\",\"label_ar\":\"الرئيسية\",\"href\":\"/\"}]","json"],
+    ["static_links","Static/utility links JSON","json"],
+  ],
+  footer_social: [
+    ["footer_about_en","Footer about EN","textarea"],["footer_about_ar","Footer about AR","textarea"],
+    ["copyright_en","Copyright text EN","text"],["copyright_ar","Copyright text AR","text"],
+    ["policy_links","Policy links JSON — [{\"label_en\":\"Privacy\",\"label_ar\":\"الخصوصية\",\"href\":\"/privacy\"}]","json"],
+    ["facebook_url","Facebook URL","text"],
+    ["instagram_url","Instagram URL","text"],
+    ["twitter_url","Twitter / X URL","text"],
+    ["youtube_url","YouTube URL","text"],
+    ["tiktok_url","TikTok URL","text"],
+    ["whatsapp_number","WhatsApp number (digits only)","text"],
+    ["contact_email","Contact email","text"],
+    ["contact_phone","Contact phone","text"],
+    ["address_en","Address EN","text"],["address_ar","Address AR","text"],
+  ],
+  seo_legal: [
+    ["seo_title_en","SEO meta title EN","text"],["seo_title_ar","SEO meta title AR","text"],
+    ["seo_description_en","SEO meta description EN","textarea"],["seo_description_ar","SEO meta description AR","textarea"],
+    ["og_image_url","Open Graph image URL","text"],
+    ["return_policy_en","Return policy EN","textarea"],["return_policy_ar","Return policy AR","textarea"],
+    ["privacy_policy_en","Privacy policy EN","textarea"],["privacy_policy_ar","Privacy policy AR","textarea"],
+  ],
+  returns: [
+    ["status","Status","select",[["requested","Requested"],["approved","Approved"],["rejected","Rejected"],["refunded","Refunded"]]],
+    ["admin_note","Admin note","textarea"],
+  ],
+  taxes: [
+    ["name_en","Name EN","text"],
+    ["name_ar","Name AR","text"],
+    ["region","Region ID (blank = global)","number"],
+    ["rate","Rate (decimal, e.g. 0.05 for 5%)","number"],
+    ["is_inclusive","Tax-inclusive pricing","checkbox"],
+    ["is_active","Active","checkbox"],
+    ["description","Description","textarea"],
+  ],
+  staff: [
+    ["email","Email","email"],
+    ["username","Username","text"],
+    ["password","Password","password"],
+    ["first_name","First name","text"],
+    ["last_name","Last name","text"],
+    ["role","Role","select",[
+      ["Owner/Super Admin","Owner / Super Admin"],
+      ["Manager","Manager"],
+      ["Product Editor","Product Editor"],
+      ["Order Support","Order Support"],
+      ["Finance","Finance"],
+      ["Marketing","Marketing"],
+    ]],
+    ["is_active","Active","checkbox"],
+    ["is_staff","Staff access","checkbox"],
+  ],
+  warehouses: [
+    ["code","Code","text"],
+    ["name_en","Name EN","text"],
+    ["name_ar","Name AR","text"],
+    ["region","Region ID","number"],
+    ["fulfillment_regions","Fulfilment region IDs (comma-separated)","text"],
+    ["active","Active","checkbox"],
+  ],
+  giftcards: [
+    ["code","Code","text"],
+    ["initial_balance","Initial balance","number"],
+    ["remaining_balance","Remaining balance","number"],
+    ["currency_code","Currency","text"],
+    ["region","Region ID","number"],
+    ["recipient_name","Recipient name","text"],
+    ["recipient_email","Recipient email","email"],
+    ["recipient_phone","Recipient phone","text"],
+    ["sender_name","Sender name","text"],
+    ["message","Message","textarea"],
+    ["status","Status","select",[["active","Active"],["redeemed","Redeemed"],["expired","Expired"],["cancelled","Cancelled"]]],
+    ["expiry_date","Expiry date","datetime-local"],
+  ],
+  abandoned: [
+    ["customer_name","Customer name","text"],
+    ["customer_email","Customer email","email"],
+    ["customer_phone","Customer phone","text"],
+    ["subtotal","Subtotal","number"],
+    ["currency_code","Currency","text"],
+    ["region","Region ID","number"],
+    ["locale","Locale","text"],
+    ["status","Status","select",[["abandoned","Abandoned"],["contacted","Contacted"],["recovered","Recovered"],["lost","Lost"]]],
+    ["recovery_sent_count","Recovery sent count","number"],
+    ["recovery_notes","Recovery notes","textarea"],
   ],
 };
 
@@ -249,11 +370,16 @@ const CREATE_DEFAULTS = {
   reviews:    { product:"",order:"",customer_name:"",rating:5,title:"",comment:"",is_verified_purchase:false,is_approved:false },
   shipping:   { region:"",city:"",area:"",min_order_value:0,max_order_value:"",shipping_fee:0,free_shipping_threshold:0,eta_min_days:"",eta_max_days:"",carrier_name:"",active:true },
   blog:       { slug:"",title_en:"",title_ar:"",excerpt_en:"",excerpt_ar:"",body_en:"",body_ar:"",image:"",category_en:"",category_ar:"",published_at:"",is_published:false,sort_order:0 },
+  taxes:      { name_en:"VAT",name_ar:"ضريبة القيمة المضافة",region:"",rate:0.05,is_inclusive:false,is_active:true,description:"" },
+  staff:      { email:"",username:"",password:"",first_name:"",last_name:"",role:"Manager",is_active:true,is_staff:true },
+  warehouses: { code:"",name_en:"",name_ar:"",region:"",fulfillment_regions:"",active:true },
+  giftcards:  { code:"",initial_balance:0,remaining_balance:0,currency_code:"OMR",region:"",recipient_name:"",recipient_email:"",recipient_phone:"",sender_name:"",message:"",status:"active",expiry_date:"" },
 };
 
-const CRUD_KEYS     = ["products","categories","deals","customers","payments","reviews","shipping","blog"];
-const DELETABLE     = ["products","categories","deals","customers","payments","reviews","shipping","blog"];
-const REPORT_TYPES  = ["orders","customers","inventory","low-stock"];
+const SETTINGS_KEYS = new Set(["homepage","branding","nav_settings","footer_social","seo_legal","social","marketing_tools","apps","payment_setup"]);
+const CRUD_KEYS     = ["products","categories","deals","customers","payments","reviews","shipping","blog","returns","taxes","staff","warehouses","giftcards"];
+const DELETABLE     = ["products","categories","deals","customers","payments","reviews","shipping","blog","taxes","staff","warehouses","giftcards"];
+const REPORT_TYPES  = ["orders","customers","inventory","low-stock","sales","abandoned-carts"];
 
 // ─── Placeholder configs ───────────────────────────────────────────────────────
 
@@ -263,75 +389,39 @@ const PLACEHOLDER_CONFIGS = {
     description: "Control how your storefront appears in search results. Configure meta titles, Open Graph tags, structured data, and sitemap generation per page, product, and collection.",
     features: ["Page-level meta title & description","Open Graph and Twitter card settings","Product JSON-LD structured data","Auto-generated XML sitemap","Canonical URL management","Robots.txt control","301/302 redirect manager"],
   },
-  giftcards: {
-    icon: "◈", badge: "Planned", title: "Gift Cards",
-    description: "Issue digital gift cards with custom denominations. Track balances, expiry dates, and redemption history across customer accounts.",
-    features: ["Custom denomination gift cards","Single-use or reloadable codes","Expiry date configuration","Balance tracking per customer","Bulk issuance for campaigns","Redemption history and audit log"],
-  },
-  abandoned: {
-    icon: "◷", badge: "Planned", title: "Abandoned Cart Recovery",
-    description: "Identify customers who left items in their cart and automatically trigger recovery emails or WhatsApp messages to bring them back.",
-    features: ["Real-time abandoned cart list","Customer contact details and cart summary","Automated recovery email sequences","WhatsApp message templates","Discount code injection in recovery","Configurable abandonment threshold","Recovery rate and revenue analytics"],
-  },
-  returns: {
-    icon: "↩", badge: "Planned", title: "Returns & Refunds",
-    description: "Process return requests, issue full or partial refunds, and track returned inventory. Complete audit trail of all return operations.",
-    features: ["Return request submission portal","Approve / reject / escalate workflow","Full and partial refund processing","Auto-restock returned inventory","Return reason analytics","Customer notification on status change","Payment provider refund integration"],
-  },
-  taxes: {
-    icon: "◫", badge: "Planned", title: "Tax & VAT Configuration",
-    description: "Configure tax rates per region, product category, and customer type. Ensure VAT compliance across GCC countries with automatic rate calculation.",
-    features: ["Regional tax zones (UAE 5%, Saudi 15%)","Product category tax overrides","Tax-inclusive vs exclusive pricing","B2B customer exemptions","Tax invoice generation","VAT registration threshold alerts","ZATCA e-invoicing compliance (KSA)"],
-  },
-  staff: {
-    icon: "⚙", badge: "Planned", title: "Staff & Permissions",
-    description: "Manage team members with role-based access control. Define custom roles with fine-grained permissions per module and audit all staff actions.",
-    features: ["Custom roles (Manager, Editor, Viewer)","Per-module read/write/delete permissions","Two-factor authentication enforcement","Staff activity audit log","Login IP allowlist","Session timeout config","Invitation-based onboarding"],
-  },
-  regions: {
-    icon: "◌", badge: "Configured in Code", title: "Regions & Currencies",
-    description: "Multi-region store configuration, supported currencies, and locale-specific pricing. Arabic and English content routing per region.",
-    features: ["Active: Oman (OM), UAE (AE), Saudi Arabia (SA)","Locales: English (en), Arabic (ar)","Per-region currency and pricing","Regional product availability","Locale-aware URL routing","Currency formatting (OMR, AED, SAR)","Region auto-detection from IP"],
-  },
 };
 
 // ─── Integration configs ──────────────────────────────────────────────────────
 
-const SOCIAL_INTEGRATIONS = [
-  { name: "Meta / Facebook",    abbr: "f",  color: "#1877F2", desc: "Facebook Pixel, Catalogue, and Ads Manager.",     status: "available" },
-  { name: "TikTok",             abbr: "T",  color: "#010101", desc: "TikTok Pixel and Shopping integration.",           status: "available" },
-  { name: "Instagram Shopping", abbr: "◉",  color: "#C13584", desc: "Tag products in posts and stories.",               status: "available" },
-  { name: "Snapchat",           abbr: "S",  color: "#FFFC00", iconColor: "#000", desc: "Snap Pixel and Dynamic Ads.",   status: "coming_soon" },
-  { name: "Pinterest",          abbr: "P",  color: "#E60023", desc: "Pinterest Tag and Product Pins.",                  status: "coming_soon" },
-  { name: "Twitter / X",        abbr: "X",  color: "#000000", desc: "Twitter Pixel and Shopping.",                      status: "coming_soon" },
-];
-
-const MARKETING_INTEGRATIONS = [
-  { name: "Google Analytics 4", abbr: "GA", color: "#E37400", desc: "GA4 events, e-commerce tracking, and conversions.", status: "available" },
-  { name: "Google Ads",         abbr: "Ads",color: "#4285F4", desc: "Conversion tracking and remarketing audiences.",     status: "available" },
-  { name: "Klaviyo",            abbr: "K",  color: "#2D2D2D", desc: "Email flows, segments, and abandoned cart.",         status: "available" },
-  { name: "Mailchimp",          abbr: "M",  color: "#FFE01B", iconColor: "#000", desc: "Email campaigns and automations.", status: "available" },
-  { name: "WhatsApp Business",  abbr: "W",  color: "#25D366", desc: "Order notifications via WhatsApp API.",              status: "coming_soon" },
-  { name: "Zendesk",            abbr: "Z",  color: "#03363D", desc: "Support ticketing and live chat.",                   status: "coming_soon" },
-];
-
-const APP_INTEGRATIONS = [
-  { name: "Expo Push Notifications", abbr: "E",  color: "#000020", desc: "Mobile push for orders, promos, and restocks.", status: "active" },
-  { name: "Cloudinary",              abbr: "CL", color: "#3448C5", desc: "Auto-optimised image hosting.",                 status: "available" },
-  { name: "Algolia Search",          abbr: "Al", color: "#003DFF", desc: "Lightning-fast search and faceting.",           status: "coming_soon" },
-  { name: "Stripe",                  abbr: "S",  color: "#635BFF", desc: "Online payment processing.",                    status: "coming_soon" },
-  { name: "Tap Payments",            abbr: "Tp", color: "#F90000", desc: "GCC-native payment gateway.",                   status: "coming_soon" },
-  { name: "Shippo",                  abbr: "Sh", color: "#16283C", desc: "Multi-carrier label printing.",                 status: "coming_soon" },
-];
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+const SETTINGS_TITLES = {
+  homepage:      "Content Sections",
+  branding:      "Branding & Identity",
+  nav_settings:  "Navigation Links",
+  footer_social: "Footer & Social Media",
+  seo_legal:     "SEO & Legal Pages",
+};
+
 function titleFor(item, key) {
+  if (SETTINGS_TITLES[key])  return SETTINGS_TITLES[key];
+  if (key === "returns")     return `Return — ${item?.order_number || item?.id}`;
+  if (key === "regions")     return item?.name || item?.code || `Region ${item?.id}`;
+  if (key === "taxes")       return item?.name_en ? `${item.name_en}${item.rate_pct != null ? ` (${item.rate_pct}%)` : ""}` : `Tax rule ${item?.id}`;
+  if (key === "staff")       return item?.email || item?.username || `Staff ${item?.id}`;
+  if (key === "giftcards")   return item?.code || `Gift card ${item?.id}`;
+  if (key === "abandoned")   return item?.customer_email || item?.customer_name || `Abandoned cart ${item?.id}`;
   return item?.order_number || item?.name_en || item?.title_en || item?.code || item?.email || item?.username || item?.provider_reference || item?.provider || `${key} item`;
 }
 
-function metaFor(item) {
+function metaFor(item, key) {
   if (!item) return "";
+  if (key === "returns") return `${item.customer_name || item.customer_email || "Customer"} · ${item.status}`;
+  if (key === "regions") return `${item.currency_code || ""} · ${item.is_active ? "Active" : "Inactive"}`;
+  if (key === "taxes")   return `${item.region_code || "Global"} · ${item.is_active ? "Active" : "Inactive"}`;
+  if (key === "staff")   return `${item.roles?.[0] || "No role"} · ${item.is_active ? "Active" : "Inactive"}`;
+  if (key === "giftcards") return `${item.currency_code || ""} · ${item.initial_balance} / ${item.remaining_balance} · ${item.status}`;
+  if (key === "abandoned") return `${item.currency_code || ""} · ${item.subtotal} · ${item.status}`;
   return item.customer_name || item.brand || item.status || item.payment_status || item.discount_type || item.currency_code || (item.is_approved === false ? "Pending moderation" : item.is_published !== undefined ? (item.is_published ? "Published" : "Draft") : "Ready");
 }
 
@@ -343,9 +433,9 @@ function labelFor(key) {
 
 function statusTone(value = "") {
   const v = String(value).toLowerCase();
-  if (["paid","delivered","active","approved","confirmed","published","shipped","processing"].some((s) => v.includes(s))) return "success";
-  if (["pending","review","unpaid","draft","returned"].some((s) => v.includes(s))) return "warning";
-  if (["cancelled","failed","inactive","rejected","hidden"].some((s) => v.includes(s))) return "danger";
+  if (["paid","delivered","active","approved","confirmed","published","shipped","processing","recovered"].some((s) => v.includes(s))) return "success";
+  if (["pending","review","unpaid","draft","returned","abandoned","contacted"].some((s) => v.includes(s))) return "warning";
+  if (["cancelled","failed","inactive","rejected","hidden","expired","lost"].some((s) => v.includes(s))) return "danger";
   return "neutral";
 }
 
@@ -401,6 +491,9 @@ export default function AdminPanelClient() {
   const [loading, setLoading]       = useState(false);
   const [toast, setToast]           = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [page, setPage]             = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const capabilitySet = useMemo(() => new Set(adminMe?.capabilities || []), [adminMe]);
 
@@ -587,15 +680,99 @@ export default function AdminPanelClient() {
   async function loadScreen(screen = active) {
     if (!screen || !screen.endpoint) { setData(null); setLoading(false); return; }
     setLoading(true);
-    closeForm();
+    if (mode !== "edit") closeForm();
     try {
-      const raw = await request(screen.endpoint);
-      // Handle DRF paginated response {count, next, previous, results}
+      let url = screen.endpoint;
+      const params = new URLSearchParams();
+      if (CRUD_KEYS.includes(activeKey) && searchQuery) {
+        params.set("search", searchQuery);
+      }
+      if (page > 1 && CRUD_KEYS.includes(activeKey)) {
+        params.set("page", String(page));
+      }
+      const qs = params.toString();
+      const raw = await request(qs ? `${url}?${qs}` : url);
       if (raw && typeof raw === "object" && Array.isArray(raw.results)) {
         setData(raw.results);
+        if (typeof raw.count === "number") {
+          const perPage = Math.ceil(raw.count / (raw.results.length || 1));
+          setTotalPages(Math.max(1, Math.ceil(raw.count / (perPage || 25))));
+        }
+      } else if (raw && typeof raw === "object" && "count" in raw && Array.isArray(raw.results)) {
+        setData(raw.results);
+        setTotalPages(Math.max(1, Math.ceil(raw.count / (raw.results.length || 25))));
       } else {
         setData(raw);
+        setTotalPages(1);
       }
+    } catch (err) {
+      showToast(err.message, "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleRefundOrder(order) {
+    if (!order?.order_number) return;
+    if (!window.confirm(`Issue refund for order ${order.order_number}? This will process a refund and may update inventory.`)) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/admin/orders/${order.order_number}/refund/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        let detail = "Refund failed";
+        try { const payload = await res.json(); detail = payload?.detail || detail; } catch {}
+        throw new Error(detail);
+      }
+      showToast("Refund processed successfully.", "success");
+      await loadScreen(active);
+    } catch (err) {
+      showToast(err.message, "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleCreateShipment(order) {
+    if (!order?.order_number) return;
+    if (!window.confirm(`Create shipment for order ${order.order_number}?`)) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/admin/orders/${order.order_number}/shipment/create/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        let detail = "Shipment creation failed";
+        try { const payload = await res.json(); detail = payload?.detail || detail; } catch {}
+        throw new Error(detail);
+      }
+      showToast("Shipment created successfully.", "success");
+      await loadScreen(active);
+    } catch (err) {
+      showToast(err.message, "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleRefreshTracking(order) {
+    if (!order?.order_number) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/admin/orders/${order.order_number}/shipment/refresh/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        let detail = "Tracking refresh failed";
+        try { const payload = await res.json(); detail = payload?.detail || detail; } catch {}
+        throw new Error(detail);
+      }
+      showToast("Tracking refreshed.", "success");
+      await loadScreen(active);
     } catch (err) {
       showToast(err.message, "error");
     } finally {
@@ -614,6 +791,11 @@ export default function AdminPanelClient() {
     if (activeKey === "reviews")    return `/admin/reviews/${item.id}/`;
     if (activeKey === "shipping")   return `/admin/shipping-rules/${item.id}/`;
     if (activeKey === "blog")       return `/admin/blog-posts/${item.slug || item.id}/`;
+    if (activeKey === "returns")    return `/admin/returns/${item.id}/`;
+    if (activeKey === "taxes")      return `/admin/tax-rules/${item.id}/`;
+    if (activeKey === "staff")      return `/admin/staff/${item.id}/`;
+    if (activeKey === "giftcards")  return `/admin/gift-cards/${item.id}/`;
+    if (activeKey === "abandoned")  return `/admin/abandoned-carts/${item.id}/`;
     return "";
   }
 
@@ -656,15 +838,32 @@ export default function AdminPanelClient() {
     setFormOpen(true);
   }
 
-  function openHomepageSettings() {
-    if (!canWriteKey("homepage")) {
-      showToast("You do not have permission to edit homepage settings.", "error");
+  function openSettingsEditor() {
+    if (!canWriteKey(activeKey)) {
+      showToast("You do not have permission to edit these settings.", "error");
       return;
     }
     setMode("edit");
     setSelected(data || {});
-    setEditor(makeEditor(data || {}, "homepage"));
+    setEditor(makeEditor(data || {}, activeKey));
     setFormOpen(true);
+  }
+
+  function openHomepageSettings() {
+    openSettingsEditor();
+  }
+
+  async function patchSettings(fields) {
+    setLoading(true);
+    try {
+      await request("/admin/settings/", { method: "PATCH", body: JSON.stringify(fields) });
+      showToast("Saved.", "success");
+      await loadScreen(active);
+    } catch (err) {
+      showToast(err.message, "error");
+    } finally {
+      setLoading(false);
+    }
   }
 
   function closeForm() {
@@ -681,7 +880,7 @@ export default function AdminPanelClient() {
     }
     setLoading(true);
     try {
-      const path = mode === "create" ? active.endpoint : activeKey === "homepage" ? active.endpoint : detailPath();
+      const path = mode === "create" ? active.endpoint : SETTINGS_KEYS.has(activeKey) ? active.endpoint : detailPath();
       const method = mode === "create" ? "POST" : "PATCH";
       const payload = buildPayload(editor, activeKey);
       await request(path, { method, body: payload instanceof FormData ? payload : JSON.stringify(payload) });
@@ -764,6 +963,8 @@ export default function AdminPanelClient() {
       return;
     }
     setActiveKey(key);
+    setPage(1);
+    setSearchQuery("");
     setSidebarOpen(false);
   }
 
@@ -890,7 +1091,7 @@ export default function AdminPanelClient() {
           </div>
           {canCreate ? (
             <button type="button" className="admin-btn-primary admin-topbar-cta" onClick={startCreate}>
-              + {activeKey === "blog" ? "New article" : activeKey === "deals" ? "Add deal" : activeKey === "shipping" ? "Add rule" : `Add ${activeKey.slice(0, -1)}`}
+              + {activeKey === "blog" ? "New article" : activeKey === "deals" ? "Add deal" : activeKey === "shipping" ? "Add rule" : activeKey === "taxes" ? "Add tax rule" : activeKey === "staff" ? "Add staff" : `Add ${activeKey.slice(0, -1)}`}
             </button>
           ) : null}
         </header>
@@ -905,6 +1106,7 @@ export default function AdminPanelClient() {
       {formOpen ? (
         <CrudFormModal
           activeKey={activeKey}
+          isSettings={SETTINGS_KEYS.has(activeKey)}
           mode={mode}
           selected={selected}
           editor={editor}
@@ -914,6 +1116,9 @@ export default function AdminPanelClient() {
           onSave={saveRecord}
           onDelete={() => deleteRecord(selected)}
           onDownloadInvoice={downloadOrderInvoice}
+          onRefundOrder={activeKey === "orders" ? handleRefundOrder : undefined}
+          onCreateShipment={activeKey === "orders" ? handleCreateShipment : undefined}
+          onRefreshTracking={activeKey === "orders" ? handleRefreshTracking : undefined}
           titleFor={titleFor}
           metaFor={metaFor}
           fields={FIELD_CONFIGS[activeKey]}
@@ -924,9 +1129,10 @@ export default function AdminPanelClient() {
 
   function renderSection() {
     if (PLACEHOLDER_CONFIGS[activeKey])         return <PlaceholderModule config={PLACEHOLDER_CONFIGS[activeKey]} />;
-    if (activeKey === "social")                 return <IntegrationsHub title="Social Media" integrations={SOCIAL_INTEGRATIONS} />;
-    if (activeKey === "marketing_tools")        return <IntegrationsHub title="Marketing Tools" integrations={MARKETING_INTEGRATIONS} />;
-    if (activeKey === "apps")                   return <IntegrationsHub title="Apps & Extensions" integrations={APP_INTEGRATIONS} />;
+    if (activeKey === "payment_setup")
+      return <PaymentGatewaysView data={data} canEdit={canWriteKey(activeKey)} onPatch={patchSettings} />;
+    if (activeKey === "social" || activeKey === "marketing_tools" || activeKey === "apps")
+      return <IntegrationsView category={activeKey} data={data} canEdit={canWriteKey(activeKey)} onPatch={patchSettings} />;
     if (activeKey === "dashboard")              return <DashboardView data={data} />;
     if (activeKey === "analytics")              return <AnalyticsView data={data} />;
     if (activeKey === "inventory")              return <InventoryView rows={Array.isArray(data) ? data : []} />;
@@ -934,7 +1140,8 @@ export default function AdminPanelClient() {
     if (activeKey === "newsletter")             return <NewsletterPanel data={data} />;
     if (activeKey === "reports")               return <Reports data={data} onDownload={downloadReport} />;
     if (activeKey === "audit_logs")            return <AuditLogsPanel rows={Array.isArray(data) ? data : []} />;
-    if (activeKey === "homepage")               return <SettingsPanel data={data} onEdit={openHomepageSettings} canEdit={canWriteKey("homepage")} />;
+    if (activeKey === "regions")               return <RegionsView rows={Array.isArray(data) ? data : []} />;
+    if (SETTINGS_KEYS.has(activeKey))           return <StoreSettingsSection section={activeKey} data={data} onEdit={openSettingsEditor} canEdit={canWriteKey(activeKey)} />;
     return (
       <CrudPanel
         rows={Array.isArray(data) ? data : []}
@@ -949,6 +1156,11 @@ export default function AdminPanelClient() {
         titleFor={titleFor}
         metaFor={metaFor}
         labelFor={labelFor}
+        searchQuery={searchQuery}
+        onSearchChange={(q) => { setSearchQuery(q); setPage(1); }}
+        page={page}
+        totalPages={totalPages}
+        onPageChange={(p) => { setPage(p); }}
       />
     );
   }

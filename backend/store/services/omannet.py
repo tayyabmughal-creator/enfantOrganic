@@ -11,9 +11,8 @@ import hashlib
 import hmac
 from dataclasses import dataclass
 
-from django.conf import settings
-
 from ..models import PaymentTransaction
+from .payment_config import get_omannet_config
 
 
 class OmannetError(Exception):
@@ -34,13 +33,14 @@ class OmannetConfig:
 
 
 def _build_config():
+    cfg = get_omannet_config()
     return OmannetConfig(
-        merchant_id=str(getattr(settings, "OMANNET_MERCHANT_ID", "") or "").strip(),
-        access_code=str(getattr(settings, "OMANNET_ACCESS_CODE", "") or "").strip(),
-        sha_request=str(getattr(settings, "OMANNET_SHA_REQUEST", "") or "").strip(),
-        sha_response=str(getattr(settings, "OMANNET_SHA_RESPONSE", "") or "").strip(),
-        base_url=str(getattr(settings, "OMANNET_BASE_URL", "") or "").strip().rstrip("/"),
-        webhook_secret=str(getattr(settings, "OMANNET_WEBHOOK_SECRET", "") or "").strip(),
+        merchant_id=cfg["merchant_id"],
+        access_code=cfg["access_code"],
+        sha_request=cfg["sha_request"],
+        sha_response=cfg["sha_response"],
+        base_url=cfg["base_url"].rstrip("/"),
+        webhook_secret=cfg["webhook_secret"],
     )
 
 

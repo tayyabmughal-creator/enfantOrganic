@@ -46,18 +46,53 @@ def localized_link_items(items, locale):
 
 def serialize_site_settings(settings, locale):
     normalized = normalize_locale(locale)
+
+    def _loc(field):
+        return getattr(settings, f"{field}_{normalized}") or getattr(settings, f"{field}_en", "")
+
     return {
+        # Core
         "brand_name": settings.brand_name,
-        "announcement": getattr(settings, f"announcement_{normalized}") or settings.announcement_en,
-        "footer_about": getattr(settings, f"footer_about_{normalized}") or settings.footer_about_en,
-        "newsletter_title": getattr(settings, f"newsletter_title_{normalized}") or settings.newsletter_title_en,
-        "newsletter_subtitle": getattr(settings, f"newsletter_subtitle_{normalized}") or settings.newsletter_subtitle_en,
-        "instagram_title": getattr(settings, f"instagram_title_{normalized}") or settings.instagram_title_en,
-        "instagram_cta": getattr(settings, f"instagram_cta_{normalized}") or settings.instagram_cta_en,
-        "blog_title": getattr(settings, f"blog_title_{normalized}") or settings.blog_title_en,
-        "free_gift_title": getattr(settings, f"free_gift_title_{normalized}") or settings.free_gift_title_en,
-        "free_gift_subtitle": getattr(settings, f"free_gift_subtitle_{normalized}") or settings.free_gift_subtitle_en,
+        "announcement": _loc("announcement"),
+        "footer_about": _loc("footer_about"),
+        # Newsletter
+        "newsletter_title": _loc("newsletter_title"),
+        "newsletter_subtitle": _loc("newsletter_subtitle"),
+        # Content sections
+        "instagram_title": _loc("instagram_title"),
+        "instagram_cta": _loc("instagram_cta"),
+        "blog_title": _loc("blog_title"),
+        "free_gift_title": _loc("free_gift_title"),
+        "free_gift_subtitle": _loc("free_gift_subtitle"),
+        # Link groups
         "why_choose_links": localized_link_items(settings.why_choose_links, normalized),
         "policy_links": localized_link_items(settings.policy_links, normalized),
         "static_links": localized_link_items(settings.static_links, normalized),
+        "nav_links": localized_link_items(settings.nav_links, normalized),
+        # Branding
+        "logo_url": settings.logo_url,
+        "favicon_url": settings.favicon_url,
+        "tagline": _loc("tagline"),
+        "primary_color": settings.primary_color,
+        "accent_color": settings.accent_color,
+        # Social media
+        "facebook_url": settings.facebook_url,
+        "instagram_url": settings.instagram_url,
+        "twitter_url": settings.twitter_url,
+        "youtube_url": settings.youtube_url,
+        "tiktok_url": settings.tiktok_url,
+        "whatsapp_number": settings.whatsapp_number,
+        # Footer
+        "copyright": _loc("copyright"),
+        # Contact
+        "contact_email": settings.contact_email,
+        "contact_phone": settings.contact_phone,
+        "address": _loc("address"),
+        # SEO
+        "seo_title": _loc("seo_title"),
+        "seo_description": _loc("seo_description"),
+        "og_image_url": settings.og_image_url,
+        # Legal
+        "return_policy": _loc("return_policy"),
+        "privacy_policy": _loc("privacy_policy"),
     }
