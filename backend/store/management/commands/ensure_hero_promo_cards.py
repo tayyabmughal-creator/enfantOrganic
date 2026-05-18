@@ -13,7 +13,7 @@ HERO_PROMO_CARD_TARGETS = [
         "subtitle_ar": "اكتشف باقات مختارة جاهزة للهدايا لروتين عناية الطفل.",
         "cta_en": "Explore gift boxes",
         "cta_ar": "اكتشف صناديق الهدايا",
-        "href": "/collections",
+        "href": "/collections?category=baby-sets",
         "image": f"{ASSET_BASE}/complete-care-cream.jpg",
         "size": "large",
         "accent": "gift",
@@ -26,7 +26,7 @@ HERO_PROMO_CARD_TARGETS = [
         "subtitle_ar": "لوشن يومي فاخر لبشرة الطفل الحساسة.",
         "cta_en": "Shop daily moisture",
         "cta_ar": "تسوق الترطيب اليومي",
-        "href": "/collections",
+        "href": "/product/extra-mild-moisture-lotion",
         "image": f"{ASSET_BASE}/extra-mild-moisture-lotion.jpg",
         "size": "large",
         "accent": "soft",
@@ -39,10 +39,10 @@ HERO_PROMO_CARD_TARGETS = [
         "subtitle_ar": "أفضل الباقات المصممة لاحتياجات العناية اليومية بالطفل.",
         "cta_en": "Shop premium sets",
         "cta_ar": "تسوق المجموعات المميزة",
-        "href": "/collections",
+        "href": "/collections?category=baby-sets",
         "image": f"{ASSET_BASE}/extra-mild-moisture-lotion.jpg",
         "size": "small",
-        "accent": "set",
+        "accent": "sets",
         "sort_order": 2,
     },
     {
@@ -52,7 +52,7 @@ HERO_PROMO_CARD_TARGETS = [
         "subtitle_ar": "ترطيب غني لراحة البشرة الحساسة.",
         "cta_en": "See best seller",
         "cta_ar": "شاهد الأكثر مبيعًا",
-        "href": "/collections",
+        "href": "/product/sweet-dreams-baby-powder",
         "image": f"{ASSET_BASE}/double-moisture-lotion.png",
         "size": "small",
         "accent": "moisture",
@@ -65,7 +65,7 @@ HERO_PROMO_CARD_TARGETS = [
         "subtitle_ar": "اختيارات مفضلة لدى الأمهات لعناية يومية لطيفة.",
         "cta_en": "Shop top picks",
         "cta_ar": "تسوق الاختيارات المميزة",
-        "href": "/collections",
+        "href": "/collections?ordering=-rating",
         "image": f"{ASSET_BASE}/relax-moisturizing-lotion.png",
         "size": "small",
         "accent": "choice",
@@ -78,7 +78,7 @@ HERO_PROMO_CARD_TARGETS = [
         "subtitle_ar": "ترطيب مريح لروتين أكثر هدوءًا.",
         "cta_en": "Night routine",
         "cta_ar": "روتين المساء",
-        "href": "/collections",
+        "href": "/product/serene-knit-organic-blanket",
         "image": f"{ASSET_BASE}/relax-moisturizing-lotion.png",
         "size": "small",
         "accent": "relax",
@@ -91,7 +91,7 @@ HERO_PROMO_CARD_TARGETS = [
         "subtitle_ar": "إضافات جديدة إلى مجموعة إنفانت لعناية الأطفال.",
         "cta_en": "See new arrivals",
         "cta_ar": "شاهد الجديد",
-        "href": "/collections",
+        "href": "/collections?ordering=-id",
         "image": f"{ASSET_BASE}/moisture-shampoo.png",
         "size": "small",
         "accent": "new",
@@ -104,7 +104,7 @@ HERO_PROMO_CARD_TARGETS = [
         "subtitle_ar": "عناية خفيفة من الشمس للنزهات اليومية.",
         "cta_en": "Explore sun care",
         "cta_ar": "اكتشف العناية الشمسية",
-        "href": "/collections",
+        "href": "/product/organic-kids-toothpaste",
         "image": f"{ASSET_BASE}/daily-sun-protection-lotion.png",
         "size": "small",
         "accent": "sun",
@@ -128,14 +128,21 @@ class Command(BaseCommand):
         parser.add_argument(
             "--dry-run",
             action="store_true",
-            help="Preview cards that would be created without writing to the database.",
+            help="Preview cards that would be created/updated without writing to the database.",
+        )
+        parser.add_argument(
+            "--update-hrefs",
+            action="store_true",
+            help="Also update the href field on existing cards to match the canonical targets.",
         )
 
     @transaction.atomic
     def handle(self, *args, **options):
         dry_run = bool(options.get("dry_run"))
+        update_hrefs = bool(options.get("update_hrefs"))
         created_count = 0
         skipped_count = 0
+        updated_count = 0
 
         initial_count = HeroPromoCard.objects.count()
 
@@ -147,8 +154,15 @@ class Command(BaseCommand):
                     break
 
             if existing:
-                skipped_count += 1
-                self.stdout.write(f"Skipped existing card: {existing.title_en}")
+                if update_hrefs and existing.href != payload["href"]:
+                    if not dry_run:
+                        existing.href = payload["href"]
+                        existing.save(update_fields=["href"])
+                    updated_count += 1
+                    self.stdout.write(f"{'[dry-run] ' if dry_run else ''}Updated href for: {existing.title_en} -> {payload['href']}")
+                else:
+                    skipped_count += 1
+                    self.stdout.write(f"Skipped existing card: {existing.title_en}")
                 continue
 
             if dry_run:
@@ -167,6 +181,6 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"HeroPromoCard ensure complete. initial={initial_count} final={final_count} "
-                f"created={created_count} skipped={skipped_count} dry_run={dry_run}"
+                f"created={created_count} updated={updated_count} skipped={skipped_count} dry_run={dry_run}"
             )
         )

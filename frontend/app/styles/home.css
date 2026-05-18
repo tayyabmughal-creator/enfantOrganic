@@ -55,14 +55,14 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center right;
+  object-position: center;
   filter: none;
-  transform: scale(0.82) translateX(14%);
-  transform-origin: center right;
-  transition: transform 260ms ease;
+  transform: scale(1);
+  transform-origin: center;
+  transition: transform 360ms ease;
 }
 
-.offer-primary:hover .offer-primary-img { transform: scale(0.86) translateX(14%); }
+.offer-primary:hover .offer-primary-img { transform: scale(1.05); }
 
 .offer-copy {
   position: relative;
@@ -170,14 +170,14 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center right;
+  object-position: center;
   filter: none;
-  transform: scale(0.78) translateX(20%);
-  transform-origin: center right;
-  transition: transform 260ms ease;
+  transform: scale(1);
+  transform-origin: center;
+  transition: transform 360ms ease;
 }
 
-.offer-secondary:hover .offer-secondary-img { transform: scale(0.82) translateX(20%); }
+.offer-secondary:hover .offer-secondary-img { transform: scale(1.05); }
 
 .offer-secondary-copy {
   position: relative;
@@ -315,11 +315,11 @@
   object-fit: cover;
   object-position: center;
   filter: none;
-  transform: scale(0.9);
-  transition: transform 250ms ease;
+  transform: scale(1);
+  transition: transform 360ms ease;
 }
 
-.offer-tile:hover .offer-tile-img img { transform: scale(0.94) translateY(-3px); }
+.offer-tile:hover .offer-tile-img img { transform: scale(1.06); }
 
 /* Text — dark gradient overlay at bottom */
 .offer-tile-body {

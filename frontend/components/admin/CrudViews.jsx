@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AdminEmpty, statusTone } from "./SharedUI";
 
 // ─── Shared Utility Functions ────────────────────────────────────────────────
@@ -107,6 +107,7 @@ export function CrudFormModal({ activeKey, isSettings, mode, selected, editor, s
         </div>
 
         {activeKey === "orders" && selected ? <OrderSnapshot order={selected} onDownloadInvoice={onDownloadInvoice} onRefundOrder={onRefundOrder} onCreateShipment={onCreateShipment} onRefreshTracking={onRefreshTracking} /> : null}
+        {activeKey === "hero_cards" ? <HeroCardPreview editor={editor} /> : null}
 
         <div className="admin-modal-form">
           {(fields || []).map((field) => (
@@ -218,9 +219,27 @@ function FormField({ field, value, editor, setEditor }) {
     return (
       <label className="admin-label">
         {label}
-        <input type="file" className="admin-input" onChange={(e) => setEditor({ ...editor, [name]: e.target.files[0] })} />
+        <input type="file" className="admin-input" accept="image/*" onChange={(e) => setEditor({ ...editor, [name]: e.target.files[0] })} />
         {value instanceof File ? <span className="admin-file-name">{value.name}</span> : null}
         {showImagePreview ? <img src={previewUrl} alt={`${label} preview`} className="admin-record-thumb" /> : null}
+      </label>
+    );
+  }
+  if (type === "combobox") {
+    const listId = `datalist-${name}`;
+    return (
+      <label className="admin-label full-width">
+        {label}
+        <input
+          list={listId}
+          className="admin-input"
+          value={value ?? ""}
+          placeholder="Type a path or pick from suggestions…"
+          onChange={(e) => setEditor({ ...editor, [name]: e.target.value })}
+        />
+        <datalist id={listId}>
+          {(options || []).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </datalist>
       </label>
     );
   }
@@ -234,5 +253,68 @@ function FormField({ field, value, editor, setEditor }) {
         onChange={(e) => setEditor({ ...editor, [name]: type === "number" ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value })}
       />
     </label>
+  );
+}
+
+const ACCENT_LABELS = {
+  gift: "Exclusive Offer",
+  soft: "Best Seller",
+  sets: "Curated Sets",
+  moisture: "Top Rated",
+  choice: "Mom's Favourite",
+  relax: "Night Routine",
+  new: "New Arrival",
+  sun: "Daily Care",
+};
+
+function HeroCardPreview({ editor }) {
+  const [filePreview, setFilePreview] = useState("");
+  const prevUrlRef = useRef("");
+
+  useEffect(() => {
+    const file = editor?.image_file;
+    if (!(file instanceof File)) {
+      if (prevUrlRef.current) URL.revokeObjectURL(prevUrlRef.current);
+      prevUrlRef.current = "";
+      setFilePreview("");
+      return;
+    }
+    if (prevUrlRef.current) URL.revokeObjectURL(prevUrlRef.current);
+    const url = URL.createObjectURL(file);
+    prevUrlRef.current = url;
+    setFilePreview(url);
+    return () => {
+      URL.revokeObjectURL(url);
+      prevUrlRef.current = "";
+    };
+  }, [editor?.image_file]);
+
+  const imageUrl = filePreview || editor?.image || "";
+  const title    = editor?.title_en || editor?.title_ar || "Card title";
+  const subtitle = editor?.subtitle_en || editor?.subtitle_ar || "";
+  const cta      = editor?.cta_en || editor?.cta_ar || "";
+  const size     = editor?.size || "small";
+  const eyebrow  = ACCENT_LABELS[editor?.accent] || editor?.accent || "";
+
+  return (
+    <div className="admin-hero-preview">
+      <p className="admin-hero-preview-label">Live Preview — {size === "large" ? "Large hero card" : "Small tile card"}</p>
+      <div className={`admin-hero-preview-card ${size}`}>
+        {imageUrl
+          ? <img src={imageUrl} alt={title} />
+          : <div className="admin-hero-preview-placeholder">No image set</div>}
+        <div className="admin-hero-preview-copy">
+          {eyebrow ? <span className="admin-hero-preview-eyebrow">{eyebrow}</span> : null}
+          <h4>{title}</h4>
+          {subtitle ? <p>{subtitle}</p> : null}
+          {cta ? <span className="admin-hero-preview-cta">{cta}</span> : null}
+        </div>
+      </div>
+      {editor?.href ? (
+        <p className="admin-hero-preview-href">Destination: {editor.href}</p>
+      ) : (
+        <p className="admin-hero-preview-href admin-hero-preview-href--warn">No link set — card will fall back to /collections</p>
+      )}
+    </div>
   );
 }
