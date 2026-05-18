@@ -31,7 +31,7 @@ function HeaderInner({ navigation }) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { itemCount, openCart } = useStore();
+  const { itemCount, openCart, refreshCartPricing } = useStore();
   const { locale, setLocale } = useLocale();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState(null);
@@ -143,8 +143,10 @@ function HeaderInner({ navigation }) {
     const updated = new URLSearchParams(params.toString());
     updated.set("region", normalizedRegion);
     setOptimisticRegion(normalizedRegion);
+    void refreshCartPricing(locale, normalizedRegion);
     startRegionTransition(() => {
       router.replace(`${pathname}?${updated.toString()}`, { scroll: false });
+      router.refresh();
     });
   };
 
