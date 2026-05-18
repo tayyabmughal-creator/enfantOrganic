@@ -475,10 +475,9 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     [cartItems],
   );
 
-  const validateCouponCode = useCallback(
-    async (options = {}) => {
-      const { silent = false } = options;
-      const couponCode = form.coupon_code.trim();
+  const runCouponValidation = useCallback(
+    async ({ couponCode = "", city = "", area = "", silent = false } = {}) => {
+      const normalizedCouponCode = String(couponCode || "").trim();
       if (!cartItems.length) {
         if (!silent) {
           setCouponMessage(isAr ? "أضف منتجات قبل تطبيق الكوبون." : "Add products before applying a coupon.");
@@ -495,9 +494,9 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             region,
-            coupon_code: couponCode,
-            city: form.city,
-            area: form.area,
+            coupon_code: normalizedCouponCode,
+            city,
+            area,
             items: checkoutItemsPayload(),
           }),
         });
@@ -512,12 +511,17 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         }
         setCouponPreview(data);
         if (!silent) {
-          setCouponMessage(couponCode ? (data.message || (isAr ? "تم تطبيق الكوبون." : "Coupon applied.")) : "");
+          setCouponMessage(
+            normalizedCouponCode
+              ? (data.message || (isAr ? "تم تطبيق الكوبون." : "Coupon applied."))
+              : "",
+          );
         }
         return true;
       } catch (err) {
-        if (!silent) {
+        if (silent) {
           setCouponPreview(null);
+        } else {
           setCouponMessage(err.message || (isAr ? "تعذر التحقق من الكوبون." : "Unable to validate coupon."));
         }
         return false;
@@ -525,7 +529,27 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         setValidatingCoupon(false);
       }
     },
-    [cartItems.length, checkoutItemsPayload, form.area, form.city, form.coupon_code, isAr, region],
+    [cartItems.length, checkoutItemsPayload, isAr, region],
+  );
+
+  const validateCouponCode = useCallback(
+    async (options = {}) =>
+      runCouponValidation({
+        silent: Boolean(options.silent),
+        couponCode:
+          Object.prototype.hasOwnProperty.call(options, "couponCode")
+            ? options.couponCode
+            : form.coupon_code,
+        city:
+          Object.prototype.hasOwnProperty.call(options, "city")
+            ? options.city
+            : form.city,
+        area:
+          Object.prototype.hasOwnProperty.call(options, "area")
+            ? options.area
+            : form.area,
+      }),
+    [form.area, form.city, form.coupon_code, runCouponValidation],
   );
 
   useEffect(() => {
@@ -533,8 +557,11 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
       setCouponPreview(null);
       return;
     }
-    validateCouponCode({ silent: true });
-  }, [region, locale, subtotal, cartItems.length, validateCouponCode]);
+    validateCouponCode({
+      silent: true,
+      couponCode: form.coupon_code,
+    });
+  }, [cartItems.length, form.coupon_code, locale, region, subtotal, validateCouponCode]);
 
   useEffect(() => {
     let isMounted = true;
