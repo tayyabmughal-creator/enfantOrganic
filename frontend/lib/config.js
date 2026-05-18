@@ -6,23 +6,45 @@
 // Resolution order:
 //   1. Explicit NEXT_PUBLIC_API_BASE_URL (baked into the build) — required for
 //      cross-origin setups like a separately hosted backend.
-//   2. In the browser without an explicit value, use the same-origin `/api`
+//   2. In the browser without an explicit value, or when the build accidentally
+//      contains a non-browser-reachable host, use the same-origin `/api`
 //      path. In production this is proxied to the Django backend by the
 //      reverse proxy (see deploy/nginx/default.conf), so the storefront keeps
 //      working even when NEXT_PUBLIC_API_BASE_URL is missing or accidentally
-//      set to an internal Docker hostname like `http://backend:8000/api` that
-//      the browser cannot reach.
+//      set to an internal Docker / loopback hostname like
+//      `http://backend:8000/api` or `http://127.0.0.1:8000/api` that the live
+//      browser cannot reach.
 //   3. Off-browser (SSR / build time / Node scripts), fall back to localhost
 //      for dev convenience.
+const NON_BROWSER_API_HOSTS = new Set([
+  "backend",
+  "frontend",
+  "localhost",
+  "127.0.0.1",
+  "0.0.0.0",
+  "[::1]",
+]);
+
+export function isBrowserUnreachableApiBase(value) {
+  if (!value) {
+    return false;
+  }
+
+  try {
+    return NON_BROWSER_API_HOSTS.has(new URL(value).hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
 function resolveApiBaseUrl() {
   const envValue =
     (typeof process !== "undefined" && process.env && process.env.NEXT_PUBLIC_API_BASE_URL) || "";
   if (envValue) {
-    // Strip a non-browser-reachable hostname that occasionally leaks in from a
-    // misconfigured deploy (the internal Docker hostname is only resolvable
-    // inside the compose network). In the browser, prefer same-origin instead
-    // so client-side fetches keep working.
-    if (typeof window !== "undefined" && /:\/\/(backend|frontend)(:|\/|$)/i.test(envValue)) {
+    // Strip non-browser-reachable hostnames that occasionally leak in from a
+    // misconfigured deploy. In the browser, prefer same-origin instead so
+    // client-side fetches keep working.
+    if (typeof window !== "undefined" && isBrowserUnreachableApiBase(envValue)) {
       return "/api";
     }
     return envValue;
