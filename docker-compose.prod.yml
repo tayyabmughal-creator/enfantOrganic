@@ -60,6 +60,8 @@ services:
     command: >
       sh -c "python manage.py migrate &&
              python manage.py collectstatic --noinput &&
+             python manage.py ensure_hero_promo_cards &&
+             python manage.py update_hero_promo_images_v2 &&
              gunicorn enfant_backend.wsgi:application --bind 0.0.0.0:8000 --workers ${GUNICORN_WORKERS:-3} --timeout ${GUNICORN_TIMEOUT:-60}"
     volumes:
       - media-data:/app/media

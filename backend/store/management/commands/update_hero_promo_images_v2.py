@@ -16,6 +16,20 @@ IMAGE_MAPPING = {
     "Daily Sun Protection": "/enfant/hero-daily-sun-protection-v2.jpg",
 }
 
+# Paths the original seed_store / ensure_hero_promo_cards commands wrote — these
+# are raw product photos rather than the styled v2 hero assets. Re-running this
+# command is safe because we only touch cards still pointing at one of these
+# legacy paths (or that have no image at all). Admin-curated values stay put.
+LEGACY_PATHS = {
+    "",
+    "/enfant/complete-care-cream.jpg",
+    "/enfant/daily-sun-protection-lotion.png",
+    "/enfant/double-moisture-lotion.png",
+    "/enfant/extra-mild-moisture-lotion.jpg",
+    "/enfant/moisture-shampoo.png",
+    "/enfant/relax-moisturizing-lotion.png",
+}
+
 
 class Command(BaseCommand):
     help = "Update HeroPromoCard image URLs to regenerated v2 homepage hero assets."
@@ -27,11 +41,23 @@ class Command(BaseCommand):
             help="Preview updates without writing to the database.",
         )
 
+    def add_arguments(self, parser):
+        super_add = getattr(super(), "add_arguments", None)
+        if callable(super_add):
+            super_add(parser)
+        parser.add_argument(
+            "--force",
+            action="store_true",
+            help="Override the legacy-path guard and rewrite every matched card.",
+        )
+
     @transaction.atomic
     def handle(self, *args, **options):
         dry_run = bool(options.get("dry_run"))
+        force = bool(options.get("force"))
         updated = 0
         unchanged = 0
+        preserved = 0
         missing = []
 
         for title, image_path in IMAGE_MAPPING.items():
@@ -42,6 +68,12 @@ class Command(BaseCommand):
 
             if card.image == image_path:
                 unchanged += 1
+                continue
+
+            current = (card.image or "").strip()
+            if not force and current not in LEGACY_PATHS:
+                # Admin-curated value — leave it alone.
+                preserved += 1
                 continue
 
             updated += 1
@@ -60,6 +92,6 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"Hero image update complete. updated={updated} unchanged={unchanged} "
-                f"missing={len(set(missing))} dry_run={dry_run}"
+                f"preserved={preserved} missing={len(set(missing))} dry_run={dry_run}"
             )
         )

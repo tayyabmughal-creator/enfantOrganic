@@ -1,12 +1,39 @@
 // Centralized configuration for client-side fetches and storage keys.
 //
 // Single source of truth so we don't drift across components — and so any HTTP
-// fallback in dev is at least consistent (production builds MUST set
-// NEXT_PUBLIC_API_BASE_URL explicitly).
+// fallback in dev is at least consistent.
 
-export const API_BASE_URL =
-  (typeof process !== "undefined" && process.env && process.env.NEXT_PUBLIC_API_BASE_URL) ||
-  "http://127.0.0.1:8000/api";
+// Resolution order:
+//   1. Explicit NEXT_PUBLIC_API_BASE_URL (baked into the build) — required for
+//      cross-origin setups like a separately hosted backend.
+//   2. In the browser without an explicit value, use the same-origin `/api`
+//      path. In production this is proxied to the Django backend by the
+//      reverse proxy (see deploy/nginx/default.conf), so the storefront keeps
+//      working even when NEXT_PUBLIC_API_BASE_URL is missing or accidentally
+//      set to an internal Docker hostname like `http://backend:8000/api` that
+//      the browser cannot reach.
+//   3. Off-browser (SSR / build time / Node scripts), fall back to localhost
+//      for dev convenience.
+function resolveApiBaseUrl() {
+  const envValue =
+    (typeof process !== "undefined" && process.env && process.env.NEXT_PUBLIC_API_BASE_URL) || "";
+  if (envValue) {
+    // Strip a non-browser-reachable hostname that occasionally leaks in from a
+    // misconfigured deploy (the internal Docker hostname is only resolvable
+    // inside the compose network). In the browser, prefer same-origin instead
+    // so client-side fetches keep working.
+    if (typeof window !== "undefined" && /:\/\/(backend|frontend)(:|\/|$)/i.test(envValue)) {
+      return "/api";
+    }
+    return envValue;
+  }
+  if (typeof window !== "undefined") {
+    return "/api";
+  }
+  return "http://127.0.0.1:8000/api";
+}
+
+export const API_BASE_URL = resolveApiBaseUrl();
 
 // localStorage keys. Two distinct realms (admin vs customer) to avoid one
 // flow's token bleeding into the other.
