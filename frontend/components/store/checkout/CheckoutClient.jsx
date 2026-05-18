@@ -198,7 +198,7 @@ function asNumber(value) {
 export default function CheckoutClient({ locale, region, regionConfig: regionSettingsData = null }) {
   const router = useRouter();
   const t = uiText(locale);
-  const { cartItems, subtotal, clearCart } = useStore();
+  const { cartItems, subtotal, clearCart, refreshCartPricing } = useStore();
   const isAr = locale === "ar";
   const regionKey = useMemo(() => getRegionKey(region), [region]);
   const regionConfig = REGION_SETTINGS[regionKey] || REGION_SETTINGS.om;
@@ -342,9 +342,14 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
   useEffect(() => {
     setForm((current) => ({
       ...current,
-      country: current.country || getCountryName(regionKey, isAr),
+      country: getCountryName(regionKey, isAr),
     }));
   }, [regionKey, isAr]);
+
+  useEffect(() => {
+    if (!cartItems.length) return;
+    void refreshCartPricing(locale, region);
+  }, [cartItems.length, locale, refreshCartPricing, region]);
 
   useEffect(() => {
     if (!isOnlineProviderEnabled) {

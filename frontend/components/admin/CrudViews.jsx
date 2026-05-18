@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { AdminEmpty, statusTone } from "./SharedUI";
 
 // ─── Shared Utility Functions ────────────────────────────────────────────────
@@ -170,6 +171,22 @@ function OrderSnapshot({ order, onDownloadInvoice, onRefundOrder, onCreateShipme
 
 function FormField({ field, value, editor, setEditor }) {
   const [name, label, type, options] = field;
+  const [objectPreviewUrl, setObjectPreviewUrl] = useState("");
+
+  useEffect(() => {
+    if (!(value instanceof File)) {
+      setObjectPreviewUrl("");
+      return undefined;
+    }
+    const nextUrl = URL.createObjectURL(value);
+    setObjectPreviewUrl(nextUrl);
+    return () => URL.revokeObjectURL(nextUrl);
+  }, [value]);
+
+  const linkedUrlField = name.endsWith("_file") ? name.slice(0, -5) : "";
+  const existingPreviewUrl = linkedUrlField ? String(editor?.[linkedUrlField] || "") : "";
+  const previewUrl = objectPreviewUrl || existingPreviewUrl;
+  const showImagePreview = Boolean(previewUrl && name.includes("image"));
 
   if (type === "checkbox") {
     return (
@@ -203,6 +220,7 @@ function FormField({ field, value, editor, setEditor }) {
         {label}
         <input type="file" className="admin-input" onChange={(e) => setEditor({ ...editor, [name]: e.target.files[0] })} />
         {value instanceof File ? <span className="admin-file-name">{value.name}</span> : null}
+        {showImagePreview ? <img src={previewUrl} alt={`${label} preview`} className="admin-record-thumb" /> : null}
       </label>
     );
   }

@@ -9,6 +9,7 @@ from ..models import (
     Category,
     Coupon,
     GiftCard,
+    HeroPromoCard,
     Order,
     PaymentTransaction,
     Product,
@@ -25,6 +26,7 @@ from ..models import (
 from ..services.payment_router import get_region_provider_options, get_region_provider_warnings
 from ..services.carrier_router import get_region_carrier_options, get_region_carrier_warnings
 from .orders import OrderStatusHistorySerializer
+from .localization import get_image_url
 
 
 class AdminProductPriceSerializer(serializers.ModelSerializer):
@@ -54,6 +56,48 @@ class AdminCategorySerializer(serializers.ModelSerializer):
         extra_kwargs = {
             "image_file": {"required": False},
         }
+
+
+class AdminHeroPromoCardSerializer(serializers.ModelSerializer):
+    image = serializers.CharField(required=False, allow_blank=True)
+
+    class Meta:
+        model = HeroPromoCard
+        fields = (
+            "id",
+            "title_en",
+            "title_ar",
+            "subtitle_en",
+            "subtitle_ar",
+            "cta_en",
+            "cta_ar",
+            "href",
+            "image",
+            "image_file",
+            "size",
+            "accent",
+            "sort_order",
+        )
+        extra_kwargs = {
+            "image_file": {"required": False},
+        }
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if self.instance:
+            return attrs
+
+        image_value = attrs.get("image")
+        image_file = attrs.get("image_file")
+        if not image_value and not image_file:
+            raise serializers.ValidationError({"image": "Provide either image URL or image file."})
+        return attrs
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        data["image"] = get_image_url(instance, request, "image_file", "image")
+        return data
 
 
 class AdminCouponSerializer(serializers.ModelSerializer):

@@ -35,6 +35,7 @@ const NAV_GROUPS = [
     label: "Content",
     items: [
       { key: "blog",          label: "Blog",           icon: "✍", endpoint: "/admin/blog-posts/",  desc: "Articles, guides, and brand stories." },
+      { key: "hero_cards",    label: "Hero Cards",     icon: "◫", endpoint: "/admin/hero-promo-cards/", desc: "Homepage hero promo cards and visuals." },
       { key: "homepage",      label: "Content",        icon: "⌂", endpoint: "/admin/settings/",    desc: "Announcements, newsletter, and homepage sections." },
     ],
   },
@@ -104,6 +105,7 @@ const NAV_READ_CAPABILITY = {
   inventory: "inventory.view",
   warehouses: "inventory.view",
   blog: "content.view",
+  hero_cards: "content.view",
   homepage: "content.view",
   branding: "content.view",
   nav_settings: "content.view",
@@ -138,6 +140,7 @@ const NAV_WRITE_CAPABILITY = {
   inventory: "inventory.edit",
   warehouses: "inventory.edit",
   blog: "content.edit",
+  hero_cards: "content.edit",
   homepage: "content.edit",
   branding: "content.edit",
   nav_settings: "content.edit",
@@ -250,6 +253,14 @@ const FIELD_CONFIGS = {
     ["category_en","Category EN","text"],["category_ar","Category AR","text"],
     ["published_at","Publish date","date"],["is_published","Published","checkbox"],
     ["sort_order","Sort order","number"],
+  ],
+  hero_cards: [
+    ["title_en","Title EN","text"],["title_ar","Title AR","text"],
+    ["subtitle_en","Subtitle EN","textarea"],["subtitle_ar","Subtitle AR","textarea"],
+    ["cta_en","CTA EN","text"],["cta_ar","CTA AR","text"],
+    ["href","Link URL","text"],["size","Card size","select",[["large","Large"],["small","Small"]]],
+    ["accent","Accent","text"],["sort_order","Sort order","number"],
+    ["image","Image URL","text"],["image_file","Image File","file"],
   ],
   homepage: [
     ["announcement_en","Announcement EN","text"],["announcement_ar","Announcement AR","text"],
@@ -370,6 +381,7 @@ const CREATE_DEFAULTS = {
   reviews:    { product:"",order:"",customer_name:"",rating:5,title:"",comment:"",is_verified_purchase:false,is_approved:false },
   shipping:   { region:"",city:"",area:"",min_order_value:0,max_order_value:"",shipping_fee:0,free_shipping_threshold:0,eta_min_days:"",eta_max_days:"",carrier_name:"",active:true },
   blog:       { slug:"",title_en:"",title_ar:"",excerpt_en:"",excerpt_ar:"",body_en:"",body_ar:"",image:"",category_en:"",category_ar:"",published_at:"",is_published:false,sort_order:0 },
+  hero_cards: { title_en:"",title_ar:"",subtitle_en:"",subtitle_ar:"",cta_en:"",cta_ar:"",href:"/collections",size:"small",accent:"soft",sort_order:0,image:"" },
   taxes:      { name_en:"VAT",name_ar:"ضريبة القيمة المضافة",region:"",rate:0.05,is_inclusive:false,is_active:true,description:"" },
   staff:      { email:"",username:"",password:"",first_name:"",last_name:"",role:"Manager",is_active:true,is_staff:true },
   warehouses: { code:"",name_en:"",name_ar:"",region:"",fulfillment_regions:"",active:true },
@@ -377,8 +389,8 @@ const CREATE_DEFAULTS = {
 };
 
 const SETTINGS_KEYS = new Set(["homepage","branding","nav_settings","footer_social","seo_legal","social","marketing_tools","apps","payment_setup"]);
-const CRUD_KEYS     = ["products","categories","deals","customers","payments","reviews","shipping","blog","returns","taxes","staff","warehouses","giftcards"];
-const DELETABLE     = ["products","categories","deals","customers","payments","reviews","shipping","blog","taxes","staff","warehouses","giftcards"];
+const CRUD_KEYS     = ["products","categories","deals","customers","payments","reviews","shipping","blog","hero_cards","returns","taxes","staff","warehouses","giftcards"];
+const DELETABLE     = ["products","categories","deals","customers","payments","reviews","shipping","blog","hero_cards","taxes","staff","warehouses","giftcards"];
 const REPORT_TYPES  = ["orders","customers","inventory","low-stock","sales","abandoned-carts"];
 
 // ─── Placeholder configs ───────────────────────────────────────────────────────
@@ -411,6 +423,7 @@ function titleFor(item, key) {
   if (key === "staff")       return item?.email || item?.username || `Staff ${item?.id}`;
   if (key === "giftcards")   return item?.code || `Gift card ${item?.id}`;
   if (key === "abandoned")   return item?.customer_email || item?.customer_name || `Abandoned cart ${item?.id}`;
+  if (key === "hero_cards")  return item?.title_en || item?.title_ar || `Hero card ${item?.id}`;
   return item?.order_number || item?.name_en || item?.title_en || item?.code || item?.email || item?.username || item?.provider_reference || item?.provider || `${key} item`;
 }
 
@@ -422,6 +435,7 @@ function metaFor(item, key) {
   if (key === "staff")   return `${item.roles?.[0] || "No role"} · ${item.is_active ? "Active" : "Inactive"}`;
   if (key === "giftcards") return `${item.currency_code || ""} · ${item.initial_balance} / ${item.remaining_balance} · ${item.status}`;
   if (key === "abandoned") return `${item.currency_code || ""} · ${item.subtotal} · ${item.status}`;
+  if (key === "hero_cards") return `${item.size || "small"} · sort ${item.sort_order ?? 0}`;
   return item.customer_name || item.brand || item.status || item.payment_status || item.discount_type || item.currency_code || (item.is_approved === false ? "Pending moderation" : item.is_published !== undefined ? (item.is_published ? "Published" : "Draft") : "Ready");
 }
 
@@ -791,6 +805,7 @@ export default function AdminPanelClient() {
     if (activeKey === "reviews")    return `/admin/reviews/${item.id}/`;
     if (activeKey === "shipping")   return `/admin/shipping-rules/${item.id}/`;
     if (activeKey === "blog")       return `/admin/blog-posts/${item.slug || item.id}/`;
+    if (activeKey === "hero_cards") return `/admin/hero-promo-cards/${item.id}/`;
     if (activeKey === "returns")    return `/admin/returns/${item.id}/`;
     if (activeKey === "taxes")      return `/admin/tax-rules/${item.id}/`;
     if (activeKey === "staff")      return `/admin/staff/${item.id}/`;
@@ -1091,7 +1106,7 @@ export default function AdminPanelClient() {
           </div>
           {canCreate ? (
             <button type="button" className="admin-btn-primary admin-topbar-cta" onClick={startCreate}>
-              + {activeKey === "blog" ? "New article" : activeKey === "deals" ? "Add deal" : activeKey === "shipping" ? "Add rule" : activeKey === "taxes" ? "Add tax rule" : activeKey === "staff" ? "Add staff" : `Add ${activeKey.slice(0, -1)}`}
+              + {activeKey === "blog" ? "New article" : activeKey === "hero_cards" ? "Add hero card" : activeKey === "deals" ? "Add deal" : activeKey === "shipping" ? "Add rule" : activeKey === "taxes" ? "Add tax rule" : activeKey === "staff" ? "Add staff" : `Add ${activeKey.slice(0, -1)}`}
             </button>
           ) : null}
         </header>
@@ -1165,4 +1180,3 @@ export default function AdminPanelClient() {
     );
   }
 }
-

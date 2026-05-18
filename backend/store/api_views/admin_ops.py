@@ -23,6 +23,7 @@ from ..models import (
     Category,
     Coupon,
     GiftCard,
+    HeroPromoCard,
     NewsletterSubscription,
     NotificationLog,
     Order,
@@ -46,6 +47,7 @@ from ..api_serializers.admin_ops import (
     AdminCouponSerializer,
     AdminCustomerSerializer,
     AdminGiftCardSerializer,
+    AdminHeroPromoCardSerializer,
     AdminOrderSerializer,
     AdminPaymentTransactionSerializer,
     AdminProductSerializer,
@@ -641,6 +643,20 @@ class AdminCategoryDetailView(StaffRetrieveUpdateDestroyView):
     queryset = Category.objects.all()
     serializer_class = AdminCategorySerializer
     lookup_field = "slug"
+
+
+class AdminHeroPromoCardListCreateView(StaffListCreateView):
+    admin_read_capabilities = (CAP_CONTENT_VIEW,)
+    admin_write_capabilities = (CAP_CONTENT_EDIT,)
+    queryset = HeroPromoCard.objects.all()
+    serializer_class = AdminHeroPromoCardSerializer
+
+
+class AdminHeroPromoCardDetailView(StaffRetrieveUpdateDestroyView):
+    admin_read_capabilities = (CAP_CONTENT_VIEW,)
+    admin_write_capabilities = (CAP_CONTENT_EDIT,)
+    queryset = HeroPromoCard.objects.all()
+    serializer_class = AdminHeroPromoCardSerializer
 
 
 class AdminCouponListCreateView(StaffListCreateView):

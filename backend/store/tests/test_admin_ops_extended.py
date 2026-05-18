@@ -1,6 +1,7 @@
 import json
 import os
 from decimal import Decimal
+import tempfile
 from unittest.mock import patch
 
 from django.conf import settings
@@ -8,9 +9,10 @@ from django.test import TestCase, override_settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.utils import timezone
+from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 
-from store.models import BlogPost, Order, Product, ProductStock, Warehouse, Region
+from store.models import BlogPost, HeroPromoCard, Order, Product, ProductStock, Warehouse, Region
 from store.services.admin_roles import ROLE_MANAGER, ensure_default_admin_roles
 
 User = get_user_model()
@@ -148,3 +150,63 @@ class AdminOpsExtendedTestCase(TestCase):
                     get_revalidation_secret(required=True)
             self.assertEqual(get_revalidation_secret(), "")
 
+    def test_hero_promo_card_admin_api_supports_crud_and_image_upload(self):
+        self.api_client.force_authenticate(self.staff_user)
+
+        card = HeroPromoCard.objects.create(
+            title_en="Hero Seed",
+            title_ar="بطاقة رئيسية",
+            subtitle_en="Seed subtitle",
+            subtitle_ar="وصف",
+            cta_en="Shop now",
+            cta_ar="تسوق الآن",
+            href="/collections",
+            image="/enfant/extra-mild-moisture-lotion.jpg",
+            size="small",
+            accent="soft",
+            sort_order=5,
+        )
+
+        list_response = self.api_client.get("/api/admin/hero-promo-cards/")
+        self.assertEqual(list_response.status_code, 200)
+        self.assertIn("results", list_response.data)
+        self.assertEqual(list_response.data["results"][0]["title_en"], "Hero Seed")
+
+        create_response = self.api_client.post(
+            "/api/admin/hero-promo-cards/",
+            {
+                "title_en": "Gift Box Offer",
+                "title_ar": "عرض صندوق الهدايا",
+                "subtitle_en": "Gift bundles",
+                "subtitle_ar": "باقات هدايا",
+                "cta_en": "Explore",
+                "cta_ar": "اكتشف",
+                "href": "/collections",
+                "image": "/enfant/complete-care-cream.jpg",
+                "size": "large",
+                "accent": "gift",
+                "sort_order": 1,
+            },
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        self.assertTrue(HeroPromoCard.objects.filter(title_en="Gift Box Offer").exists())
+
+        with tempfile.TemporaryDirectory() as tmp_media:
+            with override_settings(MEDIA_ROOT=tmp_media):
+                image_bytes = (
+                    b"GIF87a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00"
+                    b"\xff\xff\xff!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00"
+                    b"\x00\x00\x01\x00\x01\x00\x00\x02\x02L\x01\x00;"
+                )
+                upload = SimpleUploadedFile("hero.gif", image_bytes, content_type="image/gif")
+                update_response = self.api_client.patch(
+                    f"/api/admin/hero-promo-cards/{card.id}/",
+                    {"image_file": upload},
+                    format="multipart",
+                )
+
+        self.assertEqual(update_response.status_code, 200)
+        card.refresh_from_db()
+        self.assertTrue(bool(card.image_file))
+        self.assertIn("/media/hero-cards/", update_response.data["image"])
