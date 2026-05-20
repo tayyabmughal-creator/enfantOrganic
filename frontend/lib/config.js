@@ -84,9 +84,15 @@ export const ADMIN_REFRESH_KEY = "enfhant-admin-refresh";
 const DEFAULT_REDIRECT_ORIGINS = [
   // Storefront origin (frontend self-redirects to /payment/success etc.)
   typeof window !== "undefined" ? window.location.origin : "",
-  // Paymob
+  // Paymob — Egypt (accept.*) and Oman (oman.*) regional hosts. The active
+  // host is whatever PAYMOB_BASE_URL points at on the backend; for this store
+  // it is https://oman.paymob.com, so its origin MUST be allow-listed or
+  // safeRedirectUrl() rejects the iframe redirect.
   "https://accept.paymob.com",
   "https://accept.paymobsolutions.com",
+  "https://oman.paymob.com",
+  "https://uae.paymob.com",
+  "https://ksa.paymob.com",
   // PayTabs
   "https://secure.paytabs.com",
   "https://secure.paytabs.sa",
