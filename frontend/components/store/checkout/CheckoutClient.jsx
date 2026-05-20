@@ -377,6 +377,28 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     return { ...cartItems[0].pricing, amount: subtotal, prefix: "" };
   }, [cartItems, subtotal]);
 
+  // The region's expected currency vs. the currency the cart is actually priced
+  // in. They diverge when region repricing fails silently (e.g. the browser API
+  // call is rejected) — leaving "SAR region" showing an OMR total. We surface
+  // this instead of letting the order submit with a mismatched currency.
+  const regionCurrency = useMemo(
+    () => String(backendRegionConfig?.currency_code || "").trim().toUpperCase(),
+    [backendRegionConfig],
+  );
+  const cartCurrency = useMemo(
+    () => String(summaryPricing?.currency_code || "").trim().toUpperCase(),
+    [summaryPricing],
+  );
+  const currencyMismatch = Boolean(regionCurrency && cartCurrency && regionCurrency !== cartCurrency);
+
+  // Providers the region wants to offer but which the backend reports as not
+  // configured (e.g. Paymob for a region whose credentials aren't set yet).
+  // Shown as an explicit notice rather than silently hidden.
+  const unconfiguredEnabledProviders = useMemo(
+    () => providerOptions.filter((item) => item.enabled && !item.configured),
+    [providerOptions],
+  );
+
   const syncMarkerPosition = useCallback((lat, lng, shouldCenter = false) => {
     const nextLat = Number(lat);
     const nextLng = Number(lng);
@@ -780,6 +802,17 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     setError("");
     if (!cartItems.length) {
       setError(isAr ? "سلة التسوق فارغة." : "Your cart is empty.");
+      return;
+    }
+    // Never submit an order whose cart currency doesn't match the selected
+    // region — re-trigger repricing and ask the shopper to retry.
+    if (currencyMismatch) {
+      setError(
+        isAr
+          ? `يتم تحديث الأسعار إلى عملة ${regionCurrency}. يرجى الانتظار لحظة ثم المحاولة مجدداً.`
+          : `Prices are still updating to ${regionCurrency}. Please wait a moment and try again.`,
+      );
+      void refreshCartPricing(locale, region);
       return;
     }
     setSubmitting(true);
@@ -1236,14 +1269,30 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                       : `You will be redirected to the secure ${onlineProviderLabel} payment page after your order is confirmed.`}
                   </p>
                 ) : null}
+
+                {unconfiguredEnabledProviders.length ? (
+                  <p className="payment-online-note payment-online-note--muted">
+                    {isAr
+                      ? `الدفع الإلكتروني عبر ${unconfiguredEnabledProviders.map((p) => p.label).join("، ")} قيد الإعداد لهذه المنطقة وسيتوفر قريباً.`
+                      : `Online payment via ${unconfiguredEnabledProviders.map((p) => p.label).join(", ")} is being set up for this region and will be available soon.`}
+                  </p>
+                ) : null}
               </div>
+
+              {currencyMismatch ? (
+                <p className="form-error">
+                  {isAr
+                    ? `العملة المعروضة (${cartCurrency}) لا تطابق المنطقة المختارة (${regionCurrency}). يتم تحديث الأسعار...`
+                    : `The displayed currency (${cartCurrency}) doesn't match the selected region (${regionCurrency}). Updating prices…`}
+                </p>
+              ) : null}
 
               {error ? <p className="form-error">{error}</p> : null}
 
               <button
                 type="submit"
                 className="primary-action full-width checkout-form-submit--mobile"
-                disabled={submitting || cartItems.length === 0}
+                disabled={submitting || cartItems.length === 0 || currencyMismatch}
               >
                 {submitting ? <span className="btn-spinner" /> : null}
                 {submitLabel}
@@ -1373,7 +1422,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
               type="submit"
               form="checkout-form"
               className="primary-action full-width checkout-aside-submit"
-              disabled={submitting || cartItems.length === 0}
+              disabled={submitting || cartItems.length === 0 || currencyMismatch}
             >
               {submitting ? <span className="btn-spinner" /> : null}
               {submitLabel}

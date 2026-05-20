@@ -76,43 +76,57 @@ class BasePaymentProvider:
 class PaymobPaymentProvider(BasePaymentProvider):
     key = PaymentTransaction.PROVIDER_PAYMOB
 
-    def check_configuration(self):
-        cfg = get_paymob_config()
+    def check_configuration(self, region_code=""):
+        cfg = get_paymob_config(region_code)
+        suffix = (cfg.get("region_code") or "").upper()
+        tag = f"_{suffix}" if suffix and suffix != "OM" else ""
         missing = [
             label for key, label in [
-                ("api_key",        "PAYMOB_API_KEY"),
-                ("integration_id", "PAYMOB_INTEGRATION_ID"),
-                ("iframe_id",      "PAYMOB_IFRAME_ID"),
-                ("hmac_secret",    "PAYMOB_HMAC_SECRET"),
+                ("api_key",        f"PAYMOB_API_KEY{tag}"),
+                ("integration_id", f"PAYMOB_INTEGRATION_ID{tag}"),
+                ("iframe_id",      f"PAYMOB_IFRAME_ID{tag}"),
+                ("hmac_secret",    f"PAYMOB_HMAC_SECRET{tag}"),
             ]
             if not cfg.get(key)
         ]
         if missing:
             raise PaymentProviderConfigError(
-                f"{self.key} is not configured. Missing settings: {', '.join(missing)}"
+                f"{self.key} is not configured for this region. Missing settings: {', '.join(missing)}"
             )
 
     def initiate_payment(self, order):
-        self.check_configuration()
+        self.check_configuration(_order_region_code(order))
         data = paymob.initiate_payment(order)
         data["provider"] = self.key
         data["provider_reference"] = str(data.get("paymob_order_id", ""))
         return data
 
     def verify_webhook(self, request):
-        self.check_configuration()
         received_hmac = request.query_params.get("hmac", "")
         payload = request.data.get("obj", {})
 
         if not isinstance(payload, dict):
             raise PaymentProviderError("Invalid payload.", code="invalid_payload", http_status=400)
 
-        if not paymob.verify_hmac(payload, received_hmac):
+        order_payload = payload.get("order", {})
+        merchant_order_id = order_payload.get("merchant_order_id", "") if isinstance(order_payload, dict) else ""
+
+        # Resolve the order's region to pick the correct per-region HMAC secret.
+        # merchant_order_id only selects which secret to use; the HMAC then
+        # verifies the whole payload, so a spoofed id cannot bypass verification.
+        region_code = ""
+        if merchant_order_id:
+            from ..models import Order  # local import avoids a circular import
+            order = Order.objects.filter(order_number=str(merchant_order_id)).select_related("region").first()
+            if order is not None:
+                region_code = getattr(getattr(order, "region", None), "code", "") or ""
+
+        self.check_configuration(region_code)
+
+        if not paymob.verify_hmac(payload, received_hmac, region_code=region_code):
             raise PaymentProviderError("Invalid HMAC signature.", code="invalid_signature", http_status=400)
 
         paymob_tx_id = str(payload.get("id", "")).strip()
-        order_payload = payload.get("order", {})
-        merchant_order_id = order_payload.get("merchant_order_id", "") if isinstance(order_payload, dict) else ""
         if not merchant_order_id:
             raise PaymentProviderError("Missing merchant_order_id.", code="missing_order_id", http_status=400)
 
@@ -340,6 +354,10 @@ PROVIDER_REGISTRY = {
 }
 
 
+def _order_region_code(order):
+    return getattr(getattr(order, "region", None), "code", "") or ""
+
+
 def _normalize_provider_key(provider):
     return str(provider or "").strip().lower()
 
@@ -394,7 +412,7 @@ def _resolve_order_provider_key(order, requested_provider=None):
 def _check_provider_configuration(provider_key, region=None):
     try:
         if provider_key == PaymentTransaction.PROVIDER_PAYMOB:
-            PaymobPaymentProvider().check_configuration()
+            PaymobPaymentProvider().check_configuration(getattr(region, "code", ""))
         elif provider_key == PaymentTransaction.PROVIDER_PAYTABS:
             region_code = getattr(region, "code", "")
             paytabs.get_region_config(region_code)

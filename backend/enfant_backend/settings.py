@@ -302,6 +302,34 @@ PAYMOB_BASE_URL = os.getenv("PAYMOB_BASE_URL", "https://accept.paymob.com/api")
 PAYMOB_APPLE_PAY_INTEGRATION_ID = os.getenv("PAYMOB_APPLE_PAY_INTEGRATION_ID", "")
 PAYMOB_APPLE_PAY_IFRAME_ID = os.getenv("PAYMOB_APPLE_PAY_IFRAME_ID", "")
 
+# Region-scoped Paymob credentials (OM/SA/AE). Mirrors the PayTabs per-region
+# pattern below. The global PAYMOB_* vars above are treated as the Oman/default
+# config; a region's integration_id/iframe_id/hmac_secret MUST be set per region
+# before Paymob is offered there — they never fall back to another region's
+# integration (so SAR/AED orders are never sent through the OMR integration).
+# api_key is account-level and may be shared, so it falls back to the global key.
+# base_url/currency have safe per-region defaults (not secrets).
+PAYMOB_API_KEY_OM = os.getenv("PAYMOB_API_KEY_OM", "")
+PAYMOB_INTEGRATION_ID_OM = os.getenv("PAYMOB_INTEGRATION_ID_OM", "")
+PAYMOB_IFRAME_ID_OM = os.getenv("PAYMOB_IFRAME_ID_OM", "")
+PAYMOB_HMAC_SECRET_OM = os.getenv("PAYMOB_HMAC_SECRET_OM", "")
+PAYMOB_BASE_URL_OM = os.getenv("PAYMOB_BASE_URL_OM", "https://oman.paymob.com/api")
+PAYMOB_CURRENCY_OM = os.getenv("PAYMOB_CURRENCY_OM", "OMR")
+
+PAYMOB_API_KEY_SA = os.getenv("PAYMOB_API_KEY_SA", "")
+PAYMOB_INTEGRATION_ID_SA = os.getenv("PAYMOB_INTEGRATION_ID_SA", "")
+PAYMOB_IFRAME_ID_SA = os.getenv("PAYMOB_IFRAME_ID_SA", "")
+PAYMOB_HMAC_SECRET_SA = os.getenv("PAYMOB_HMAC_SECRET_SA", "")
+PAYMOB_BASE_URL_SA = os.getenv("PAYMOB_BASE_URL_SA", "https://ksa.paymob.com/api")
+PAYMOB_CURRENCY_SA = os.getenv("PAYMOB_CURRENCY_SA", "SAR")
+
+PAYMOB_API_KEY_AE = os.getenv("PAYMOB_API_KEY_AE", "")
+PAYMOB_INTEGRATION_ID_AE = os.getenv("PAYMOB_INTEGRATION_ID_AE", "")
+PAYMOB_IFRAME_ID_AE = os.getenv("PAYMOB_IFRAME_ID_AE", "")
+PAYMOB_HMAC_SECRET_AE = os.getenv("PAYMOB_HMAC_SECRET_AE", "")
+PAYMOB_BASE_URL_AE = os.getenv("PAYMOB_BASE_URL_AE", "https://uae.paymob.com/api")
+PAYMOB_CURRENCY_AE = os.getenv("PAYMOB_CURRENCY_AE", "AED")
+
 # ── Provider placeholders for GCC payment routing ──────────────────────────
 PAYTABS_PROFILE_ID = os.getenv("PAYTABS_PROFILE_ID", "")
 PAYTABS_SERVER_KEY = os.getenv("PAYTABS_SERVER_KEY", "")

@@ -32,17 +32,70 @@ def _get(db_obj, db_field, settings_key, default=""):
 
 # ── Paymob ────────────────────────────────────────────────────────────────────
 
-def get_paymob_config():
+def _paymob_region_suffix(region_code):
+    """Map a region code to its Paymob settings suffix (OM/SA/AE), or "" for the
+    global/default (Oman) config when the region is unknown/unset."""
+    normalized = str(region_code or "").strip().lower()
+    if normalized == "uae":
+        normalized = "ae"
+    return {"om": "OM", "sa": "SA", "ae": "AE"}.get(normalized, "")
+
+
+def _setting(name, default=""):
+    return str(getattr(django_settings, name, "") or "").strip() or default
+
+
+def get_paymob_config(region_code=""):
+    """Resolve Paymob credentials for a given region.
+
+    Resolution rules:
+      - Oman / default (suffix "" or "OM"): per-region "_OM" env override, then
+        the global PAYMOB_* env vars and DB SiteSettings — i.e. the original
+        single-tenant behavior, fully preserved.
+      - Saudi (SA) / UAE (AE): credentials come ONLY from their "_SA"/"_AE" env
+        vars. integration_id/iframe_id/hmac_secret never fall back to another
+        region, so an OMR integration is never used for a SAR/AED order. The
+        account-level api_key may fall back to the global key. base_url/currency
+        use safe per-region defaults (not secrets).
+    """
     db = _site_settings()
+    suffix = _paymob_region_suffix(region_code)
+    is_default_region = suffix in ("", "OM")
+
+    def region_env(base):
+        return _setting(f"{base}_{suffix}") if suffix else ""
+
+    # api_key is account-level — region override, else global env/DB.
+    api_key = region_env("PAYMOB_API_KEY") or _get(db, "paymob_api_key", "PAYMOB_API_KEY")
+
+    def credential(base, db_field):
+        value = region_env(base)
+        if value:
+            return value
+        # Only the default (Oman) config inherits the global env/DB credential.
+        return _get(db, db_field, base) if is_default_region else ""
+
+    integration_id = credential("PAYMOB_INTEGRATION_ID", "paymob_integration_id")
+    iframe_id = credential("PAYMOB_IFRAME_ID", "paymob_iframe_id")
+    hmac_secret = credential("PAYMOB_HMAC_SECRET", "paymob_hmac_secret")
+
+    if suffix in ("SA", "AE"):
+        base_url = _setting(f"PAYMOB_BASE_URL_{suffix}", "https://accept.paymob.com/api")
+        currency = _setting(f"PAYMOB_CURRENCY_{suffix}", "SAR" if suffix == "SA" else "AED")
+    else:
+        base_url = _get(db, "", "PAYMOB_BASE_URL", "https://accept.paymob.com/api")
+        currency = _get(db, "paymob_currency", "PAYMOB_CURRENCY", "OMR")
+
     return {
-        "api_key":                   _get(db, "paymob_api_key",                   "PAYMOB_API_KEY"),
-        "integration_id":            _get(db, "paymob_integration_id",            "PAYMOB_INTEGRATION_ID"),
-        "iframe_id":                 _get(db, "paymob_iframe_id",                 "PAYMOB_IFRAME_ID"),
-        "hmac_secret":               _get(db, "paymob_hmac_secret",               "PAYMOB_HMAC_SECRET"),
-        "currency":                  _get(db, "paymob_currency",                  "PAYMOB_CURRENCY",   "EGP"),
-        "base_url":                  _get(db, "",                                 "PAYMOB_BASE_URL",   "https://accept.paymob.com/api"),
+        "api_key":                   api_key,
+        "integration_id":            integration_id,
+        "iframe_id":                 iframe_id,
+        "hmac_secret":               hmac_secret,
+        "currency":                  currency,
+        "base_url":                  base_url,
         "apple_pay_integration_id":  _get(db, "paymob_apple_pay_integration_id",  "PAYMOB_APPLE_PAY_INTEGRATION_ID"),
         "apple_pay_iframe_id":       _get(db, "paymob_apple_pay_iframe_id",       "PAYMOB_APPLE_PAY_IFRAME_ID"),
+        "region_code":               (suffix or "").lower(),
     }
 
 

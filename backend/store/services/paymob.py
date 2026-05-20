@@ -53,18 +53,19 @@ class PaymobError(Exception):
     """Raised when a Paymob API call fails or is misconfigured."""
 
 
-def _check_config():
-    cfg = get_paymob_config()
+def _check_config(region_code=""):
+    cfg = get_paymob_config(region_code)
+    suffix = (cfg.get("region_code") or "").upper()
     missing_map = {
-        "api_key":        "PAYMOB_API_KEY",
-        "integration_id": "PAYMOB_INTEGRATION_ID",
-        "iframe_id":      "PAYMOB_IFRAME_ID",
-        "hmac_secret":    "PAYMOB_HMAC_SECRET",
+        "api_key":        f"PAYMOB_API_KEY{('_' + suffix) if suffix and suffix != 'OM' else ''}",
+        "integration_id": f"PAYMOB_INTEGRATION_ID{('_' + suffix) if suffix and suffix != 'OM' else ''}",
+        "iframe_id":      f"PAYMOB_IFRAME_ID{('_' + suffix) if suffix and suffix != 'OM' else ''}",
+        "hmac_secret":    f"PAYMOB_HMAC_SECRET{('_' + suffix) if suffix and suffix != 'OM' else ''}",
     }
     missing = [label for key, label in missing_map.items() if not cfg.get(key)]
     if missing:
         raise PaymobError(
-            f"Paymob is not configured. Missing environment variables: {', '.join(missing)}"
+            f"Paymob is not configured for this region. Missing settings: {', '.join(missing)}"
         )
 
 
@@ -77,10 +78,15 @@ def _get(data: dict, dotted_key: str) -> str:
     return str(value)
 
 
-def get_auth_token() -> str:
-    """Authenticate with Paymob and return a short-lived auth token."""
-    _check_config()
-    cfg = get_paymob_config()
+def get_auth_token(cfg=None) -> str:
+    """Authenticate with Paymob and return a short-lived auth token.
+
+    Accepts an already-resolved config dict so the whole initiation flow uses a
+    single region's credentials/base_url consistently.
+    """
+    cfg = cfg or get_paymob_config()
+    if not cfg.get("api_key"):
+        raise PaymobError("Paymob API key is not configured.")
     try:
         response = requests.post(
             f"{cfg['base_url']}/auth/tokens",
@@ -97,9 +103,9 @@ def get_auth_token() -> str:
         raise PaymobError(f"Paymob authentication failed: {exc}") from exc
 
 
-def create_paymob_order(auth_token: str, amount_cents: int, currency: str, merchant_order_id: str) -> str:
+def create_paymob_order(auth_token: str, amount_cents: int, currency: str, merchant_order_id: str, cfg=None) -> str:
     """Register an order with Paymob and return the Paymob order ID."""
-    cfg = get_paymob_config()
+    cfg = cfg or get_paymob_config()
     try:
         response = requests.post(
             f"{cfg['base_url']}/ecommerce/orders",
@@ -131,9 +137,10 @@ def create_payment_key(
     billing_data: dict,
     *,
     integration_id: int = None,
+    cfg=None,
 ) -> str:
     """Request a payment key (one-time token) for the Paymob iframe."""
-    cfg = get_paymob_config()
+    cfg = cfg or get_paymob_config()
     try:
         response = requests.post(
             f"{cfg['base_url']}/acceptance/payment_keys",
@@ -190,15 +197,16 @@ def initiate_payment(order) -> dict:
       - iframe_url: the URL to redirect the user to
       - paymob_order_id: the Paymob-side order ID (store this for reconciliation)
     """
-    _check_config()
-    cfg = get_paymob_config()
+    region_code = getattr(getattr(order, "region", None), "code", "")
+    _check_config(region_code)
+    cfg = get_paymob_config(region_code)
     amount_cents = int(order.grand_total * 100)
     currency = order.currency_code or cfg["currency"]
 
-    auth_token = get_auth_token()
-    paymob_order_id = create_paymob_order(auth_token, amount_cents, currency, order.order_number)
+    auth_token = get_auth_token(cfg)
+    paymob_order_id = create_paymob_order(auth_token, amount_cents, currency, order.order_number, cfg=cfg)
     billing_data = build_billing_data(order)
-    payment_key = create_payment_key(auth_token, amount_cents, currency, paymob_order_id, billing_data)
+    payment_key = create_payment_key(auth_token, amount_cents, currency, paymob_order_id, billing_data, cfg=cfg)
 
     iframe_url = (
         f"{cfg['base_url']}/acceptance/iframes/{cfg['iframe_id']}"
@@ -206,9 +214,10 @@ def initiate_payment(order) -> dict:
     )
 
     logger.info(
-        "Paymob payment initiated: order=%s paymob_order=%s",
+        "Paymob payment initiated: order=%s paymob_order=%s region=%s",
         order.order_number,
         paymob_order_id,
+        region_code or "default",
     )
 
     return {
@@ -279,14 +288,16 @@ def initiate_apple_pay_payment(order) -> dict:
     }
 
 
-def verify_hmac(transaction_data: dict, received_hmac: str) -> bool:
+def verify_hmac(transaction_data: dict, received_hmac: str, region_code="") -> bool:
     """
     Verify the HMAC-SHA512 signature on a Paymob transaction callback.
 
     Paymob concatenates specific fields in a fixed order and computes
-    HMAC-SHA512 with the HMAC secret as the key.
+    HMAC-SHA512 with the HMAC secret as the key. The secret is region-specific:
+    the caller passes the region of the order the callback refers to so the
+    correct per-region secret is used (defaults to the global/Oman secret).
     """
-    cfg = get_paymob_config()
+    cfg = get_paymob_config(region_code)
     if not cfg["hmac_secret"]:
         logger.warning("PAYMOB_HMAC_SECRET is not set — skipping HMAC verification.")
         return False

@@ -1917,6 +1917,47 @@ class CheckoutAndPermsTestCase(TestCase):
         self.assertEqual(tx.provider_reference, "pm-order-123")
         self.assertEqual(tx.status, PaymentTransaction.STATUS_PENDING)
 
+    @override_settings(
+        PAYMOB_API_KEY="global-key",
+        PAYMOB_INTEGRATION_ID="65592",
+        PAYMOB_IFRAME_ID="60088",
+        PAYMOB_HMAC_SECRET="global-hmac",
+        PAYMOB_INTEGRATION_ID_SA="",
+        PAYMOB_IFRAME_ID_SA="",
+        PAYMOB_HMAC_SECRET_SA="",
+    )
+    def test_paymob_config_oman_uses_global_sa_requires_own_creds(self):
+        from store.services.payment_config import get_paymob_config
+
+        om = get_paymob_config("om")
+        self.assertEqual(om["integration_id"], "65592")
+        self.assertEqual(om["hmac_secret"], "global-hmac")
+
+        # Saudi must NOT borrow the Oman integration/iframe/hmac.
+        sa = get_paymob_config("sa")
+        self.assertEqual(sa["integration_id"], "")
+        self.assertEqual(sa["iframe_id"], "")
+        self.assertEqual(sa["hmac_secret"], "")
+        self.assertEqual(sa["currency"], "SAR")
+        self.assertEqual(sa["base_url"], "https://ksa.paymob.com/api")
+        # api_key is account-level and may be shared.
+        self.assertEqual(sa["api_key"], "global-key")
+
+    @override_settings(
+        PAYMOB_API_KEY="global-key",
+        PAYMOB_INTEGRATION_ID_SA="9001",
+        PAYMOB_IFRAME_ID_SA="9002",
+        PAYMOB_HMAC_SECRET_SA="sa-hmac",
+    )
+    def test_paymob_config_sa_uses_region_creds_when_present(self):
+        from store.services.payment_config import get_paymob_config
+
+        sa = get_paymob_config("sa")
+        self.assertEqual(sa["integration_id"], "9001")
+        self.assertEqual(sa["iframe_id"], "9002")
+        self.assertEqual(sa["hmac_secret"], "sa-hmac")
+        self.assertEqual(sa["currency"], "SAR")
+
     def test_payment_initiate_fails_when_region_provider_is_disabled(self):
         self.region.payment_enabled_providers = ["paymob"]
         self.region.default_payment_provider = "paymob"
