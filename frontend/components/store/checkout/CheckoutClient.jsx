@@ -8,6 +8,7 @@ import Icon from "@/components/icons/Icon";
 import { buildAnalyticsItems, pushDataLayerEvent } from "@/lib/analytics";
 import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
 import { API_BASE_URL as CONFIG_API_BASE_URL, CUSTOMER_TOKEN_KEY, safeRedirectUrl } from "@/lib/config";
+import { readJson } from "@/lib/http";
 
 const API_BASE_URL = CONFIG_API_BASE_URL;
 const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
@@ -500,7 +501,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
             items: checkoutItemsPayload(),
           }),
         });
-        const data = await response.json();
+        const data = await readJson(response, { isAr });
         if (!response.ok) throw new Error(data.detail || JSON.stringify(data));
         if (!data.valid) {
           setCouponPreview(null);
@@ -578,7 +579,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
           },
         });
         if (!response.ok) return;
-        const data = await response.json();
+        const data = await readJson(response, { isAr });
         if (!isMounted || !Array.isArray(data)) return;
         setSavedAddresses(data);
         const preferred = data.find((item) => item.is_default) || data[0];
@@ -856,7 +857,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await response.json();
+      const data = await readJson(response, { isAr });
       if (!response.ok) throw new Error(data.detail || JSON.stringify(data));
 
       clearCart();
@@ -870,7 +871,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
             provider: activeOnlineProvider,
           }),
         });
-        const payData = await payRes.json();
+        const payData = await readJson(payRes, { isAr });
         if (!payRes.ok) throw new Error(payData.error || "Payment initiation failed. Please try again.");
         // Validate redirect against the trusted payment-origin allowlist.
         const candidate = payData.redirect_url || payData.iframe_url || "";
