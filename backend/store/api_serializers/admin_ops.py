@@ -12,6 +12,7 @@ from ..models import (
     HeroPromoCard,
     Order,
     PaymentTransaction,
+    PaymobRegionConfig,
     Product,
     ProductPrice,
     ProductStock,
@@ -409,9 +410,151 @@ class AdminProductStockSerializer(serializers.ModelSerializer):
 
 
 class AdminSiteSettingsSerializer(serializers.ModelSerializer):
+    """Site settings for the admin panel.
+
+    The legacy GLOBAL Paymob credential fields (kept only as the Oman/default
+    fallback behind the per-region PaymobRegionConfig system) are handled like
+    secrets:
+      - they are WRITE-ONLY — the raw value is never returned to the browser;
+      - a read-only ``<field>_set`` boolean reports whether a value is stored;
+      - a blank/null submission is IGNORED so it never erases a saved value;
+      - an explicit ``clear_<field>: true`` flag erases that one field.
+    """
+
+    # Treated as credential-like: never echoed, blank-preserving on write.
+    PAYMOB_SECRET_FIELDS = (
+        "paymob_api_key",
+        "paymob_hmac_secret",
+        "paymob_integration_id",
+        "paymob_iframe_id",
+        "paymob_apple_pay_integration_id",
+        "paymob_apple_pay_iframe_id",
+    )
+
+    paymob_api_key = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    paymob_hmac_secret = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    paymob_integration_id = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    paymob_iframe_id = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    paymob_apple_pay_integration_id = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    paymob_apple_pay_iframe_id = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+
+    paymob_api_key_set = serializers.SerializerMethodField()
+    paymob_hmac_secret_set = serializers.SerializerMethodField()
+    paymob_integration_id_set = serializers.SerializerMethodField()
+    paymob_iframe_id_set = serializers.SerializerMethodField()
+    paymob_apple_pay_integration_id_set = serializers.SerializerMethodField()
+    paymob_apple_pay_iframe_id_set = serializers.SerializerMethodField()
+
+    clear_paymob_api_key = serializers.BooleanField(write_only=True, required=False, default=False)
+    clear_paymob_hmac_secret = serializers.BooleanField(write_only=True, required=False, default=False)
+    clear_paymob_integration_id = serializers.BooleanField(write_only=True, required=False, default=False)
+    clear_paymob_iframe_id = serializers.BooleanField(write_only=True, required=False, default=False)
+    clear_paymob_apple_pay_integration_id = serializers.BooleanField(write_only=True, required=False, default=False)
+    clear_paymob_apple_pay_iframe_id = serializers.BooleanField(write_only=True, required=False, default=False)
+
     class Meta:
         model = SiteSettings
         fields = "__all__"
+
+    def _is_set(self, obj, field):
+        return bool(str(getattr(obj, field, "") or "").strip())
+
+    def get_paymob_api_key_set(self, obj):
+        return self._is_set(obj, "paymob_api_key")
+
+    def get_paymob_hmac_secret_set(self, obj):
+        return self._is_set(obj, "paymob_hmac_secret")
+
+    def get_paymob_integration_id_set(self, obj):
+        return self._is_set(obj, "paymob_integration_id")
+
+    def get_paymob_iframe_id_set(self, obj):
+        return self._is_set(obj, "paymob_iframe_id")
+
+    def get_paymob_apple_pay_integration_id_set(self, obj):
+        return self._is_set(obj, "paymob_apple_pay_integration_id")
+
+    def get_paymob_apple_pay_iframe_id_set(self, obj):
+        return self._is_set(obj, "paymob_apple_pay_iframe_id")
+
+    def _apply_secret_directives(self, validated_data, *, creating):
+        """Honor clear_* flags and never overwrite a stored secret with a blank."""
+        for field in self.PAYMOB_SECRET_FIELDS:
+            if validated_data.pop(f"clear_{field}", False):
+                validated_data[field] = ""
+                continue
+            if field in validated_data:
+                value = validated_data.get(field)
+                if value is None or str(value).strip() == "":
+                    # Blank submission: keep the existing value (empty on create).
+                    if creating:
+                        validated_data[field] = ""
+                    else:
+                        validated_data.pop(field, None)
+        return validated_data
+
+    def create(self, validated_data):
+        self._apply_secret_directives(validated_data, creating=True)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        self._apply_secret_directives(validated_data, creating=False)
+        return super().update(instance, validated_data)
+
+
+class AdminPaymobRegionConfigSerializer(serializers.ModelSerializer):
+    """Per-region Paymob credentials for the admin Payment Setup UI.
+
+    Secrets (api_key, hmac_secret) are write-only: the raw value is never sent
+    back to the frontend — only a boolean "is set" indicator. Blank credential
+    fields are ignored on write so they never overwrite a working value (DB or
+    env fallback); send a value only when you intend to change it.
+    """
+
+    region_label    = serializers.CharField(source="get_region_code_display", read_only=True)
+    api_key_set     = serializers.SerializerMethodField(read_only=True)
+    hmac_secret_set = serializers.SerializerMethodField(read_only=True)
+    # Secrets accepted on write, never echoed back.
+    api_key     = serializers.CharField(write_only=True, required=False, allow_blank=True, default="")
+    hmac_secret = serializers.CharField(write_only=True, required=False, allow_blank=True, default="")
+
+    # Credential fields whose blank values must NOT overwrite stored/env config.
+    _BLANK_PRESERVING_FIELDS = (
+        "api_key", "integration_id", "iframe_id", "hmac_secret", "base_url", "currency",
+    )
+
+    class Meta:
+        model = PaymobRegionConfig
+        fields = (
+            "region_code",
+            "region_label",
+            "enabled",
+            "integration_id",
+            "iframe_id",
+            "base_url",
+            "currency",
+            "api_key",
+            "hmac_secret",
+            "api_key_set",
+            "hmac_secret_set",
+        )
+
+    def get_api_key_set(self, obj):
+        return bool((obj.api_key or "").strip())
+
+    def get_hmac_secret_set(self, obj):
+        return bool((obj.hmac_secret or "").strip())
+
+    def _strip_blank_credentials(self, validated_data):
+        """Drop blank credential fields so they don't overwrite existing values."""
+        for field in self._BLANK_PRESERVING_FIELDS:
+            if field in validated_data and not str(validated_data.get(field) or "").strip():
+                validated_data.pop(field)
+        return validated_data
+
+    def update(self, instance, validated_data):
+        self._strip_blank_credentials(validated_data)
+        return super().update(instance, validated_data)
 
 
 class AdminBlogPostSerializer(serializers.ModelSerializer):

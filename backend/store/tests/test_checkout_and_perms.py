@@ -1024,6 +1024,120 @@ class CheckoutAndPermsTestCase(TestCase):
         self.assertEqual((audit_log.before_snapshot or {}).get("announcement_en"), "Old EN")
         self.assertEqual((audit_log.after_snapshot or {}).get("announcement_en"), "Updated EN")
 
+    def _site_settings_with_paymob(self):
+        return SiteSettings.objects.create(
+            brand_name="Enfant Organics",
+            announcement_en="EN", announcement_ar="ع",
+            footer_about_en="A", footer_about_ar="ع",
+            newsletter_title_en="N", newsletter_title_ar="ن",
+            newsletter_subtitle_en="S", newsletter_subtitle_ar="س",
+            instagram_title_en="I", instagram_title_ar="ا",
+            instagram_cta_en="F", instagram_cta_ar="ت",
+            blog_title_en="B", blog_title_ar="م",
+            free_gift_title_en="G", free_gift_title_ar="ه",
+            free_gift_subtitle_en="GS", free_gift_subtitle_ar="و",
+            why_choose_links=[], policy_links=[], static_links=[],
+            paymob_api_key="SECRET-API-KEY",
+            paymob_hmac_secret="SECRET-HMAC",
+            paymob_integration_id="65592",
+            paymob_iframe_id="60088",
+        )
+
+    def test_admin_settings_get_never_exposes_raw_paymob_secrets(self):
+        user = self._create_staff_user("settings-paymob-get", role_name=ROLE_MANAGER)
+        self._site_settings_with_paymob()
+        self.api_client.force_authenticate(user)
+
+        response = self.api_client.get("/api/admin/settings/")
+        self.assertEqual(response.status_code, 200)
+        data = response.data
+
+        for raw in ("paymob_api_key", "paymob_hmac_secret", "paymob_integration_id", "paymob_iframe_id"):
+            self.assertNotIn(raw, data, f"{raw} must not be returned to the browser")
+        self.assertTrue(data.get("paymob_api_key_set"))
+        self.assertTrue(data.get("paymob_hmac_secret_set"))
+        self.assertTrue(data.get("paymob_integration_id_set"))
+        self.assertTrue(data.get("paymob_iframe_id_set"))
+        # The raw secret values must not leak anywhere in the response.
+        blob = json.dumps(data, default=str)
+        self.assertNotIn("SECRET-API-KEY", blob)
+        self.assertNotIn("SECRET-HMAC", blob)
+
+    def test_admin_settings_blank_paymob_does_not_erase_secret(self):
+        user = self._create_staff_user("settings-paymob-blank", role_name=ROLE_MANAGER)
+        self._site_settings_with_paymob()
+        self.api_client.force_authenticate(user)
+
+        response = self.api_client.patch(
+            "/api/admin/settings/",
+            {"paymob_api_key": "", "paymob_hmac_secret": "", "announcement_en": "x"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        settings = SiteSettings.objects.first()
+        self.assertEqual(settings.paymob_api_key, "SECRET-API-KEY")
+        self.assertEqual(settings.paymob_hmac_secret, "SECRET-HMAC")
+
+    def test_admin_settings_new_paymob_value_updates(self):
+        user = self._create_staff_user("settings-paymob-update", role_name=ROLE_MANAGER)
+        self._site_settings_with_paymob()
+        self.api_client.force_authenticate(user)
+
+        response = self.api_client.patch(
+            "/api/admin/settings/",
+            {"paymob_api_key": "NEW-API-KEY"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        settings = SiteSettings.objects.first()
+        self.assertEqual(settings.paymob_api_key, "NEW-API-KEY")
+        self.assertEqual(settings.paymob_hmac_secret, "SECRET-HMAC")  # untouched
+
+    def test_admin_settings_clear_flag_clears_only_requested_secret(self):
+        user = self._create_staff_user("settings-paymob-clear", role_name=ROLE_MANAGER)
+        self._site_settings_with_paymob()
+        self.api_client.force_authenticate(user)
+
+        response = self.api_client.patch(
+            "/api/admin/settings/",
+            {"clear_paymob_api_key": True},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        settings = SiteSettings.objects.first()
+        self.assertEqual(settings.paymob_api_key, "")            # cleared
+        self.assertEqual(settings.paymob_hmac_secret, "SECRET-HMAC")  # untouched
+        self.assertEqual(settings.paymob_integration_id, "65592")     # untouched
+
+    def test_admin_settings_audit_redacts_paymob_secrets(self):
+        user = self._create_staff_user("settings-paymob-audit", role_name=ROLE_MANAGER)
+        settings = self._site_settings_with_paymob()
+        self.api_client.force_authenticate(user)
+
+        response = self.api_client.patch(
+            "/api/admin/settings/",
+            {"paymob_api_key": "ANOTHER-KEY"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        audit_log = (
+            AdminAuditLog.objects.filter(
+                action=AdminAuditLog.ACTION_SITE_SETTINGS_CHANGED,
+                resource_type="site_settings",
+                resource_id=str(settings.id),
+            )
+            .order_by("-id")
+            .first()
+        )
+        self.assertIsNotNone(audit_log)
+        blob = json.dumps(
+            {"before": audit_log.before_snapshot, "after": audit_log.after_snapshot},
+            default=str,
+        )
+        self.assertNotIn("SECRET-API-KEY", blob)
+        self.assertNotIn("SECRET-HMAC", blob)
+        self.assertNotIn("ANOTHER-KEY", blob)
+
     def test_vat_om_5_percent_without_shipping_tax(self):
         TaxRate.objects.create(
             region=self.region,
@@ -1957,6 +2071,70 @@ class CheckoutAndPermsTestCase(TestCase):
         self.assertEqual(sa["iframe_id"], "9002")
         self.assertEqual(sa["hmac_secret"], "sa-hmac")
         self.assertEqual(sa["currency"], "SAR")
+
+    @override_settings(
+        PAYMOB_API_KEY="global-key",
+        PAYMOB_INTEGRATION_ID_SA="",
+        PAYMOB_IFRAME_ID_SA="",
+        PAYMOB_HMAC_SECRET_SA="",
+    )
+    def test_paymob_config_db_row_overrides_env_per_region(self):
+        from store.models import PaymobRegionConfig
+        from store.services.payment_config import get_paymob_config, paymob_config_is_complete
+
+        # No row yet → Saudi is setup-pending (no env creds either).
+        sa = get_paymob_config("sa")
+        self.assertFalse(paymob_config_is_complete(sa))
+
+        # Admin enters SA credentials in the panel → becomes active, no redeploy.
+        PaymobRegionConfig.objects.create(
+            region_code="SA",
+            api_key="sa-db-key",
+            integration_id="7001",
+            iframe_id="7002",
+            hmac_secret="sa-db-hmac",
+            enabled=True,
+        )
+        sa = get_paymob_config("sa")
+        self.assertEqual(sa["api_key"], "sa-db-key")
+        self.assertEqual(sa["integration_id"], "7001")
+        self.assertEqual(sa["iframe_id"], "7002")
+        self.assertEqual(sa["hmac_secret"], "sa-db-hmac")
+        self.assertTrue(paymob_config_is_complete(sa))
+
+    @override_settings(
+        PAYMOB_API_KEY="global-key",
+        PAYMOB_INTEGRATION_ID="65592",
+        PAYMOB_IFRAME_ID="60088",
+        PAYMOB_HMAC_SECRET="global-hmac",
+    )
+    def test_paymob_config_blank_db_row_does_not_break_env(self):
+        from store.models import PaymobRegionConfig
+        from store.services.payment_config import get_paymob_config, paymob_config_is_complete
+
+        # A blank Oman row must not overwrite working env credentials.
+        PaymobRegionConfig.objects.create(region_code="OM", enabled=True)
+        om = get_paymob_config("om")
+        self.assertEqual(om["integration_id"], "65592")
+        self.assertEqual(om["hmac_secret"], "global-hmac")
+        self.assertTrue(paymob_config_is_complete(om))
+
+    @override_settings(
+        PAYMOB_API_KEY="global-key",
+        PAYMOB_INTEGRATION_ID="65592",
+        PAYMOB_IFRAME_ID="60088",
+        PAYMOB_HMAC_SECRET="global-hmac",
+    )
+    def test_paymob_config_disabled_flag_turns_region_off(self):
+        from store.models import PaymobRegionConfig
+        from store.services.payment_config import get_paymob_config, paymob_config_is_complete
+
+        PaymobRegionConfig.objects.create(region_code="OM", enabled=False)
+        om = get_paymob_config("om")
+        self.assertFalse(om["enabled"])
+        # Credentials still resolve from env, but the region is not complete.
+        self.assertEqual(om["integration_id"], "65592")
+        self.assertFalse(paymob_config_is_complete(om))
 
     def test_payment_initiate_fails_when_region_provider_is_disabled(self):
         self.region.payment_enabled_providers = ["paymob"]

@@ -9,9 +9,43 @@ from django.db.models.fields.files import FieldFile
 from ..models import AdminAuditLog
 
 
+# Substrings that mark a dict key as holding a secret. Matching values are
+# replaced with a presence flag ("[set]"/"[empty]") in audit snapshots so raw
+# credentials (Paymob/PayTabs/Thawani/etc.) are never persisted to the log.
+# Public keys (publishable/public) are explicitly excluded.
+_SENSITIVE_KEY_HINTS = (
+    "secret",
+    "password",
+    "passwd",
+    "hmac",
+    "api_key",
+    "apikey",
+    "access_token",
+    "auth_key",
+    "server_key",
+    "private",
+    "sha_request",
+    "sha_response",
+)
+
+
+def _is_sensitive_key(key):
+    lowered = str(key).lower()
+    if "publishable" in lowered or "public" in lowered:
+        return False
+    return any(hint in lowered for hint in _SENSITIVE_KEY_HINTS)
+
+
 def serialize_for_audit(value):
     if isinstance(value, dict):
-        return {str(key): serialize_for_audit(item) for key, item in value.items()}
+        result = {}
+        for key, item in value.items():
+            if _is_sensitive_key(key):
+                has_value = item not in (None, "", b"")
+                result[str(key)] = "[set]" if has_value else "[empty]"
+            else:
+                result[str(key)] = serialize_for_audit(item)
+        return result
     if isinstance(value, (list, tuple, set)):
         return [serialize_for_audit(item) for item in value]
     if isinstance(value, Decimal):
