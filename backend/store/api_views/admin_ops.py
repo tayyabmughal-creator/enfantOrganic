@@ -28,6 +28,7 @@ from ..models import (
     NotificationLog,
     Order,
     PaymentTransaction,
+    PaymobRegionConfig,
     Product,
     ProductStock,
     PushDevice,
@@ -50,6 +51,7 @@ from ..api_serializers.admin_ops import (
     AdminHeroPromoCardSerializer,
     AdminOrderSerializer,
     AdminPaymentTransactionSerializer,
+    AdminPaymobRegionConfigSerializer,
     AdminProductSerializer,
     AdminRegionSerializer,
     AdminReturnRequestSerializer,
@@ -1455,6 +1457,100 @@ class AdminSettingsView(APIView):
             after_snapshot=snapshot_instance(updated_settings),
         )
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+def _paymob_audit_snapshot(row):
+    """Audit snapshot for a PaymobRegionConfig that never records raw secrets."""
+    if row is None:
+        return None
+    return {
+        "region_code":    row.region_code,
+        "enabled":        row.enabled,
+        "integration_id": row.integration_id,
+        "iframe_id":      row.iframe_id,
+        "base_url":       row.base_url,
+        "currency":       row.currency,
+        "api_key_set":     bool((row.api_key or "").strip()),
+        "hmac_secret_set": bool((row.hmac_secret or "").strip()),
+    }
+
+
+class AdminPaymobRegionConfigView(APIView):
+    """Region-aware Paymob credentials, manageable from the admin panel.
+
+    GET   → status of all supported regions (Oman / Saudi / UAE), including
+            whether each is active, disabled, or setup-pending. Secrets are
+            never returned — only boolean "is set" / "is resolved" indicators.
+    PATCH → update a single region (body must include ``region_code``). Blank
+            credential fields are ignored so they never overwrite a working
+            value (DB or env fallback).
+    """
+
+    permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
+    admin_read_capabilities = (CAP_CONTENT_VIEW,)
+    admin_write_capabilities = (CAP_CONTENT_EDIT,)
+    serializer_class = AdminPaymobRegionConfigSerializer
+
+    def _region_payload(self, region_code):
+        from ..services.payment_config import get_paymob_config, paymob_config_is_complete
+
+        row = PaymobRegionConfig.objects.filter(region_code=region_code).first()
+        instance = row or PaymobRegionConfig(region_code=region_code)
+        data = AdminPaymobRegionConfigSerializer(instance).data
+
+        # Resolved view = what the gateway would actually use (DB layered over
+        # env). Exposes only booleans for secrets, never the values themselves.
+        cfg = get_paymob_config(region_code.lower())
+        configured = paymob_config_is_complete(cfg)
+        enabled = cfg.get("enabled", True)
+        data["resolved"] = {
+            "enabled":            enabled,
+            "currency":           cfg.get("currency", ""),
+            "base_url":           cfg.get("base_url", ""),
+            "has_api_key":        bool(cfg.get("api_key")),
+            "has_integration_id": bool(cfg.get("integration_id")),
+            "has_iframe_id":      bool(cfg.get("iframe_id")),
+            "has_hmac_secret":    bool(cfg.get("hmac_secret")),
+        }
+        data["configured"] = configured
+        data["available"] = bool(configured)
+        if not enabled:
+            data["status"] = "disabled"
+        elif configured:
+            data["status"] = "active"
+        else:
+            data["status"] = "setup_pending"
+        data["has_db_row"] = row is not None
+        return data
+
+    def get(self, request):
+        regions = [self._region_payload(code) for code in PaymobRegionConfig.DEFAULT_CURRENCY.keys()]
+        return Response({"regions": regions})
+
+    def patch(self, request):
+        region_code = str(request.data.get("region_code") or "").strip().upper()
+        valid_codes = {choice[0] for choice in PaymobRegionConfig.REGION_CHOICES}
+        if region_code not in valid_codes:
+            return Response(
+                {"detail": f"region_code must be one of {sorted(valid_codes)}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        row, _created = PaymobRegionConfig.objects.get_or_create(region_code=region_code)
+        before_snapshot = _paymob_audit_snapshot(row)
+        serializer = AdminPaymobRegionConfigSerializer(row, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        updated = serializer.save()
+        log_admin_action(
+            request=request,
+            actor=request.user,
+            action=AdminAuditLog.ACTION_SITE_SETTINGS_CHANGED,
+            resource_type="paymob_region_config",
+            resource_id=region_code,
+            before_snapshot=before_snapshot,
+            after_snapshot=_paymob_audit_snapshot(updated),
+        )
+        return Response(self._region_payload(region_code), status=status.HTTP_200_OK)
 
 
 class AdminGiftCardListCreateView(StaffListCreateView):

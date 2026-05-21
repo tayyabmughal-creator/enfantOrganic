@@ -389,6 +389,51 @@ class SiteSettings(models.Model):
         return self.brand_name
 
 
+class PaymobRegionConfig(models.Model):
+    """Per-region Paymob credentials, manageable from the admin panel.
+
+    One row per supported region (Oman / Saudi Arabia / UAE). Each region needs
+    its own Paymob-supported integration, so credentials never cross regions.
+    Blank fields fall back to environment variables in
+    ``store.services.payment_config.get_paymob_config`` — saving a blank value
+    here never overwrites or disables a working env-based config.
+    """
+
+    REGION_OM = "OM"
+    REGION_SA = "SA"
+    REGION_AE = "AE"
+    REGION_CHOICES = [
+        (REGION_OM, "Oman (OMR)"),
+        (REGION_SA, "Saudi Arabia (SAR)"),
+        (REGION_AE, "United Arab Emirates (AED)"),
+    ]
+    DEFAULT_CURRENCY = {REGION_OM: "OMR", REGION_SA: "SAR", REGION_AE: "AED"}
+
+    region_code    = models.CharField(max_length=2, choices=REGION_CHOICES, unique=True)
+    enabled        = models.BooleanField(
+        default=True,
+        help_text="When off, Paymob is treated as disabled for this region even if credentials exist.",
+    )
+    api_key        = models.CharField(max_length=500, blank=True, default="")
+    integration_id = models.CharField(max_length=20,  blank=True, default="")
+    iframe_id      = models.CharField(max_length=20,  blank=True, default="")
+    hmac_secret    = models.CharField(max_length=200, blank=True, default="")
+    base_url       = models.CharField(max_length=200, blank=True, default="")
+    currency       = models.CharField(max_length=5,   blank=True, default="")
+
+    class Meta:
+        verbose_name = "Paymob region config"
+        verbose_name_plural = "Paymob region configs"
+        ordering = ("region_code",)
+
+    def save(self, *args, **kwargs):
+        self.region_code = (self.region_code or "").strip().upper()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Paymob · {self.get_region_code_display()}"
+
+
 class TaxRule(models.Model):
     region = models.ForeignKey(
         "Region",

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { AdminEmpty } from "./SharedUI";
 
 const REPORT_TYPES = ["orders", "customers", "inventory", "sales", "abandoned-carts"];
@@ -838,24 +838,6 @@ export function PlaceholderModule({ config }) {
 
 const PAYMENT_GATEWAYS = [
   {
-    key: "paymob",
-    name: "Paymob",
-    logo: "PM",
-    color: "#0f4c8c",
-    desc: "Card payments for Egypt. Supports MADA, Apple Pay, and wallets.",
-    regions: ["EG"],
-    requiredKeys: ["paymob_api_key", "paymob_integration_id", "paymob_iframe_id", "paymob_hmac_secret"],
-    fields: [
-      { key: "paymob_api_key",           label: "API Key",                    type: "password", placeholder: "ZXhhbXBsZUtleQ==",   hint: "Paymob Dashboard → Developers → API Key" },
-      { key: "paymob_integration_id",    label: "Integration ID",             type: "text",     placeholder: "123456",              hint: "Payment Integrations page — the numeric ID" },
-      { key: "paymob_iframe_id",         label: "iFrame ID",                  type: "text",     placeholder: "654321",              hint: "iFrame page — the numeric ID" },
-      { key: "paymob_hmac_secret",       label: "HMAC Secret",                type: "password", placeholder: "abc123def456...",      hint: "Webhook HMAC secret for signature verification" },
-      { key: "paymob_currency",          label: "Currency",                   type: "text",     placeholder: "EGP",                 hint: "Default currency code (e.g. EGP). Leave blank to use order currency." },
-      { key: "paymob_apple_pay_integration_id", label: "Apple Pay Integration ID", type: "text", placeholder: "789012",            hint: "Optional — Apple Pay integration ID" },
-      { key: "paymob_apple_pay_iframe_id",      label: "Apple Pay iFrame ID",      type: "text", placeholder: "210987",            hint: "Optional — Apple Pay iFrame ID" },
-    ],
-  },
-  {
     key: "paytabs",
     name: "PayTabs",
     logo: "PT",
@@ -928,7 +910,180 @@ const PAYMENT_GATEWAYS = [
   },
 ];
 
-export function PaymentGatewaysView({ data, canEdit, onPatch }) {
+// ─── Paymob (region-aware) ────────────────────────────────────────────────────
+// Paymob requires a separate Paymob-supported integration per region, so each
+// region (Oman / Saudi / UAE) has its own credentials. Values entered here are
+// stored in the database and override environment-variable fallbacks; blank
+// fields never overwrite a working value. Secrets are write-only — the server
+// returns only an "is set" indicator, never the stored secret.
+
+const PAYMOB_REGIONS_META = [
+  { code: "OM", name: "Oman",                  currency: "OMR", color: "#0f4c8c" },
+  { code: "SA", name: "Saudi Arabia",          currency: "SAR", color: "#13803a" },
+  { code: "AE", name: "United Arab Emirates",  currency: "AED", color: "#7a1f2b" },
+];
+
+const PAYMOB_FIELDS = [
+  { key: "api_key",        label: "API Key",        type: "password", secret: true,  hint: "Paymob Dashboard → Settings → Account Info → API Key" },
+  { key: "integration_id", label: "Integration ID", type: "text",                    hint: "Paymob → Developers → Payment Integrations — the numeric ID for this region" },
+  { key: "iframe_id",      label: "iFrame ID",      type: "text",                    hint: "Paymob → Developers → iFrames — the numeric ID" },
+  { key: "hmac_secret",    label: "HMAC Secret",    type: "password", secret: true,  hint: "Paymob → Settings → Account Info → HMAC — used to verify callbacks" },
+  { key: "base_url",       label: "API Base URL",   type: "text",                    hint: "Leave blank to use the default https://accept.paymob.com/api" },
+  { key: "currency",       label: "Currency",       type: "text",                    hint: "Currency code for this region (e.g. OMR / SAR / AED)" },
+];
+
+function paymobStatusMeta(status) {
+  if (status === "active")   return { label: "Active",        cls: "connected" };
+  if (status === "disabled") return { label: "Disabled",      cls: "idle" };
+  return { label: "Setup pending", cls: "idle" };
+}
+
+function PaymobRegionCard({ region, canEdit, request, onSaved }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const meta = PAYMOB_REGIONS_META.find((r) => r.code === region.region_code) || {};
+  const st = paymobStatusMeta(region.status);
+  const resolved = region.resolved || {};
+  const envBacked = region.status === "active" && !region.has_db_row;
+
+  function startEdit() {
+    setError("");
+    setDraft({
+      enabled: region.enabled !== false,
+      integration_id: region.integration_id || "",
+      iframe_id: region.iframe_id || "",
+      base_url: region.base_url || "",
+      currency: region.currency || "",
+      api_key: "",       // secrets are never prefilled
+      hmac_secret: "",
+    });
+    setOpen(true);
+  }
+
+  async function save() {
+    setSaving(true);
+    setError("");
+    try {
+      const body = { region_code: region.region_code, enabled: !!draft.enabled };
+      PAYMOB_FIELDS.forEach((f) => {
+        const v = (draft[f.key] ?? "").toString();
+        // Secrets are sent only when the admin typed a value, so a blank field
+        // never overwrites a saved or env-provided credential.
+        if (f.secret) { if (v.trim()) body[f.key] = v; }
+        else body[f.key] = v;
+      });
+      await request("/admin/paymob-regions/", { method: "PATCH", body: JSON.stringify(body) });
+      setOpen(false);
+      await onSaved();
+    } catch (err) {
+      setError(err.message || "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className={`admin-iv-card${region.status === "active" ? " connected" : ""}${open ? " expanded" : ""}`}>
+      <div className="admin-iv-main" role="button" tabIndex={0} onClick={() => (open ? setOpen(false) : startEdit())} onKeyDown={(e) => e.key === "Enter" && (open ? setOpen(false) : startEdit())}>
+        <div className="admin-iv-logo" style={{ background: meta.color || "#0f4c8c" }}>{region.region_code}</div>
+        <div className="admin-iv-info">
+          <strong>Paymob · {meta.name || region.region_label}</strong>
+          <span>Currency {region.resolved?.currency || meta.currency}. Requires a Paymob integration for this region.</span>
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
+            {["api_key", "integration_id", "iframe_id", "hmac_secret"].map((k) => (
+              <span key={k} style={{ fontSize: "0.66rem", background: "var(--admin-surface-raised, #f3f4f6)", color: resolved[`has_${k === "api_key" ? "api_key" : k}`] ? "#13803a" : "var(--admin-muted)", padding: "1px 6px", borderRadius: 3, fontWeight: 600 }}>
+                {resolved[`has_${k}`] ? "✓" : "—"} {k.replace(/_/g, " ")}
+              </span>
+            ))}
+          </div>
+          {envBacked && <span style={{ fontSize: "0.68rem", color: "var(--admin-muted)", marginTop: 4 }}>Resolved from environment variables — save here to manage from the panel.</span>}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+          <span className={`admin-iv-chip ${st.cls}`}>{st.label}</span>
+          <span style={{ fontSize: "0.7rem", color: "var(--admin-muted)" }}>{open ? "▲ Close" : "▼ Configure"}</span>
+        </div>
+      </div>
+      {open && (
+        <div className="admin-iv-form">
+          <div className="admin-iv-field" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <input id={`paymob-enabled-${region.region_code}`} type="checkbox" checked={!!draft.enabled} disabled={!canEdit} onChange={(e) => setDraft((d) => ({ ...d, enabled: e.target.checked }))} style={{ width: 16, height: 16 }} />
+            <label htmlFor={`paymob-enabled-${region.region_code}`} style={{ margin: 0 }}>Enabled for this region</label>
+          </div>
+          {PAYMOB_FIELDS.map((f) => {
+            const isSet = f.key === "api_key" ? region.api_key_set : f.key === "hmac_secret" ? region.hmac_secret_set : false;
+            return (
+              <div key={f.key} className="admin-iv-field">
+                <label>{f.label}{f.secret && isSet ? " (saved — leave blank to keep)" : ""}</label>
+                <input
+                  type={f.type || "text"}
+                  value={draft[f.key] ?? ""}
+                  onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
+                  placeholder={f.secret && isSet ? "•••••••• saved" : (f.key === "currency" ? (meta.currency || "") : (f.key === "base_url" ? "https://accept.paymob.com/api" : ""))}
+                  disabled={!canEdit}
+                  autoComplete="off"
+                />
+                {f.hint && <span className="admin-iv-field-hint">{f.hint}</span>}
+              </div>
+            );
+          })}
+          {error && <div style={{ color: "#b91c1c", fontSize: "0.8rem" }}>{error}</div>}
+          {canEdit && (
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <button className="admin-btn-primary admin-btn-sm" onClick={save} disabled={saving}>
+                {saving ? "Saving…" : "Save credentials"}
+              </button>
+              <button className="admin-btn-sm active-outline" onClick={() => setOpen(false)}>Cancel</button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function PaymobRegionsPanel({ canEdit, request }) {
+  const [regions, setRegions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await request("/admin/paymob-regions/");
+      setRegions(res?.regions || []);
+    } catch (err) {
+      setError(err.message || "Failed to load Paymob configuration");
+    } finally {
+      setLoading(false);
+    }
+  }, [request]);
+
+  useEffect(() => { load(); }, [load]);
+
+  return (
+    <div className="admin-iv-card-group" style={{ marginBottom: 24 }}>
+      <div className="admin-iv-header">
+        <h3 style={{ margin: "0 0 4px" }}>Paymob — per region</h3>
+        <p style={{ margin: 0 }}>Configure Paymob separately for Oman, Saudi Arabia, and UAE. Each region needs its own Paymob-supported integration. Environment variables remain the fallback; values saved here override them and blank fields never disable a working config.</p>
+      </div>
+      {loading && <div style={{ padding: 12, color: "var(--admin-muted)" }}>Loading…</div>}
+      {error && <div style={{ padding: 12, color: "#b91c1c" }}>{error}</div>}
+      {!loading && !error && (
+        <div className="admin-iv-list">
+          {regions.map((region) => (
+            <PaymobRegionCard key={region.region_code} region={region} canEdit={canEdit} request={request} onSaved={load} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function PaymentGatewaysView({ data, canEdit, onPatch, request }) {
   const [expanded, setExpanded] = useState(null);
   const [draft, setDraft] = useState({});
   const [saving, setSaving] = useState(false);
@@ -967,6 +1122,7 @@ export function PaymentGatewaysView({ data, canEdit, onPatch }) {
         <h2>Payment Gateways</h2>
         <p>Enter credentials for each gateway. Keys are stored securely in the database and override environment variables set at deploy time.</p>
       </div>
+      {request && <PaymobRegionsPanel canEdit={canEdit} request={request} />}
       <div className="admin-iv-list">
         {PAYMENT_GATEWAYS.map((gw) => {
           const connected = isConnected(gw);

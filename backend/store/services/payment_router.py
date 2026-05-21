@@ -80,6 +80,10 @@ class PaymobPaymentProvider(BasePaymentProvider):
         cfg = get_paymob_config(region_code)
         suffix = (cfg.get("region_code") or "").upper()
         tag = f"_{suffix}" if suffix and suffix != "OM" else ""
+        if not cfg.get("enabled", True):
+            raise PaymentProviderConfigError(
+                f"{self.key} is disabled for this region in the admin panel."
+            )
         missing = [
             label for key, label in [
                 ("api_key",        f"PAYMOB_API_KEY{tag}"),

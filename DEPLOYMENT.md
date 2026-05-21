@@ -66,19 +66,51 @@ PAYMOB_BASE_URL=https://oman.paymob.com/api
 PAYMOB_CURRENCY=OMR
 ```
 
-### Region-aware Paymob (Saudi / UAE)
+### Region-aware Paymob (Oman / Saudi / UAE)
 
-Paymob is offered per region. Oman uses the global `PAYMOB_*` values above.
-Saudi/UAE require their **own** integration credentials and never reuse Oman's
-(so SAR/AED orders are never routed through the OMR integration). Until these
-are set, Paymob simply shows a "being set up for this region" notice there.
+Paymob is configured **per region** (Oman/OMR, Saudi Arabia/SAR, UAE/AED). Each
+region needs its **own** Paymob-supported integration — credentials never cross
+regions, so a SAR/AED order is never routed through the OMR integration.
+
+**Two ways to configure, with the env layer always available as a fallback:**
+
+1. **Admin panel (recommended, no redeploy)** — Admin Panel → **Payment Setup →
+   Paymob — per region**. For each region you can enter API Key, Integration ID,
+   iFrame ID, HMAC Secret, Base URL, Currency, and an Enabled toggle. Values are
+   stored in the database (`PaymobRegionConfig`).
+2. **Environment variables (fallback / defaults)** — the `PAYMOB_*` values below.
+
+**Config priority (first non-empty wins, per field):**
+
+1. Region-specific **admin/DB** value (`PaymobRegionConfig` row), if non-empty
+2. Region-specific **env** value (`PAYMOB_*_OM` / `_SA` / `_AE`)
+3. **Global env / DB fallback — Oman / default region only** (the `PAYMOB_*`
+   values, kept for backward compatibility)
+4. Otherwise the provider is **disabled / setup-pending** for that region
+
+Notes:
+
+- **Blank admin fields never overwrite or disable a working value.** Saving a
+  region with empty fields simply falls through to the env layer.
+- **Secrets are write-only.** The admin API returns only an "is set" indicator
+  for API Key / HMAC Secret — never the stored secret — and audit logs record
+  presence flags, not the values.
+- Disabling a region with the **Enabled** toggle turns Paymob off there even if
+  credentials exist.
+- If SAR/AED credentials are missing, Paymob shows **setup-pending** for those
+  regions. Adding credentials (in the panel or env) activates them with **no
+  code change**. Existing Oman config keeps working unchanged.
+
+Env vars for Saudi/UAE (only needed if you prefer env over the admin panel):
 
 ```env
 # Saudi Arabia (once a SAR integration exists)
+PAYMOB_API_KEY_SA=
 PAYMOB_INTEGRATION_ID_SA=
 PAYMOB_IFRAME_ID_SA=
 PAYMOB_HMAC_SECRET_SA=
 # UAE (once an AED integration exists)
+PAYMOB_API_KEY_AE=
 PAYMOB_INTEGRATION_ID_AE=
 PAYMOB_IFRAME_ID_AE=
 PAYMOB_HMAC_SECRET_AE=

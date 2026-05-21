@@ -32,6 +32,12 @@ def _get(db_obj, db_field, settings_key, default=""):
 
 # ── Paymob ────────────────────────────────────────────────────────────────────
 
+# Supported per-region Paymob configs. Each region needs its own
+# Paymob-supported integration; credentials never cross regions.
+PAYMOB_REGIONS = ("OM", "SA", "AE")
+PAYMOB_DEFAULT_CURRENCY = {"OM": "OMR", "SA": "SAR", "AE": "AED"}
+
+
 def _paymob_region_suffix(region_code):
     """Map a region code to its Paymob settings suffix (OM/SA/AE), or "" for the
     global/default (Oman) config when the region is unknown/unset."""
@@ -45,46 +51,99 @@ def _setting(name, default=""):
     return str(getattr(django_settings, name, "") or "").strip() or default
 
 
+def _paymob_region_row(suffix):
+    """Return the PaymobRegionConfig row for a region suffix, or None.
+
+    Resolves to None on any failure (missing table during early migrations,
+    unknown suffix) so env-based config keeps working.
+    """
+    if not suffix:
+        return None
+    try:
+        from ..models import PaymobRegionConfig
+        return PaymobRegionConfig.objects.filter(region_code=suffix).first()
+    except Exception:
+        return None
+
+
+def _row_value(row, field):
+    if row is None:
+        return ""
+    return str(getattr(row, field, "") or "").strip()
+
+
 def get_paymob_config(region_code=""):
     """Resolve Paymob credentials for a given region.
 
-    Resolution rules:
-      - Oman / default (suffix "" or "OM"): per-region "_OM" env override, then
-        the global PAYMOB_* env vars and DB SiteSettings — i.e. the original
-        single-tenant behavior, fully preserved.
-      - Saudi (SA) / UAE (AE): credentials come ONLY from their "_SA"/"_AE" env
-        vars. integration_id/iframe_id/hmac_secret never fall back to another
-        region, so an OMR integration is never used for a SAR/AED order. The
-        account-level api_key may fall back to the global key. base_url/currency
-        use safe per-region defaults (not secrets).
+    Resolution priority, per field (first non-empty wins):
+      1. Region-specific admin/DB value  (PaymobRegionConfig row)
+      2. Region-specific env value        (PAYMOB_*_OM / _SA / _AE)
+      3. Global env / SiteSettings DB      — **Oman / default region only**
+      4. Safe non-secret default           (base_url / currency)
+
+    For Saudi (SA) and UAE (AE), integration_id/iframe_id/hmac_secret NEVER fall
+    back to another region, so an OMR integration is never used for a SAR/AED
+    order. When those regions have no admin/DB or per-region env credentials they
+    resolve empty → the provider reports as disabled/setup-pending. The
+    account-level api_key may fall back to the global key (same Paymob account).
+
+    Blank admin/DB fields simply fall through to env — saving a blank value in
+    the admin panel never overwrites or disables a working env-based config.
     """
     db = _site_settings()
     suffix = _paymob_region_suffix(region_code)
     is_default_region = suffix in ("", "OM")
+    row_suffix = suffix or "OM"
+    row = _paymob_region_row(row_suffix)
 
     def region_env(base):
         return _setting(f"{base}_{suffix}") if suffix else ""
 
-    # api_key is account-level — region override, else global env/DB.
-    api_key = region_env("PAYMOB_API_KEY") or _get(db, "paymob_api_key", "PAYMOB_API_KEY")
+    # api_key is account-level (one Paymob account, many per-region
+    # integrations), so it may fall back to the global key for any region:
+    # row → region env → global env/DB. This never makes a region "active" on
+    # its own — integration_id/iframe_id/hmac_secret below still gate it.
+    api_key = (
+        _row_value(row, "api_key")
+        or region_env("PAYMOB_API_KEY")
+        or _get(db, "paymob_api_key", "PAYMOB_API_KEY")
+    )
 
-    def credential(base, db_field):
-        value = region_env(base)
+    def credential(row_field, env_base, db_field):
+        value = _row_value(row, row_field) or region_env(env_base)
         if value:
             return value
         # Only the default (Oman) config inherits the global env/DB credential.
-        return _get(db, db_field, base) if is_default_region else ""
+        return _get(db, db_field, env_base) if is_default_region else ""
 
-    integration_id = credential("PAYMOB_INTEGRATION_ID", "paymob_integration_id")
-    iframe_id = credential("PAYMOB_IFRAME_ID", "paymob_iframe_id")
-    hmac_secret = credential("PAYMOB_HMAC_SECRET", "paymob_hmac_secret")
+    integration_id = credential("integration_id", "PAYMOB_INTEGRATION_ID", "paymob_integration_id")
+    iframe_id      = credential("iframe_id",      "PAYMOB_IFRAME_ID",      "paymob_iframe_id")
+    hmac_secret    = credential("hmac_secret",    "PAYMOB_HMAC_SECRET",    "paymob_hmac_secret")
 
-    if suffix in ("SA", "AE"):
-        base_url = _setting(f"PAYMOB_BASE_URL_{suffix}", "https://accept.paymob.com/api")
-        currency = _setting(f"PAYMOB_CURRENCY_{suffix}", "SAR" if suffix == "SA" else "AED")
-    else:
-        base_url = _get(db, "", "PAYMOB_BASE_URL", "https://accept.paymob.com/api")
-        currency = _get(db, "paymob_currency", "PAYMOB_CURRENCY", "OMR")
+    # base_url / currency are non-secret and always have a safe default.
+    default_currency = PAYMOB_DEFAULT_CURRENCY.get(row_suffix, "OMR")
+    base_url = (
+        _row_value(row, "base_url")
+        or region_env("PAYMOB_BASE_URL")
+        or (
+            _get(db, "", "PAYMOB_BASE_URL", "https://accept.paymob.com/api")
+            if is_default_region
+            else _setting(f"PAYMOB_BASE_URL_{suffix}", "https://accept.paymob.com/api")
+        )
+    )
+    currency = (
+        _row_value(row, "currency")
+        or region_env("PAYMOB_CURRENCY")
+        or (
+            _get(db, "paymob_currency", "PAYMOB_CURRENCY", default_currency)
+            if is_default_region
+            else _setting(f"PAYMOB_CURRENCY_{suffix}", default_currency)
+        )
+    )
+
+    # An explicit admin row may switch a region off; absence of a row means the
+    # region is implicitly enabled (env-driven), preserving existing behavior.
+    enabled = bool(row.enabled) if row is not None else True
 
     return {
         "api_key":                   api_key,
@@ -93,10 +152,22 @@ def get_paymob_config(region_code=""):
         "hmac_secret":               hmac_secret,
         "currency":                  currency,
         "base_url":                  base_url,
+        "enabled":                   enabled,
         "apple_pay_integration_id":  _get(db, "paymob_apple_pay_integration_id",  "PAYMOB_APPLE_PAY_INTEGRATION_ID"),
         "apple_pay_iframe_id":       _get(db, "paymob_apple_pay_iframe_id",       "PAYMOB_APPLE_PAY_IFRAME_ID"),
         "region_code":               (suffix or "").lower(),
     }
+
+
+def paymob_config_is_complete(cfg):
+    """True when a resolved Paymob config has all credentials AND is enabled."""
+    return bool(
+        cfg.get("enabled")
+        and cfg.get("api_key")
+        and cfg.get("integration_id")
+        and cfg.get("iframe_id")
+        and cfg.get("hmac_secret")
+    )
 
 
 # ── PayTabs ───────────────────────────────────────────────────────────────────

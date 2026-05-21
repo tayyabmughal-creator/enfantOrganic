@@ -29,6 +29,7 @@ from .models import (
     Testimonial,
     Coupon,
     PaymentTransaction,
+    PaymobRegionConfig,
     ProductStock,
     WishlistItem,
     Warehouse,
@@ -194,6 +195,12 @@ class SiteSettingsAdmin(admin.ModelAdmin):
         ("Marketing Tools", {"fields": ("ga4_measurement_id", "gtm_container_id", "google_ads_conversion_id", "klaviyo_public_key", "mailchimp_api_key", "whatsapp_cloud_phone_id", "zendesk_key"), "classes": ("collapse",)}),
         ("Apps", {"fields": ("expo_push_token", "cloudinary_cloud_name", "cloudinary_api_key", "cloudinary_api_secret", "algolia_app_id", "algolia_api_key", "zapier_webhook_url", "stripe_publishable_key", "stripe_secret_key", "shippo_api_token"), "classes": ("collapse",)}),
     )
+
+
+@admin.register(PaymobRegionConfig)
+class PaymobRegionConfigAdmin(admin.ModelAdmin):
+    list_display = ("region_code", "enabled", "integration_id", "iframe_id", "currency")
+    list_filter = ("enabled", "region_code")
 
 
 @admin.register(HeroPromoCard)

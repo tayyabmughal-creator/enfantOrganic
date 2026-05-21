@@ -1188,7 +1188,7 @@ export default function AdminPanelClient() {
   function renderSection() {
     if (PLACEHOLDER_CONFIGS[activeKey])         return <PlaceholderModule config={PLACEHOLDER_CONFIGS[activeKey]} />;
     if (activeKey === "payment_setup")
-      return <PaymentGatewaysView data={data} canEdit={canWriteKey(activeKey)} onPatch={patchSettings} />;
+      return <PaymentGatewaysView data={data} canEdit={canWriteKey(activeKey)} onPatch={patchSettings} request={request} />;
     if (activeKey === "social" || activeKey === "marketing_tools" || activeKey === "apps")
       return <IntegrationsView category={activeKey} data={data} canEdit={canWriteKey(activeKey)} onPatch={patchSettings} />;
     if (activeKey === "dashboard")              return <DashboardView data={data} />;

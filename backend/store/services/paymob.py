@@ -56,6 +56,8 @@ class PaymobError(Exception):
 def _check_config(region_code=""):
     cfg = get_paymob_config(region_code)
     suffix = (cfg.get("region_code") or "").upper()
+    if not cfg.get("enabled", True):
+        raise PaymobError("Paymob is disabled for this region in the admin panel.")
     missing_map = {
         "api_key":        f"PAYMOB_API_KEY{('_' + suffix) if suffix and suffix != 'OM' else ''}",
         "integration_id": f"PAYMOB_INTEGRATION_ID{('_' + suffix) if suffix and suffix != 'OM' else ''}",
