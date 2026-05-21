@@ -26,7 +26,7 @@ jobs:
           username: ${{ secrets.HOSTINGER_SSH_USER }}
           key: ${{ secrets.HOSTINGER_SSH_KEY }}
           port: ${{ secrets.HOSTINGER_SSH_PORT || 22 }}
-          source: "backend,frontend,deploy,docker-compose.prod.yml,.env.production.example"
+          source: "backend,frontend,deploy,scripts,docker-compose.prod.yml,.env.production.example"
           target: ${{ secrets.HOSTINGER_DEPLOY_PATH }}
           overwrite: true
 
@@ -71,13 +71,44 @@ jobs:
             EMAIL_HOST_USER=${{ secrets.EMAIL_HOST_USER }}
             EMAIL_HOST_PASSWORD=${{ secrets.EMAIL_HOST_PASSWORD }}
             EMAIL_USE_TLS=${{ secrets.EMAIL_USE_TLS || 'True' }}
+            # Paymob (Oman test integration). Required — see DEPLOYMENT.md for the
+            # GitHub secrets to create. base_url/currency have safe defaults.
+            PAYMOB_API_KEY=${{ secrets.PAYMOB_API_KEY }}
+            PAYMOB_INTEGRATION_ID=${{ secrets.PAYMOB_INTEGRATION_ID }}
+            PAYMOB_IFRAME_ID=${{ secrets.PAYMOB_IFRAME_ID }}
+            PAYMOB_HMAC_SECRET=${{ secrets.PAYMOB_HMAC_SECRET }}
+            PAYMOB_CURRENCY=${{ secrets.PAYMOB_CURRENCY || 'OMR' }}
+            PAYMOB_BASE_URL=${{ secrets.PAYMOB_BASE_URL || 'https://oman.paymob.com/api' }}
+            # Region-scoped Paymob (Saudi / UAE). Leave the secrets unset until a
+            # SAR/AED integration exists — empty values keep Paymob hidden there
+            # rather than routing those orders through the OMR integration.
+            PAYMOB_INTEGRATION_ID_SA=${{ secrets.PAYMOB_INTEGRATION_ID_SA }}
+            PAYMOB_IFRAME_ID_SA=${{ secrets.PAYMOB_IFRAME_ID_SA }}
+            PAYMOB_HMAC_SECRET_SA=${{ secrets.PAYMOB_HMAC_SECRET_SA }}
+            PAYMOB_INTEGRATION_ID_AE=${{ secrets.PAYMOB_INTEGRATION_ID_AE }}
+            PAYMOB_IFRAME_ID_AE=${{ secrets.PAYMOB_IFRAME_ID_AE }}
+            PAYMOB_HMAC_SECRET_AE=${{ secrets.PAYMOB_HMAC_SECRET_AE }}
+            # Thawani (Oman, UAT).
+            THAWANI_SECRET_KEY=${{ secrets.THAWANI_SECRET_KEY }}
+            THAWANI_PUBLISHABLE_KEY=${{ secrets.THAWANI_PUBLISHABLE_KEY }}
+            THAWANI_BASE_URL=${{ secrets.THAWANI_BASE_URL || 'https://uatcheckout.thawani.om' }}
+            THAWANI_ENABLE_REAL_API=${{ secrets.THAWANI_ENABLE_REAL_API || '1' }}
             EOF
+
+            # Fail the deploy early if the generated env is wrong (typo domain,
+            # missing ALLOWED_HOSTS / Redis / Paymob, etc.) — before touching the
+            # running stack. Prints presence only, never secret values.
+            bash scripts/validate-production-env.sh .env.production
 
             docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build --remove-orphans
             docker compose -f docker-compose.prod.yml --env-file .env.production restart nginx
             docker compose -f docker-compose.prod.yml --env-file .env.production ps
             docker compose -f docker-compose.prod.yml --env-file .env.production logs nginx --tail=100
             docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend python manage.py check
+            # Confirm the public domain actually reached the backend container's
+            # ALLOWED_HOSTS — a wrong/typo domain here breaks all browser API calls.
+            docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend printenv DJANGO_ALLOWED_HOSTS | grep -Fq "enfhantorganic.itwing.cloud" \
+              || { echo "FATAL: backend DJANGO_ALLOWED_HOSTS is missing enfhantorganic.itwing.cloud"; exit 1; }
             docker compose -f docker-compose.prod.yml --env-file .env.production exec -T nginx nginx -t
             docker compose -f docker-compose.prod.yml --env-file .env.production exec -T nginx wget -S -O /dev/null http://127.0.0.1/
             docker image prune -f
@@ -85,12 +116,35 @@ jobs:
       - name: Verify public site
         run: |
           set -e
-          url="${{ secrets.PRODUCTION_HEALTHCHECK_URL || 'http://enfantorganic.itwing.cloud/' }}"
+          # NOTE: correct spelling is enfhantorganic (with the 'h').
+          url="${{ secrets.PRODUCTION_HEALTHCHECK_URL || 'https://enfhantorganic.itwing.cloud/' }}"
           for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
             if curl --fail --show-error --silent --location --head --max-time 20 "$url"; then
-              exit 0
+              break
             fi
             echo "Public site not ready yet (attempt ${attempt}/12)."
             sleep 10
+            if [ "$attempt" = "12" ]; then
+              curl --verbose --location --max-time 20 "$url"
+              exit 1
+            fi
           done
-          curl --verbose --location --max-time 20 "$url"
+
+      - name: Verify public API returns JSON (region/currency flow)
+        run: |
+          domain="enfhantorganic.itwing.cloud"
+          fail=0
+          check() {
+            result="$(curl -sS -o /dev/null -w '%{http_code} %{content_type}' --max-time 25 "$1" || echo '000 none')"
+            code="${result%% *}"; ctype="${result#* }"
+            if [ "$code" = "200" ] && printf '%s' "$ctype" | grep -q 'application/json'; then
+              echo "PASS  $1 -> $result"
+            else
+              echo "FAIL  $1 -> $result"; fail=1
+            fi
+          }
+          check "https://${domain}/api/navigation/"
+          check "https://${domain}/api/products/"
+          check "https://${domain}/api/products/?region=sa"
+          check "https://${domain}/api/products/?region=ae"
+          [ "$fail" = "0" ] || { echo "Public API smoke tests FAILED — browser/region flow is broken."; exit 1; }
