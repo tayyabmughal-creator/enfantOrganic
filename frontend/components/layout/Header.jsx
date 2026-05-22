@@ -336,7 +336,7 @@ function HeaderInner({ navigation }) {
             <Icon name="search" size={18} />
           </button>
           <a href={buildStorePath(locale, "/account", region)} className="icon-link" aria-label={locale === "ar" ? "حسابي" : "My Account"}>
-            <Icon name="sparkle" size={18} />
+            <Icon name="user" size={18} />
           </a>
           <button type="button" className="icon-link cart-link" aria-label={t.cart} onClick={openCart}>
             <Icon name="cart" size={18} />

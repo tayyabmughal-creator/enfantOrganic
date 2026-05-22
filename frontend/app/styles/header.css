@@ -152,7 +152,10 @@
   position: absolute;
   top: calc(100% + 10px);
   inset-inline-start: 0;
-  min-width: 560px;
+  width: min(620px, calc(100vw - 40px));
+  max-height: min(72vh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 14px;
   background: white;
   border: 1px solid var(--line);
@@ -162,10 +165,12 @@
   visibility: hidden;
   transform: translateY(8px);
   transition: 180ms ease;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(96, 122, 66, 0.3) transparent;
 }
 
 .nav-dropdown-sm {
-  min-width: 360px;
+  width: min(360px, calc(100vw - 40px));
 }
 
 .nav-dropdown.is-visible {
