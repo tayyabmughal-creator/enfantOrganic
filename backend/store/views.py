@@ -19,6 +19,8 @@ from .api_views import (
     AdminGiftCardListCreateView,
     AdminHeroPromoCardDetailView,
     AdminHeroPromoCardListCreateView,
+    AdminInstagramPostDetailView,
+    AdminInstagramPostListCreateView,
     AdminMeView,
     AdminModerationSummaryView,
     AdminOrderDetailView,

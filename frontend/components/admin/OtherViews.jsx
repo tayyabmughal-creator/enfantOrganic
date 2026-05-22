@@ -776,7 +776,33 @@ export function NewsletterPanel({ data }) {
   );
 }
 
-export function RegionsView({ rows }) {
+export function RegionsView({ rows, request, onSaved }) {
+  const [editingThreshold, setEditingThreshold] = useState({});
+  const [savingThreshold, setSavingThreshold] = useState({});
+  const [thresholdError, setThresholdError] = useState({});
+
+  async function saveThreshold(code, value) {
+    const num = parseFloat(value);
+    if (isNaN(num) || num < 0) {
+      setThresholdError((e) => ({ ...e, [code]: "Enter a valid positive number" }));
+      return;
+    }
+    setSavingThreshold((s) => ({ ...s, [code]: true }));
+    setThresholdError((e) => ({ ...e, [code]: null }));
+    try {
+      await request(`/admin/regions/${code}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ shipping_threshold: num.toFixed(2) }),
+      });
+      setEditingThreshold((e) => ({ ...e, [code]: undefined }));
+      onSaved?.();
+    } catch {
+      setThresholdError((e) => ({ ...e, [code]: "Save failed — try again" }));
+    } finally {
+      setSavingThreshold((s) => ({ ...s, [code]: false }));
+    }
+  }
+
   if (!rows.length) {
     return (
       <section className="admin-panel-card">
@@ -786,36 +812,195 @@ export function RegionsView({ rows }) {
   }
   return (
     <div className="admin-regions">
-      {rows.map((region) => (
-        <section key={region.id || region.code} className="admin-panel-card admin-region-card">
-          <div className="admin-panel-head">
-            <div>
-              <h3>{region.name || region.code?.toUpperCase()} <span className="admin-badge neutral">{region.code?.toUpperCase()}</span></h3>
-              <span>{region.currency_code} · {region.locale || "en/ar"}</span>
+      {rows.map((region) => {
+        const code = region.code;
+        const isEditing = editingThreshold[code] !== undefined;
+        const isSaving = savingThreshold[code];
+        const error = thresholdError[code];
+        return (
+          <section key={region.id || code} className="admin-panel-card admin-region-card">
+            <div className="admin-panel-head">
+              <div>
+                <h3>{region.name || code?.toUpperCase()} <span className="admin-badge neutral">{code?.toUpperCase()}</span></h3>
+                <span>{region.currency_code} · {region.locale || "en/ar"}</span>
+              </div>
+              <span className={`admin-badge ${region.is_active ? "success" : "neutral"}`}>{region.is_active ? "Active" : "Inactive"}</span>
             </div>
-            <span className={`admin-badge ${region.is_active ? "success" : "neutral"}`}>{region.is_active ? "Active" : "Inactive"}</span>
-          </div>
-          <div className="admin-settings-preview">
-            {region.seller_legal_name && <div className="admin-settings-row"><strong>Legal name</strong><span>{region.seller_legal_name}</span></div>}
-            {region.contact_email && <div className="admin-settings-row"><strong>Contact email</strong><span>{region.contact_email}</span></div>}
-            {region.contact_phone && <div className="admin-settings-row"><strong>Contact phone</strong><span>{region.contact_phone}</span></div>}
-            {region.seller_address_en && <div className="admin-settings-row"><strong>Address</strong><span>{region.seller_address_en}</span></div>}
-            {region.payment_enabled_providers?.length > 0 && (
-              <div className="admin-settings-row">
-                <strong>Payment providers</strong>
-                <span>{region.payment_enabled_providers.join(", ")}</span>
-              </div>
-            )}
-            {region.free_shipping_threshold != null && (
-              <div className="admin-settings-row">
+            <div className="admin-settings-preview">
+              {region.seller_legal_name && <div className="admin-settings-row"><strong>Legal name</strong><span>{region.seller_legal_name}</span></div>}
+              {region.contact_email && <div className="admin-settings-row"><strong>Contact email</strong><span>{region.contact_email}</span></div>}
+              {region.contact_phone && <div className="admin-settings-row"><strong>Contact phone</strong><span>{region.contact_phone}</span></div>}
+              {region.seller_address_en && <div className="admin-settings-row"><strong>Address</strong><span>{region.seller_address_en}</span></div>}
+              {region.payment_enabled_providers?.length > 0 && (
+                <div className="admin-settings-row">
+                  <strong>Payment providers</strong>
+                  <span>{region.payment_enabled_providers.join(", ")}</span>
+                </div>
+              )}
+
+              {/* Free shipping threshold — inline editable */}
+              <div className="admin-settings-row admin-threshold-row">
                 <strong>Free shipping above</strong>
-                <span>{region.currency_code} {region.free_shipping_threshold}</span>
+                {isEditing ? (
+                  <span className="admin-threshold-edit">
+                    <span className="admin-threshold-currency">{region.currency_code}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className="admin-threshold-input"
+                      defaultValue={region.shipping_threshold || "0"}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveThreshold(code, e.target.value);
+                        if (e.key === "Escape") setEditingThreshold((s) => ({ ...s, [code]: undefined }));
+                      }}
+                      autoFocus
+                    />
+                    <button
+                      className="admin-btn admin-btn-xs admin-btn-primary"
+                      disabled={isSaving}
+                      onClick={(e) => saveThreshold(code, e.target.closest(".admin-threshold-edit").querySelector("input").value)}
+                    >
+                      {isSaving ? "Saving…" : "Save"}
+                    </button>
+                    <button
+                      className="admin-btn admin-btn-xs"
+                      onClick={() => setEditingThreshold((s) => ({ ...s, [code]: undefined }))}
+                    >
+                      Cancel
+                    </button>
+                    {error && <span className="admin-threshold-error">{error}</span>}
+                  </span>
+                ) : (
+                  <span className="admin-threshold-display">
+                    <span>{region.currency_code} {region.shipping_threshold || "—"}</span>
+                    {request && (
+                      <button
+                        className="admin-btn admin-btn-xs admin-btn-ghost"
+                        onClick={() => setEditingThreshold((s) => ({ ...s, [code]: true }))}
+                      >
+                        Edit
+                      </button>
+                    )}
+                  </span>
+                )}
               </div>
-            )}
-          </div>
-        </section>
-      ))}
+            </div>
+          </section>
+        );
+      })}
     </div>
+  );
+}
+
+// ─── Instagram Posts ──────────────────────────────────────────────────────────
+
+export function InstagramPostsPanel({ rows = [], request, onSaved }) {
+  const [posts, setPosts] = useState(rows);
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({ image: "", href: "" });
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => { setPosts(rows); }, [rows]);
+
+  async function handleAdd(e) {
+    e.preventDefault();
+    if (!form.image.trim()) { setError("Image URL is required."); return; }
+    setSaving(true); setError("");
+    try {
+      await request("/admin/instagram-posts/", { method: "POST", body: JSON.stringify({ image: form.image.trim(), href: form.href.trim() }) });
+      setForm({ image: "", href: "" });
+      setAdding(false);
+      onSaved?.();
+    } catch { setError("Failed to save. Check the URL and try again."); }
+    finally { setSaving(false); }
+  }
+
+  async function handleDelete(id) {
+    setDeletingId(id);
+    try {
+      await request(`/admin/instagram-posts/${id}/`, { method: "DELETE" });
+      onSaved?.();
+    } catch { setError("Delete failed."); }
+    finally { setDeletingId(null); }
+  }
+
+  return (
+    <section className="admin-panel-card">
+      <div className="admin-panel-head">
+        <div>
+          <h3>Instagram Grid</h3>
+          <span>{posts.length} post{posts.length !== 1 ? "s" : ""} · shown on homepage in 5-column mosaic</span>
+        </div>
+        {!adding && (
+          <button type="button" className="admin-btn-primary" onClick={() => { setAdding(true); setError(""); }}>
+            + Add post
+          </button>
+        )}
+      </div>
+
+      {adding && (
+        <form className="ig-post-add-form" onSubmit={handleAdd}>
+          <div className="ig-post-add-fields">
+            <label>
+              <span>Image URL</span>
+              <input
+                type="url"
+                placeholder="https://cdn.example.com/photo.jpg"
+                value={form.image}
+                onChange={(e) => setForm((f) => ({ ...f, image: e.target.value }))}
+                required
+              />
+            </label>
+            <label>
+              <span>Instagram post link (optional)</span>
+              <input
+                type="url"
+                placeholder="https://www.instagram.com/p/..."
+                value={form.href}
+                onChange={(e) => setForm((f) => ({ ...f, href: e.target.value }))}
+              />
+            </label>
+          </div>
+          {form.image && (
+            <div className="ig-post-preview-thumb">
+              <img src={form.image} alt="preview" onError={(e) => { e.target.style.display = "none"; }} />
+            </div>
+          )}
+          {error && <p className="admin-threshold-error">{error}</p>}
+          <div className="ig-post-add-actions">
+            <button type="submit" className="admin-btn-primary" disabled={saving}>{saving ? "Saving…" : "Save"}</button>
+            <button type="button" className="admin-btn-ghost" onClick={() => { setAdding(false); setError(""); }}>Cancel</button>
+          </div>
+        </form>
+      )}
+
+      {posts.length === 0 && !adding ? (
+        <AdminEmpty message="No Instagram posts yet. Add the first one." />
+      ) : (
+        <div className="ig-admin-grid">
+          {posts.map((post) => (
+            <div key={post.id} className="ig-admin-tile">
+              <img src={post.image} alt="" onError={(e) => { e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%23e8f0e0'/%3E%3C/svg%3E"; }} />
+              <div className="ig-admin-tile-overlay">
+                <a href={post.href} target="_blank" rel="noopener noreferrer" className="ig-admin-tile-link" title="Open post">↗</a>
+                <button
+                  type="button"
+                  className="ig-admin-tile-del"
+                  onClick={() => handleDelete(post.id)}
+                  disabled={deletingId === post.id}
+                  title="Delete"
+                >
+                  {deletingId === post.id ? "…" : "×"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

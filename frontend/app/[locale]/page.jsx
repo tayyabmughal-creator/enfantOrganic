@@ -270,18 +270,34 @@ export default async function LocalizedHomePage({ params, searchParams }) {
       </section>
 
       <section className="section container">
-        <div className="section-heading">
-          <div>
-            <h3>{home.instagram.title}</h3>
-          </div>
-          <a href="https://www.instagram.com/enfant_middle_east/" className="section-link">
+        <div className="instagram-header">
+          <h3>{home.instagram.title}</h3>
+          <a
+            href="https://www.instagram.com/enfant_middle_east/"
+            className="instagram-cta"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             {home.instagram.cta}
           </a>
         </div>
         <div className="instagram-grid">
           {home.instagram.posts.map((post, index) => (
-            <a key={`${post.href}-${index}`} href={post.href} className="instagram-tile">
+            <a
+              key={`${post.href}-${index}`}
+              href={post.href}
+              className={`instagram-tile${index === 1 ? " instagram-tile-ig" : ""}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               <img src={post.image} alt="Enfant Instagram" loading="lazy" />
+              {index === 1 && (
+                <div className="instagram-logo-overlay">
+                  <div className="instagram-logo-circle">
+                    <Icon name="instagram" size={42} />
+                  </div>
+                </div>
+              )}
             </a>
           ))}
         </div>
@@ -306,6 +322,9 @@ export default async function LocalizedHomePage({ params, searchParams }) {
                 <span className="blog-date">{post.published_at}</span>
                 <h4>{post.title}</h4>
                 <p>{post.excerpt}</p>
+                <span className="blog-card-read-more">
+                  {locale === "ar" ? "اقرأ المزيد" : "Read more"} <span aria-hidden="true">{locale === "ar" ? "←" : "→"}</span>
+                </span>
               </div>
             </Link>
           ))}

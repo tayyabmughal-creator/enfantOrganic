@@ -17,6 +17,7 @@ from .admin_ops import (
     AdminCouponSerializer,
     AdminCustomerSerializer,
     AdminHeroPromoCardSerializer,
+    AdminInstagramPostSerializer,
     AdminOrderSerializer,
     AdminPaymentTransactionSerializer,
     AdminPaymobRegionConfigSerializer,

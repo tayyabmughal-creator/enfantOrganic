@@ -612,15 +612,13 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  min-height: 2.8em;
 }
 
 .blog-card-body p {
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  min-height: 5.1em;
 }
 
 .category-card-body p,
@@ -849,10 +847,14 @@
 }
 
 .category-card:hover,
-.product-card:hover,
-.blog-card:hover {
+.product-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 24px 50px rgba(25, 24, 23, 0.1);
+}
+
+.blog-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 32px rgba(25, 24, 23, 0.1);
 }
 
 .product-card:hover {
@@ -1119,7 +1121,7 @@
 .review-grid,
 .blog-grid {
   display: grid;
-  gap: clamp(14px, 1.8vw, 22px);
+  gap: clamp(12px, 1.4vw, 18px);
 }
 
 .review-grid {
@@ -1169,27 +1171,93 @@
   font-size: 0.82rem;
 }
 
+.instagram-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.instagram-header h3 {
+  margin: 0;
+  font-size: clamp(1.45rem, 2.6vw, 2.1rem);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.instagram-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 0 32px;
+  border-radius: 999px;
+  background: #e8a020;
+  color: white;
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 200ms ease, transform 140ms ease, box-shadow 200ms ease;
+  box-shadow: 0 4px 16px rgba(232, 160, 32, 0.28);
+}
+
+.instagram-cta:hover {
+  background: #cf8e14;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(232, 160, 32, 0.36);
+}
+
 .instagram-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: clamp(10px, 1.4vw, 16px);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 3px;
 }
 
 .instagram-tile {
+  position: relative;
   overflow: hidden;
   aspect-ratio: 1 / 1;
-  border-radius: 14px;
-  border: 1px solid var(--line);
-  background:
-    radial-gradient(circle at 50% 20%, rgba(146, 171, 105, 0.16), transparent 34%),
-    linear-gradient(180deg, #fcfef9, #f2f7ea 76%, #e6efdc);
+  display: block;
+  background: #d8edca;
 }
 
 .instagram-tile img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
-  padding: 14px;
+  object-fit: cover;
+  display: block;
+  transition: transform 320ms ease;
+}
+
+.instagram-tile:hover img {
+  transform: scale(1.05);
+}
+
+.instagram-tile-ig img {
+  filter: brightness(0.6);
+}
+
+.instagram-logo-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.instagram-logo-circle {
+  width: 86px;
+  height: 86px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  border: 2.5px solid rgba(255, 255, 255, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
 }
 
 .blog-grid {
@@ -1198,13 +1266,15 @@
 
 .blog-card {
   overflow: hidden;
-  border-radius: var(--radius-xl);
+  border-radius: 18px;
   border: 1px solid var(--line);
   background: white;
-  box-shadow: var(--shadow);
-  display: block;
+  box-shadow: 0 2px 10px rgba(37, 49, 27, 0.06);
+  display: flex;
+  flex-direction: column;
   color: inherit;
   text-decoration: none;
+  transition: transform 200ms ease, box-shadow 200ms ease;
 }
 
 .blog-detail-layout {
@@ -1284,33 +1354,53 @@
 }
 
 .blog-card-image {
-  aspect-ratio: 1.35 / 1;
-  display: grid;
-  place-items: center;
-  background:
-    radial-gradient(circle at 50% 20%, rgba(146, 171, 105, 0.16), transparent 34%),
-    linear-gradient(180deg, #fcfef9, #f2f7ea 76%, #e6efdc);
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: #e8f0dc;
 }
 
 .blog-card-image img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
-  padding: 18px;
+  object-fit: cover;
+  display: block;
+  transition: transform 320ms ease;
+}
+
+.blog-card:hover .blog-card-image img {
+  transform: scale(1.05);
 }
 
 .blog-card-body {
-  padding: 18px;
+  padding: 14px 16px 16px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  flex: 1;
 }
 
 .blog-date {
-  color: var(--text-soft);
-  font-size: 0.82rem;
+  font-size: 0.72rem;
   font-weight: 700;
+  color: var(--brand-dark);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  opacity: 0.75;
 }
+
+.blog-card-read-more {
+  margin-top: auto;
+  padding-top: 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--brand-dark);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+[dir="rtl"] .blog-card-read-more { flex-direction: row-reverse; }
 
 .newsletter-strip {
   padding: clamp(24px, 4vw, 40px);
@@ -1577,22 +1667,35 @@
 
 @media (max-width: 640px) {
   .product-rail {
-    grid-auto-columns: minmax(244px, 82vw);
-    gap: 16px;
+    grid-template-columns: repeat(2, 1fr);
+    grid-auto-flow: row;
+    grid-auto-columns: unset;
+    overflow-x: unset;
+    scroll-snap-type: none;
+    gap: 10px;
+    padding: 2px 0 4px;
+  }
+
+  .product-rail-btn {
+    display: none;
+  }
+
+  .product-rail-dots {
+    display: none;
   }
 
   .product-card {
-    border-radius: 22px;
-    box-shadow: 0 14px 34px rgba(25, 24, 23, 0.1);
+    border-radius: 18px;
+    box-shadow: 0 10px 24px rgba(25, 24, 23, 0.08);
   }
 
   .product-card-media-wrap {
-    padding: 9px 9px 0;
+    padding: 7px 7px 0;
   }
 
   .product-card-image {
     aspect-ratio: 1 / 0.9;
-    border-radius: 19px;
+    border-radius: 14px;
     background:
       radial-gradient(circle at 50% 92%, rgba(255, 255, 255, 0.94) 0 31%, transparent 32%),
       radial-gradient(circle at 18% 80%, rgba(146, 171, 105, 0.18), transparent 18%),
@@ -1602,66 +1705,79 @@
 
   .product-card-image-primary,
   .product-card-image-secondary {
-    inset: 20px;
-    width: calc(100% - 40px);
-    height: calc(100% - 40px);
+    inset: 14px;
+    width: calc(100% - 28px);
+    height: calc(100% - 28px);
   }
 
   .product-badge {
-    top: 13px;
-    inset-inline-start: 13px;
+    top: 10px;
+    inset-inline-start: 10px;
     inset-inline-end: auto;
-    max-width: 46%;
+    max-width: 50%;
+    font-size: 0.62rem;
+    padding: 4px 7px;
     background: rgba(255, 255, 255, 0.9);
     color: var(--brand-dark);
-    box-shadow: 0 10px 22px rgba(25, 24, 23, 0.08);
+    box-shadow: 0 8px 18px rgba(25, 24, 23, 0.08);
   }
 
   .product-card-wishlist {
-    top: 12px;
+    top: 10px;
     inset-inline-start: auto;
-    inset-inline-end: 12px;
-    width: 32px;
-    height: 32px;
+    inset-inline-end: 10px;
+    width: 28px;
+    height: 28px;
     border: 0;
     background: transparent;
     box-shadow: none;
   }
 
   .product-card-body {
-    padding: 14px 15px 15px;
-    gap: 8px;
+    padding: 9px 10px 11px;
+    gap: 5px;
   }
 
   .product-card-body h4 {
-    font-size: 1rem;
+    font-size: 0.8rem;
+    min-height: 2.4em;
+    max-height: 2.4em;
   }
 
   .product-card-description {
-    min-height: 0;
-    font-size: 0.86rem;
+    display: none;
+  }
+
+  .product-pill-row {
+    display: none;
+  }
+
+  .product-card-meta {
+    min-height: unset;
+    gap: 4px;
   }
 
   .product-price-panel {
-    padding: 10px 11px;
-    border-radius: 15px;
+    padding: 8px 9px;
+    border-radius: 12px;
   }
 
   .product-card .product-pricing strong {
-    font-size: 1.24rem;
+    font-size: 1rem;
   }
 
   .product-savings-badge {
-    padding: 5px 8px;
-    font-size: 0.68rem;
+    padding: 4px 6px;
+    font-size: 0.62rem;
   }
 
   .product-action-button {
-    min-height: 42px;
+    min-height: 36px;
+    font-size: 0.76rem;
     background: var(--brand-dark);
     color: white;
     border-color: var(--brand-dark);
-    border-radius: 16px;
+    border-radius: 13px;
   }
 
   .category-carousel-shell {

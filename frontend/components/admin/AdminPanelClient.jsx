@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import DashboardView from "./DashboardView";
 import AnalyticsView from "./AnalyticsView";
-import { StoreSettingsSection, SettingsPanel, Reports, AuditLogsPanel, IntegrationsView, PaymentGatewaysView, InventoryView, InsightsView, NewsletterPanel, RegionsView, PlaceholderModule } from "./OtherViews";
+import { StoreSettingsSection, SettingsPanel, Reports, AuditLogsPanel, IntegrationsView, PaymentGatewaysView, InventoryView, InsightsView, NewsletterPanel, RegionsView, InstagramPostsPanel, PlaceholderModule } from "./OtherViews";
 import { CrudPanel, CrudFormModal } from "./CrudViews";
 import { AdminToast } from "./SharedUI";
 import SkeletonLoader from "../SkeletonLoader";
@@ -34,9 +34,10 @@ const NAV_GROUPS = [
   {
     label: "Content",
     items: [
-      { key: "blog",          label: "Blog",           icon: "✍", endpoint: "/admin/blog-posts/",  desc: "Articles, guides, and brand stories." },
-      { key: "hero_cards",    label: "Hero Cards",     icon: "◫", endpoint: "/admin/hero-promo-cards/", desc: "Homepage hero promo cards and visuals." },
-      { key: "homepage",      label: "Content",        icon: "⌂", endpoint: "/admin/settings/",    desc: "Announcements, newsletter, and homepage sections." },
+      { key: "blog",             label: "Blog",           icon: "✍", endpoint: "/admin/blog-posts/",       desc: "Articles, guides, and brand stories." },
+      { key: "hero_cards",       label: "Hero Cards",     icon: "◫", endpoint: "/admin/hero-promo-cards/",  desc: "Homepage hero promo cards and visuals." },
+      { key: "instagram_posts",  label: "Instagram Grid", icon: "◎", endpoint: "/admin/instagram-posts/",   desc: "Instagram feed photos shown on the homepage." },
+      { key: "homepage",         label: "Content",        icon: "⌂", endpoint: "/admin/settings/",          desc: "Announcements, newsletter, and homepage sections." },
     ],
   },
   {
@@ -106,6 +107,7 @@ const NAV_READ_CAPABILITY = {
   warehouses: "inventory.view",
   blog: "content.view",
   hero_cards: "content.view",
+  instagram_posts: "content.view",
   homepage: "content.view",
   branding: "content.view",
   nav_settings: "content.view",
@@ -141,6 +143,7 @@ const NAV_WRITE_CAPABILITY = {
   warehouses: "inventory.edit",
   blog: "content.edit",
   hero_cards: "content.edit",
+  instagram_posts: "content.edit",
   homepage: "content.edit",
   branding: "content.edit",
   nav_settings: "content.edit",
@@ -1198,7 +1201,8 @@ export default function AdminPanelClient() {
     if (activeKey === "newsletter")             return <NewsletterPanel data={data} />;
     if (activeKey === "reports")               return <Reports data={data} onDownload={downloadReport} />;
     if (activeKey === "audit_logs")            return <AuditLogsPanel rows={Array.isArray(data) ? data : []} />;
-    if (activeKey === "regions")               return <RegionsView rows={Array.isArray(data) ? data : []} />;
+    if (activeKey === "regions")               return <RegionsView rows={Array.isArray(data) ? data : []} request={request} onSaved={() => loadScreen()} />;
+    if (activeKey === "instagram_posts")       return <InstagramPostsPanel rows={Array.isArray(data) ? data : []} request={request} onSaved={() => loadScreen()} />;
     if (SETTINGS_KEYS.has(activeKey))           return <StoreSettingsSection section={activeKey} data={data} onEdit={openSettingsEditor} canEdit={canWriteKey(activeKey)} />;
     return (
       <CrudPanel

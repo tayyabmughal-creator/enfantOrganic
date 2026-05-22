@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
@@ -9,6 +9,7 @@ import CartApplePayButton from "@/components/store/cart/CartApplePayButton";
 import { useStore } from "@/components/store/cart/StoreProvider";
 import { useLocale } from "@/contexts/LocaleContext";
 import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
+import { API_BASE_URL } from "@/lib/config";
 
 function CartDrawerInner() {
   const searchParams = useSearchParams();
@@ -16,6 +17,8 @@ function CartDrawerInner() {
   const { locale } = useLocale();
   const t = uiText(locale);
   const { cartItems, closeCart, drawerOpen, refreshCartPricing, removeItem, subtotal, updateQuantity } = useStore();
+  const [shippingThreshold, setShippingThreshold] = useState(null);
+  const [thresholdCurrency, setThresholdCurrency] = useState(null);
 
   useEffect(() => {
     if (!cartItems.length) {
@@ -24,6 +27,23 @@ function CartDrawerInner() {
 
     void refreshCartPricing(locale, region);
   }, [cartItems, locale, region]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(`${API_BASE_URL}/navigation/?locale=${locale}&region=${region}`, {
+      signal: controller.signal,
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        const t = Number(data?.current_region?.shipping_threshold);
+        if (t > 0) {
+          setShippingThreshold(t);
+          setThresholdCurrency(data?.current_region?.currency_code || "");
+        }
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [locale, region]);
 
   return (
     <>
@@ -41,6 +61,38 @@ function CartDrawerInner() {
               <Icon name="close" size={18} />
             </button>
           </div>
+
+          {shippingThreshold > 0 && (() => {
+            const progress = Math.min((subtotal / shippingThreshold) * 100, 100);
+            const isUnlocked = subtotal >= shippingThreshold;
+            const remaining = Math.max(shippingThreshold - subtotal, 0);
+            const remainingLabel = `${thresholdCurrency} ${remaining.toFixed(3).replace(/\.?0+$/, (m) => remaining % 1 === 0 ? "" : m)}`;
+            return (
+              <div className="free-shipping-bar">
+                <p className={`free-shipping-msg${isUnlocked ? " is-unlocked" : ""}`}>
+                  {isUnlocked ? (
+                    locale === "ar"
+                      ? <><span aria-hidden="true">🎉</span> لقد حصلت على <strong>شحن مجاني</strong> لطلبك!</>
+                      : <><span aria-hidden="true">🎉</span> You&rsquo;ve unlocked <strong>FREE shipping</strong> on your order!</>
+                  ) : (
+                    locale === "ar"
+                      ? <>أضف <strong>{remainingLabel}</strong> للحصول على <strong>شحن مجاني</strong></>
+                      : <>Add <strong>{remainingLabel}</strong> more for <strong>free shipping</strong></>
+                  )}
+                </p>
+                <div className="free-shipping-track">
+                  <div
+                    className={`free-shipping-fill${isUnlocked ? " is-full" : ""}`}
+                    style={{ width: `${progress}%` }}
+                  >
+                    {progress >= 18 && (
+                      <span className="free-shipping-pct">{Math.round(progress)}%</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           <div className="cart-drawer-items">
             {cartItems.length === 0 ? (

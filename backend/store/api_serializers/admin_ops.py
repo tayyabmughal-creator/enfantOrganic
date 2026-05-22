@@ -10,6 +10,7 @@ from ..models import (
     Coupon,
     GiftCard,
     HeroPromoCard,
+    InstagramPost,
     Order,
     PaymentTransaction,
     PaymobRegionConfig,
@@ -57,6 +58,15 @@ class AdminCategorySerializer(serializers.ModelSerializer):
         extra_kwargs = {
             "image_file": {"required": False},
         }
+
+
+class AdminInstagramPostSerializer(serializers.ModelSerializer):
+    image = serializers.CharField(required=False, allow_blank=True)
+
+    class Meta:
+        model = InstagramPost
+        fields = ("id", "image", "image_file", "href", "sort_order")
+        read_only_fields = ("id",)
 
 
 class AdminHeroPromoCardSerializer(serializers.ModelSerializer):

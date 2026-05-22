@@ -174,11 +174,16 @@ function HeaderInner({ navigation }) {
   return (
     <header className="site-header">
       <div className="announcement-bar">
-        <div className="container announcement-bar-inner">
-          <span>{navigation.settings.announcement}</span>
-          <span className="announcement-shipping">
-            {navigation.current_region.currency_code} {navigation.current_region.shipping_threshold}
-          </span>
+        <div className="announcement-marquee">
+          <div className={`announcement-reel${locale === "ar" ? " is-rtl" : ""}`}>
+            {[0, 1].map((i) => (
+              <span key={i} className="announcement-copy" aria-hidden={i > 0 ? "true" : undefined}>
+                {navigation.settings.announcement}
+                <span className="announcement-sep" aria-hidden="true">·</span>
+                <strong>{navigation.current_region.currency_code}&nbsp;{navigation.current_region.shipping_threshold}</strong>
+              </span>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -259,18 +264,6 @@ function HeaderInner({ navigation }) {
           </Link>
 
           <div className="nav-mobile-footer">
-            <label className="control-select language-select">
-              <span className="visually-hidden">{t.language}</span>
-              <span className="control-select-icon" aria-hidden="true">
-                <Icon name="globe" size={15} />
-              </span>
-              <span className="control-select-value">{localeLabel}</span>
-              <select value={activeLocale} onChange={(event) => changeLocale(event.target.value)}>
-                <option value="en">English</option>
-                <option value="ar">العربية</option>
-              </select>
-              <Icon name="chevronDown" size={13} className="control-select-chevron" />
-            </label>
             <label className="control-select region-select">
               <span className="visually-hidden">{t.region}</span>
               <span className="control-select-flag" aria-hidden="true">{currentFlag}</span>
@@ -289,18 +282,15 @@ function HeaderInner({ navigation }) {
 
         <div className="header-controls">
           <div className="header-switchers">
-            <label className="control-select language-select">
-              <span className="visually-hidden">{t.language}</span>
-              <span className="control-select-icon" aria-hidden="true">
-                <Icon name="globe" size={15} />
-              </span>
-              <span className="control-select-value">{localeLabel}</span>
-              <select value={activeLocale} onChange={(event) => changeLocale(event.target.value)}>
-                <option value="en">English</option>
-                <option value="ar">العربية</option>
-              </select>
-              <Icon name="chevronDown" size={13} className="control-select-chevron" />
-            </label>
+            <button
+              type="button"
+              className="lang-toggle-btn"
+              onClick={() => changeLocale(locale === "ar" ? "en" : "ar")}
+              aria-label={locale === "ar" ? "Switch to English" : "التبديل إلى العربية"}
+            >
+              <Icon name="globe" size={15} className="lang-toggle-icon" />
+              <span>{locale === "ar" ? "EN" : "AR"}</span>
+            </button>
             <label className="control-select region-select">
               <span className="visually-hidden">{t.region}</span>
               <span className="control-select-flag" aria-hidden="true">{currentFlag}</span>
@@ -316,6 +306,31 @@ function HeaderInner({ navigation }) {
               <Icon name="chevronDown" size={13} className="control-select-chevron" />
             </label>
           </div>
+
+          {/* Mobile-only: locale toggle shown directly in the nav bar */}
+          <button
+            type="button"
+            className="lang-toggle-btn mobile-lang-toggle"
+            onClick={() => changeLocale(locale === "ar" ? "en" : "ar")}
+            aria-label={locale === "ar" ? "Switch to English" : "التبديل إلى العربية"}
+          >
+            <Icon name="globe" size={14} className="lang-toggle-icon" />
+            <span>{locale === "ar" ? "EN" : "AR"}</span>
+          </button>
+          <label className="control-select region-select mobile-region-select">
+            <span className="visually-hidden">{t.region}</span>
+            <span className="control-select-flag" aria-hidden="true">{currentFlag}</span>
+            <span className="control-select-value">{regionLabel}</span>
+            {isRegionPending ? <span className="control-select-dot" aria-hidden="true" /> : null}
+            <select value={activeRegionCode} onChange={(event) => changeRegion(event.target.value)}>
+              {navigation.regions.map((item) => (
+                <option key={item.code} value={item.code}>
+                  {REGION_FLAGS[item.code] ? `${REGION_FLAGS[item.code]} ` : ""}{item.name} · {item.currency_code}
+                </option>
+              ))}
+            </select>
+            <Icon name="chevronDown" size={12} className="control-select-chevron" />
+          </label>
 
           <button type="button" className="icon-link" aria-label={t.search} onClick={() => setSearchOpen(true)}>
             <Icon name="search" size={18} />

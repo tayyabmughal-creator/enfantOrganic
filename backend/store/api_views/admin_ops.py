@@ -24,6 +24,7 @@ from ..models import (
     Coupon,
     GiftCard,
     HeroPromoCard,
+    InstagramPost,
     NewsletterSubscription,
     NotificationLog,
     Order,
@@ -49,6 +50,7 @@ from ..api_serializers.admin_ops import (
     AdminCustomerSerializer,
     AdminGiftCardSerializer,
     AdminHeroPromoCardSerializer,
+    AdminInstagramPostSerializer,
     AdminOrderSerializer,
     AdminPaymentTransactionSerializer,
     AdminPaymobRegionConfigSerializer,
@@ -659,6 +661,20 @@ class AdminHeroPromoCardDetailView(StaffRetrieveUpdateDestroyView):
     admin_write_capabilities = (CAP_CONTENT_EDIT,)
     queryset = HeroPromoCard.objects.all()
     serializer_class = AdminHeroPromoCardSerializer
+
+
+class AdminInstagramPostListCreateView(StaffListCreateView):
+    admin_read_capabilities = (CAP_CONTENT_VIEW,)
+    admin_write_capabilities = (CAP_CONTENT_EDIT,)
+    queryset = InstagramPost.objects.all().order_by("sort_order")
+    serializer_class = AdminInstagramPostSerializer
+
+
+class AdminInstagramPostDetailView(StaffRetrieveUpdateDestroyView):
+    admin_read_capabilities = (CAP_CONTENT_VIEW,)
+    admin_write_capabilities = (CAP_CONTENT_EDIT,)
+    queryset = InstagramPost.objects.all()
+    serializer_class = AdminInstagramPostSerializer
 
 
 class AdminCouponListCreateView(StaffListCreateView):

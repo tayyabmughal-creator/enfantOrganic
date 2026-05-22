@@ -23,6 +23,17 @@ const SECURITY_HEADERS = [
 const nextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
   outputFileTracingRoot: path.join(process.cwd(), ".."),
+  async rewrites() {
+    // In development Next.js serves the frontend directly (no nginx), so
+    // browser-side fetches to /api/* would hit Next.js routing instead of
+    // Django. This proxy makes them transparently reach the Django dev server.
+    if (!isDev) return [];
+    return [
+      // Trailing slash: Next.js strips it (308), Django requires it (301).
+      // Adding it in the destination breaks the loop — Django gets the right URL directly.
+      { source: "/api/:path*", destination: "http://127.0.0.1:8000/api/:path*/" },
+    ];
+  },
   async headers() {
     return [
       {
