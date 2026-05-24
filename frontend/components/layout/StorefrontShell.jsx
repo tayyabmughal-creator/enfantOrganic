@@ -1,3 +1,4 @@
+import FloatingWhatsApp from "@/components/layout/FloatingWhatsApp";
 import Footer from "@/components/layout/Footer";
 import Header from "@/components/layout/Header";
 import AnalyticsConsentBanner from "@/components/store/analytics/AnalyticsConsentBanner";
@@ -10,6 +11,7 @@ export default function StorefrontShell({ children, locale, navigation }) {
       <Header navigation={navigation} />
       <main className="storefront-main">{children}</main>
       <Footer locale={locale} navigation={navigation} />
+      <FloatingWhatsApp locale={locale} navigation={navigation} />
       <AnalyticsConsentBanner locale={locale} />
     </div>
   );

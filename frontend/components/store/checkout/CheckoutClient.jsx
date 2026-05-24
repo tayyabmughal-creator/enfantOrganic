@@ -12,6 +12,7 @@ import { readJson } from "@/lib/http";
 
 const API_BASE_URL = CONFIG_API_BASE_URL;
 const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+const PAYMOB_APPLE_PAY_INTEGRATION_ID = process.env.NEXT_PUBLIC_PAYMOB_APPLE_PAY_INTEGRATION_ID || "";
 const AUTH_TOKEN_KEY = CUSTOMER_TOKEN_KEY;
 const GOOGLE_SCRIPT_ID = "enfant-google-maps-script";
 
@@ -21,18 +22,21 @@ const REGION_SETTINGS = {
     countryNameEn: "Oman",
     countryNameAr: "عُمان",
     center: { lat: 23.588, lng: 58.3829 },
+    bounds: { south: 16.6, west: 51.9, north: 26.4, east: 60.0 },
   },
   ae: {
     countryCode: "AE",
     countryNameEn: "United Arab Emirates",
     countryNameAr: "الإمارات العربية المتحدة",
     center: { lat: 25.2048, lng: 55.2708 },
+    bounds: { south: 22.6, west: 51.0, north: 26.1, east: 56.5 },
   },
   sa: {
     countryCode: "SA",
     countryNameEn: "Saudi Arabia",
     countryNameAr: "المملكة العربية السعودية",
     center: { lat: 24.7136, lng: 46.6753 },
+    bounds: { south: 16.0, west: 34.4, north: 32.2, east: 55.7 },
   },
 };
 
@@ -170,6 +174,50 @@ function extractAddressComponent(components, type) {
   return match?.long_name || "";
 }
 
+// Shared mapper used by both Places Autocomplete (place_changed) and reverse
+// geocode (marker drag, map click, geolocation). Returns a partial form patch.
+// Empty Google fields fall back to whatever the form currently holds.
+function buildAddressPatchFromGoogleResult(result, current = {}) {
+  const components = result?.address_components || [];
+  const city =
+    extractAddressComponent(components, "locality") ||
+    extractAddressComponent(components, "administrative_area_level_1");
+  const area =
+    extractAddressComponent(components, "sublocality") ||
+    extractAddressComponent(components, "neighborhood") ||
+    extractAddressComponent(components, "administrative_area_level_2");
+  const postcode = extractAddressComponent(components, "postal_code");
+  const country = extractAddressComponent(components, "country");
+  const formatted = result?.formatted_address || result?.name || "";
+
+  return {
+    place_id: result?.place_id || current.place_id || "",
+    formatted_address: formatted || current.formatted_address || "",
+    address_line_1: formatted || current.address_line_1 || "",
+    city: city || current.city || "",
+    area: area || current.area || "",
+    postcode: postcode || current.postcode || "",
+    country: country || current.country || "",
+  };
+}
+
+function reverseGeocodeLocation(geocoder, lat, lng, language) {
+  if (!geocoder) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    try {
+      geocoder.geocode({ location: { lat, lng }, language }, (results, status) => {
+        if (status === "OK" && Array.isArray(results) && results.length > 0) {
+          resolve(results[0]);
+        } else {
+          resolve(null);
+        }
+      });
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
 function formatEtaText(etaMin, etaMax, isAr) {
   const min = Number(etaMin);
   const max = Number(etaMax);
@@ -213,6 +261,8 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
   const mapRef = useRef(null);
   const markerRef = useRef(null);
   const autocompleteRef = useRef(null);
+  const geocoderRef = useRef(null);
+  const reverseGeocodeReqIdRef = useRef(0);
   const mapClickListenerRef = useRef(null);
   const markerDragListenerRef = useRef(null);
   const placeListenerRef = useRef(null);
@@ -250,6 +300,18 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
   const [couponPreview, setCouponPreview] = useState(null);
   const [couponMessage, setCouponMessage] = useState("");
   const [error, setError] = useState("");
+  const [applePayAvailable, setApplePayAvailable] = useState(false);
+
+  useEffect(() => {
+    if (!PAYMOB_APPLE_PAY_INTEGRATION_ID) return;
+    try {
+      setApplePayAvailable(
+        Boolean(typeof window !== "undefined" && window.ApplePaySession && window.ApplePaySession.canMakePayments()),
+      );
+    } catch {
+      setApplePayAvailable(false);
+    }
+  }, []);
 
   const [savedAddresses, setSavedAddresses] = useState([]);
   const [selectedAddressId, setSelectedAddressId] = useState("");
@@ -257,7 +319,14 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
 
   const [mapStatus, setMapStatus] = useState(GOOGLE_MAPS_API_KEY ? "idle" : "missing_key");
   const [mapNotice, setMapNotice] = useState("");
+  const [geocodingPin, setGeocodingPin] = useState(false);
+  const [geolocating, setGeolocating] = useState(false);
+  const [geolocationError, setGeolocationError] = useState("");
   const [onlineProvider, setOnlineProvider] = useState("");
+
+  const mapPinRequired = Boolean(backendRegionConfig?.require_map_pin);
+  const hasPin =
+    form.lat !== "" && form.lng !== "" && Number.isFinite(Number(form.lat)) && Number.isFinite(Number(form.lng));
 
   const enabledProviders = useMemo(() => {
     const raw = backendRegionConfig?.payment_enabled_providers;
@@ -430,6 +499,72 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
           }),
     }));
   }, []);
+
+  // Reverse-geocode a point and patch the address fields. Ignores stale
+  // responses (the user may drop a second pin before the first lookup returns).
+  const runReverseGeocode = useCallback(
+    async (lat, lng) => {
+      if (!geocoderRef.current) return;
+      const reqId = reverseGeocodeReqIdRef.current + 1;
+      reverseGeocodeReqIdRef.current = reqId;
+      setGeocodingPin(true);
+      const result = await reverseGeocodeLocation(
+        geocoderRef.current,
+        lat,
+        lng,
+        isAr ? "ar" : "en",
+      );
+      if (reqId !== reverseGeocodeReqIdRef.current) return;
+      setGeocodingPin(false);
+      if (!result) return;
+      setForm((current) => ({ ...current, ...buildAddressPatchFromGoogleResult(result, current) }));
+    },
+    [isAr],
+  );
+
+  const useMyCurrentLocation = useCallback(() => {
+    if (typeof window === "undefined" || !window.navigator?.geolocation) {
+      setGeolocationError(
+        isAr
+          ? "تحديد الموقع غير مدعوم على هذا المتصفح."
+          : "Geolocation is not supported in this browser.",
+      );
+      return;
+    }
+    if (mapStatus !== "ready") return;
+
+    setGeolocationError("");
+    setGeolocating(true);
+    window.navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setGeolocating(false);
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        updateCoordinates(lat, lng, { keepAddressFields: false });
+        syncMarkerPosition(lat, lng, true);
+        void runReverseGeocode(lat, lng);
+      },
+      (err) => {
+        setGeolocating(false);
+        let message;
+        if (err?.code === 1) {
+          message = isAr
+            ? "تم رفض إذن الموقع. فعّله من إعدادات المتصفح وحاول مجدداً."
+            : "Location permission was denied. Enable it in your browser settings and try again.";
+        } else if (err?.code === 2) {
+          message = isAr
+            ? "تعذر تحديد موقعك حالياً."
+            : "Your location is currently unavailable.";
+        } else if (err?.code === 3) {
+          message = isAr ? "انتهت مهلة تحديد الموقع." : "Locating you timed out.";
+        } else {
+          message = isAr ? "تعذر استخدام موقعك." : "Could not use your location.";
+        }
+        setGeolocationError(message);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+    );
+  }, [isAr, mapStatus, runReverseGeocode, syncMarkerPosition, updateCoordinates]);
 
   const applySavedAddress = useCallback(
     (address) => {
@@ -679,13 +814,29 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
       ? { lat: Number(form.lat), lng: Number(form.lng) }
       : { lat: regionConfig.center.lat, lng: regionConfig.center.lng };
 
+    const restrictionBounds = regionConfig.bounds
+      ? new googleMaps.LatLngBounds(
+          { lat: regionConfig.bounds.south, lng: regionConfig.bounds.west },
+          { lat: regionConfig.bounds.north, lng: regionConfig.bounds.east },
+        )
+      : null;
+
+    if (!geocoderRef.current && googleMaps.Geocoder) {
+      geocoderRef.current = new googleMaps.Geocoder();
+    }
+
     if (!mapRef.current) {
       mapRef.current = new googleMaps.Map(mapContainerRef.current, {
         center: startPosition,
-        zoom: hasCoordinates ? 16 : 12,
+        zoom: hasCoordinates ? 16 : 11,
         mapTypeControl: false,
         fullscreenControl: false,
         streetViewControl: false,
+        clickableIcons: false,
+        gestureHandling: "greedy",
+        ...(restrictionBounds
+          ? { restriction: { latLngBounds: restrictionBounds, strictBounds: false } }
+          : {}),
       });
 
       markerRef.current = new googleMaps.Marker({
@@ -697,7 +848,10 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
       markerDragListenerRef.current = markerRef.current.addListener("dragend", () => {
         const position = markerRef.current?.getPosition();
         if (!position) return;
-        updateCoordinates(position.lat(), position.lng(), { keepAddressFields: false });
+        const lat = position.lat();
+        const lng = position.lng();
+        updateCoordinates(lat, lng, { keepAddressFields: false });
+        void runReverseGeocode(lat, lng);
       });
 
       mapClickListenerRef.current = mapRef.current.addListener("click", (event) => {
@@ -706,8 +860,14 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         const lng = event.latLng.lng();
         markerRef.current?.setPosition({ lat, lng });
         updateCoordinates(lat, lng, { keepAddressFields: false });
+        void runReverseGeocode(lat, lng);
       });
     } else {
+      if (restrictionBounds && mapRef.current.setOptions) {
+        mapRef.current.setOptions({
+          restriction: { latLngBounds: restrictionBounds, strictBounds: false },
+        });
+      }
       syncMarkerPosition(startPosition.lat, startPosition.lng, true);
     }
 
@@ -716,6 +876,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         componentRestrictions: { country: regionConfig.countryCode.toLowerCase() },
         fields: ["address_components", "formatted_address", "geometry", "name", "place_id"],
         types: ["geocode"],
+        ...(restrictionBounds ? { bounds: restrictionBounds, strictBounds: false } : {}),
       });
       placeListenerRef.current = autocompleteRef.current.addListener("place_changed", () => {
         const place = autocompleteRef.current?.getPlace?.();
@@ -723,37 +884,36 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
 
         const lat = place.geometry.location.lat();
         const lng = place.geometry.location.lng();
-        const city =
-          extractAddressComponent(place.address_components, "locality") ||
-          extractAddressComponent(place.address_components, "administrative_area_level_1");
-        const area =
-          extractAddressComponent(place.address_components, "sublocality") ||
-          extractAddressComponent(place.address_components, "neighborhood");
-        const postcode = extractAddressComponent(place.address_components, "postal_code");
-        const country = extractAddressComponent(place.address_components, "country");
-
         setForm((current) => ({
           ...current,
           lat: lat.toFixed(6),
           lng: lng.toFixed(6),
-          place_id: place.place_id || "",
-          formatted_address: place.formatted_address || place.name || "",
-          address_line_1: place.formatted_address || place.name || current.address_line_1,
-          city: city || current.city,
-          area: area || current.area,
-          postcode: postcode || current.postcode,
-          country: country || current.country,
+          ...buildAddressPatchFromGoogleResult(place, current),
         }));
         syncMarkerPosition(lat, lng, true);
       });
+    } else {
+      if (autocompleteRef.current.setComponentRestrictions) {
+        autocompleteRef.current.setComponentRestrictions({
+          country: regionConfig.countryCode.toLowerCase(),
+        });
+      }
+      if (restrictionBounds && autocompleteRef.current.setBounds) {
+        autocompleteRef.current.setBounds(restrictionBounds);
+      }
     }
-
-    if (autocompleteRef.current?.setComponentRestrictions) {
-      autocompleteRef.current.setComponentRestrictions({
-        country: regionConfig.countryCode.toLowerCase(),
-      });
-    }
-  }, [form.lat, form.lng, mapStatus, regionConfig.center.lat, regionConfig.center.lng, regionConfig.countryCode, syncMarkerPosition, updateCoordinates]);
+  }, [
+    form.lat,
+    form.lng,
+    mapStatus,
+    regionConfig.bounds,
+    regionConfig.center.lat,
+    regionConfig.center.lng,
+    regionConfig.countryCode,
+    runReverseGeocode,
+    syncMarkerPosition,
+    updateCoordinates,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -797,11 +957,19 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     summaryPricing?.currency_code,
   ]);
 
-  async function submitOrder(event) {
-    event.preventDefault();
+  async function submitOrder(opts = {}) {
+    const applePayExpress = opts.applePay === true;
     setError("");
     if (!cartItems.length) {
       setError(isAr ? "سلة التسوق فارغة." : "Your cart is empty.");
+      return;
+    }
+    if (mapPinRequired && !hasPin) {
+      setError(
+        isAr
+          ? "يرجى تحديد موقع التوصيل على الخريطة قبل تأكيد الطلب."
+          : "Please pin your delivery location on the map before placing the order.",
+      );
       return;
     }
     // Never submit an order whose cart currency doesn't match the selected
@@ -848,7 +1016,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
           formatted_address: form.formatted_address,
           location_notes: form.location_notes,
         },
-        payment_method: form.payment_method,
+        payment_method: applePayExpress ? "online" : form.payment_method,
         coupon_code: form.coupon_code,
         notes: form.notes,
         items: checkoutItemsPayload(),
@@ -858,8 +1026,10 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
       const currencyCode = couponPreview?.currency_code || summaryPricing?.currency_code || "";
       const shippingAmount = asNumber(couponPreview?.shipping_amount);
       const taxAmount = asNumber(couponPreview?.tax_amount);
-      const paymentType =
-        form.payment_method === "online" && activeOnlineProvider
+      const effectiveOnlineProvider = applePayExpress ? "paymob" : activeOnlineProvider;
+      const paymentType = applePayExpress
+        ? "online_paymob_apple_pay"
+        : form.payment_method === "online" && activeOnlineProvider
           ? `online_${activeOnlineProvider}`
           : form.payment_method;
 
@@ -895,14 +1065,16 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
 
       clearCart();
 
-      if (form.payment_method === "online") {
+      if (applePayExpress || form.payment_method === "online") {
+        const initiateBody = {
+          order_number: data.order_number,
+          provider: effectiveOnlineProvider,
+        };
+        if (applePayExpress) initiateBody.payment_type = "apple_pay";
         const payRes = await fetch(`${API_BASE_URL}/payments/initiate/`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            order_number: data.order_number,
-            provider: activeOnlineProvider,
-          }),
+          body: JSON.stringify(initiateBody),
         });
         const payData = await readJson(payRes, { isAr });
         if (!payRes.ok) throw new Error(payData.error || "Payment initiation failed. Please try again.");
@@ -978,7 +1150,14 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         </div>
       ) : (
         <div className="checkout-grid">
-          <form id="checkout-form" className="checkout-form" onSubmit={submitOrder}>
+          <form
+            id="checkout-form"
+            className="checkout-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              return submitOrder();
+            }}
+          >
             <div className="form-card checkout-panel">
               {/* ── Contact Information ── */}
               <div className="checkout-sub-card">
@@ -1091,8 +1270,20 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                   </div>
                 </div>
 
-                <details className="checkout-disclosure is-location-card" open={mapStatus === "ready"}>
-                  <summary>{isAr ? "حدد موقع التوصيل" : "Pin your delivery location"}</summary>
+                <div className={`checkout-location-block ${mapPinRequired && !hasPin ? "is-required-pending" : ""}`}>
+                  <div className="checkout-location-block-head">
+                    <strong>{isAr ? "حدد موقع التوصيل" : "Pin your delivery location"}</strong>
+                    {mapPinRequired ? (
+                      <span className="checkout-location-required" aria-label={isAr ? "مطلوب" : "Required"}>
+                        {isAr ? "مطلوب" : "Required"}
+                      </span>
+                    ) : null}
+                    {hasPin ? (
+                      <span className="checkout-location-set">
+                        <Icon name="check" size={12} /> {isAr ? "تم تحديد الموقع" : "Location set"}
+                      </span>
+                    ) : null}
+                  </div>
                   <div className="map-address-card">
 
                   {mapStatus === "missing_key" || mapStatus === "error" ? (
@@ -1108,23 +1299,48 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
 
                   {mapStatus === "ready" ? (
                     <>
-                      <label>
-                        {isAr ? "بحث العنوان" : "Search for an address"}
-                        <input
-                          ref={placeInputRef}
-                          name="place-search"
-                          placeholder={isAr ? "ابحث عن عنوان..." : "Search for an address..."}
-                        />
-                      </label>
+                      <div className="map-search-row">
+                        <label className="map-search-label">
+                          {isAr ? "بحث العنوان" : "Search for an address"}
+                          <input
+                            ref={placeInputRef}
+                            name="place-search"
+                            placeholder={isAr ? "ابحث عن عنوان..." : "Search for an address..."}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="map-locate-btn"
+                          onClick={useMyCurrentLocation}
+                          disabled={geolocating}
+                        >
+                          {geolocating
+                            ? (isAr ? "جارٍ تحديد الموقع..." : "Locating...")
+                            : (isAr ? "📍 استخدم موقعي" : "📍 Use my location")}
+                        </button>
+                      </div>
+                      {geolocationError ? (
+                        <p className="form-error map-inline-error">{geolocationError}</p>
+                      ) : null}
                       <div ref={mapContainerRef} className="checkout-map-canvas" />
+                      <p className="map-address-help">
+                        {isAr
+                          ? "اسحب العلامة أو انقر على الخريطة لضبط الموقع. سيُعبَّأ العنوان تلقائياً."
+                          : "Drag the pin or tap the map to adjust. Address fields fill in automatically."}
+                      </p>
                       <div className="map-coordinates">
                         <span>{isAr ? "خط العرض" : "Latitude"}: {form.lat || "—"}</span>
                         <span>{isAr ? "خط الطول" : "Longitude"}: {form.lng || "—"}</span>
+                        {geocodingPin ? (
+                          <span className="map-geocoding-status">
+                            {isAr ? "جلب العنوان..." : "Looking up address..."}
+                          </span>
+                        ) : null}
                       </div>
                     </>
                   ) : null}
                   </div>
-                </details>
+                </div>
 
                 <div className="checkout-fields checkout-fields--2">
                   <label className="checkout-field-span-2">
@@ -1209,6 +1425,20 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                     <p>{isAr ? "اختر الطريقة المناسبة لك" : "Select your preferred payment method"}</p>
                   </div>
                 </div>
+                {applePayAvailable ? (
+                  <div className="checkout-apple-pay-express">
+                    <button
+                      type="button"
+                      className="cart-apple-pay-button cart-apple-pay-button--buy"
+                      disabled={submitting || cartItems.length === 0 || currencyMismatch || (mapPinRequired && !hasPin)}
+                      onClick={() => submitOrder({ applePay: true })}
+                      aria-label={isAr ? "ادفع بـ Apple Pay" : "Pay with Apple Pay"}
+                    />
+                    <span className="checkout-apple-pay-separator">
+                      {isAr ? "أو ادفع بطريقة أخرى" : "Or pay another way"}
+                    </span>
+                  </div>
+                ) : null}
                 <div className="payment-method-list">
                   {paymentMethods.map((method) => (
                     <button
@@ -1292,7 +1522,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
               <button
                 type="submit"
                 className="primary-action full-width checkout-form-submit--mobile"
-                disabled={submitting || cartItems.length === 0 || currencyMismatch}
+                disabled={submitting || cartItems.length === 0 || currencyMismatch || (mapPinRequired && !hasPin)}
               >
                 {submitting ? <span className="btn-spinner" /> : null}
                 {submitLabel}
@@ -1422,7 +1652,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
               type="submit"
               form="checkout-form"
               className="primary-action full-width checkout-aside-submit"
-              disabled={submitting || cartItems.length === 0 || currencyMismatch}
+              disabled={submitting || cartItems.length === 0 || currencyMismatch || (mapPinRequired && !hasPin)}
             >
               {submitting ? <span className="btn-spinner" /> : null}
               {submitLabel}

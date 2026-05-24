@@ -82,9 +82,17 @@ export default async function LocalizedHomePage({ params, searchParams }) {
     sun:      isAr ? "حماية يومية"    : "Daily Care",
   };
 
-  const heroPrimary   = home.hero_cards.find((c) => c.size === "large");
-  const heroSecondary = home.hero_cards.filter((c) => c.size === "large").slice(1)[0];
-  const heroChips     = home.hero_cards.filter((c) => c.size !== "large");
+  const heroCards = Array.isArray(home.hero_cards) ? home.hero_cards : [];
+  const heroLarge = heroCards.filter((c) => c.size === "large");
+  const heroPrimary = heroLarge[0];
+  const heroSecondary = heroLarge[1];
+  // Extra large cards (3rd+) flow into the chip grid so admins don't lose them.
+  const heroChips = [
+    ...heroCards.filter((c) => c.size !== "large"),
+    ...heroLarge.slice(2),
+  ];
+  const heroMainCount = (heroPrimary ? 1 : 0) + (heroSecondary ? 1 : 0);
+  const heroShowcaseEmpty = !heroPrimary && !heroSecondary && heroChips.length === 0;
   const organizationJsonLd = {
     "@context": "https://schema.org",
     "@type": "Organization",
@@ -99,10 +107,12 @@ export default async function LocalizedHomePage({ params, searchParams }) {
   return (
     <StorefrontShell locale={locale} navigation={navigation}>
       <JsonLd data={organizationJsonLd} />
+      {heroShowcaseEmpty ? null : (
       <section className="section container">
         <div className="offers-showcase">
 
-          <div className="offers-main">
+          {heroMainCount > 0 ? (
+          <div className={`offers-main offers-main--${heroMainCount === 1 ? "single" : "dual"}`}>
             {heroPrimary ? (
               <Link
                 href={buildStorePath(locale, heroPrimary.href || "/collections", region)}
@@ -151,9 +161,10 @@ export default async function LocalizedHomePage({ params, searchParams }) {
               </Link>
             ) : null}
           </div>
+          ) : null}
 
           {heroChips.length > 0 ? (
-            <div className="offers-grid">
+            <div className="offers-grid" data-count={heroChips.length}>
               {heroChips.map((card) => (
                 <Link
                   key={card.title}
@@ -182,6 +193,7 @@ export default async function LocalizedHomePage({ params, searchParams }) {
 
         </div>
       </section>
+      )}
 
       <section className="section container">
         <div className="trust-strip">

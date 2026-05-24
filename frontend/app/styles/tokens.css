@@ -1,5 +1,6 @@
 :root {
-  --bg: #f7f8f3;
+  --bg: #fbfcf8;
+  --site-bg-gradient: linear-gradient(145deg, #fffefa 0%, #f7fbf1 36%, #fbf5ed 72%, #f9fbf6 100%);
   --surface: #ffffff;
   --surface-soft: #f4f7ef;
   --surface-accent: #eaf1df;
@@ -32,14 +33,14 @@
 html {
   scroll-behavior: smooth;
   text-size-adjust: 100%;
+  background: var(--bg);
 }
 
 body {
   margin: 0;
   overflow-x: hidden;
-  background:
-    radial-gradient(circle at top left, rgba(237, 244, 226, 0.85), transparent 28rem),
-    var(--bg);
+  background: var(--site-bg-gradient);
+  background-attachment: fixed;
   color: var(--text);
   font-family:
     var(--font-sans),

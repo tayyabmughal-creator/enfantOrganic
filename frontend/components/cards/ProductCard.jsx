@@ -7,11 +7,29 @@ import Icon from "@/components/icons/Icon";
 import { useStore } from "@/components/store/cart/StoreProvider";
 import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
 
+const PRODUCT_CARD_IMAGE_MAP = {
+  "/enfant/complete-care-cream.jpg": "/enfant/product-cards/complete-care-cream-card.jpg",
+  "/enfant/daily-sun-protection-lotion.png": "/enfant/product-cards/daily-sun-protection-lotion-card.jpg",
+  "/enfant/double-moisture-lotion.png": "/enfant/product-cards/double-moisture-lotion-card.jpg",
+  "/enfant/extra-mild-baby-wipes.jpg": "/enfant/product-cards/extra-mild-baby-wipes-card.jpg",
+  "/enfant/extra-mild-moisture-lotion.jpg": "/enfant/product-cards/extra-mild-moisture-lotion-card.jpg",
+  "/enfant/face-body-sunscreen-lotion.png": "/enfant/product-cards/face-body-sunscreen-lotion-card.jpg",
+  "/enfant/insect-repellent-lotion.png": "/enfant/product-cards/insect-repellent-lotion-card.jpg",
+  "/enfant/moisture-shampoo.png": "/enfant/product-cards/moisture-shampoo-card.jpg",
+  "/enfant/relax-moisturizing-lotion.png": "/enfant/product-cards/relax-moisturizing-lotion-card.jpg",
+};
+
+function resolveProductCardImage(image) {
+  return PRODUCT_CARD_IMAGE_MAP[image] || image;
+}
+
 export default function ProductCard({ locale, product, region }) {
   const { addItem, openCart, openQuickView } = useStore();
   const t = uiText(locale);
   const [wishToast, setWishToast] = useState(false);
   const hasOptions = (product.option_groups || []).some((group) => group.values.length > 1);
+  const primaryImage = resolveProductCardImage(product.image);
+  const hoverImage = product.hover_image ? resolveProductCardImage(product.hover_image) : "";
   const rating = Number(product.rating || 0);
   const reviewLabel = locale === "ar" ? "تقييم" : "reviews";
   const saveLabel = locale === "ar" ? "وفر" : "Save";
@@ -36,18 +54,18 @@ export default function ProductCard({ locale, product, region }) {
   };
 
   return (
-    <article className={`product-card ${product.hover_image ? "has-hover-image" : ""}`}>
+    <article className={`product-card ${hoverImage ? "has-hover-image" : ""}`}>
       <div className="product-card-media-wrap">
         <Link href={buildStorePath(locale, `/product/${product.slug}`, region)} className="product-card-image">
           <img
-            src={product.image}
+            src={primaryImage}
             alt={product.name}
             loading="lazy"
             className="product-card-image-primary"
           />
-          {product.hover_image ? (
+          {hoverImage ? (
             <img
-              src={product.hover_image}
+              src={hoverImage}
               alt=""
               aria-hidden="true"
               loading="lazy"

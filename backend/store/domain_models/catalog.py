@@ -484,6 +484,7 @@ class HeroPromoCard(OrderedModel):
     image_file = models.ImageField(upload_to="hero-cards/", blank=True, null=True)
     size = models.CharField(max_length=12, choices=CARD_SIZE_CHOICES, default=SMALL)
     accent = models.CharField(max_length=40, default="soft")
+    is_visible = models.BooleanField(default=True)
 
     def __str__(self):
         return self.title_en

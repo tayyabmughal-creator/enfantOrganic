@@ -7,6 +7,7 @@ import { StoreSettingsSection, SettingsPanel, Reports, AuditLogsPanel, Integrati
 import { CrudPanel, CrudFormModal } from "./CrudViews";
 import { AdminToast } from "./SharedUI";
 import SkeletonLoader from "../SkeletonLoader";
+import Icon from "../icons/Icon";
 import { API_BASE_URL, ADMIN_TOKEN_KEY, ADMIN_REFRESH_KEY } from "@/lib/config";
 
 const API_BASE    = API_BASE_URL;
@@ -17,80 +18,80 @@ const NAV_GROUPS = [
   {
     label: "Store",
     items: [
-      { key: "dashboard",  label: "Dashboard",   icon: "⊞", endpoint: "/admin/dashboard/",  desc: "Live store signals and KPIs." },
-      { key: "orders",     label: "Orders",       icon: "▤", endpoint: "/admin/orders/",      desc: "Manage and fulfil customer orders." },
-      { key: "customers",  label: "Customers",    icon: "♙", endpoint: "/admin/customers/",   desc: "Customer accounts and history." },
+      { key: "dashboard",  label: "Dashboard",   icon: "dashboard", endpoint: "/admin/dashboard/",  desc: "Live store signals and KPIs." },
+      { key: "orders",     label: "Orders",       icon: "clipboard", endpoint: "/admin/orders/",      desc: "Manage and fulfil customer orders." },
+      { key: "customers",  label: "Customers",    icon: "user",      endpoint: "/admin/customers/",   desc: "Customer accounts and history." },
     ],
   },
   {
     label: "Catalog",
     items: [
-      { key: "products",   label: "Products",    icon: "◇", endpoint: "/admin/products/",    desc: "Create and manage product listings." },
-      { key: "categories", label: "Categories",  icon: "☰", endpoint: "/admin/categories/",  desc: "Organise products into categories." },
-      { key: "inventory",  label: "Inventory",   icon: "▦", endpoint: "/admin/products/",    desc: "Stock levels and reorder alerts." },
-      { key: "warehouses", label: "Warehouses",  icon: "⌂", endpoint: "/admin/warehouses/",  desc: "Fulfilment centres and regions." },
+      { key: "products",   label: "Products",    icon: "tag",      endpoint: "/admin/products/",    desc: "Create and manage product listings." },
+      { key: "categories", label: "Categories",  icon: "folder",   endpoint: "/admin/categories/",  desc: "Organise products into categories." },
+      { key: "inventory",  label: "Inventory",   icon: "box",      endpoint: "/admin/products/",    desc: "Stock levels and reorder alerts." },
+      { key: "warehouses", label: "Warehouses",  icon: "building", endpoint: "/admin/warehouses/",  desc: "Fulfilment centres and regions." },
     ],
   },
   {
     label: "Content",
     items: [
-      { key: "blog",             label: "Blog",           icon: "✍", endpoint: "/admin/blog-posts/",       desc: "Articles, guides, and brand stories." },
-      { key: "hero_cards",       label: "Hero Cards",     icon: "◫", endpoint: "/admin/hero-promo-cards/",  desc: "Homepage hero promo cards and visuals." },
-      { key: "instagram_posts",  label: "Instagram Grid", icon: "◎", endpoint: "/admin/instagram-posts/",   desc: "Instagram feed photos shown on the homepage." },
-      { key: "homepage",         label: "Content",        icon: "⌂", endpoint: "/admin/settings/",          desc: "Announcements, newsletter, and homepage sections." },
+      { key: "blog",             label: "Blog",           icon: "edit",      endpoint: "/admin/blog-posts/",       desc: "Articles, guides, and brand stories." },
+      { key: "hero_cards",       label: "Hero Cards",     icon: "image",     endpoint: "/admin/hero-promo-cards/",  desc: "Homepage hero promo cards and visuals." },
+      { key: "instagram_posts",  label: "Instagram Grid", icon: "instagram", endpoint: "/admin/instagram-posts/",   desc: "Instagram feed photos shown on the homepage." },
+      { key: "homepage",         label: "Content",        icon: "home",      endpoint: "/admin/settings/",          desc: "Announcements, newsletter, and homepage sections." },
     ],
   },
   {
     label: "Store Setup",
     items: [
-      { key: "branding",      label: "Branding",       icon: "◈", endpoint: "/admin/settings/",    desc: "Logo, colors, tagline, and store identity." },
-      { key: "nav_settings",  label: "Navigation",     icon: "☰", endpoint: "/admin/settings/",    desc: "Header nav links and utility menu." },
-      { key: "footer_social", label: "Footer & Social",icon: "⊟", endpoint: "/admin/settings/",    desc: "Footer content, social media, and contact info." },
-      { key: "seo_legal",     label: "SEO & Legal",    icon: "◎", endpoint: "/admin/settings/",    desc: "Meta tags, Open Graph, return policy, privacy." },
+      { key: "branding",      label: "Branding",       icon: "palette", endpoint: "/admin/settings/", desc: "Logo, colors, tagline, and store identity." },
+      { key: "nav_settings",  label: "Navigation",     icon: "menu",    endpoint: "/admin/settings/", desc: "Header nav links and utility menu." },
+      { key: "footer_social", label: "Footer & Social",icon: "link",    endpoint: "/admin/settings/", desc: "Footer content, social media, and contact info." },
+      { key: "seo_legal",     label: "SEO & Legal",    icon: "search",  endpoint: "/admin/settings/", desc: "Meta tags, Open Graph, return policy, privacy." },
     ],
   },
   {
     label: "Marketing",
     items: [
-      { key: "deals",      label: "Promotions",     icon: "✺", endpoint: "/admin/promotions/", desc: "Coupons, codes, and deals." },
-      { key: "giftcards",  label: "Gift Cards",     icon: "◈", endpoint: "/admin/gift-cards/", desc: "Issue and track gift cards." },
-      { key: "abandoned",  label: "Abandoned Cart", icon: "◷", endpoint: "/admin/abandoned-carts/", desc: "Recover abandoned checkouts." },
-      { key: "newsletter", label: "Newsletter",     icon: "▢", endpoint: "/admin/newsletter-subscribers/", desc: "Subscribers and campaigns." },
+      { key: "deals",      label: "Promotions",     icon: "percent", endpoint: "/admin/promotions/",           desc: "Coupons, codes, and deals." },
+      { key: "giftcards",  label: "Gift Cards",     icon: "gift",    endpoint: "/admin/gift-cards/",           desc: "Issue and track gift cards." },
+      { key: "abandoned",  label: "Abandoned Cart", icon: "cartX",   endpoint: "/admin/abandoned-carts/",      desc: "Recover abandoned checkouts." },
+      { key: "newsletter", label: "Newsletter",     icon: "mail",    endpoint: "/admin/newsletter-subscribers/", desc: "Subscribers and campaigns." },
     ],
   },
   {
     label: "Analytics",
     items: [
-      { key: "analytics",  label: "Analytics",  icon: "▥", endpoint: "/admin/dashboard/",  desc: "Revenue, funnels, and trends." },
-      { key: "insights",   label: "Insights",   icon: "◑", endpoint: "/admin/customers/",   desc: "Segments, LTV, and cohorts." },
-      { key: "reports",    label: "Reports",    icon: "⇩", endpoint: "/admin/moderation/",  desc: "CSV exports and health checks." },
-      { key: "audit_logs", label: "Audit Logs", icon: "⌁", endpoint: "/admin/audit-logs/",  desc: "Sensitive action timeline and traceability." },
+      { key: "analytics",  label: "Analytics",  icon: "chartLine", endpoint: "/admin/dashboard/",  desc: "Revenue, funnels, and trends." },
+      { key: "insights",   label: "Insights",   icon: "chartPie",  endpoint: "/admin/customers/",  desc: "Segments, LTV, and cohorts." },
+      { key: "reports",    label: "Reports",    icon: "download",  endpoint: "/admin/moderation/", desc: "CSV exports and health checks." },
+      { key: "audit_logs", label: "Audit Logs", icon: "activity",  endpoint: "/admin/audit-logs/", desc: "Sensitive action timeline and traceability." },
     ],
   },
   {
     label: "Operations",
     items: [
-      { key: "reviews",  label: "Reviews",  icon: "★", endpoint: "/admin/reviews/", desc: "Approve and moderate reviews." },
-      { key: "returns",  label: "Returns",  icon: "↩", endpoint: "/admin/returns/",  desc: "Return requests and refunds." },
-      { key: "shipping", label: "Shipping", icon: "◁", endpoint: "/admin/shipping-rules/", desc: "Rules-based rates and delivery ETA." },
+      { key: "reviews",  label: "Reviews",  icon: "star",         endpoint: "/admin/reviews/",         desc: "Approve and moderate reviews." },
+      { key: "returns",  label: "Returns",  icon: "returnArrow",  endpoint: "/admin/returns/",         desc: "Return requests and refunds." },
+      { key: "shipping", label: "Shipping", icon: "truck",        endpoint: "/admin/shipping-rules/", desc: "Rules-based rates and delivery ETA." },
     ],
   },
   {
     label: "Integrations",
     items: [
-      { key: "social",          label: "Social Media",    icon: "◉", endpoint: "/admin/settings/", desc: "Facebook, TikTok, Snapchat, and Pinterest pixels." },
-      { key: "marketing_tools", label: "Marketing Tools", icon: "⊗", endpoint: "/admin/settings/", desc: "GA4, Google Ads, GTM, Klaviyo, and Mailchimp." },
-      { key: "apps",            label: "App Store",       icon: "⊕", endpoint: "/admin/settings/", desc: "Push notifications, search, and fulfilment apps." },
+      { key: "social",          label: "Social Media",    icon: "share",      endpoint: "/admin/settings/", desc: "Facebook, TikTok, Snapchat, and Pinterest pixels." },
+      { key: "marketing_tools", label: "Marketing Tools", icon: "megaphone",  endpoint: "/admin/settings/", desc: "GA4, Google Ads, GTM, Klaviyo, and Mailchimp." },
+      { key: "apps",            label: "App Store",       icon: "apps",       endpoint: "/admin/settings/", desc: "Push notifications, search, and fulfilment apps." },
     ],
   },
   {
     label: "Settings",
     items: [
-      { key: "payments",        label: "Payments",        icon: "▭", endpoint: "/admin/payments/",  desc: "Providers and transactions." },
-      { key: "payment_setup",   label: "Payment Setup",   icon: "⊞", endpoint: "/admin/settings/",  desc: "Configure payment gateway credentials from the admin panel." },
-      { key: "taxes",           label: "Taxes",           icon: "◫", endpoint: "/admin/tax-rules/", desc: "Tax zones, VAT rates, and inclusive/exclusive pricing." },
-      { key: "staff",           label: "Staff",           icon: "⚙", endpoint: "/admin/staff/",    desc: "Team accounts, roles, and permissions." },
-      { key: "regions",         label: "Regions",         icon: "◌", endpoint: "/admin/regions/",  desc: "Active regions, currencies, and locale config." },
+      { key: "payments",        label: "Payments",        icon: "creditCard", endpoint: "/admin/payments/",  desc: "Providers and transactions." },
+      { key: "payment_setup",   label: "Payment Setup",   icon: "settings",   endpoint: "/admin/settings/",  desc: "Configure payment gateway credentials from the admin panel." },
+      { key: "taxes",           label: "Taxes",           icon: "receipt",    endpoint: "/admin/tax-rules/", desc: "Tax zones, VAT rates, and inclusive/exclusive pricing." },
+      { key: "staff",           label: "Staff",           icon: "users",      endpoint: "/admin/staff/",     desc: "Team accounts, roles, and permissions." },
+      { key: "regions",         label: "Regions",         icon: "globe",      endpoint: "/admin/regions/",   desc: "Active regions, currencies, and locale config." },
     ],
   },
 ];
@@ -306,6 +307,7 @@ const FIELD_CONFIGS = {
       ["sun","Daily Care"],
     ]],
     ["sort_order","Sort order","number"],
+    ["is_visible","Visible on homepage","checkbox"],
     ["image","Image URL","text"],["image_file","Upload image","file"],
   ],
   homepage: [
@@ -427,7 +429,7 @@ const CREATE_DEFAULTS = {
   reviews:    { product:"",order:"",customer_name:"",rating:5,title:"",comment:"",is_verified_purchase:false,is_approved:false },
   shipping:   { region:"",city:"",area:"",min_order_value:0,max_order_value:"",shipping_fee:0,free_shipping_threshold:0,eta_min_days:"",eta_max_days:"",carrier_name:"",active:true },
   blog:       { slug:"",title_en:"",title_ar:"",excerpt_en:"",excerpt_ar:"",body_en:"",body_ar:"",image:"",category_en:"",category_ar:"",published_at:"",is_published:false,sort_order:0 },
-  hero_cards: { title_en:"",title_ar:"",subtitle_en:"",subtitle_ar:"",cta_en:"Shop now",cta_ar:"تسوق الآن",href:"/collections",size:"small",accent:"soft",sort_order:0,image:"" },
+  hero_cards: { title_en:"",title_ar:"",subtitle_en:"",subtitle_ar:"",cta_en:"Shop now",cta_ar:"تسوق الآن",href:"/collections",size:"small",accent:"soft",sort_order:0,is_visible:true,image:"" },
   taxes:      { name_en:"VAT",name_ar:"ضريبة القيمة المضافة",region:"",rate:0.05,is_inclusive:false,is_active:true,description:"" },
   staff:      { email:"",username:"",password:"",first_name:"",last_name:"",role:"Manager",is_active:true,is_staff:true },
   warehouses: { code:"",name_en:"",name_ar:"",region:"",fulfillment_regions:"",active:true },
@@ -481,7 +483,7 @@ function metaFor(item, key) {
   if (key === "staff")   return `${item.roles?.[0] || "No role"} · ${item.is_active ? "Active" : "Inactive"}`;
   if (key === "giftcards") return `${item.currency_code || ""} · ${item.initial_balance} / ${item.remaining_balance} · ${item.status}`;
   if (key === "abandoned") return `${item.currency_code || ""} · ${item.subtotal} · ${item.status}`;
-  if (key === "hero_cards") return `${item.size || "small"} · sort ${item.sort_order ?? 0}`;
+  if (key === "hero_cards") return `${item.size || "small"} · sort ${item.sort_order ?? 0} · ${item.is_visible === false ? "hidden" : "visible"}`;
   return item.customer_name || item.brand || item.status || item.payment_status || item.discount_type || item.currency_code || (item.is_approved === false ? "Pending moderation" : item.is_published !== undefined ? (item.is_published ? "Published" : "Draft") : "Ready");
 }
 
@@ -1119,7 +1121,9 @@ export default function AdminPanelClient() {
                   className={`admin-nav-item ${activeKey === item.key ? "active" : ""}`}
                   onClick={() => navigate(item.key)}
                 >
-                  <span className="admin-nav-icon">{item.icon}</span>
+                  <span className="admin-nav-icon" aria-hidden="true">
+                    <Icon name={item.icon} size={18} />
+                  </span>
                   <span className="admin-nav-label">{item.label}</span>
                   {!item.endpoint ? <span className="admin-soon-dot" /> : null}
                 </button>

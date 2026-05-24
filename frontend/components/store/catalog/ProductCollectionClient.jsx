@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import ProductCard from "@/components/cards/ProductCard";
 import { buildAnalyticsItems, pushDataLayerEvent } from "@/lib/analytics";
-import { uiText } from "@/lib/storefront";
+import { formatMoney, uiText } from "@/lib/storefront";
 
 const sortKeys = ["featured", "price-asc", "price-desc", "reviews"];
 
@@ -33,6 +33,35 @@ export default function ProductCollectionClient({ data, locale, region }) {
   const [sortBy, setSortBy] = useState("featured");
   const [maxPrice, setMaxPrice] = useState(absoluteMaxPrice);
   const lastTrackedListSignatureRef = useRef("");
+  const basePricing = data.products.find((product) => product.pricing)?.pricing || {};
+  const formatCatalogPrice = (amount) => (
+    basePricing.currency_code
+      ? formatMoney({ ...basePricing, amount, prefix: "" }, locale)
+      : String(Math.round(amount))
+  );
+  const hasActiveFilters =
+    selectedCategory !== "all" ||
+    selectedTag !== "all" ||
+    sortBy !== "featured" ||
+    maxPrice < absoluteMaxPrice;
+  const selectedCategoryName =
+    selectedCategory === "all"
+      ? t.allProducts
+      : data.categories.find((category) => category.slug === selectedCategory)?.name || t.allProducts;
+  const selectedTagName =
+    selectedTag === "all"
+      ? t.viewAll
+      : data.tags.find((tag) => tag.slug === selectedTag)?.name || t.viewAll;
+  const priceCapLabel = formatCatalogPrice(maxPrice);
+  const maxPriceLabel = formatCatalogPrice(absoluteMaxPrice);
+  const selectionLabel = `${selectedCategoryName} / ${selectedTagName}`;
+
+  function resetFilters() {
+    setSelectedCategory("all");
+    setSelectedTag("all");
+    setSortBy("featured");
+    setMaxPrice(absoluteMaxPrice);
+  }
 
   const filteredProducts = useMemo(() => {
     const nextProducts = data.products
@@ -62,6 +91,10 @@ export default function ProductCollectionClient({ data, locale, region }) {
 
     return nextProducts;
   }, [data.products, maxPrice, selectedCategory, selectedTag, sortBy]);
+  const resultsLabel =
+    locale === "ar"
+      ? `${filteredProducts.length} منتج`
+      : `${filteredProducts.length} products`;
 
   useEffect(() => {
     if (!filteredProducts.length) {
@@ -93,8 +126,26 @@ export default function ProductCollectionClient({ data, locale, region }) {
   return (
     <div className="catalog-layout">
       <aside className="filters-panel">
+        <div className="filters-panel-header">
+          <div>
+            <span>{t.filters}</span>
+            <strong>{selectionLabel}</strong>
+          </div>
+          <button
+            type="button"
+            className="filter-reset-button"
+            onClick={resetFilters}
+            disabled={!hasActiveFilters}
+          >
+            {t.reset}
+          </button>
+        </div>
+
         <div className="filters-group">
-          <h4>{t.categories}</h4>
+          <div className="filters-group-heading">
+            <h4>{t.categories}</h4>
+            <span>{data.categories.length}</span>
+          </div>
           <div className="filter-chip-row">
             <button
               type="button"
@@ -117,7 +168,10 @@ export default function ProductCollectionClient({ data, locale, region }) {
         </div>
 
         <div className="filters-group">
-          <h4>{t.tags}</h4>
+          <div className="filters-group-heading">
+            <h4>{t.tags}</h4>
+            <span>{data.tags.length}</span>
+          </div>
           <div className="filter-chip-row">
             <button
               type="button"
@@ -140,26 +194,45 @@ export default function ProductCollectionClient({ data, locale, region }) {
         </div>
 
         <div className="filters-group">
-          <h4>{t.price}</h4>
-          <input
-            type="range"
-            min="0"
-            max={absoluteMaxPrice}
-            value={maxPrice}
-            onChange={(event) => setMaxPrice(Number(event.target.value))}
-          />
+          <div className="filters-group-heading">
+            <h4>{t.price}</h4>
+            <span>{priceCapLabel}</span>
+          </div>
+          <div className="catalog-range-control">
+            <input
+              type="range"
+              min="0"
+              max={absoluteMaxPrice}
+              value={maxPrice}
+              onChange={(event) => setMaxPrice(Number(event.target.value))}
+              aria-label={t.price}
+            />
+            <div className="catalog-range-labels">
+              <span>{formatCatalogPrice(0)}</span>
+              <span>{maxPriceLabel}</span>
+            </div>
+          </div>
         </div>
       </aside>
 
       <div className="catalog-results">
         <div className="catalog-toolbar">
-          <span>{filteredProducts.length} products</span>
-          <label className="control-select">
-            <select value={sortBy} onChange={(event) => setSortBy(sortKeys.includes(event.target.value) ? event.target.value : "featured")}>
-              <option value="featured">{t.sortBy}: {sortLabels.featured}</option>
-              <option value="price-asc">{t.sortBy}: {sortLabels["price-asc"]}</option>
-              <option value="price-desc">{t.sortBy}: {sortLabels["price-desc"]}</option>
-              <option value="reviews">{t.sortBy}: {sortLabels.reviews}</option>
+          <div className="catalog-toolbar-copy">
+            <span>{t.products}</span>
+            <strong>{resultsLabel}</strong>
+            <small>{selectionLabel}</small>
+          </div>
+          <label className="control-select catalog-sort-select">
+            <span className="catalog-sort-label">{t.sortBy}</span>
+            <strong>{sortLabels[sortBy]}</strong>
+            <select
+              value={sortBy}
+              onChange={(event) => setSortBy(sortKeys.includes(event.target.value) ? event.target.value : "featured")}
+            >
+              <option value="featured">{sortLabels.featured}</option>
+              <option value="price-asc">{sortLabels["price-asc"]}</option>
+              <option value="price-desc">{sortLabels["price-desc"]}</option>
+              <option value="reviews">{sortLabels.reviews}</option>
             </select>
           </label>
         </div>

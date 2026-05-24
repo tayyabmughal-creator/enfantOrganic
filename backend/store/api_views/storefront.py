@@ -90,7 +90,11 @@ class HomePageView(StorefrontContextMixin, APIView):
         ]
 
         payload = {
-            "hero_cards": HeroPromoCardSerializer(HeroPromoCard.objects.all(), many=True, context=context).data,
+            "hero_cards": HeroPromoCardSerializer(
+                HeroPromoCard.objects.filter(is_visible=True),
+                many=True,
+                context=context,
+            ).data,
             "categories_heading": {
                 "title": "Shop by Category" if locale == "en" else "تسوق حسب الفئة",
                 "subtitle": "Discover our Premium collections" if locale == "en" else "اكتشف مجموعاتنا المميزة",

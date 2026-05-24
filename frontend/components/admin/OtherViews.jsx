@@ -781,6 +781,10 @@ export function RegionsView({ rows, request, onSaved }) {
   const [savingThreshold, setSavingThreshold] = useState({});
   const [thresholdError, setThresholdError] = useState({});
 
+  const [editingWhatsapp, setEditingWhatsapp] = useState({});
+  const [savingWhatsapp, setSavingWhatsapp] = useState({});
+  const [whatsappError, setWhatsappError] = useState({});
+
   async function saveThreshold(code, value) {
     const num = parseFloat(value);
     if (isNaN(num) || num < 0) {
@@ -803,6 +807,29 @@ export function RegionsView({ rows, request, onSaved }) {
     }
   }
 
+  async function saveWhatsapp(code, value) {
+    // Keep only digits + optional leading +; wa.me links strip the + anyway.
+    const cleaned = String(value || "").replace(/[^\d+]/g, "");
+    if (cleaned && cleaned.replace(/\D/g, "").length < 6) {
+      setWhatsappError((e) => ({ ...e, [code]: "Enter a valid phone number (digits, with country code)" }));
+      return;
+    }
+    setSavingWhatsapp((s) => ({ ...s, [code]: true }));
+    setWhatsappError((e) => ({ ...e, [code]: null }));
+    try {
+      await request(`/admin/regions/${code}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ whatsapp_phone: cleaned }),
+      });
+      setEditingWhatsapp((e) => ({ ...e, [code]: undefined }));
+      onSaved?.();
+    } catch {
+      setWhatsappError((e) => ({ ...e, [code]: "Save failed — try again" }));
+    } finally {
+      setSavingWhatsapp((s) => ({ ...s, [code]: false }));
+    }
+  }
+
   if (!rows.length) {
     return (
       <section className="admin-panel-card">
@@ -817,6 +844,9 @@ export function RegionsView({ rows, request, onSaved }) {
         const isEditing = editingThreshold[code] !== undefined;
         const isSaving = savingThreshold[code];
         const error = thresholdError[code];
+        const isEditingWa = editingWhatsapp[code] !== undefined;
+        const isSavingWa = savingWhatsapp[code];
+        const waError = whatsappError[code];
         return (
           <section key={region.id || code} className="admin-panel-card admin-region-card">
             <div className="admin-panel-head">
@@ -878,6 +908,53 @@ export function RegionsView({ rows, request, onSaved }) {
                       <button
                         className="admin-btn admin-btn-xs admin-btn-ghost"
                         onClick={() => setEditingThreshold((s) => ({ ...s, [code]: true }))}
+                      >
+                        Edit
+                      </button>
+                    )}
+                  </span>
+                )}
+              </div>
+
+              {/* WhatsApp number — inline editable, controls floating chat button */}
+              <div className="admin-settings-row admin-threshold-row">
+                <strong>WhatsApp number</strong>
+                {isEditingWa ? (
+                  <span className="admin-threshold-edit">
+                    <input
+                      type="tel"
+                      inputMode="tel"
+                      placeholder="968XXXXXXXX"
+                      className="admin-threshold-input"
+                      defaultValue={region.whatsapp_phone || ""}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveWhatsapp(code, e.target.value);
+                        if (e.key === "Escape") setEditingWhatsapp((s) => ({ ...s, [code]: undefined }));
+                      }}
+                      autoFocus
+                    />
+                    <button
+                      className="admin-btn admin-btn-xs admin-btn-primary"
+                      disabled={isSavingWa}
+                      onClick={(e) => saveWhatsapp(code, e.target.closest(".admin-threshold-edit").querySelector("input").value)}
+                    >
+                      {isSavingWa ? "Saving…" : "Save"}
+                    </button>
+                    <button
+                      className="admin-btn admin-btn-xs"
+                      onClick={() => setEditingWhatsapp((s) => ({ ...s, [code]: undefined }))}
+                    >
+                      Cancel
+                    </button>
+                    {waError && <span className="admin-threshold-error">{waError}</span>}
+                  </span>
+                ) : (
+                  <span className="admin-threshold-display">
+                    <span>{region.whatsapp_phone || "—"}</span>
+                    {request && (
+                      <button
+                        className="admin-btn admin-btn-xs admin-btn-ghost"
+                        onClick={() => setEditingWhatsapp((s) => ({ ...s, [code]: true }))}
                       >
                         Edit
                       </button>

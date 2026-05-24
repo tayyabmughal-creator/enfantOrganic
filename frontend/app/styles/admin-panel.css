@@ -122,10 +122,22 @@
 }
 
 .admin-nav-icon {
-  font-size: 15px;
-  width: 20px;
-  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
   flex-shrink: 0;
+  color: #6f7c66;
+  transition: color 150ms;
+}
+
+.admin-nav-item:hover .admin-nav-icon {
+  color: #2a4030;
+}
+
+.admin-nav-item.active .admin-nav-icon {
+  color: #ffffff;
 }
 
 .admin-nav-label {
@@ -526,22 +538,59 @@
 .admin-kpi-grid.four-col { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 
 .admin-kpi-card {
-  padding: 20px 22px;
+  padding: 18px 20px 16px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
 }
 
-.admin-kpi-card.kpi-success { border-color: #ccebd0; background: #f8fdf9; }
-.admin-kpi-card.kpi-warning { border-color: #f2dfad; background: #fffcf4; }
-.admin-kpi-card.kpi-danger  { border-color: #f2c7c7; background: #fff8f8; }
+.admin-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(25, 24, 23, 0.06);
+  border-color: #d6e0c8;
+}
+
+.admin-kpi-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-kpi-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #f3f7ec;
+  color: #5d7644;
+  flex-shrink: 0;
+}
+
+.kpi-tone-revenue     .admin-kpi-icon { background: #fef5e1; color: #8a6a1f; }
+.kpi-tone-monthly     .admin-kpi-icon { background: #fff1d6; color: #8a6a1f; }
+.kpi-tone-orders      .admin-kpi-icon { background: #eaf6ec; color: #2f6d3a; }
+.kpi-tone-customers   .admin-kpi-icon { background: #ecf0fa; color: #4a5b89; }
+.kpi-tone-avg         .admin-kpi-icon { background: #fff3e2; color: #8a6322; }
+.kpi-tone-conversion  .admin-kpi-icon { background: #eaf3fa; color: #2c6485; }
+.kpi-tone-abandonment .admin-kpi-icon { background: #fdecea; color: #a73c3c; }
+.kpi-tone-repeat      .admin-kpi-icon { background: #efeaf9; color: #5a4593; }
 
 .admin-kpi-label {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: #8a9580;
+}
+
+.admin-kpi-card-body {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .admin-kpi-value {
@@ -552,14 +601,21 @@
   line-height: 1;
 }
 
+.kpi-spark { flex-shrink: 0; opacity: 0.85; }
+
 .admin-kpi-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   font-weight: 600;
   color: #8a9580;
 }
 
-.admin-kpi-delta.up   { color: #267334; }
-.admin-kpi-delta.down { color: #c44242; }
+.admin-kpi-delta.up    { color: #267334; }
+.admin-kpi-delta.down  { color: #c44242; }
+.admin-kpi-delta.flat  { color: #8a9580; }
+.admin-kpi-delta-arrow { font-size: 10px; line-height: 1; }
 
 /* ─── Dashboard layout ────────────────────────────────────────────────────── */
 
@@ -2177,4 +2233,292 @@
 @media (max-width: 900px) {
   .ig-admin-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .ig-post-add-fields { grid-template-columns: 1fr; }
+}
+
+/* ─── Dashboard toolbar (period pill + refresh) ───────────────────────────── */
+
+.admin-dash-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-bottom: -4px;
+}
+
+.admin-dash-period {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid #e2e8d8;
+  background: #ffffff;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4a5641;
+  box-shadow: 0 1px 3px rgba(25, 24, 23, 0.03);
+}
+
+.admin-dash-period-icon {
+  display: inline-flex;
+  color: #7d8a72;
+}
+
+.admin-dash-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #e2e8d8;
+  background: #ffffff;
+  border-radius: 10px;
+  color: #4a5641;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(25, 24, 23, 0.03);
+  transition: background 150ms, transform 150ms;
+}
+
+.admin-dash-refresh:hover {
+  background: #f4f7ef;
+  transform: rotate(45deg);
+}
+
+/* ─── Dashboard chart card headers ────────────────────────────────────────── */
+
+.admin-chart-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.admin-chart-card-head h3 {
+  margin: 0;
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: clamp(16px, 1.6vw, 19px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #191817;
+}
+
+.admin-chart-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: #f3f7ec;
+  color: #4a5641;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid #e3ecd6;
+}
+
+.admin-chart-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #7d8a72;
+}
+
+.admin-chart-swatch {
+  display: inline-block;
+  width: 18px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+/* ─── Donut legend ─────────────────────────────────────────────────────────── */
+
+.admin-donut-section .admin-donut-chart {
+  margin: 0 auto;
+  display: block;
+}
+
+.admin-donut-legend {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.admin-donut-legend li {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  font-size: 13px;
+  color: #4a5641;
+}
+
+.admin-donut-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.admin-donut-label {
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.admin-donut-count {
+  font-weight: 700;
+  color: #191817;
+}
+
+.admin-donut-count em {
+  font-style: normal;
+  color: #8a9580;
+  font-weight: 500;
+  margin-inline-start: 4px;
+}
+
+.admin-donut-empty {
+  color: #8a9580;
+  font-size: 13px;
+  text-align: center;
+  padding: 12px 0;
+}
+
+/* ─── Insight summary row ─────────────────────────────────────────────────── */
+
+.admin-insight-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.admin-insight-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid #e8eddf;
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 2px 12px rgba(25, 24, 23, 0.03);
+}
+
+.admin-insight-card.tone-warn { background: #fff8f1; border-color: #f0d8b8; }
+.admin-insight-card.tone-ok   { background: #f8fcf4; border-color: #d8e6c5; }
+
+.admin-insight-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: #f3f7ec;
+  color: #4a7c3c;
+  flex-shrink: 0;
+}
+
+.admin-insight-card.tone-warn .admin-insight-icon {
+  background: #fde7d1;
+  color: #8a4f1d;
+}
+
+.admin-insight-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.admin-insight-copy strong {
+  color: #191817;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.admin-insight-copy span {
+  color: #6f7c66;
+  line-height: 1.4;
+}
+
+/* ─── Stat tile grid (Inventory Health card) ──────────────────────────────── */
+
+.admin-stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.admin-stat-tile {
+  padding: 14px;
+  border: 1px solid #eef2e6;
+  background: #fbfdf8;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-stat-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8a9580;
+}
+
+.admin-stat-tile strong {
+  font-size: 20px;
+  font-weight: 700;
+  color: #191817;
+  letter-spacing: -0.02em;
+}
+
+/* ─── Small list polish ───────────────────────────────────────────────────── */
+
+.admin-list-sm-item {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-list-sm-rank {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #f3f7ec;
+  color: #5d7644;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.admin-list-sm-name {
+  font-size: 13px;
+  color: #2a4030;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-list-sm-item small {
+  color: #8a9580;
+  font-size: 11px;
+}
+
+/* ─── Three-up chart row (Top Products / Inventory / Customers) ───────────── */
+
+.admin-chart-row--3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+@media (max-width: 1180px) {
+  .admin-insight-row { grid-template-columns: 1fr; }
+  .admin-chart-row--3 { grid-template-columns: 1fr; }
 }

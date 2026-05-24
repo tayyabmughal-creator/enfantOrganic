@@ -25,7 +25,10 @@ export const metadata = {
 };
 
 export const viewport = {
-  themeColor: "#f8f9f4",
+  themeColor: "#fbfcf8",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 function detectLocaleFromNextUrl(nextUrlHeaderValue) {

@@ -88,6 +88,7 @@ class AdminHeroPromoCardSerializer(serializers.ModelSerializer):
             "size",
             "accent",
             "sort_order",
+            "is_visible",
         )
         extra_kwargs = {
             "image_file": {"required": False},
