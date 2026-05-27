@@ -2,8 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import StorefrontShell from "@/components/layout/StorefrontShell";
+import PaymentOrderLink from "@/components/store/payment/PaymentOrderLink";
 import PendingPaymentWatcher from "@/components/store/payment/PendingPaymentWatcher";
 import { getNavigationData } from "@/lib/api";
+import { resolveServerRegion } from "@/lib/regionResolver";
 import { buildStorePath, normalizeLocale, normalizeRegion } from "@/lib/storefront";
 
 export default async function PaymentPendingPage({ params, searchParams }) {
@@ -12,7 +14,7 @@ export default async function PaymentPendingPage({ params, searchParams }) {
   if (localeParam !== locale) notFound();
 
   const resolvedSearchParams = await searchParams;
-  const region = normalizeRegion(resolvedSearchParams?.region || "om");
+  const region = resolveServerRegion(resolvedSearchParams);
   const orderNumber =
     resolvedSearchParams?.merchant_order_id ||
     resolvedSearchParams?.order_number ||
@@ -25,11 +27,6 @@ export default async function PaymentPendingPage({ params, searchParams }) {
     resolvedSearchParams?.token ||
     "";
   const emailOrPhone = resolvedSearchParams?.email_or_phone || "";
-  const detailSuffix = lookupToken
-    ? `&lookup_token=${encodeURIComponent(lookupToken)}`
-    : emailOrPhone
-      ? `&email_or_phone=${encodeURIComponent(emailOrPhone)}`
-      : "";
   const navigation = await getNavigationData(locale, region);
   const isAr = locale === "ar";
 
@@ -84,12 +81,15 @@ export default async function PaymentPendingPage({ params, searchParams }) {
 
           <div className="payment-page-actions">
             {orderNumber ? (
-              <Link
-                href={`${buildStorePath(locale, `/thank-you/${orderNumber}`, region)}${detailSuffix}`}
+              <PaymentOrderLink
+                href={buildStorePath(locale, `/thank-you/${orderNumber}`, region)}
+                orderNumber={orderNumber}
+                lookupToken={lookupToken}
+                emailOrPhone={emailOrPhone}
                 className="primary-action"
               >
                 {isAr ? "عرض الطلب" : "View Order"}
-              </Link>
+              </PaymentOrderLink>
             ) : null}
             <Link href={buildStorePath(locale, "/track-order", region)} className="secondary-action">
               {isAr ? "تتبع الطلب" : "Track Order"}

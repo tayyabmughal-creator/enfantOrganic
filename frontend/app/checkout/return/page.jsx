@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 
+import { resolveServerRegion } from "@/lib/regionResolver";
 import { buildStorePath, normalizeLocale, normalizeRegion } from "@/lib/storefront";
 
 // Paymob "Transaction response callback" target.
@@ -27,7 +28,7 @@ export default async function CheckoutReturnPage({ searchParams }) {
   const cookieStore = await cookies();
 
   const locale = normalizeLocale(cookieStore.get(LOCALE_COOKIE)?.value || "en");
-  const region = normalizeRegion(sp.region || "om");
+  const region = resolveServerRegion(sp);
 
   // merchant_order_id is the value we set as Paymob's merchant_order_id, i.e.
   // our own order_number. Fall back through the other names Paymob/legacy flows

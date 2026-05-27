@@ -8,6 +8,7 @@ import { useStore } from "@/components/store/cart/StoreProvider";
 import { useLocale } from "@/contexts/LocaleContext";
 import { API_BASE_URL, safeRedirectUrl } from "@/lib/config";
 import { buildStorePath, formatMoney, normalizeRegion, uiText } from "@/lib/storefront";
+import { saveOrderLookupToken } from "@/lib/orderLookupToken";
 
 const PAYMOB_APPLE_PAY_INTEGRATION_ID = process.env.NEXT_PUBLIC_PAYMOB_APPLE_PAY_INTEGRATION_ID || "";
 
@@ -109,12 +110,15 @@ function CartApplePayButtonInner() {
         if (!orderRes.ok) {
           throw new Error(orderData.detail || (isAr ? "فشل إنشاء الطلب." : "Order creation failed."));
         }
+        saveOrderLookupToken(orderData.order_number, orderData.lookup_token);
 
         const payRes = await fetch(`${API_BASE_URL}/payments/initiate/`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             order_number: orderData.order_number,
+            region,
+            lookup_token: orderData.lookup_token || "",
             provider: "paymob",
             payment_type: "apple_pay",
           }),

@@ -4,12 +4,13 @@ import Link from "next/link";
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import PurchaseEventTracker from "@/components/store/analytics/PurchaseEventTracker";
 import { getNavigationData } from "@/lib/api";
+import { API_BASE_URL } from "@/lib/config";
+import { resolveServerRegion } from "@/lib/regionResolver";
 import { buildStorePath, normalizeLocale, normalizeRegion, formatMoney } from "@/lib/storefront";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api";
-
-async function getOrder(orderNumber, { lookupToken = "", emailOrPhone = "" } = {}) {
+async function getOrder(orderNumber, { lookupToken = "", emailOrPhone = "", region = "om" } = {}) {
   const params = new URLSearchParams();
+  params.set("region", normalizeRegion(region));
   if (lookupToken) params.set("lookup_token", lookupToken);
   if (emailOrPhone) params.set("email_or_phone", emailOrPhone);
   const query = params.toString();
@@ -65,14 +66,14 @@ export default async function ThankYouPage({ params, searchParams }) {
   if (localeParam !== locale) notFound();
 
   const isAr = locale === "ar";
-  const requestedRegion = normalizeRegion(resolvedSearchParams?.region || "om");
+  const requestedRegion = resolveServerRegion(resolvedSearchParams);
   const lookupToken =
     resolvedSearchParams?.lookup_token ||
     resolvedSearchParams?.t ||
     resolvedSearchParams?.token ||
     "";
   const emailOrPhone = resolvedSearchParams?.email_or_phone || "";
-  const order = await getOrder(orderNumber, { lookupToken, emailOrPhone });
+  const order = await getOrder(orderNumber, { lookupToken, emailOrPhone, region: requestedRegion });
   const orderRegion = normalizeRegion(order?.region_code || requestedRegion);
   const navigation = await getNavigationData(locale, orderRegion);
 

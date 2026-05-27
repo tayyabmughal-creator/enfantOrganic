@@ -8,12 +8,12 @@ import Icon from "@/components/icons/Icon";
 import CartApplePayButton from "@/components/store/cart/CartApplePayButton";
 import { useStore } from "@/components/store/cart/StoreProvider";
 import { useLocale } from "@/contexts/LocaleContext";
-import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
+import { buildStorePath, formatMoney, normalizeRegion, uiText } from "@/lib/storefront";
 import { API_BASE_URL } from "@/lib/config";
 
 function CartDrawerInner() {
   const searchParams = useSearchParams();
-  const region = searchParams.get("region") || "om";
+  const region = normalizeRegion(searchParams.get("region") || "om");
   const { locale } = useLocale();
   const t = uiText(locale);
   const { cartItems, closeCart, drawerOpen, refreshCartPricing, removeItem, subtotal, updateQuantity } = useStore();

@@ -28,6 +28,13 @@ from ..services.stock import filter_products_fulfillable_for_region
 from .context import StorefrontContextMixin, product_queryset
 
 
+def products_available_for_region(queryset, region):
+    if not region:
+        return queryset.none()
+    queryset = queryset.filter(prices__region=region)
+    return filter_products_fulfillable_for_region(queryset, region).distinct()
+
+
 class NavigationView(StorefrontContextMixin, APIView):
     serializer_class = RegionSerializer
 
@@ -64,9 +71,10 @@ class HomePageView(StorefrontContextMixin, APIView):
     def get(self, request):
         locale = self.get_locale()
         context = self.get_serializer_context()
+        region = context["region"]
         settings = self.get_settings()
         serialized_settings = serialize_site_settings(settings, locale)
-        qs = product_queryset()
+        qs = products_available_for_region(product_queryset(), region)
 
         sections = [
             {
@@ -162,11 +170,18 @@ class ProductDetailView(StorefrontContextMixin, APIView):
     def get(self, request, slug):
         locale = self.get_locale()
         context = self.get_serializer_context()
-        product = product_queryset().filter(slug=slug).first()
+        region = context["region"]
+        product = products_available_for_region(
+            product_queryset().filter(slug=slug),
+            region,
+        ).first()
         if not product:
             return Response({"detail": "Not found"}, status=404)
 
-        related = product_queryset().filter(category=product.category).exclude(pk=product.pk)[:4]
+        related = products_available_for_region(
+            product_queryset().filter(category=product.category).exclude(pk=product.pk),
+            region,
+        )[:4]
 
         payload = {
             "breadcrumbs": [
@@ -258,6 +273,8 @@ def apply_catalog_filters(queryset, request, region):
     max_price = request.query_params.get("max_price", "").strip()
     ordering = request.query_params.get("ordering", "").strip()
 
+    queryset = products_available_for_region(queryset, region)
+
     if search:
         queryset = apply_ranked_product_search(queryset, search)
     if category:
@@ -270,8 +287,6 @@ def apply_catalog_filters(queryset, request, region):
         queryset = queryset.filter(prices__region=region, prices__price__gte=min_price)
     if max_price:
         queryset = queryset.filter(prices__region=region, prices__price__lte=max_price)
-
-    queryset = filter_products_fulfillable_for_region(queryset, region)
 
     if ordering == "price_asc":
         queryset = queryset.order_by("prices__price")

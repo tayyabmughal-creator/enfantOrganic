@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import { buildStorePath } from "@/lib/storefront";
 import { API_BASE_URL } from "@/lib/config";
+import { saveOrderLookupToken } from "@/lib/orderLookupToken";
 
 export default function TrackOrderClient({ locale, region }) {
   const router = useRouter();
@@ -19,7 +20,7 @@ export default function TrackOrderClient({ locale, region }) {
   useEffect(() => {
     if (!searchParams) return;
     const o = searchParams.get("o") || searchParams.get("order_number") || searchParams.get("order") || "";
-    const t = searchParams.get("t") || searchParams.get("token") || "";
+    const t = searchParams.get("t") || searchParams.get("lookup_token") || searchParams.get("token") || "";
     const contact = searchParams.get("email_or_phone") || "";
     if (o) setOrderNumber(o);
     if (t) setLookupToken(t);
@@ -40,12 +41,13 @@ export default function TrackOrderClient({ locale, region }) {
       const response = await fetch(`${API_BASE_URL}/orders/lookup/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ order_number: o, lookup_token: t }),
+        body: JSON.stringify({ order_number: o, lookup_token: t, region }),
       });
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.detail || "Order not found.");
       }
+      saveOrderLookupToken(data.order_number, t);
       router.push(
         `${buildStorePath(locale, `/thank-you/${data.order_number}`, region)}&t=${encodeURIComponent(t)}`,
       );
@@ -70,7 +72,7 @@ export default function TrackOrderClient({ locale, region }) {
     setError("");
 
     try {
-      const body = { order_number: cleanOrderNumber };
+      const body = { order_number: cleanOrderNumber, region };
       if (cleanToken) body.lookup_token = cleanToken;
       if (cleanEmailOrPhone) body.email_or_phone = cleanEmailOrPhone;
 
@@ -83,6 +85,9 @@ export default function TrackOrderClient({ locale, region }) {
 
       if (!response.ok) {
         throw new Error(data.detail || "Order not found.");
+      }
+      if (cleanToken) {
+        saveOrderLookupToken(data.order_number, cleanToken);
       }
 
       const suffix = cleanToken

@@ -1,3 +1,5 @@
+import { normalizeLocale, normalizeRegion } from "@/lib/storefront-core/routing";
+
 const API_BASE_URL =
   process.env.API_INTERNAL_BASE_URL ||
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api";
@@ -15,8 +17,8 @@ class ApiError extends Error {
 
 async function request(path, locale, region, extraParams = {}) {
   const params = new URLSearchParams();
-  params.set("locale", locale);
-  params.set("region", region);
+  params.set("locale", normalizeLocale(locale));
+  params.set("region", normalizeRegion(region));
 
   for (const [key, value] of Object.entries(extraParams)) {
     if (value === undefined || value === null || value === "") {

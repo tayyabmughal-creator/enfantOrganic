@@ -14,6 +14,7 @@ import {
   replaceLocaleInPath,
   uiText,
 } from "@/lib/storefront";
+import { saveSelectedRegion } from "@/lib/regionResolver";
 import { pushDataLayerEvent } from "@/lib/analytics";
 import { API_BASE_URL as CONFIG_API_BASE_URL } from "@/lib/config";
 
@@ -73,6 +74,13 @@ function HeaderInner({ navigation }) {
   useEffect(() => {
     setOptimisticRegion(region);
   }, [region]);
+
+  useEffect(() => {
+    const urlRegion = searchParams.get("region");
+    if (urlRegion) {
+      saveSelectedRegion(urlRegion);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (!searchOpen) {
@@ -142,6 +150,7 @@ function HeaderInner({ navigation }) {
 
     const updated = new URLSearchParams(params.toString());
     updated.set("region", normalizedRegion);
+    saveSelectedRegion(normalizedRegion);
     setOptimisticRegion(normalizedRegion);
     void refreshCartPricing(locale, normalizedRegion);
     startRegionTransition(() => {

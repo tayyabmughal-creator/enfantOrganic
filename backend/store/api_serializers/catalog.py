@@ -177,7 +177,7 @@ class ProductCardSerializer(serializers.ModelSerializer):
         for price in prices:
             if price.region_id == region.id:
                 return price
-        return prices[0] if prices else None
+        return None
 
     def get_name(self, obj):
         return localized(obj, "name", self.context.get("locale"))

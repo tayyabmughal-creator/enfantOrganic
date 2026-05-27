@@ -11,6 +11,7 @@ import CategoryCarousel from "@/components/store/CategoryCarousel";
 import NewsletterForm from "@/components/store/NewsletterForm";
 import ProductRail from "@/components/store/ProductRail";
 import { getHomePageData, getNavigationData } from "@/lib/api";
+import { resolveServerRegion } from "@/lib/regionResolver";
 import { buildSeoMetadata, SITE_NAME, toAbsoluteUrl, buildLocalizedPath } from "@/lib/seo";
 import { buildStorePath, normalizeLocale, normalizeRegion, uiText } from "@/lib/storefront";
 
@@ -18,7 +19,7 @@ export async function generateMetadata({ params, searchParams }) {
   const { locale: localeParam } = await params;
   const locale = normalizeLocale(localeParam);
   const resolvedSearchParams = await searchParams;
-  const region = normalizeRegion(resolvedSearchParams?.region || "om");
+  const region = resolveServerRegion(resolvedSearchParams);
   const isAr = locale === "ar";
 
   let description = isAr
@@ -62,7 +63,7 @@ export default async function LocalizedHomePage({ params, searchParams }) {
   }
 
   const resolvedSearchParams = await searchParams;
-  const region = normalizeRegion(resolvedSearchParams.region);
+  const region = resolveServerRegion(resolvedSearchParams);
   const [navigation, home] = await Promise.all([
     getNavigationData(locale, region),
     getHomePageData(locale, region),

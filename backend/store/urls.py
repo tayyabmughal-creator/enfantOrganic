@@ -9,6 +9,7 @@ from .api_views.payments import (
     PaytabsWebhookView,
     ThawaniWebhookView,
 )
+from .api_views.regions import RegionDetectView
 from .api_views.whatsapp import WhatsAppWebhookView
 from .api_views.storefront import BlogDetailView, BlogListView
 from .views import (
@@ -94,6 +95,7 @@ from .views import (
 
 urlpatterns = [
     path("navigation/", NavigationView.as_view(), name="navigation"),
+    path("regions/detect/", RegionDetectView.as_view(), name="regions-detect"),
     path("home/", HomePageView.as_view(), name="home"),
     path("catalog/", CatalogPageView.as_view(), name="catalog"),
     path("products/", ProductListView.as_view(), name="products"),

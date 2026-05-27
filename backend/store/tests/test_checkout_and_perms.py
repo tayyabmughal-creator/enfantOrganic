@@ -2017,7 +2017,7 @@ class CheckoutAndPermsTestCase(TestCase):
         ) as mocked_paymob:
             response = self.api_client.post(
                 "/api/payments/initiate/",
-                {"order_number": order.order_number},
+                {"order_number": order.order_number, "lookup_token": order.lookup_token},
                 format="json",
             )
 
@@ -2144,7 +2144,7 @@ class CheckoutAndPermsTestCase(TestCase):
 
         response = self.api_client.post(
             "/api/payments/initiate/",
-            {"order_number": order.order_number, "provider": "telr"},
+            {"order_number": order.order_number, "lookup_token": order.lookup_token, "provider": "telr"},
             format="json",
         )
 
@@ -2160,7 +2160,7 @@ class CheckoutAndPermsTestCase(TestCase):
 
         response = self.api_client.post(
             "/api/payments/initiate/",
-            {"order_number": order.order_number},
+            {"order_number": order.order_number, "lookup_token": order.lookup_token},
             format="json",
         )
 
@@ -2203,7 +2203,7 @@ class CheckoutAndPermsTestCase(TestCase):
         ) as mocked_paytabs:
             response = self.api_client.post(
                 "/api/payments/initiate/",
-                {"order_number": order.order_number},
+                {"order_number": order.order_number, "lookup_token": order.lookup_token},
                 format="json",
             )
 
@@ -2373,7 +2373,10 @@ class CheckoutAndPermsTestCase(TestCase):
                 "supported": True,
             },
         ):
-            response = self.api_client.get(f"/api/payments/status/{order.order_number}/")
+            response = self.api_client.get(
+                f"/api/payments/status/{order.order_number}/",
+                {"lookup_token": order.lookup_token},
+            )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["transaction"]["provider"], "paytabs")
@@ -2394,7 +2397,7 @@ class CheckoutAndPermsTestCase(TestCase):
         ):
             response = self.api_client.post(
                 "/api/payments/retry/",
-                {"order_number": order.order_number},
+                {"order_number": order.order_number, "lookup_token": order.lookup_token},
                 format="json",
             )
 
@@ -2404,6 +2407,26 @@ class CheckoutAndPermsTestCase(TestCase):
         tx = PaymentTransaction.objects.filter(order=order, provider_reference="retry-ref-1001").first()
         self.assertIsNotNone(tx)
         self.assertEqual(tx.status, PaymentTransaction.STATUS_PENDING)
+
+    def test_payment_initiate_requires_lookup_token_for_guest(self):
+        order = self._create_online_order(self.region)
+
+        response = self.api_client.post(
+            "/api/payments/initiate/",
+            {"order_number": order.order_number},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("lookup_token", response.data.get("error", ""))
+
+    def test_payment_status_requires_lookup_token_for_guest(self):
+        order = self._create_online_order(self.region)
+
+        response = self.api_client.get(f"/api/payments/status/{order.order_number}/")
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("lookup_token", response.data.get("error", ""))
 
     def test_customer_can_request_return(self):
         customer = User.objects.create_user(username="return-customer", password="Pass12345!")
@@ -2711,6 +2734,12 @@ class CheckoutAndPermsTestCase(TestCase):
         self.assertEqual(order.refund_status, Order.REFUND_REFUNDED)
         self.assertEqual(order.payment_status, Order.PAYMENT_REFUNDED)
 
+    @override_settings(
+        THAWANI_PUBLISHABLE_KEY="",
+        THAWANI_SECRET_KEY="",
+        THAWANI_BASE_URL="",
+        THAWANI_WEBHOOK_SECRET="",
+    )
     def test_region_serializer_warns_when_thawani_enabled_without_credentials(self):
         self.region.payment_enabled_providers = ["paytabs", "thawani", "omannet"]
         self.region.default_payment_provider = "paytabs"

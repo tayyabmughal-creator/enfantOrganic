@@ -5,6 +5,7 @@ export const revalidate = 86400; // 24 hours
 
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import { getBlogList, getNavigationData } from "@/lib/api";
+import { resolveServerRegion } from "@/lib/regionResolver";
 import { buildStorePath, normalizeLocale, normalizeRegion } from "@/lib/storefront";
 
 export default async function BlogIndexPage({ params, searchParams }) {
@@ -13,7 +14,7 @@ export default async function BlogIndexPage({ params, searchParams }) {
   if (localeParam !== locale) notFound();
 
   const resolvedSearchParams = await searchParams;
-  const region = normalizeRegion(resolvedSearchParams?.region || "om");
+  const region = resolveServerRegion(resolvedSearchParams);
   const isAr = locale === "ar";
 
   const [navigation, posts] = await Promise.all([

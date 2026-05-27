@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import AccountClient from "@/components/store/account/AccountClient";
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import { getNavigationData } from "@/lib/api";
+import { resolveServerRegion } from "@/lib/regionResolver";
 import { normalizeLocale, normalizeRegion } from "@/lib/storefront";
 
 export default async function AccountPage({ params, searchParams }) {
@@ -11,7 +12,7 @@ export default async function AccountPage({ params, searchParams }) {
   if (localeParam !== locale) notFound();
 
   const resolvedSearchParams = await searchParams;
-  const region = normalizeRegion(resolvedSearchParams?.region || "om");
+  const region = resolveServerRegion(resolvedSearchParams);
   const navigation = await getNavigationData(locale, region);
 
   return (

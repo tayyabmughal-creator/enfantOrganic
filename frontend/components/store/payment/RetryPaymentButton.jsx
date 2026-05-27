@@ -1,16 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { API_BASE_URL, safeRedirectUrl } from "@/lib/config";
+import { readOrderLookupToken } from "@/lib/orderLookupToken";
 
 export default function RetryPaymentButton({
   orderNumber,
   provider = "",
+  region = "om",
+  lookupToken = "",
   isAr = false,
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [storedLookupToken, setStoredLookupToken] = useState("");
+  const effectiveLookupToken = lookupToken || storedLookupToken;
+
+  useEffect(() => {
+    if (!lookupToken && orderNumber) {
+      setStoredLookupToken(readOrderLookupToken(orderNumber));
+    }
+  }, [lookupToken, orderNumber]);
 
   async function retryPayment() {
     if (!orderNumber || loading) return;
@@ -22,6 +33,8 @@ export default function RetryPaymentButton({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           order_number: orderNumber,
+          region,
+          lookup_token: effectiveLookupToken,
           ...(provider ? { provider } : {}),
         }),
       });

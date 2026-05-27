@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import Icon from "@/components/icons/Icon";
 import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
 import { API_BASE_URL, CUSTOMER_TOKEN_KEY, CUSTOMER_REFRESH_KEY } from "@/lib/config";
+import { appendRegionQuery } from "@/lib/regionResolver";
 
 const API_BASE = API_BASE_URL;
 const TOKEN_KEY = CUSTOMER_TOKEN_KEY;
@@ -28,12 +29,14 @@ function clearTokens() {
 
 async function authFetch(path, options = {}) {
   const token = getToken();
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
+  const { region, ...fetchOptions } = options;
+  const requestPath = region ? appendRegionQuery(path, region) : path;
+  const res = await fetch(`${API_BASE}${requestPath}`, {
+    ...fetchOptions,
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
+      ...(fetchOptions.headers || {}),
     },
   });
   return res;
@@ -60,16 +63,16 @@ export default function AccountClient({ locale, region }) {
   const [regForm, setRegForm] = useState({ username: "", email: "", password: "", password2: "" });
 
   const loadProfile = useCallback(async () => {
-    const res = await authFetch("/account/profile/");
+    const res = await authFetch("/account/profile/", { region });
     if (!res.ok) { clearTokens(); return null; }
     return res.json();
-  }, []);
+  }, [region]);
 
   const loadOrders = useCallback(async () => {
-    const res = await authFetch("/account/orders/");
+    const res = await authFetch("/account/orders/", { region });
     if (!res.ok) return [];
     return res.json();
-  }, []);
+  }, [region]);
 
   useEffect(() => {
     if (!getToken()) { setLoading(false); return; }
@@ -83,7 +86,7 @@ export default function AccountClient({ locale, region }) {
     e.preventDefault();
     setError(""); setSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE}/auth/token/`, {
+      const res = await fetch(`${API_BASE}${appendRegionQuery("/auth/token/", region)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: loginForm.username, password: loginForm.password }),
@@ -108,7 +111,7 @@ export default function AccountClient({ locale, region }) {
       setSubmitting(false); return;
     }
     try {
-      const res = await fetch(`${API_BASE}/auth/register/`, {
+      const res = await fetch(`${API_BASE}${appendRegionQuery("/auth/register/", region)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: regForm.username, email: regForm.email, password: regForm.password }),
@@ -157,6 +160,7 @@ export default function AccountClient({ locale, region }) {
     try {
       const response = await authFetch(`/account/orders/${orderNumber}/returns/`, {
         method: "POST",
+        region,
         body: JSON.stringify({ reason }),
       });
       const payload = await response.json();

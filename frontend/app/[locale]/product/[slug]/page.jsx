@@ -7,6 +7,7 @@ import JsonLd from "@/components/seo/JsonLd";
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import ProductDetailClient from "@/components/store/product/ProductDetailClient";
 import { getNavigationData, getProductBySlug } from "@/lib/api";
+import { resolveServerRegion } from "@/lib/regionResolver";
 import { buildSeoMetadata, buildLocalizedPath, toAbsoluteUrl, SITE_NAME } from "@/lib/seo";
 import { normalizeLocale, normalizeRegion, uiText } from "@/lib/storefront";
 
@@ -20,7 +21,7 @@ export async function generateMetadata({ params, searchParams }) {
   const { locale: localeParam, slug } = await params;
   const locale = normalizeLocale(localeParam);
   const resolvedSearchParams = await searchParams;
-  const region = normalizeRegion(resolvedSearchParams?.region || "om");
+  const region = resolveServerRegion(resolvedSearchParams);
   const isAr = locale === "ar";
 
   let title = isAr ? "تفاصيل المنتج | إنفانت أورجانيك" : "Product Details | Enfant Organics";
@@ -63,7 +64,7 @@ export default async function LocalizedProductPage({ params, searchParams }) {
   }
 
   const resolvedSearchParams = await searchParams;
-  const region = normalizeRegion(resolvedSearchParams.region);
+  const region = resolveServerRegion(resolvedSearchParams);
   const [navigation, productPage] = await Promise.all([
     getNavigationData(locale, region),
     getProductBySlug(slug, locale, region),

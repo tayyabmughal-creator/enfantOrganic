@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { buildStorePath } from "@/lib/storefront";
 import { API_BASE_URL, safeRedirectUrl } from "@/lib/config";
+import { readOrderLookupToken } from "@/lib/orderLookupToken";
 
 const FINAL_PROVIDER_STATUSES = new Set(["paid", "failed", "cancelled", "refunded"]);
 
@@ -18,25 +19,33 @@ export default function PendingPaymentWatcher({
   const [message, setMessage] = useState(
     isAr ? "نحن نتحقق من حالة الدفع..." : "We are checking your payment status...",
   );
+  const [storedLookupToken, setStoredLookupToken] = useState("");
+  const effectiveLookupToken = lookupToken || storedLookupToken;
+
+  useEffect(() => {
+    if (!lookupToken && orderNumber) {
+      setStoredLookupToken(readOrderLookupToken(orderNumber));
+    }
+  }, [lookupToken, orderNumber]);
 
   const successUrl = useMemo(() => {
     const params = new URLSearchParams({ order_number: orderNumber });
-    if (lookupToken) {
-      params.set("lookup_token", lookupToken);
+    if (effectiveLookupToken) {
+      params.set("lookup_token", effectiveLookupToken);
     } else if (emailOrPhone) {
       params.set("email_or_phone", emailOrPhone);
     }
     return `${buildStorePath(locale, "/payment/success", region)}&${params.toString()}`;
-  }, [emailOrPhone, locale, lookupToken, orderNumber, region]);
+  }, [effectiveLookupToken, emailOrPhone, locale, orderNumber, region]);
   const failedUrl = useMemo(() => {
     const params = new URLSearchParams({ order_number: orderNumber });
-    if (lookupToken) {
-      params.set("lookup_token", lookupToken);
+    if (effectiveLookupToken) {
+      params.set("lookup_token", effectiveLookupToken);
     } else if (emailOrPhone) {
       params.set("email_or_phone", emailOrPhone);
     }
     return `${buildStorePath(locale, "/payment/failed", region)}&${params.toString()}`;
-  }, [emailOrPhone, locale, lookupToken, orderNumber, region]);
+  }, [effectiveLookupToken, emailOrPhone, locale, orderNumber, region]);
 
   useEffect(() => {
     if (!orderNumber) return undefined;
@@ -54,7 +63,11 @@ export default function PendingPaymentWatcher({
       if (isStopped) return;
       attempts += 1;
       try {
-        const response = await fetch(`${API_BASE_URL}/payments/status/${encodeURIComponent(orderNumber)}/`, {
+        const params = new URLSearchParams({ region });
+        if (effectiveLookupToken) {
+          params.set("lookup_token", effectiveLookupToken);
+        }
+        const response = await fetch(`${API_BASE_URL}/payments/status/${encodeURIComponent(orderNumber)}/?${params.toString()}`, {
           cache: "no-store",
         });
         if (!response.ok) {
@@ -114,7 +127,7 @@ export default function PendingPaymentWatcher({
       window.clearInterval(interval);
       window.clearTimeout(timeout);
     };
-  }, [failedUrl, isAr, orderNumber, successUrl]);
+  }, [effectiveLookupToken, failedUrl, isAr, orderNumber, region, successUrl]);
 
   return <p style={{ fontSize: "0.9rem", margin: 0 }}>{message}</p>;
 }

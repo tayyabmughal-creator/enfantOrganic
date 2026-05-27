@@ -5,6 +5,7 @@ export const revalidate = 86400; // 24 hours
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import ProductCollectionClient from "@/components/store/catalog/ProductCollectionClient";
 import { getCatalogData, getNavigationData } from "@/lib/api";
+import { resolveServerRegion } from "@/lib/regionResolver";
 import { buildSeoMetadata } from "@/lib/seo";
 import { normalizeLocale, normalizeRegion } from "@/lib/storefront";
 
@@ -31,7 +32,7 @@ export async function generateMetadata({ params, searchParams }) {
   const { locale: localeParam } = await params;
   const locale = normalizeLocale(localeParam);
   const resolvedSearchParams = await searchParams;
-  const region = normalizeRegion(resolvedSearchParams?.region || "om");
+  const region = resolveServerRegion(resolvedSearchParams);
   const filters = buildCatalogFilters(resolvedSearchParams);
   const isAr = locale === "ar";
 
@@ -75,7 +76,7 @@ export default async function LocalizedCollectionsPage({ params, searchParams })
   }
 
   const resolvedSearchParams = await searchParams;
-  const region = normalizeRegion(pickParam(resolvedSearchParams.region));
+  const region = resolveServerRegion(resolvedSearchParams);
   const filters = buildCatalogFilters(resolvedSearchParams);
   const [navigation, catalog] = await Promise.all([
     getNavigationData(locale, region),

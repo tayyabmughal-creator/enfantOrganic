@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import LocaleHtmlAttributes from "@/components/seo/LocaleHtmlAttributes";
 import ChunkLoadRecovery from "@/components/system/ChunkLoadRecovery";
 import LocalServiceWorkerReset from "@/components/system/LocalServiceWorkerReset";
+import RegionResolver from "@/components/system/RegionResolver";
 import GtmScript from "@/components/store/analytics/GtmScript";
 import StoreProvider from "@/components/store/cart/StoreProvider";
 import { LocaleProvider } from "@/contexts/LocaleContext";
@@ -70,6 +71,7 @@ export default async function RootLayout({ children }) {
         <LocalServiceWorkerReset />
         <LocaleProvider initialLocale={locale}>
           <LocaleHtmlAttributes />
+          <RegionResolver />
           <StoreProvider>{children}</StoreProvider>
         </LocaleProvider>
       </body>

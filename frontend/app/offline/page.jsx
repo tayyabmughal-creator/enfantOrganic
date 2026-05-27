@@ -16,7 +16,7 @@ export default function OfflinePage() {
           أنت غير متصل بالإنترنت، يرجى إعادة الاتصال والمحاولة مرة أخرى.
         </p>
         <div style={{ marginTop: "8px" }}>
-          <Link className="primary-action" href="/en?region=om">
+          <Link className="primary-action" href="/en">
             Back to Home
           </Link>
         </div>

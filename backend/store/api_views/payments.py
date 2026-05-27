@@ -7,6 +7,7 @@ Endpoints:
   GET  /api/payments/status/<order_number>/  → lightweight payment status poll
 """
 import logging
+import secrets
 
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -22,6 +23,39 @@ from ..services.payment_router import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _order_owner_matches_request(order, request):
+    return bool(
+        order.user_id
+        and request.user.is_authenticated
+        and order.user_id == request.user.pk
+    )
+
+
+def _lookup_token_from_request(request):
+    return str(
+        request.data.get("lookup_token")
+        or request.data.get("t")
+        or request.query_params.get("lookup_token")
+        or request.query_params.get("t")
+        or ""
+    ).strip()
+
+
+def _validate_customer_payment_access(order, request):
+    if order.user_id and request.user.is_authenticated and order.user_id != request.user.pk:
+        return Response({"error": "Unauthorized."}, status=status.HTTP_403_FORBIDDEN)
+
+    if _order_owner_matches_request(order, request):
+        return None
+
+    token = _lookup_token_from_request(request)
+    if not token:
+        return Response({"error": "lookup_token is required."}, status=status.HTTP_403_FORBIDDEN)
+    if not order.lookup_token or not secrets.compare_digest(token, str(order.lookup_token)):
+        return Response({"error": "Invalid lookup_token."}, status=status.HTTP_403_FORBIDDEN)
+    return None
 
 
 def _apply_webhook_update(provider_key, request, *, ignore_missing_order=False):
@@ -132,9 +166,9 @@ def _initiate_payment_response(request, *, is_retry=False):
     except Order.DoesNotExist:
         return Response({"error": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
 
-    # Ownership check: authenticated users can only initiate for their own orders.
-    if order.user_id and request.user.is_authenticated and order.user_id != request.user.pk:
-        return Response({"error": "Unauthorized."}, status=status.HTTP_403_FORBIDDEN)
+    access_error = _validate_customer_payment_access(order, request)
+    if access_error is not None:
+        return access_error
 
     if order.payment_method != Order.PAYMENT_ONLINE:
         return Response(
@@ -298,9 +332,9 @@ class PaymentStatusView(APIView):
         except Order.DoesNotExist:
             return Response({"error": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Ownership check for authenticated users.
-        if order.user_id and request.user.is_authenticated and order.user_id != request.user.pk:
-            return Response({"error": "Unauthorized."}, status=status.HTTP_403_FORBIDDEN)
+        access_error = _validate_customer_payment_access(order, request)
+        if access_error is not None:
+            return access_error
 
         latest_tx = (
             PaymentTransaction.objects.filter(order=order)

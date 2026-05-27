@@ -3,7 +3,7 @@ export default function manifest() {
     name: "Enfant Organics",
     short_name: "Enfant",
     description: "Regional bilingual baby-care storefront for Oman, UAE, and KSA.",
-    start_url: "/en?region=om",
+    start_url: "/en",
     scope: "/",
     display: "standalone",
     background_color: "#ffffff",

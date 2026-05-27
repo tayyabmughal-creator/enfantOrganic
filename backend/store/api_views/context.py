@@ -1,5 +1,6 @@
 from ..models import Product, Region, SiteSettings
 from ..serializers import normalize_locale
+from ..services.region_detection import get_default_region
 
 
 class StorefrontContextMixin:
@@ -12,10 +13,7 @@ class StorefrontContextMixin:
             region = Region.objects.filter(code=code, is_active=True).first()
             if region:
                 return region
-        return (
-            Region.objects.filter(is_default=True, is_active=True).first()
-            or Region.objects.filter(is_active=True).order_by("sort_order", "id").first()
-        )
+        return get_default_region()
 
     def get_settings(self):
         return SiteSettings.objects.first()

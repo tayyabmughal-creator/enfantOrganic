@@ -9,6 +9,8 @@ import { buildAnalyticsItems, pushDataLayerEvent } from "@/lib/analytics";
 import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
 import { API_BASE_URL as CONFIG_API_BASE_URL, CUSTOMER_TOKEN_KEY, safeRedirectUrl } from "@/lib/config";
 import { readJson } from "@/lib/http";
+import { appendRegionQuery } from "@/lib/regionResolver";
+import { saveOrderLookupToken } from "@/lib/orderLookupToken";
 
 const API_BASE_URL = CONFIG_API_BASE_URL;
 const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
@@ -729,7 +731,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     const loadAddresses = async () => {
       setLoadingAddresses(true);
       try {
-        const response = await fetch(`${API_BASE_URL}/account/addresses/`, {
+        const response = await fetch(`${API_BASE_URL}${appendRegionQuery("/account/addresses/", region)}`, {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
@@ -1062,6 +1064,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
       });
       const data = await readJson(response, { isAr });
       if (!response.ok) throw new Error(data.detail || JSON.stringify(data));
+      saveOrderLookupToken(data.order_number, data.lookup_token);
 
       clearCart();
 
@@ -1069,6 +1072,8 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         const initiateBody = {
           order_number: data.order_number,
           provider: effectiveOnlineProvider,
+          region,
+          lookup_token: data.lookup_token || "",
         };
         if (applePayExpress) initiateBody.payment_type = "apple_pay";
         const payRes = await fetch(`${API_BASE_URL}/payments/initiate/`, {

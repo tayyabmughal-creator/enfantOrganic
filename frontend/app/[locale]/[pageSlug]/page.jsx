@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import { getNavigationData } from "@/lib/api";
+import { resolveServerRegion } from "@/lib/regionResolver";
 import { buildSeoMetadata } from "@/lib/seo";
 import { buildStorePath, normalizeLocale, normalizeRegion } from "@/lib/storefront";
 
@@ -398,7 +399,7 @@ export async function generateMetadata({ params, searchParams }) {
   const { locale: localeParam, pageSlug } = await params;
   const locale = normalizeLocale(localeParam);
   const resolvedSearchParams = await searchParams;
-  const region = normalizeRegion(resolvedSearchParams?.region || "om");
+  const region = resolveServerRegion(resolvedSearchParams);
   const content = STATIC_CONTENT?.[pageSlug]?.[locale];
   const isAr = locale === "ar";
 
@@ -431,7 +432,7 @@ export default async function StaticPage({ params, searchParams }) {
     notFound();
   }
 
-  const region = normalizeRegion(resolvedSearchParams?.region || "om");
+  const region = resolveServerRegion(resolvedSearchParams);
   const navigation = await getNavigationData(locale, region);
   const content = STATIC_CONTENT[pageSlug][locale];
   const phone = WHATSAPP_PHONE || navigation?.contact?.phone || "";

@@ -201,6 +201,7 @@ REST_FRAMEWORK = {
         "password_reset": os.getenv("DRF_PASSWORD_RESET_RATE", "3/hour"),
         "checkout": os.getenv("DRF_CHECKOUT_RATE", "30/hour"),
         "payment": os.getenv("DRF_PAYMENT_RATE", "30/hour"),
+        "region_detection": os.getenv("DRF_REGION_DETECTION_RATE", "120/hour"),
         "order_lookup": os.getenv("DRF_ORDER_LOOKUP_RATE", "5/hour"),
         "webhook": os.getenv("DRF_WEBHOOK_RATE", "120/min"),
     },
@@ -214,6 +215,7 @@ if "test" in sys.argv:
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["auth"] = "10000/min"
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["password_reset"] = "10000/hour"
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["payment"] = "10000/hour"
+    REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["region_detection"] = "10000/hour"
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["webhook"] = "10000/min"
     CELERY_TASK_ALWAYS_EAGER = True
     CELERY_TASK_EAGER_PROPAGATES = True

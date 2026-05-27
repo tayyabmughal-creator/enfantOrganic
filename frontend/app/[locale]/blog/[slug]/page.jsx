@@ -6,6 +6,7 @@ export const revalidate = 86400; // 24 hours
 import JsonLd from "@/components/seo/JsonLd";
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import { getBlogBySlug, getNavigationData } from "@/lib/api";
+import { resolveServerRegion } from "@/lib/regionResolver";
 import { buildSeoMetadata, buildLocalizedPath, toAbsoluteUrl } from "@/lib/seo";
 import { buildStorePath, normalizeLocale, normalizeRegion } from "@/lib/storefront";
 
@@ -13,7 +14,7 @@ export async function generateMetadata({ params, searchParams }) {
   const { locale: localeParam, slug } = await params;
   const locale = normalizeLocale(localeParam);
   const resolvedSearchParams = await searchParams;
-  const region = normalizeRegion(resolvedSearchParams?.region || "om");
+  const region = resolveServerRegion(resolvedSearchParams);
   const isAr = locale === "ar";
 
   let title = isAr ? "مقالة | إنفانت أورجانيك" : "Blog Article | Enfant Organics";
@@ -54,7 +55,7 @@ export default async function BlogDetailPage({ params, searchParams }) {
   if (localeParam !== locale) notFound();
 
   const resolvedSearchParams = await searchParams;
-  const region = normalizeRegion(resolvedSearchParams?.region || "om");
+  const region = resolveServerRegion(resolvedSearchParams);
   const isAr = locale === "ar";
 
   let post;

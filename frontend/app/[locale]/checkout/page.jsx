@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import CheckoutClient from "@/components/store/checkout/CheckoutClient";
 import { getNavigationData } from "@/lib/api";
+import { resolveServerRegion } from "@/lib/regionResolver";
 import { normalizeLocale, normalizeRegion } from "@/lib/storefront";
 
 export default async function CheckoutPage({ params, searchParams }) {
@@ -14,7 +15,7 @@ export default async function CheckoutPage({ params, searchParams }) {
     notFound();
   }
 
-  const region = normalizeRegion(resolvedSearchParams?.region || "om");
+  const region = resolveServerRegion(resolvedSearchParams);
   const navigation = await getNavigationData(normalizedLocale, region);
 
   return (
