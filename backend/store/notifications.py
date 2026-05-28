@@ -3,7 +3,9 @@ import logging
 from urllib import request as urlrequest
 
 from django.conf import settings
+from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
+from django.utils.html import escape
 
 from .emails import (
     TEMPLATE_ORDER_CANCELLED,
@@ -18,6 +20,7 @@ from .emails import (
     send_transactional_order_email,
 )
 from .models import NotificationLog, Order, PushDevice, WhatsAppLog
+from .services.inventory_health import get_inventory_admin_email, inventory_health_summary
 from .services.sms_router import send_sms
 from .services.sms_templates import render_sms_template
 from .services.whatsapp_cloud import WhatsAppCloudError, send_template as send_whatsapp_template
@@ -648,6 +651,87 @@ def notify_admins_low_stock(product):
         "stock_quantity": product.stock_quantity,
     }
     return _dispatch_admin_push(NotificationLog.EVENT_LOW_STOCK, title, body, payload, order=None)
+
+
+def _format_inventory_email_group(title, products):
+    if not products:
+        return f"{title}\nNone"
+    lines = [title]
+    lines.extend(
+        f"- {product['name_en']} ({product['stock_quantity']} units)"
+        for product in products
+    )
+    return "\n".join(lines)
+
+
+def send_admin_inventory_health_email():
+    summary = inventory_health_summary()
+    if summary["count"] <= 0:
+        return False
+
+    recipient = get_inventory_admin_email()
+    if not recipient:
+        logger.warning("Inventory health email skipped because no admin recipient is configured.")
+        return False
+
+    subject = f"Inventory Health: {summary['count']} product(s) need attention"
+    text_body = "\n\n".join(
+        [
+            f"Inventory Health ({summary['count']})",
+            f"Threshold: {summary['threshold']} units or below",
+            _format_inventory_email_group("Out of Stock", summary["out_of_stock"]),
+            _format_inventory_email_group("Critical", summary["critical"]),
+            _format_inventory_email_group("Low Stock", summary["low_stock"]),
+        ]
+    )
+    html_sections = []
+    for label, products in (
+        ("Out of Stock", summary["out_of_stock"]),
+        ("Critical", summary["critical"]),
+        ("Low Stock", summary["low_stock"]),
+    ):
+        if products:
+            rows = "".join(
+                f"<li><strong>{escape(product['name_en'])}</strong> — {product['stock_quantity']} units</li>"
+                for product in products
+            )
+        else:
+            rows = "<li>None</li>"
+        html_sections.append(f"<h2>{label}</h2><ul>{rows}</ul>")
+
+    html_body = (
+        f"<h1>Inventory Health ({summary['count']})</h1>"
+        f"<p>Threshold: {summary['threshold']} units or below.</p>"
+        + "".join(html_sections)
+    )
+
+    email = EmailMultiAlternatives(
+        subject=subject,
+        body=text_body,
+        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@enfantorganics.com"),
+        to=[recipient],
+    )
+    email.attach_alternative(html_body, "text/html")
+    sent = bool(email.send(fail_silently=False))
+
+    _create_notification_log(
+        event=NotificationLog.EVENT_LOW_STOCK,
+        channel=NotificationLog.CHANNEL_EMAIL,
+        recipient=recipient,
+        provider="smtp",
+        title=subject,
+        body=text_body,
+        payload={
+            "threshold": summary["threshold"],
+            "count": summary["count"],
+            "out_of_stock": [product["slug"] for product in summary["out_of_stock"]],
+            "critical": [product["slug"] for product in summary["critical"]],
+            "low_stock": [product["slug"] for product in summary["low_stock"]],
+        },
+        status=NotificationLog.STATUS_SENT if sent else NotificationLog.STATUS_FAILED,
+        error_message="" if sent else "Email provider did not confirm delivery.",
+    )
+    return sent
 
 
 def send_admin_push(event, title, body, payload):

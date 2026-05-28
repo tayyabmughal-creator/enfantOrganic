@@ -447,6 +447,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "store.tasks.clear_expired_sessions",
         "schedule": crontab(hour=0, minute=0),
     },
+    "send_inventory_health_email_daily": {
+        "task": "store.tasks.send_daily_inventory_health_email",
+        "schedule": crontab(hour=9, minute=0),
+    },
 }
 
 def _require_paymob_config():

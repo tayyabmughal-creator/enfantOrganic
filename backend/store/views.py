@@ -1,5 +1,6 @@
 from .api_views import (
     AbandonedCartCreateView,
+    AnalyticsEventCreateView,
     AddressListCreateView,
     AdminAbandonedCartDetailView,
     AdminAbandonedCartListView,
@@ -80,6 +81,7 @@ from .api_views import (
 
 __all__ = [
     "AbandonedCartCreateView",
+    "AnalyticsEventCreateView",
     "AddressListCreateView",
     "AdminAbandonedCartDetailView",
     "AdminAbandonedCartListView",

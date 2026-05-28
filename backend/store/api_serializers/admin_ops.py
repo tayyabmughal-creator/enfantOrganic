@@ -50,6 +50,13 @@ class AdminProductSerializer(serializers.ModelSerializer):
             "hover_image_file": {"required": False},
         }
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        data["image"] = get_image_url(instance, request, "image_file", "image")
+        data["hover_image"] = get_image_url(instance, request, "hover_image_file", "hover_image")
+        return data
+
 
 class AdminCategorySerializer(serializers.ModelSerializer):
     class Meta:

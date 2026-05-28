@@ -188,6 +188,7 @@ class SiteSettingsAdmin(admin.ModelAdmin):
         ("Paymob", {"fields": ("paymob_api_key", "paymob_integration_id", "paymob_iframe_id", "paymob_hmac_secret", "paymob_currency", "paymob_apple_pay_integration_id", "paymob_apple_pay_iframe_id"), "classes": ("collapse",)}),
         ("PayTabs", {"fields": ("paytabs_profile_id", "paytabs_server_key", "paytabs_region"), "classes": ("collapse",)}),
         ("HyperPay", {"fields": ("hyperpay_entity_id", "hyperpay_access_token"), "classes": ("collapse",)}),
+        ("Inventory", {"fields": ("inventory_low_stock_threshold",)}),
         ("Telr", {"fields": ("telr_store_id", "telr_auth_key"), "classes": ("collapse",)}),
         ("Thawani", {"fields": ("thawani_publishable_key", "thawani_secret_key", "thawani_webhook_secret", "thawani_base_url"), "classes": ("collapse",)}),
         ("OmanNet", {"fields": ("omannet_merchant_id", "omannet_access_code", "omannet_sha_request", "omannet_sha_response", "omannet_webhook_secret"), "classes": ("collapse",)}),

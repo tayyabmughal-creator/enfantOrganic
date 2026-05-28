@@ -20,6 +20,7 @@ from .catalog import (
 from .commerce import (
     AbandonedCart,
     AdminAuditLog,
+    AnalyticsEvent,
     Coupon,
     CustomerAddress,
     GiftCard,
@@ -38,6 +39,7 @@ from .commerce import (
 
 __all__ = [
     "AbandonedCart",
+    "AnalyticsEvent",
     "BlogPost",
     "AdminAuditLog",
     "Category",

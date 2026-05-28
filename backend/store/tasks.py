@@ -3,7 +3,7 @@ from celery import shared_task
 from django.core.management import call_command
 
 from .models import Order
-from .notifications import _dispatch_order_event
+from .notifications import _dispatch_order_event, send_admin_inventory_health_email
 from .services.invoice import ensure_paid_order_invoice
 from .services.shipment import create_order_shipment
 
@@ -40,6 +40,16 @@ def clear_expired_sessions():
         call_command("clearsessions")
     except Exception:
         logger.exception("Failed to clear expired sessions via celery beat")
+
+
+@shared_task
+def send_daily_inventory_health_email():
+    try:
+        return send_admin_inventory_health_email()
+    except Exception:
+        logger.exception("Failed to send daily inventory health email")
+        return False
+
 
 @shared_task
 def trigger_frontend_revalidate_async(path=None, tag=None):
