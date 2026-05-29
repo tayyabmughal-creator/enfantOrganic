@@ -92,13 +92,16 @@ jobs:
             THAWANI_SECRET_KEY=${{ secrets.THAWANI_SECRET_KEY }}
             THAWANI_PUBLISHABLE_KEY=${{ secrets.THAWANI_PUBLISHABLE_KEY }}
             THAWANI_BASE_URL=${{ secrets.THAWANI_BASE_URL || 'https://uatcheckout.thawani.om' }}
-            THAWANI_ENABLE_REAL_API=${{ secrets.THAWANI_ENABLE_REAL_API || '1' }}
+            THAWANI_ENABLE_REAL_API=${{ secrets.THAWANI_ENABLE_REAL_API || '0' }}
+            THAWANI_CREATE_SESSION_PATH=${{ secrets.THAWANI_CREATE_SESSION_PATH || '/api/v1/checkout/session' }}
             EOF
+            chmod 600 .env.production
 
             # Fail the deploy early if the generated env is wrong (typo domain,
             # missing ALLOWED_HOSTS / Redis / Paymob, etc.) — before touching the
             # running stack. Prints presence only, never secret values.
-            bash scripts/validate-production-env.sh .env.production
+            EXPECTED_DOMAIN="${{ secrets.PRODUCTION_DOMAIN || 'enfhantorganic.itwing.cloud' }}" \
+              bash scripts/validate-production-env.sh .env.production
 
             docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build --remove-orphans
             docker compose -f docker-compose.prod.yml --env-file .env.production restart nginx
@@ -107,8 +110,9 @@ jobs:
             docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend python manage.py check
             # Confirm the public domain actually reached the backend container's
             # ALLOWED_HOSTS — a wrong/typo domain here breaks all browser API calls.
-            docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend printenv DJANGO_ALLOWED_HOSTS | grep -Fq "enfhantorganic.itwing.cloud" \
-              || { echo "FATAL: backend DJANGO_ALLOWED_HOSTS is missing enfhantorganic.itwing.cloud"; exit 1; }
+            domain="${{ secrets.PRODUCTION_DOMAIN || 'enfhantorganic.itwing.cloud' }}"
+            docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend printenv DJANGO_ALLOWED_HOSTS | grep -Fq "$domain" \
+              || { echo "FATAL: backend DJANGO_ALLOWED_HOSTS is missing $domain"; exit 1; }
             docker compose -f docker-compose.prod.yml --env-file .env.production exec -T nginx nginx -t
             docker compose -f docker-compose.prod.yml --env-file .env.production exec -T nginx wget -S -O /dev/null http://127.0.0.1/
             docker image prune -f
@@ -116,8 +120,11 @@ jobs:
       - name: Verify public site
         run: |
           set -e
-          # NOTE: correct spelling is enfhantorganic (with the 'h').
-          url="${{ secrets.PRODUCTION_HEALTHCHECK_URL || 'https://enfhantorganic.itwing.cloud/' }}"
+          domain="${{ secrets.PRODUCTION_DOMAIN || 'enfhantorganic.itwing.cloud' }}"
+          url="${{ secrets.PRODUCTION_HEALTHCHECK_URL || '' }}"
+          if [ -z "$url" ]; then
+            url="https://${domain}/"
+          fi
           for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
             if curl --fail --show-error --silent --location --head --max-time 20 "$url"; then
               break
@@ -132,7 +139,7 @@ jobs:
 
       - name: Verify public API returns JSON (region/currency flow)
         run: |
-          domain="enfhantorganic.itwing.cloud"
+          domain="${{ secrets.PRODUCTION_DOMAIN || 'enfhantorganic.itwing.cloud' }}"
           fail=0
           check() {
             result="$(curl -sS -o /dev/null -w '%{http_code} %{content_type}' --max-time 25 "$1" || echo '000 none')"

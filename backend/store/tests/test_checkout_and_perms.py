@@ -34,7 +34,7 @@ from store.models import (
 )
 from store.api_serializers.checkout import CheckoutCreateSerializer
 from store.api_serializers.catalog import RegionSerializer
-from store.api_views.admin_ops import IsStaffUser
+from store.api_views.admin_ops import HasAdminCapability, IsStaffUser
 from store.emails import send_order_confirmation_email, send_payment_paid_email
 from store.services.invoice import ensure_paid_order_invoice
 from store.services import carrier_router, sms_router
@@ -724,6 +724,28 @@ class CheckoutAndPermsTestCase(TestCase):
         request = self.factory.get("/")
         request.user = staff_user
         self.assertTrue(permission.has_permission(request, None))
+
+    def test_has_admin_capability_defaults_to_deny_when_view_has_no_capabilities(self):
+        permission = HasAdminCapability()
+        staff_user = self._create_staff_user("staff-default-deny", role_name=ROLE_MANAGER)
+        request = self.factory.get("/")
+        request.user = staff_user
+
+        class _NoCapabilityView:
+            pass
+
+        self.assertFalse(permission.has_permission(request, _NoCapabilityView()))
+
+    def test_has_admin_capability_allows_explicit_escape_hatch(self):
+        permission = HasAdminCapability()
+        staff_user = self._create_staff_user("staff-escape-hatch", role_name=ROLE_MANAGER)
+        request = self.factory.get("/")
+        request.user = staff_user
+
+        class _EscapeHatchView:
+            allow_staff_without_capability = True
+
+        self.assertTrue(permission.has_permission(request, _EscapeHatchView()))
 
     def test_order_support_user_cannot_edit_products(self):
         staff_user = self._create_staff_user("support-products", role_name=ROLE_ORDER_SUPPORT)
@@ -2258,6 +2280,38 @@ class CheckoutAndPermsTestCase(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data.get("code"), "invalid_signature")
+
+    @override_settings(
+        THAWANI_PUBLISHABLE_KEY="thawani-pk",
+        THAWANI_SECRET_KEY="thawani-sk",
+        THAWANI_BASE_URL="https://uatcheckout.thawani.om/api/v1",
+        THAWANI_ENABLE_REAL_API="1",
+        THAWANI_CREATE_SESSION_PATH="/api/v1/checkout/session",
+    )
+    def test_thawani_create_session_url_normalizes_legacy_base_url(self):
+        order = self._create_online_order(self.region)
+
+        class _MockResponse:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {
+                    "data": {
+                        "session_id": "TH-SESSION-URL-001",
+                        "checkout_url": "https://checkout.thawani.om/pay/abc",
+                    }
+                }
+
+        with patch("store.services.thawani.requests.post", return_value=_MockResponse()) as mocked_post:
+            from store.services import thawani as thawani_service
+
+            result = thawani_service.initiate_payment(order)
+
+        self.assertEqual(result["provider_reference"], "TH-SESSION-URL-001")
+        self.assertEqual(result["redirect_url"], "https://checkout.thawani.om/pay/abc")
+        called_url = mocked_post.call_args[0][0]
+        self.assertEqual(called_url, "https://uatcheckout.thawani.om/api/v1/checkout/session")
 
     @override_settings(
         OMANNET_MERCHANT_ID="merchant-om",

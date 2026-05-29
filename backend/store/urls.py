@@ -14,6 +14,7 @@ from .api_views.whatsapp import WhatsAppWebhookView
 from .api_views.storefront import BlogDetailView, BlogListView
 from .views import (
     AbandonedCartCreateView,
+    AnalyticsEventCreateView,
     AddressListCreateView,
     AdminAbandonedCartDetailView,
     AdminAbandonedCartListView,
@@ -194,4 +195,5 @@ urlpatterns = [
     path("admin/abandoned-carts/", AdminAbandonedCartListView.as_view(), name="admin-abandoned-carts"),
     path("admin/abandoned-carts/<int:pk>/", AdminAbandonedCartDetailView.as_view(), name="admin-abandoned-cart-detail"),
     path("abandoned-carts/", AbandonedCartCreateView.as_view(), name="abandoned-cart-create"),
+    path("analytics/event/", AnalyticsEventCreateView.as_view(), name="analytics-event-create"),
 ]

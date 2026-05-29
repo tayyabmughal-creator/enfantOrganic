@@ -363,7 +363,7 @@ TELR_BASE_URL = os.getenv("TELR_BASE_URL", "https://secure.telr.com")
 
 THAWANI_PUBLISHABLE_KEY = os.getenv("THAWANI_PUBLISHABLE_KEY", "")
 THAWANI_SECRET_KEY = os.getenv("THAWANI_SECRET_KEY", "")
-THAWANI_BASE_URL = os.getenv("THAWANI_BASE_URL", "https://uatcheckout.thawani.om/api/v1")
+THAWANI_BASE_URL = os.getenv("THAWANI_BASE_URL", "https://uatcheckout.thawani.om")
 THAWANI_WEBHOOK_SECRET = os.getenv("THAWANI_WEBHOOK_SECRET", "")
 THAWANI_ENABLE_REAL_API = os.getenv("THAWANI_ENABLE_REAL_API", "0")
 THAWANI_CREATE_SESSION_PATH = os.getenv("THAWANI_CREATE_SESSION_PATH", "/api/v1/checkout/session")
@@ -446,6 +446,10 @@ CELERY_BEAT_SCHEDULE = {
     "clear_expired_sessions_daily": {
         "task": "store.tasks.clear_expired_sessions",
         "schedule": crontab(hour=0, minute=0),
+    },
+    "send_inventory_health_email_daily": {
+        "task": "store.tasks.send_daily_inventory_health_email",
+        "schedule": crontab(hour=9, minute=0),
     },
 }
 

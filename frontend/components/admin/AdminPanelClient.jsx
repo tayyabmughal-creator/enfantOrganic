@@ -13,6 +13,7 @@ import { API_BASE_URL, ADMIN_TOKEN_KEY, ADMIN_REFRESH_KEY } from "@/lib/config";
 const API_BASE    = API_BASE_URL;
 const TOKEN_KEY   = ADMIN_TOKEN_KEY;
 const REFRESH_KEY = ADMIN_REFRESH_KEY;
+const SIDEBAR_COLLAPSED_KEY = "enfhant-admin-sidebar-collapsed";
 
 const NAV_GROUPS = [
   {
@@ -62,7 +63,7 @@ const NAV_GROUPS = [
   {
     label: "Analytics",
     items: [
-      { key: "analytics",  label: "Analytics",  icon: "chartLine", endpoint: "/admin/dashboard/",  desc: "Revenue, funnels, and trends." },
+      { key: "analytics",  label: "Analytics",  icon: "chartLine", endpoint: "/admin/analytics/",  desc: "Revenue, funnels, and trends." },
       { key: "insights",   label: "Insights",   icon: "chartPie",  endpoint: "/admin/customers/",  desc: "Segments, LTV, and cohorts." },
       { key: "reports",    label: "Reports",    icon: "download",  endpoint: "/admin/moderation/", desc: "CSV exports and health checks." },
       { key: "audit_logs", label: "Audit Logs", icon: "activity",  endpoint: "/admin/audit-logs/", desc: "Sensitive action timeline and traceability." },
@@ -89,6 +90,7 @@ const NAV_GROUPS = [
     items: [
       { key: "payments",        label: "Payments",        icon: "creditCard", endpoint: "/admin/payments/",  desc: "Providers and transactions." },
       { key: "payment_setup",   label: "Payment Setup",   icon: "settings",   endpoint: "/admin/settings/",  desc: "Configure payment gateway credentials from the admin panel." },
+      { key: "inventory_settings", label: "Inventory Settings", icon: "box", endpoint: "/admin/settings/", desc: "Inventory alert thresholds and restock signals." },
       { key: "taxes",           label: "Taxes",           icon: "receipt",    endpoint: "/admin/tax-rules/", desc: "Tax zones, VAT rates, and inclusive/exclusive pricing." },
       { key: "staff",           label: "Staff",           icon: "users",      endpoint: "/admin/staff/",     desc: "Team accounts, roles, and permissions." },
       { key: "regions",         label: "Regions",         icon: "globe",      endpoint: "/admin/regions/",   desc: "Active regions, currencies, and locale config." },
@@ -130,6 +132,7 @@ const NAV_READ_CAPABILITY = {
   apps: "content.view",
   payments: "payments.view",
   payment_setup: "payments.view",
+  inventory_settings: "inventory.view",
   taxes: "regions.view",
   staff: "staff.manage",
   regions: "regions.view",
@@ -160,6 +163,7 @@ const NAV_WRITE_CAPABILITY = {
   taxes: "regions.edit",
   payments: "payments.edit",
   payment_setup: "payments.edit",
+  inventory_settings: "inventory.edit",
   staff: "staff.manage",
   social: "content.edit",
   marketing_tools: "content.edit",
@@ -173,6 +177,7 @@ const PAYMENT_STATUS  = [["unpaid","Unpaid"],["review","Needs review"],["paid","
 const PAYMENT_METHOD  = [["cod","Cash on delivery"],["whatsapp","WhatsApp"],["bank_transfer","Bank transfer"],["online","Online"]];
 const SHIPMENT_STATUS = [["pending","Pending"],["created","Created"],["in_transit","In transit"],["delivered","Delivered"],["failed","Failed"],["manual","Manual"]];
 const PAYMENT_PROVIDER = [["cod","Cash on delivery"],["whatsapp","WhatsApp"],["bank_transfer","Bank transfer"],["online","Online"],["stripe","Stripe"],["tap","Tap"],["paytabs","PayTabs"],["hyperpay","HyperPay"],["checkout_com","Checkout.com"]];
+const SALES_CHANNEL = [["online_store","Online Store"],["draft_order","Draft Orders"]];
 
 const FIELD_CONFIGS = {
   products: [
@@ -209,6 +214,7 @@ const FIELD_CONFIGS = {
     ["ends_at","Ends at","datetime-local"],["is_active","Active","checkbox"],
   ],
   orders: [
+    ["sales_channel","Sales channel","select",SALES_CHANNEL],
     ["status","Order status","select",ORDER_STATUS],
     ["status_note","Status note","textarea"],
     ["payment_method","Payment method","select",PAYMENT_METHOD],
@@ -354,6 +360,9 @@ const FIELD_CONFIGS = {
     ["return_policy_en","Return policy EN","textarea"],["return_policy_ar","Return policy AR","textarea"],
     ["privacy_policy_en","Privacy policy EN","textarea"],["privacy_policy_ar","Privacy policy AR","textarea"],
   ],
+  inventory_settings: [
+    ["inventory_low_stock_threshold","Inventory health threshold","number"],
+  ],
   returns: [
     ["status","Status","select",[["requested","Requested"],["approved","Approved"],["rejected","Rejected"],["refunded","Refunded"]]],
     ["admin_note","Admin note","textarea"],
@@ -436,7 +445,15 @@ const CREATE_DEFAULTS = {
   giftcards:  { code:"",initial_balance:0,remaining_balance:0,currency_code:"OMR",region:"",recipient_name:"",recipient_email:"",recipient_phone:"",sender_name:"",message:"",status:"active",expiry_date:"" },
 };
 
-const SETTINGS_KEYS = new Set(["homepage","branding","nav_settings","footer_social","seo_legal","social","marketing_tools","apps","payment_setup"]);
+const SETTINGS_KEYS = new Set(["homepage","branding","nav_settings","footer_social","seo_legal","social","marketing_tools","apps","payment_setup","inventory_settings"]);
+const DASHBOARD_FILTER_DEFAULTS = {
+  topMetric: "rating",
+  topDateRange: "all_time",
+  topMarket: "all",
+  customStartDate: "",
+  customEndDate: "",
+};
+const DASHBOARD_REFRESH_INTERVAL_MS = 10000;
 const CRUD_KEYS     = ["products","categories","deals","customers","payments","reviews","shipping","blog","hero_cards","returns","taxes","staff","warehouses","giftcards"];
 const DELETABLE     = ["products","categories","deals","customers","payments","reviews","shipping","blog","hero_cards","taxes","staff","warehouses","giftcards"];
 const REPORT_TYPES  = ["orders","customers","inventory","low-stock","sales","abandoned-carts"];
@@ -553,9 +570,13 @@ export default function AdminPanelClient() {
   const [loading, setLoading]       = useState(false);
   const [toast, setToast]           = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [page, setPage]             = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
+  const [dashboardFilters, setDashboardFilters] = useState(DASHBOARD_FILTER_DEFAULTS);
+  const [inventoryThreshold, setInventoryThreshold] = useState(10);
+  const [inventoryFocusSlug, setInventoryFocusSlug] = useState("");
 
   const capabilitySet = useMemo(() => new Set(adminMe?.capabilities || []), [adminMe]);
 
@@ -599,7 +620,12 @@ export default function AdminPanelClient() {
 
   useEffect(() => {
     setToken(window.localStorage.getItem(TOKEN_KEY) || "");
+    setSidebarCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1");
   }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, sidebarCollapsed ? "1" : "0");
+  }, [sidebarCollapsed]);
 
   useEffect(() => {
     if (!token) {
@@ -739,12 +765,14 @@ export default function AdminPanelClient() {
     closeForm();
   }
 
-  async function loadScreen(screen = active) {
+  async function loadScreen(screen = active, options = {}) {
     if (!screen || !screen.endpoint) { setData(null); setLoading(false); return; }
-    setLoading(true);
-    if (mode !== "edit") closeForm();
+    if (!options.silent) setLoading(true);
+    if (mode !== "edit" && !options.silent) closeForm();
     try {
       let url = screen.endpoint;
+      const screenKey = screen?.key || activeKey;
+      const filterSource = options.dashboardFilters || dashboardFilters;
       const params = new URLSearchParams();
       if (CRUD_KEYS.includes(activeKey) && searchQuery) {
         params.set("search", searchQuery);
@@ -752,8 +780,27 @@ export default function AdminPanelClient() {
       if (page > 1 && CRUD_KEYS.includes(activeKey)) {
         params.set("page", String(page));
       }
+      if (screenKey === "dashboard") {
+        params.set("top_metric", filterSource.topMetric);
+        params.set("top_date_range", filterSource.topDateRange);
+        params.set("top_market", filterSource.topMarket);
+        if (filterSource.topDateRange === "custom_date") {
+          if (filterSource.customStartDate) params.set("top_start_date", filterSource.customStartDate);
+          if (filterSource.customEndDate) params.set("top_end_date", filterSource.customEndDate);
+        }
+      }
+      if (screenKey === "inventory") {
+        params.set("page_size", "100");
+      }
       const qs = params.toString();
       const raw = await request(qs ? `${url}?${qs}` : url);
+      if (screenKey === "dashboard" && raw?.inventory_health_threshold !== undefined) {
+        setInventoryThreshold(Number(raw.inventory_health_threshold || 10));
+      }
+      if (screenKey === "inventory") {
+        const settingsPayload = await request("/admin/settings/");
+        setInventoryThreshold(Number(settingsPayload?.inventory_low_stock_threshold || 10));
+      }
       if (raw && typeof raw === "object" && Array.isArray(raw.results)) {
         setData(raw.results);
         if (typeof raw.count === "number") {
@@ -770,7 +817,7 @@ export default function AdminPanelClient() {
     } catch (err) {
       showToast(err.message, "error");
     } finally {
-      setLoading(false);
+      if (!options.silent) setLoading(false);
     }
   }
 
@@ -842,23 +889,23 @@ export default function AdminPanelClient() {
     }
   }
 
-  function detailPath(item = selected) {
+  function detailPath(item = selected, key = activeKey) {
     if (!item) return "";
-    if (activeKey === "products")   return `/admin/products/${item.slug}/`;
-    if (activeKey === "categories") return `/admin/categories/${item.slug}/`;
-    if (activeKey === "deals")      return `/admin/promotions/${item.id}/`;
-    if (activeKey === "orders")     return `/admin/orders/${item.order_number}/`;
-    if (activeKey === "payments")   return `/admin/payments/${item.id}/`;
-    if (activeKey === "customers")  return `/admin/customers/${item.id}/`;
-    if (activeKey === "reviews")    return `/admin/reviews/${item.id}/`;
-    if (activeKey === "shipping")   return `/admin/shipping-rules/${item.id}/`;
-    if (activeKey === "blog")       return `/admin/blog-posts/${item.slug || item.id}/`;
-    if (activeKey === "hero_cards") return `/admin/hero-promo-cards/${item.id}/`;
-    if (activeKey === "returns")    return `/admin/returns/${item.id}/`;
-    if (activeKey === "taxes")      return `/admin/tax-rules/${item.id}/`;
-    if (activeKey === "staff")      return `/admin/staff/${item.id}/`;
-    if (activeKey === "giftcards")  return `/admin/gift-cards/${item.id}/`;
-    if (activeKey === "abandoned")  return `/admin/abandoned-carts/${item.id}/`;
+    if (key === "products")   return `/admin/products/${item.slug}/`;
+    if (key === "categories") return `/admin/categories/${item.slug}/`;
+    if (key === "deals")      return `/admin/promotions/${item.id}/`;
+    if (key === "orders")     return `/admin/orders/${item.order_number}/`;
+    if (key === "payments")   return `/admin/payments/${item.id}/`;
+    if (key === "customers")  return `/admin/customers/${item.id}/`;
+    if (key === "reviews")    return `/admin/reviews/${item.id}/`;
+    if (key === "shipping")   return `/admin/shipping-rules/${item.id}/`;
+    if (key === "blog")       return `/admin/blog-posts/${item.slug || item.id}/`;
+    if (key === "hero_cards") return `/admin/hero-promo-cards/${item.id}/`;
+    if (key === "returns")    return `/admin/returns/${item.id}/`;
+    if (key === "taxes")      return `/admin/tax-rules/${item.id}/`;
+    if (key === "staff")      return `/admin/staff/${item.id}/`;
+    if (key === "giftcards")  return `/admin/gift-cards/${item.id}/`;
+    if (key === "abandoned")  return `/admin/abandoned-carts/${item.id}/`;
     return "";
   }
 
@@ -877,6 +924,40 @@ export default function AdminPanelClient() {
       const payload = await request(path);
       setSelected(payload);
       setEditor(makeEditor(payload));
+    } catch (err) {
+      showToast(err.message, "error");
+    }
+  }
+
+  async function openProductEditor(product) {
+    if (!product?.slug) {
+      navigate("inventory");
+      return;
+    }
+    if (!canViewKey("products")) {
+      showToast("You do not have access to product records.", "error");
+      return;
+    }
+    if (!canWriteKey("products")) {
+      showToast("You can view products but cannot edit stock.", "info");
+      navigate("inventory", { focusProductSlug: product.slug });
+      return;
+    }
+
+    setActiveKey("products");
+    setPage(1);
+    setSearchQuery("");
+    setInventoryFocusSlug("");
+    setSidebarOpen(false);
+    setMode("edit");
+    setSelected(product);
+    setEditor(makeEditor(product, "products"));
+    setFormOpen(true);
+
+    try {
+      const payload = await request(detailPath(product, "products"));
+      setSelected(payload);
+      setEditor(makeEditor(payload, "products"));
     } catch (err) {
       showToast(err.message, "error");
     }
@@ -1020,10 +1101,24 @@ export default function AdminPanelClient() {
     }
   }
 
-  function navigate(key) {
+  useEffect(() => {
+    if (!(token && adminMe && activeKey === "dashboard" && active)) return undefined;
+    const timer = window.setInterval(() => {
+      void loadScreen(active, { silent: true });
+    }, DASHBOARD_REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, adminMe, activeKey, dashboardFilters]);
+
+  function navigate(key, options = {}) {
     if (!canViewKey(key)) {
       showToast("You do not have access to this section.", "error");
       return;
+    }
+    if (options.focusProductSlug !== undefined) {
+      setInventoryFocusSlug(options.focusProductSlug || "");
+    } else if (key !== "inventory") {
+      setInventoryFocusSlug("");
     }
     setActiveKey(key);
     setPage(1);
@@ -1094,7 +1189,7 @@ export default function AdminPanelClient() {
   // ─── Authenticated shell ───────────────────────────────────────────────────
 
   return (
-    <div className="admin-shell">
+    <div className={`admin-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       {toast ? <AdminToast toast={toast} /> : null}
       {sidebarOpen ? <div className="admin-overlay" role="presentation" onClick={() => setSidebarOpen(false)} /> : null}
 
@@ -1150,6 +1245,21 @@ export default function AdminPanelClient() {
           <button type="button" className="admin-menu-toggle" aria-label="Open menu" onClick={() => setSidebarOpen(true)}>
             <span /><span /><span />
           </button>
+          <button
+            type="button"
+            className="admin-sidebar-toggle"
+            aria-label={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+            title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+            onClick={() => {
+              setSidebarOpen(false);
+              setSidebarCollapsed((prev) => !prev);
+            }}
+          >
+            <span className={`admin-sidebar-toggle-icon ${sidebarCollapsed ? "" : "expanded"}`} aria-hidden="true">
+              <Icon name="arrowRight" size={16} />
+            </span>
+            <span>{sidebarCollapsed ? "Show Menu" : "Hide Menu"}</span>
+          </button>
           <div className="admin-topbar-title">
             <h1>{active.label}</h1>
             <p>{active.desc}</p>
@@ -1198,9 +1308,27 @@ export default function AdminPanelClient() {
       return <PaymentGatewaysView data={data} canEdit={canWriteKey(activeKey)} onPatch={patchSettings} request={request} />;
     if (activeKey === "social" || activeKey === "marketing_tools" || activeKey === "apps")
       return <IntegrationsView category={activeKey} data={data} canEdit={canWriteKey(activeKey)} onPatch={patchSettings} />;
-    if (activeKey === "dashboard")              return <DashboardView data={data} />;
+    if (activeKey === "dashboard")
+      return (
+        <DashboardView
+          data={data}
+          filters={dashboardFilters}
+          onFiltersChange={(patch) => {
+            setDashboardFilters((prev) => {
+              const next = { ...prev, ...patch };
+              if (token && adminMe && active) {
+                void loadScreen(active, { dashboardFilters: next });
+              }
+              return next;
+            });
+          }}
+          onRefresh={() => { void loadScreen(active); }}
+          onRestock={openProductEditor}
+          onViewAllInventory={() => navigate("inventory")}
+        />
+      );
     if (activeKey === "analytics")              return <AnalyticsView data={data} />;
-    if (activeKey === "inventory")              return <InventoryView rows={Array.isArray(data) ? data : []} />;
+    if (activeKey === "inventory")              return <InventoryView rows={Array.isArray(data) ? data : []} threshold={inventoryThreshold} focusProductSlug={inventoryFocusSlug} />;
     if (activeKey === "insights")               return <InsightsView rows={Array.isArray(data) ? data : []} />;
     if (activeKey === "newsletter")             return <NewsletterPanel data={data} />;
     if (activeKey === "reports")               return <Reports data={data} onDownload={downloadReport} />;

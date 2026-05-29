@@ -1,6 +1,7 @@
 from .domain_models import (
     AbandonedCart,
     AdminAuditLog,
+    AnalyticsEvent,
     BlogPost,
     Category,
     Coupon,
@@ -37,6 +38,7 @@ from .domain_models import (
 __all__ = [
     "AbandonedCart",
     "AdminAuditLog",
+    "AnalyticsEvent",
     "BlogPost",
     "Category",
     "Coupon",

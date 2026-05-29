@@ -83,6 +83,15 @@ function LinkListPreview({ links }) {
 }
 
 export function StoreSettingsSection({ section, data, onEdit, canEdit }) {
+  if (section === "inventory_settings") {
+    return (
+      <SettingsCard title="Inventory Settings" subtitle="Restock alert rules used by the dashboard and daily email." onEdit={onEdit} canEdit={canEdit}>
+        <SettingsRow label="Inventory health threshold" value={`${Number(data?.inventory_low_stock_threshold ?? 10)} units`} />
+        <SettingsRow label="Admin email recipient" value={data?.contact_email || "Contact email is not set"} />
+      </SettingsCard>
+    );
+  }
+
   if (section === "branding") {
     return (
       <SettingsCard title="Branding & Identity" subtitle="Store logo, name, colors, and tagline." onEdit={onEdit} canEdit={canEdit}>
@@ -674,11 +683,37 @@ export function IntegrationsHub({ title, integrations }) {
   );
 }
 
-export function InventoryView({ rows }) {
-  const sorted   = [...rows].sort((a, b) => (a.stock_quantity || 0) - (b.stock_quantity || 0));
-  const low      = sorted.filter((p) => (p.stock_quantity || 0) < 10 && (p.stock_quantity || 0) > 0 && p.track_inventory);
-  const out      = sorted.filter((p) => (p.stock_quantity || 0) === 0 && p.track_inventory);
-  const healthy  = sorted.filter((p) => (p.stock_quantity || 0) >= 10);
+function inventoryHealthStatus(product, threshold = 10) {
+  const qty = Number(product?.stock_quantity || 0);
+  if (!product?.track_inventory) return { label: "Untracked", tone: "neutral", priority: 3 };
+  if (qty <= 0) return { label: "Out of Stock", tone: "danger", priority: 0 };
+  if (qty <= 5) return { label: "Critical", tone: "critical", priority: 1 };
+  if (qty <= threshold) return { label: "Low Stock", tone: "warning", priority: 2 };
+  return { label: "In Stock", tone: "success", priority: 3 };
+}
+
+export function InventoryView({ rows, threshold = 10, focusProductSlug = "" }) {
+  const numericThreshold = Number(threshold || 10);
+  const sorted = [...rows].sort((a, b) => {
+    const aStatus = inventoryHealthStatus(a, numericThreshold);
+    const bStatus = inventoryHealthStatus(b, numericThreshold);
+    return (
+      aStatus.priority - bStatus.priority ||
+      Number(a.stock_quantity || 0) - Number(b.stock_quantity || 0) ||
+      String(a.name_en || "").localeCompare(String(b.name_en || ""))
+    );
+  });
+  const out = sorted.filter((p) => inventoryHealthStatus(p, numericThreshold).label === "Out of Stock");
+  const critical = sorted.filter((p) => inventoryHealthStatus(p, numericThreshold).label === "Critical");
+  const low = sorted.filter((p) => inventoryHealthStatus(p, numericThreshold).label === "Low Stock");
+  const healthy = sorted.filter((p) => inventoryHealthStatus(p, numericThreshold).label === "In Stock");
+
+  useEffect(() => {
+    if (!focusProductSlug) return;
+    const escapedSlug = window.CSS?.escape ? window.CSS.escape(focusProductSlug) : focusProductSlug.replace(/"/g, '\\"');
+    const target = document.querySelector(`[data-product-slug="${escapedSlug}"]`);
+    if (target) target.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focusProductSlug, sorted.length]);
 
   return (
     <div className="admin-inventory">
@@ -686,32 +721,31 @@ export function InventoryView({ rows }) {
         <article className="admin-kpi-card"><span className="admin-kpi-label">Total SKUs</span><strong className="admin-kpi-value">{rows.length}</strong></article>
         <article className="admin-kpi-card kpi-success"><span className="admin-kpi-label">In Stock</span><strong className="admin-kpi-value">{healthy.length}</strong></article>
         <article className="admin-kpi-card kpi-warning"><span className="admin-kpi-label">Low Stock</span><strong className="admin-kpi-value">{low.length}</strong></article>
-        <article className="admin-kpi-card kpi-danger"><span className="admin-kpi-label">Out of Stock</span><strong className="admin-kpi-value">{out.length}</strong></article>
+        <article className="admin-kpi-card kpi-danger"><span className="admin-kpi-label">Critical / Out</span><strong className="admin-kpi-value">{critical.length + out.length}</strong></article>
       </div>
 
       <section className="admin-panel-card">
         <div className="admin-panel-head">
           <h3>Stock Levels</h3>
-          <span>{rows.length} products</span>
+          <span>{rows.length} products · threshold {numericThreshold} units</span>
         </div>
         <div className="admin-inv-table">
           <div className="admin-inv-head">
             <span>Product</span><span>SKU</span><span>Qty</span><span>Status</span>
           </div>
-          {sorted.map((p) => {
-            const isLow = p.track_inventory && p.stock_quantity < 10 && p.stock_quantity > 0;
-            const isOut = p.track_inventory && p.stock_quantity === 0;
-            const status = isOut ? "Out of stock" : isLow ? "Low stock" : "In stock";
-            const tone   = isOut ? "danger" : isLow ? "warning" : "success";
+          {sorted.map((p, index) => {
+            const status = inventoryHealthStatus(p, numericThreshold);
+            const rowKey = p.id ?? p.slug ?? `${p.name_en || "product"}-${index}`;
+            const isFocused = focusProductSlug && p.slug === focusProductSlug;
             return (
-              <div key={p.slug} className="admin-inv-row">
+              <div key={rowKey} className={`admin-inv-row ${isFocused ? "is-focused" : ""}`} data-product-slug={p.slug || ""}>
                 <div className="admin-inv-product">
-                  {p.image ? <img src={p.image} alt="" /> : <div className="admin-inv-thumb-ph" />}
+                  {p.image ? <img className="admin-inv-thumb" src={p.image} alt="" /> : <div className="admin-inv-thumb-ph" />}
                   <strong>{p.name_en}</strong>
                 </div>
                 <span className="admin-inv-sku">{p.slug}</span>
                 <span className="admin-inv-qty">{p.stock_quantity}</span>
-                <span className={`admin-badge ${p.track_inventory ? tone : "neutral"}`}>{p.track_inventory ? status : "Untracked"}</span>
+                <span className={`admin-badge ${status.tone}`}>{status.label}</span>
               </div>
             );
           })}

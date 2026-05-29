@@ -12,7 +12,7 @@ from django.utils import timezone
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 
-from store.models import BlogPost, HeroPromoCard, Order, Product, ProductStock, Warehouse, Region
+from store.models import BlogPost, Category, HeroPromoCard, Order, Product, ProductStock, Warehouse, Region
 from store.services.admin_roles import ROLE_MANAGER, ensure_default_admin_roles
 
 User = get_user_model()
@@ -43,6 +43,15 @@ class AdminOpsExtendedTestCase(TestCase):
             code="om",
             name_en="Oman",
             currency_code="OMR",
+            shipping_fee=Decimal("2.00"),
+            shipping_threshold=Decimal("0.00"),
+            contact_phone="12345678",
+            address_en="Test Address",
+        )
+        self.region_sa = Region.objects.create(
+            code="sa",
+            name_en="Saudi Arabia",
+            currency_code="SAR",
             shipping_fee=Decimal("2.00"),
             shipping_threshold=Decimal("0.00"),
             contact_phone="12345678",
@@ -100,6 +109,96 @@ class AdminOpsExtendedTestCase(TestCase):
         self.assertIn("revenue", response.data)
         self.assertIn("orders", response.data)
         self.assertIn("revenue_delta", response.data)
+
+        filtered = self.api_client.get(
+            "/api/admin/dashboard/",
+            {
+                "top_metric": "orders",
+                "top_date_range": "all_time",
+                "top_market": "sa",
+            },
+        )
+        self.assertEqual(filtered.status_code, 200)
+        self.assertEqual(filtered.data.get("top_products_metric"), "orders")
+        self.assertEqual(filtered.data.get("top_products_date_range"), "all_time")
+        self.assertEqual(filtered.data.get("top_products_market"), "sa")
+        self.assertEqual(filtered.data.get("currency_code"), "SAR")
+
+    def test_dashboard_inventory_health_payload(self):
+        self.api_client.force_authenticate(self.staff_user)
+        category = Category.objects.create(
+            slug="baby-care",
+            name_en="Baby Care",
+            name_ar="Baby Care",
+            image="https://example.com/category.jpg",
+        )
+        Product.objects.create(slug="out", name_en="Out Product", name_ar="Out Product", category=category, track_inventory=True, stock_quantity=0)
+        Product.objects.create(slug="critical", name_en="Critical Product", name_ar="Critical Product", category=category, track_inventory=True, stock_quantity=3)
+        Product.objects.create(slug="low", name_en="Low Product", name_ar="Low Product", category=category, track_inventory=True, stock_quantity=8)
+        Product.objects.create(slug="healthy", name_en="Healthy Product", name_ar="Healthy Product", category=category, track_inventory=True, stock_quantity=12)
+
+        response = self.api_client.get("/api/admin/dashboard/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data.get("inventory_health_threshold"), 10)
+        self.assertEqual(response.data.get("inventory_health_count"), 3)
+        rows = response.data.get("inventory_health_products")
+        self.assertEqual([row["slug"] for row in rows], ["out", "critical", "low"])
+        self.assertEqual([row["status_label"] for row in rows], ["Out of Stock", "Critical", "Low Stock"])
+
+    def test_dashboard_sales_by_channel_payload(self):
+        self.api_client.force_authenticate(self.staff_user)
+        Order.objects.create(
+            region=self.region,
+            sales_channel=Order.SALES_CHANNEL_ONLINE_STORE,
+            customer_name="Online Customer",
+            customer_email="online@example.com",
+            customer_phone="12345678",
+            address_line_1="Street 1",
+            city="Muscat",
+            country="Oman",
+            subtotal=Decimal("10.00"),
+            shipping_total=Decimal("0.00"),
+            grand_total=Decimal("10.00"),
+            currency_code="OMR",
+        )
+        Order.objects.create(
+            region=self.region,
+            sales_channel=Order.SALES_CHANNEL_DRAFT_ORDER,
+            customer_name="Draft Customer",
+            customer_email="draft@example.com",
+            customer_phone="12345678",
+            address_line_1="Street 1",
+            city="Muscat",
+            country="Oman",
+            subtotal=Decimal("5.00"),
+            shipping_total=Decimal("0.00"),
+            grand_total=Decimal("5.00"),
+            currency_code="OMR",
+        )
+
+        response = self.api_client.get("/api/admin/dashboard/")
+
+        self.assertEqual(response.status_code, 200)
+        sales_by_channel = response.data.get("sales_by_channel")
+        self.assertEqual(sales_by_channel.get("total_sales"), 15.0)
+        self.assertEqual(sales_by_channel.get("total_orders"), 2)
+        rows = {row["key"]: row for row in sales_by_channel.get("channels")}
+        self.assertEqual(rows["online_store"]["orders"], 1)
+        self.assertEqual(rows["online_store"]["sales"], 10.0)
+        self.assertEqual(rows["draft_order"]["orders"], 1)
+        self.assertEqual(rows["draft_order"]["sales"], 5.0)
+
+    def test_analytics_api_exposes_regional_payload(self):
+        self.api_client.force_authenticate(self.staff_user)
+
+        response = self.api_client.get("/api/admin/analytics/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("regional_revenue", response.data)
+        self.assertIn("region_om", response.data)
+        self.assertIsInstance(response.data["region_om"], dict)
+        self.assertEqual(response.data["region_om"].get("currency_code"), "OMR")
+        self.assertIn("revenue_omr", response.data["region_om"])
 
     def test_token_refresh(self):
         # Authenticate and get token

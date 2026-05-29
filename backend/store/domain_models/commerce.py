@@ -9,6 +9,14 @@ from .catalog import Product, Region
 
 
 class Order(models.Model):
+    SALES_CHANNEL_ONLINE_STORE = "online_store"
+    SALES_CHANNEL_DRAFT_ORDER = "draft_order"
+
+    SALES_CHANNEL_CHOICES = (
+        (SALES_CHANNEL_ONLINE_STORE, "Online store"),
+        (SALES_CHANNEL_DRAFT_ORDER, "Draft orders"),
+    )
+
     STATUS_PENDING = "pending"
     STATUS_CONFIRMED = "confirmed"
     STATUS_PAID = "paid"
@@ -143,6 +151,11 @@ class Order(models.Model):
     )
     region = models.ForeignKey(Region, on_delete=models.PROTECT, related_name="orders")
     locale = models.CharField(max_length=8, default="en")
+    sales_channel = models.CharField(
+        max_length=32,
+        choices=SALES_CHANNEL_CHOICES,
+        default=SALES_CHANNEL_ONLINE_STORE,
+    )
 
     customer_name = models.CharField(max_length=160)
     customer_email = models.EmailField(blank=True)
@@ -956,6 +969,66 @@ class GiftCard(models.Model):
         prefix = "EOG"
         token = secrets.token_hex(6).upper()
         return f"{prefix}-{token[:4]}-{token[4:8]}-{token[8:12]}"
+
+
+class AnalyticsEvent(models.Model):
+    """
+    Lightweight event table for real storefront funnel tracking.
+
+    Events are written by the public POST /api/analytics/event/ endpoint and read by
+    AdminAnalyticsView + AdminDashboardView to produce honest conversion-funnel data.
+
+    session_key: anonymous UUID stored in the visitor's localStorage. Used to count
+    unique visitors/sessions without requiring authentication.
+    """
+
+    EVENT_PAGE_VIEW = "page_view"
+    EVENT_PRODUCT_VIEW = "product_view"
+    EVENT_ADD_TO_CART = "add_to_cart"
+    EVENT_CHECKOUT_INITIATED = "checkout_initiated"
+
+    EVENT_CHOICES = [
+        (EVENT_PAGE_VIEW, "Page View"),
+        (EVENT_PRODUCT_VIEW, "Product View"),
+        (EVENT_ADD_TO_CART, "Add to Cart"),
+        (EVENT_CHECKOUT_INITIATED, "Checkout Initiated"),
+    ]
+
+    event_type = models.CharField(max_length=32, choices=EVENT_CHOICES, db_index=True)
+    session_key = models.CharField(max_length=64, db_index=True)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="analytics_events",
+    )
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="analytics_events",
+    )
+    region = models.ForeignKey(
+        Region,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="analytics_events",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=["event_type", "created_at"]),
+            models.Index(fields=["session_key", "event_type"]),
+        ]
+
+    def __str__(self):
+        return f"{self.event_type} — {self.session_key[:8]} ({self.created_at})"
 
 
 class AbandonedCart(models.Model):

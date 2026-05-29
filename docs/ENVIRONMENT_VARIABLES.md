@@ -149,7 +149,7 @@ Owner labels:
 |---|---|---|---|---|
 | `THAWANI_PUBLISHABLE_KEY` | Conditional | `pk_test...` | `settings.py`, `services/thawani.py` | Provider/Ops |
 | `THAWANI_SECRET_KEY` | Conditional | `sk_test...` | `settings.py`, `services/thawani.py` | Provider/Ops |
-| `THAWANI_BASE_URL` | Optional | `https://uatcheckout.thawani.om/api/v1` | `settings.py`, `services/thawani.py` | Backend |
+| `THAWANI_BASE_URL` | Optional | `https://uatcheckout.thawani.om` | `settings.py`, `services/thawani.py` | Backend |
 | `THAWANI_WEBHOOK_SECRET` | Recommended | `webhook-secret` | `settings.py`, `services/thawani.py` | Provider/Ops |
 | `THAWANI_ENABLE_REAL_API` | Conditional | `0` or `1` | `settings.py`, `services/thawani.py` | Backend/Ops |
 | `THAWANI_CREATE_SESSION_PATH` | Optional | `/api/v1/checkout/session` | `settings.py`, `services/thawani.py` | Backend |

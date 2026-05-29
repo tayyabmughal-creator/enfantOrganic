@@ -16,6 +16,7 @@ from .account import (
 )
 from .admin_ops import (
     AbandonedCartCreateView,
+    AnalyticsEventCreateView,
     AdminAbandonedCartDetailView,
     AdminAbandonedCartListView,
     AdminAnalyticsView,
@@ -84,6 +85,7 @@ from .whatsapp import WhatsAppWebhookView
 
 __all__ = [
     "AbandonedCartCreateView",
+    "AnalyticsEventCreateView",
     "AddressListCreateView",
     "AdminAbandonedCartDetailView",
     "AdminAbandonedCartListView",

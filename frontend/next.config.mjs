@@ -22,7 +22,11 @@ const SECURITY_HEADERS = [
 
 const nextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
-  outputFileTracingRoot: path.join(process.cwd(), ".."),
+  // Keep trace collection scoped to this app by default to avoid expensive
+  // parent-directory scans in container/CI builds.
+  outputFileTracingRoot: process.env.NEXT_OUTPUT_FILE_TRACING_ROOT
+    ? path.resolve(process.env.NEXT_OUTPUT_FILE_TRACING_ROOT)
+    : process.cwd(),
   async rewrites() {
     // In development Next.js serves the frontend directly (no nginx), so
     // browser-side fetches to /api/* would hit Next.js routing instead of

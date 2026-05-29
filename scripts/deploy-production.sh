@@ -19,7 +19,7 @@ set -euo pipefail
 # the caller's working directory.
 cd "$(dirname "$0")/.."
 
-DOMAIN="enfhantorganic.itwing.cloud"
+DOMAIN="${EXPECTED_DOMAIN:-enfhantorganic.itwing.cloud}"
 COMPOSE_FILE="docker-compose.prod.yml"
 ENV_FILE=".env.production"
 
@@ -29,7 +29,7 @@ ENV_FILE=".env.production"
 COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
 
 echo "==> [1/4] Validating ${ENV_FILE}"
-bash scripts/validate-production-env.sh "$ENV_FILE"
+EXPECTED_DOMAIN="$DOMAIN" bash scripts/validate-production-env.sh "$ENV_FILE"
 
 echo
 echo "==> [2/4] Building & starting the stack"

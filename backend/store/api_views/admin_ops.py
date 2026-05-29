@@ -1,10 +1,12 @@
 import csv
 import logging
+from datetime import datetime
 from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.http import FileResponse, HttpResponse
+from django.utils.dateparse import parse_date
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics, permissions, status
@@ -13,12 +15,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from django.db import transaction
-from django.db.models import Count, F, Sum, Q
+from django.db.models import Count, Sum, Q
 from django.db.models.functions import TruncMonth
 
 from ..models import (
     AbandonedCart,
     AdminAuditLog,
+    AnalyticsEvent,
     BlogPost,
     Category,
     Coupon,
@@ -108,6 +111,11 @@ from ..services.admin_roles import (
 )
 from ..services.admin_audit import log_admin_action, snapshot_instance
 from ..services.invoice import ensure_paid_order_invoice
+from ..services.inventory_health import (
+    get_inventory_health_threshold,
+    inventory_health_queryset,
+    serialize_inventory_health_products,
+)
 from ..services.payment_router import PaymentProviderError, refund as process_gateway_refund
 from ..services.shipment import (
     ShipmentServiceError,
@@ -119,6 +127,86 @@ from ..services.shipment import (
 
 
 logger = logging.getLogger(__name__)
+
+
+# GCC storefront currencies normalized to OMR for cross-market analytics.
+# These can be overridden in the future via settings if needed.
+ANALYTICS_TO_OMR_RATE = {
+    "OMR": Decimal("1.0"),
+    "AED": Decimal("0.1040"),
+    "SAR": Decimal("0.1026"),
+}
+
+
+def _sum_money_in_omr(queryset, amount_field):
+    rows = queryset.values("currency_code").annotate(total=Sum(amount_field))
+    total = Decimal("0.0")
+    for row in rows:
+        currency = str(row.get("currency_code") or "OMR").upper()
+        rate = ANALYTICS_TO_OMR_RATE.get(currency, Decimal("1.0"))
+        total += Decimal(row.get("total") or 0) * rate
+    return float(total)
+
+
+def _analytics_money_total(rows):
+    total = Decimal("0.0")
+    for row in rows:
+        currency = str(row.get("currency_code") or "OMR").upper()
+        rate = ANALYTICS_TO_OMR_RATE.get(currency, Decimal("1.0"))
+        total += Decimal(row.get("total") or 0) * rate
+    return float(total)
+
+
+def _build_sales_channel_summary(current_orders, previous_orders, *, currency_code="OMR", convert_to_omr=False):
+    labels = {
+        Order.SALES_CHANNEL_ONLINE_STORE: "Online Store",
+        Order.SALES_CHANNEL_DRAFT_ORDER: "Draft Orders",
+    }
+    colors = {
+        Order.SALES_CHANNEL_ONLINE_STORE: "#20aeea",
+        Order.SALES_CHANNEL_DRAFT_ORDER: "#7652e9",
+    }
+    channels = [Order.SALES_CHANNEL_ONLINE_STORE, Order.SALES_CHANNEL_DRAFT_ORDER]
+
+    def totals_for(queryset, channel):
+        channel_qs = queryset.filter(sales_channel=channel)
+        if convert_to_omr:
+            rows = channel_qs.values("currency_code").annotate(total=Sum("grand_total"))
+            total = _analytics_money_total(rows)
+        else:
+            total = float(channel_qs.aggregate(total=Sum("grand_total"))["total"] or 0)
+        return {
+            "total": total,
+            "orders": channel_qs.count(),
+        }
+
+    current = {channel: totals_for(current_orders, channel) for channel in channels}
+    previous = {channel: totals_for(previous_orders, channel) for channel in channels}
+    total_sales = sum(item["total"] for item in current.values())
+    total_orders = sum(item["orders"] for item in current.values())
+
+    def pct_change(current_value, previous_value):
+        if not previous_value:
+            return None
+        return round(((current_value - previous_value) / previous_value) * 100, 1)
+
+    return {
+        "total_sales": total_sales,
+        "total_orders": total_orders,
+        "currency_code": "OMR" if convert_to_omr else currency_code,
+        "channels": [
+            {
+                "key": channel,
+                "label": labels[channel],
+                "color": colors[channel],
+                "sales": current[channel]["total"],
+                "orders": current[channel]["orders"],
+                "share": round((current[channel]["total"] / total_sales) * 100, 1) if total_sales else 0,
+                "delta": pct_change(current[channel]["total"], previous[channel]["total"]),
+            }
+            for channel in channels
+        ],
+    }
 
 
 class IsStaffUser(permissions.BasePermission):
@@ -150,7 +238,9 @@ class HasAdminCapability(permissions.BasePermission):
                 )
 
         if not required_capabilities:
-            return True
+            # Safe-by-default: require explicit opt-in for staff-only access
+            # when a view does not declare capability requirements.
+            return bool(getattr(view, "allow_staff_without_capability", False))
 
         return all(has_admin_capability(user, capability) for capability in required_capabilities)
 
@@ -158,6 +248,7 @@ class HasAdminCapability(permissions.BasePermission):
 class AdminCapabilityMixin:
     admin_read_capabilities = ()
     admin_write_capabilities = ()
+    allow_staff_without_capability = False
     permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
 
     def get_required_admin_capabilities(self, request):
@@ -181,35 +272,251 @@ class AdminDashboardView(APIView):
 
     @extend_schema(responses=dict)
     def get(self, request):
+        top_metric = str(request.query_params.get("top_metric", "rating") or "rating").strip().lower()
+        if top_metric not in {"rating", "revenue", "units_sold", "orders", "repeat_purchase"}:
+            top_metric = "rating"
+
+        top_date_range = str(request.query_params.get("top_date_range", "all_time") or "all_time").strip().lower()
+        if top_date_range not in {"all_time", "last_7_days", "last_30_days", "last_60_days", "last_90_days", "custom_date"}:
+            top_date_range = "all_time"
+
+        top_market = str(request.query_params.get("top_market", "all") or "all").strip().lower()
+        if top_market not in {"all", "om", "ae", "sa"}:
+            top_market = "all"
+        top_market_region = Region.objects.filter(code=top_market, is_active=True).only("currency_code").first() if top_market != "all" else None
+        top_products_currency_code = top_market_region.currency_code if top_market_region else "OMR"
+        dashboard_currency_code = top_market_region.currency_code if top_market_region else "OMR"
+
         now = timezone.now()
         this_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         last_month_start = (this_month_start - timedelta(days=1)).replace(day=1)
 
         User = get_user_model()
-        orders = Order.objects.all()
-        paid_orders = orders.filter(payment_status=Order.PAYMENT_PAID)
-        low_stock = ProductStock.objects.select_related("product", "warehouse").filter(
-            warehouse__active=True,
-            quantity__lte=F("low_stock_threshold"),
+        base_orders = Order.objects.all()
+        if top_market != "all":
+            base_orders = base_orders.filter(region__code=top_market)
+
+        start_raw = str(request.query_params.get("top_start_date", "") or "").strip()
+        end_raw = str(request.query_params.get("top_end_date", "") or "").strip()
+        start_date = parse_date(start_raw)
+        end_date = parse_date(end_raw)
+        custom_range_valid = bool(start_date and end_date)
+        if custom_range_valid and start_date > end_date:
+            start_date, end_date = end_date, start_date
+
+        def _as_day_start(target_date):
+            return timezone.make_aware(datetime.combine(target_date, datetime.min.time()))
+
+        def _as_day_end(target_date):
+            return timezone.make_aware(datetime.combine(target_date, datetime.max.time()))
+
+        scoped_orders = base_orders
+        if top_date_range == "custom_date":
+            if custom_range_valid:
+                scoped_orders = scoped_orders.filter(
+                    created_at__gte=_as_day_start(start_date),
+                    created_at__lte=_as_day_end(end_date),
+                )
+        elif top_date_range != "all_time":
+            day_window = {
+                "last_7_days": 7,
+                "last_30_days": 30,
+                "last_60_days": 60,
+                "last_90_days": 90,
+            }[top_date_range]
+            scoped_orders = scoped_orders.filter(created_at__gte=now - timedelta(days=day_window))
+
+        scoped_paid_orders = scoped_orders.filter(payment_status=Order.PAYMENT_PAID)
+
+        if top_date_range == "all_time":
+            current_period_orders = base_orders.filter(created_at__gte=this_month_start)
+            previous_period_orders = base_orders.filter(created_at__gte=last_month_start, created_at__lt=this_month_start)
+        elif top_date_range in {"last_7_days", "last_30_days", "last_60_days", "last_90_days"}:
+            day_window = {
+                "last_7_days": 7,
+                "last_30_days": 30,
+                "last_60_days": 60,
+                "last_90_days": 90,
+            }[top_date_range]
+            current_period_start = now - timedelta(days=day_window)
+            previous_period_start = current_period_start - timedelta(days=day_window)
+            current_period_orders = base_orders.filter(created_at__gte=current_period_start, created_at__lte=now)
+            previous_period_orders = base_orders.filter(created_at__gte=previous_period_start, created_at__lt=current_period_start)
+        elif top_date_range == "custom_date" and custom_range_valid:
+            current_period_start = _as_day_start(start_date)
+            current_period_end = _as_day_end(end_date)
+            range_days = max(1, (end_date - start_date).days + 1)
+            previous_period_start = current_period_start - timedelta(days=range_days)
+            current_period_orders = base_orders.filter(created_at__gte=current_period_start, created_at__lte=current_period_end)
+            previous_period_orders = base_orders.filter(created_at__gte=previous_period_start, created_at__lt=current_period_start)
+        else:
+            current_period_orders = base_orders.filter(created_at__gte=this_month_start)
+            previous_period_orders = base_orders.filter(created_at__gte=last_month_start, created_at__lt=this_month_start)
+
+        current_period_paid = current_period_orders.filter(payment_status=Order.PAYMENT_PAID)
+        previous_period_paid = previous_period_orders.filter(payment_status=Order.PAYMENT_PAID)
+
+        base_abandoned_carts = AbandonedCart.objects.all()
+        if top_market != "all":
+            base_abandoned_carts = base_abandoned_carts.filter(region__code=top_market)
+
+        if top_date_range == "all_time":
+            current_period_carts = base_abandoned_carts
+            previous_period_carts = AbandonedCart.objects.none()
+        elif top_date_range in {"last_7_days", "last_30_days", "last_60_days", "last_90_days"}:
+            day_window = {
+                "last_7_days": 7,
+                "last_30_days": 30,
+                "last_60_days": 60,
+                "last_90_days": 90,
+            }[top_date_range]
+            current_period_start = now - timedelta(days=day_window)
+            previous_period_start = current_period_start - timedelta(days=day_window)
+            current_period_carts = base_abandoned_carts.filter(abandoned_at__gte=current_period_start, abandoned_at__lte=now)
+            previous_period_carts = base_abandoned_carts.filter(abandoned_at__gte=previous_period_start, abandoned_at__lt=current_period_start)
+        elif top_date_range == "custom_date" and custom_range_valid:
+            current_period_start = _as_day_start(start_date)
+            current_period_end = _as_day_end(end_date)
+            range_days = max(1, (end_date - start_date).days + 1)
+            previous_period_start = current_period_start - timedelta(days=range_days)
+            current_period_carts = base_abandoned_carts.filter(abandoned_at__gte=current_period_start, abandoned_at__lte=current_period_end)
+            previous_period_carts = base_abandoned_carts.filter(abandoned_at__gte=previous_period_start, abandoned_at__lt=current_period_start)
+        else:
+            current_period_carts = base_abandoned_carts.filter(abandoned_at__gte=this_month_start)
+            previous_period_carts = base_abandoned_carts.filter(abandoned_at__gte=last_month_start, abandoned_at__lt=this_month_start)
+
+        inventory_health_threshold = get_inventory_health_threshold()
+        inventory_health = inventory_health_queryset(threshold=inventory_health_threshold)
+        inventory_health_count = inventory_health.count()
+        inventory_health_products = serialize_inventory_health_products(
+            threshold=inventory_health_threshold,
+            limit=5,
+            request=request,
         )
 
-        total_revenue = float(paid_orders.aggregate(total=Sum("grand_total"))["total"] or 0)
-        total_orders = orders.count()
-        total_customers = User.objects.filter(is_staff=False).count()
-        total_products = Product.objects.filter(is_published=True).count()
-        pending_orders = orders.filter(status=Order.STATUS_PENDING).count()
+        if top_market == "all":
+            total_revenue = _sum_money_in_omr(scoped_paid_orders, "grand_total")
+        else:
+            total_revenue = float(scoped_paid_orders.aggregate(total=Sum("grand_total"))["total"] or 0)
+        total_orders = scoped_orders.count()
+        total_customers = (
+            scoped_orders.exclude(customer_email="")
+            .values("customer_email")
+            .distinct()
+            .count()
+            + scoped_orders.filter(customer_email="")
+            .exclude(user_id__isnull=True)
+            .values("user_id")
+            .distinct()
+            .count()
+        )
+        if top_market == "all":
+            total_products = Product.objects.filter(is_published=True).count()
+        else:
+            total_products = (
+                Product.objects.filter(is_published=True, prices__region__code=top_market)
+                .distinct()
+                .count()
+            )
+        pending_orders = scoped_orders.filter(status=Order.STATUS_PENDING).count()
 
-        # Current month
-        monthly_paid = paid_orders.filter(created_at__gte=this_month_start)
-        monthly_revenue = float(monthly_paid.aggregate(total=Sum("grand_total"))["total"] or 0)
-        monthly_orders = orders.filter(created_at__gte=this_month_start).count()
-        monthly_customers = User.objects.filter(is_staff=False, date_joined__gte=this_month_start).count()
+        if top_market == "all":
+            monthly_revenue = _sum_money_in_omr(current_period_paid, "grand_total")
+        else:
+            monthly_revenue = float(current_period_paid.aggregate(total=Sum("grand_total"))["total"] or 0)
+        monthly_orders = current_period_orders.count()
+        monthly_customers = (
+            current_period_orders.exclude(customer_email="")
+            .values("customer_email")
+            .distinct()
+            .count()
+            + current_period_orders.filter(customer_email="")
+            .exclude(user_id__isnull=True)
+            .values("user_id")
+            .distinct()
+            .count()
+        )
 
-        # Previous month
-        prev_paid = paid_orders.filter(created_at__gte=last_month_start, created_at__lt=this_month_start)
-        prev_revenue = float(prev_paid.aggregate(total=Sum("grand_total"))["total"] or 0)
-        prev_orders = orders.filter(created_at__gte=last_month_start, created_at__lt=this_month_start).count()
-        prev_customers = User.objects.filter(is_staff=False, date_joined__gte=last_month_start, date_joined__lt=this_month_start).count()
+        if top_market == "all":
+            prev_revenue = _sum_money_in_omr(previous_period_paid, "grand_total")
+        else:
+            prev_revenue = float(previous_period_paid.aggregate(total=Sum("grand_total"))["total"] or 0)
+        prev_orders = previous_period_orders.count()
+        prev_customers = (
+            previous_period_orders.exclude(customer_email="")
+            .values("customer_email")
+            .distinct()
+            .count()
+            + previous_period_orders.filter(customer_email="")
+            .exclude(user_id__isnull=True)
+            .values("user_id")
+            .distinct()
+            .count()
+        )
+
+        # Conversion breakdown using real AnalyticsEvent data.
+        # Period window mirrors current_period_orders (this month / last N days / custom range).
+        if top_date_range == "all_time":
+            event_period_start = this_month_start
+            event_prev_start = last_month_start
+            event_prev_end = this_month_start
+        elif top_date_range in {"last_7_days", "last_30_days", "last_60_days", "last_90_days"}:
+            _dw = {"last_7_days": 7, "last_30_days": 30, "last_60_days": 60, "last_90_days": 90}[top_date_range]
+            event_period_start = now - timedelta(days=_dw)
+            event_prev_start = event_period_start - timedelta(days=_dw)
+            event_prev_end = event_period_start
+        elif top_date_range == "custom_date" and custom_range_valid:
+            event_period_start = _as_day_start(start_date)
+            _range_days = max(1, (end_date - start_date).days + 1)
+            event_prev_start = event_period_start - timedelta(days=_range_days)
+            event_prev_end = event_period_start
+        else:
+            event_period_start = this_month_start
+            event_prev_start = last_month_start
+            event_prev_end = this_month_start
+
+        def _period_events(start, end=None):
+            qs = AnalyticsEvent.objects.filter(created_at__gte=start)
+            if end:
+                qs = qs.filter(created_at__lt=end)
+            if top_market != "all":
+                qs = qs.filter(region__code=top_market)
+            return qs
+
+        curr_events = _period_events(event_period_start)
+        prev_events = _period_events(event_prev_start, event_prev_end)
+
+        current_sessions = curr_events.filter(
+            event_type=AnalyticsEvent.EVENT_PAGE_VIEW
+        ).values("session_key").distinct().count()
+        previous_sessions = prev_events.filter(
+            event_type=AnalyticsEvent.EVENT_PAGE_VIEW
+        ).values("session_key").distinct().count()
+
+        current_added_to_cart = curr_events.filter(
+            event_type=AnalyticsEvent.EVENT_ADD_TO_CART
+        ).values("session_key").distinct().count()
+        previous_added_to_cart = prev_events.filter(
+            event_type=AnalyticsEvent.EVENT_ADD_TO_CART
+        ).values("session_key").distinct().count()
+
+        current_checkout = curr_events.filter(
+            event_type=AnalyticsEvent.EVENT_CHECKOUT_INITIATED
+        ).values("session_key").distinct().count()
+        previous_checkout = prev_events.filter(
+            event_type=AnalyticsEvent.EVENT_CHECKOUT_INITIATED
+        ).values("session_key").distinct().count()
+
+        current_completed = current_period_paid.count()
+        previous_completed = previous_period_paid.count()
+
+        def stage_rate(count, sessions):
+            if not sessions:
+                return 0.0
+            return round(min(100.0, (count / sessions) * 100), 2)
+
+        current_overall_conversion = stage_rate(current_completed, current_sessions)
+        previous_overall_conversion = stage_rate(previous_completed, previous_sessions)
 
         def pct_change(current, previous):
             if not previous:
@@ -219,43 +526,262 @@ class AdminDashboardView(APIView):
         avg_order_value = round(total_revenue / total_orders, 2) if total_orders else 0
 
         # Real conversion rate: paid orders / total orders
-        conversion_rate = round((paid_orders.count() / total_orders) * 100, 1) if total_orders else 0
+        conversion_rate = round((scoped_paid_orders.count() / total_orders) * 100, 1) if total_orders else 0
 
         # Real repeat rate: customers with >1 order / customers with any order
-        customers_with_orders = (
-            User.objects.filter(is_staff=False)
-            .annotate(order_count=Count("orders"))
-            .filter(order_count__gt=0)
+        customer_order_counts = (
+            scoped_orders.exclude(customer_email="")
+            .values("customer_email")
+            .annotate(order_count=Count("id"))
         )
-        repeat_customers = customers_with_orders.filter(order_count__gt=1).count()
-        total_customers_with_orders = customers_with_orders.count()
+        repeat_customers = customer_order_counts.filter(order_count__gt=1).count()
+        total_customers_with_orders = customer_order_counts.count()
         repeat_rate = round((repeat_customers / total_customers_with_orders) * 100, 1) if total_customers_with_orders else 0
 
-        # Abandonment rate: orders with status 'cancelled' / total orders
-        cancelled_orders = orders.filter(status=Order.STATUS_CANCELLED).count()
-        abandonment_rate = round((cancelled_orders / total_orders) * 100, 1) if total_orders else 0
+        # Real cart abandonment rate: abandoned carts / (abandoned carts + paid orders in scope)
+        # Uses the same date + market scope as the rest of the dashboard.
+        scoped_abandoned_carts_count = current_period_carts.count()
+        scoped_paid_count = scoped_paid_orders.count()
+        abandonment_rate = (
+            round(scoped_abandoned_carts_count / (scoped_abandoned_carts_count + scoped_paid_count) * 100, 1)
+            if (scoped_abandoned_carts_count + scoped_paid_count)
+            else 0
+        )
 
-        revenue_trend = [
+        if top_market == "all":
+            by_month_currency = (
+                scoped_paid_orders.annotate(month=TruncMonth("created_at"))
+                .values("month", "currency_code")
+                .annotate(total=Sum("grand_total"))
+                .order_by("month")
+            )
+            month_map = {}
+            for row in by_month_currency:
+                month = row.get("month")
+                if not month:
+                    continue
+                currency = str(row.get("currency_code") or "OMR").upper()
+                rate = ANALYTICS_TO_OMR_RATE.get(currency, Decimal("1.0"))
+                converted = Decimal(row.get("total") or 0) * rate
+                month_map[month] = month_map.get(month, Decimal("0.0")) + converted
+            revenue_trend = [
+                {
+                    "label": month.strftime("%b %Y"),
+                    "value": float(total),
+                }
+                for month, total in sorted(month_map.items(), key=lambda item: item[0])[:12]
+            ]
+        else:
+            revenue_trend = [
+                {
+                    "label": item["month"].strftime("%b %Y"),
+                    "value": float(item["total"] or 0),
+                }
+                for item in scoped_paid_orders.annotate(month=TruncMonth("created_at"))
+                .values("month")
+                .annotate(total=Sum("grand_total"))
+                .order_by("month")[:12]
+            ]
+        # Orders trend — monthly order count for sparkline
+        orders_trend = [
             {
                 "label": item["month"].strftime("%b %Y"),
-                "value": float(item["total"] or 0),
+                "value": item["total"],
             }
-            for item in paid_orders.annotate(month=TruncMonth("created_at"))
+            for item in scoped_orders.annotate(month=TruncMonth("created_at"))
             .values("month")
-            .annotate(total=Sum("grand_total"))
+            .annotate(total=Count("id"))
             .order_by("month")[:12]
         ]
-        status_mix = list(orders.values("status").annotate(count=Count("id")).order_by("status"))
+
+        # Customers trend — distinct customer emails per month for sparkline
+        customers_trend = [
+            {
+                "label": item["month"].strftime("%b %Y"),
+                "value": item["total"],
+            }
+            for item in scoped_orders.exclude(customer_email="")
+            .annotate(month=TruncMonth("created_at"))
+            .values("month")
+            .annotate(total=Count("customer_email", distinct=True))
+            .order_by("month")[:12]
+        ]
+
+        # Status mix follows the active dashboard scope (date + market).
+        status_mix = list(scoped_orders.values("status").annotate(count=Count("id")).order_by("status"))
+        sales_channel_orders = scoped_orders.exclude(
+            status__in=[
+                Order.STATUS_CANCELLED,
+                Order.STATUS_FAILED,
+                Order.STATUS_REFUNDED,
+            ]
+        )
+        previous_sales_channel_orders = previous_period_orders.exclude(
+            status__in=[
+                Order.STATUS_CANCELLED,
+                Order.STATUS_FAILED,
+                Order.STATUS_REFUNDED,
+            ]
+        )
+        sales_by_channel = _build_sales_channel_summary(
+            sales_channel_orders,
+            previous_sales_channel_orders,
+            currency_code=dashboard_currency_code,
+            convert_to_omr=top_market == "all",
+        )
+
+        top_paid_orders = scoped_paid_orders
+
+        top_products = []
+        metric_label = {
+            "rating": "By rating",
+            "revenue": "By revenue",
+            "units_sold": "By units sold",
+            "orders": "By orders",
+            "repeat_purchase": "By repeat purchase",
+        }[top_metric]
+
+        if top_metric == "rating":
+            sold_product_ids = (
+                top_paid_orders
+                .values_list("items__product_id", flat=True)
+                .exclude(items__product_id__isnull=True)
+                .distinct()
+            )
+            top_products = list(
+                Product.objects.filter(is_published=True, id__in=sold_product_ids)
+                .order_by("-rating", "-review_count")
+                .values("slug", "name_en", "stock_quantity", "rating", "review_count")[:8]
+            )
+            for product in top_products:
+                rating = float(product.get("rating") or 0)
+                product["sales"] = 0
+                product["orders_count"] = 0
+                product["revenue"] = 0.0
+                product["repeat_purchase_count"] = 0
+                product["metric"] = top_metric
+                product["metric_label"] = metric_label
+                product["metric_value"] = rating
+                product["metric_value_display"] = f"{rating:.1f}★"
+                product["currency_code"] = top_products_currency_code
+        else:
+            if top_market == "all":
+                raw_rows = list(
+                    Product.objects.filter(
+                        is_published=True,
+                        orderitem__order__in=top_paid_orders,
+                    )
+                    .values("id", "slug", "name_en", "stock_quantity", "orderitem__order__currency_code")
+                    .annotate(
+                        revenue=Sum("orderitem__line_total"),
+                        units_sold=Sum("orderitem__quantity"),
+                        orders_count=Count("orderitem__order_id", distinct=True),
+                    )
+                )
+                product_map = {}
+                for raw in raw_rows:
+                    product_id = raw["id"]
+                    currency = str(raw.get("orderitem__order__currency_code") or "OMR").upper()
+                    rate = float(ANALYTICS_TO_OMR_RATE.get(currency, Decimal("1.0")))
+                    bucket = product_map.setdefault(
+                        product_id,
+                        {
+                            "id": product_id,
+                            "slug": raw.get("slug"),
+                            "name_en": raw.get("name_en"),
+                            "stock_quantity": raw.get("stock_quantity"),
+                            "revenue": 0.0,
+                            "units_sold": 0,
+                            "orders_count": 0,
+                        },
+                    )
+                    bucket["revenue"] += float(raw.get("revenue") or 0) * rate
+                    bucket["units_sold"] += int(raw.get("units_sold") or 0)
+                    bucket["orders_count"] += int(raw.get("orders_count") or 0)
+                top_product_rows = list(product_map.values())
+            else:
+                top_product_rows = list(
+                    Product.objects.filter(
+                        is_published=True,
+                        orderitem__order__in=top_paid_orders,
+                    )
+                    .values("id", "slug", "name_en", "stock_quantity")
+                    .annotate(
+                        revenue=Sum("orderitem__line_total"),
+                        units_sold=Sum("orderitem__quantity"),
+                        orders_count=Count("orderitem__order_id", distinct=True),
+                    )
+                )
+
+            repeat_purchase_counts = {
+                row["items__product_id"]: int(row["repeat_customers"] or 0)
+                for row in (
+                    top_paid_orders
+                    .filter(items__product_id__isnull=False)
+                    .exclude(customer_email="")
+                    .values("items__product_id", "customer_email")
+                    .annotate(order_count=Count("id", distinct=True))
+                    .filter(order_count__gt=1)
+                    .values("items__product_id")
+                    .annotate(repeat_customers=Count("customer_email", distinct=True))
+                )
+            }
+
+            for row in top_product_rows:
+                row["revenue"] = float(row.get("revenue") or 0)
+                row["units_sold"] = int(row.get("units_sold") or 0)
+                row["orders_count"] = int(row.get("orders_count") or 0)
+                row["repeat_purchase_count"] = int(repeat_purchase_counts.get(row["id"], 0))
+
+            if top_metric == "revenue":
+                top_product_rows.sort(key=lambda row: (row["revenue"], row["orders_count"]), reverse=True)
+            elif top_metric == "units_sold":
+                top_product_rows.sort(key=lambda row: (row["units_sold"], row["orders_count"]), reverse=True)
+            elif top_metric == "orders":
+                top_product_rows.sort(key=lambda row: (row["orders_count"], row["units_sold"]), reverse=True)
+            elif top_metric == "repeat_purchase":
+                top_product_rows.sort(
+                    key=lambda row: (row["repeat_purchase_count"], row["orders_count"], row["units_sold"]),
+                    reverse=True,
+                )
+
+            top_products = []
+            for row in top_product_rows[:8]:
+                if top_metric == "revenue":
+                    metric_value = row["revenue"]
+                elif top_metric == "units_sold":
+                    metric_value = row["units_sold"]
+                elif top_metric == "orders":
+                    metric_value = row["orders_count"]
+                else:
+                    metric_value = row["repeat_purchase_count"]
+
+                top_products.append(
+                    {
+                        "slug": row.get("slug"),
+                        "name_en": row.get("name_en"),
+                        "stock_quantity": row.get("stock_quantity"),
+                        "sales": row["units_sold"],
+                        "orders_count": row["orders_count"],
+                        "revenue": row["revenue"],
+                        "repeat_purchase_count": row["repeat_purchase_count"],
+                        "metric": top_metric,
+                        "metric_label": metric_label,
+                        "metric_value": metric_value,
+                        "currency_code": top_products_currency_code,
+                    }
+                )
 
         return Response(
             {
                 "revenue": total_revenue,
+                "currency_code": dashboard_currency_code,
                 "revenue_delta": pct_change(monthly_revenue, prev_revenue),
                 "monthly_revenue": monthly_revenue,
                 "orders": total_orders,
                 "orders_delta": pct_change(monthly_orders, prev_orders),
                 "pending_orders": pending_orders,
-                "paid_orders": paid_orders.count(),
+                "paid_orders": scoped_paid_orders.count(),
                 "customers": total_customers,
                 "customers_delta": pct_change(monthly_customers, prev_customers),
                 "products": total_products,
@@ -263,28 +789,78 @@ class AdminDashboardView(APIView):
                 "conversion_rate": conversion_rate,
                 "abandonment_rate": abandonment_rate,
                 "repeat_rate": repeat_rate,
-                "low_stock": low_stock.count(),
-                "low_stock_products": low_stock.values("product_id").distinct().count(),
+                "conversion_breakdown": {
+                    "overall_rate": current_overall_conversion,
+                    "overall_delta": pct_change(current_overall_conversion, previous_overall_conversion),
+                    "steps": [
+                        {
+                            "key": "sessions",
+                            "label": "Sessions",
+                            "count": current_sessions,
+                            "rate": 100.0 if current_sessions else 0.0,
+                            "delta": pct_change(current_sessions, previous_sessions),
+                        },
+                        {
+                            "key": "added_to_cart",
+                            "label": "Added to cart",
+                            "count": current_added_to_cart,
+                            "rate": stage_rate(current_added_to_cart, current_sessions),
+                            "delta": pct_change(
+                                stage_rate(current_added_to_cart, current_sessions),
+                                stage_rate(previous_added_to_cart, previous_sessions),
+                            ),
+                        },
+                        {
+                            "key": "checkout",
+                            "label": "Reached checkout",
+                            "count": current_checkout,
+                            "rate": stage_rate(current_checkout, current_sessions),
+                            "delta": pct_change(
+                                stage_rate(current_checkout, current_sessions),
+                                stage_rate(previous_checkout, previous_sessions),
+                            ),
+                        },
+                        {
+                            "key": "completed",
+                            "label": "Completed",
+                            "count": current_completed,
+                            "rate": stage_rate(current_completed, current_sessions),
+                            "delta": pct_change(
+                                stage_rate(current_completed, current_sessions),
+                                stage_rate(previous_completed, previous_sessions),
+                            ),
+                        },
+                    ],
+                },
+                "low_stock": inventory_health_count,
+                "low_stock_products": inventory_health_count,
+                "inventory_health_threshold": inventory_health_threshold,
+                "inventory_health_count": inventory_health_count,
+                "inventory_health_products": inventory_health_products,
                 "revenue_trend": revenue_trend,
+                "orders_trend": orders_trend,
+                "customers_trend": customers_trend,
                 "status_mix": status_mix,
-                "top_products": list(
-                    Product.objects.filter(is_published=True)
-                    .order_by("-review_count", "-rating")
-                    .values("slug", "name_en", "stock_quantity")[:8]
-                ),
-                "recent_orders": list(
-                    orders.order_by("-created_at").values(
-                        "order_number",
-                        "customer_name",
-                        "grand_total",
-                        "currency_code",
-                        "status",
-                        "payment_status",
-                        "created_at",
-                    )[:10]
-                ),
+                "sales_by_channel": sales_by_channel,
+                "top_products": top_products,
+                "top_products_currency_code": top_products_currency_code,
+                "top_products_metric": top_metric,
+                "top_products_date_range": top_date_range,
+                "top_products_market": top_market,
                 "recent_customers": list(
                     User.objects.filter(is_staff=False)
+                    .filter(
+                        Q(
+                            id__in=scoped_orders.exclude(user_id__isnull=True)
+                            .values_list("user_id", flat=True)
+                            .distinct()
+                        )
+                        | Q(
+                            email__in=scoped_orders.exclude(customer_email="")
+                            .values_list("customer_email", flat=True)
+                            .distinct()
+                        )
+                    )
                     .order_by("-date_joined")
                     .values("id", "username", "email", "first_name", "last_name", "date_joined")[:10]
                 ),
@@ -307,35 +883,64 @@ class AdminAnalyticsView(APIView):
         regional_revenue = {}
         for region in Region.objects.filter(is_active=True):
             region_orders = paid_orders.filter(region=region)
+            region_total = Decimal(region_orders.aggregate(total=Sum("grand_total"))["total"] or 0)
+            rate = ANALYTICS_TO_OMR_RATE.get(str(region.currency_code or "OMR").upper(), Decimal("1.0"))
             regional_revenue[region.code] = {
                 "name": region.name_en or region.code.upper(),
-                "revenue": float(region_orders.aggregate(total=Sum("grand_total"))["total"] or 0),
+                "currency_code": region.currency_code,
+                "revenue": float(region_total),
+                "revenue_omr": float(region_total * rate),
                 "orders": region_orders.count(),
             }
 
-        # Conversion funnel (all-time)
-        total_customers = get_user_model().objects.filter(is_staff=False).count()
+        # Conversion funnel — real AnalyticsEvent counts (all-time, no date filter applied here)
+        all_events = AnalyticsEvent.objects.all()
+        funnel_visitors = all_events.filter(
+            event_type=AnalyticsEvent.EVENT_PAGE_VIEW
+        ).values("session_key").distinct().count()
+        funnel_product_views = all_events.filter(
+            event_type=AnalyticsEvent.EVENT_PRODUCT_VIEW
+        ).count()
+        funnel_cart_adds = all_events.filter(
+            event_type=AnalyticsEvent.EVENT_ADD_TO_CART
+        ).values("session_key").distinct().count()
+        funnel_checkouts = all_events.filter(
+            event_type=AnalyticsEvent.EVENT_CHECKOUT_INITIATED
+        ).values("session_key").distinct().count()
+
         total_orders_count = orders.count()
         paid_orders_count = paid_orders.count()
         cancelled_orders_count = orders.filter(status=Order.STATUS_CANCELLED).count()
 
         # Revenue trend (monthly)
+        by_month_currency = (
+            paid_orders.annotate(month=TruncMonth("created_at"))
+            .values("month", "currency_code")
+            .annotate(total=Sum("grand_total"))
+            .order_by("month")
+        )
+        month_map = {}
+        for row in by_month_currency:
+            month = row.get("month")
+            if not month:
+                continue
+            currency = str(row.get("currency_code") or "OMR").upper()
+            rate = ANALYTICS_TO_OMR_RATE.get(currency, Decimal("1.0"))
+            converted = Decimal(row.get("total") or 0) * rate
+            month_map[month] = month_map.get(month, Decimal("0.0")) + converted
         revenue_trend = [
             {
-                "label": item["month"].strftime("%b %Y"),
-                "value": float(item["total"] or 0),
+                "label": month.strftime("%b %Y"),
+                "value": float(total),
             }
-            for item in paid_orders.annotate(month=TruncMonth("created_at"))
-            .values("month")
-            .annotate(total=Sum("grand_total"))
-            .order_by("month")[:12]
+            for month, total in sorted(month_map.items(), key=lambda item: item[0])[:12]
         ]
 
         return Response({
-            "visitors": total_customers,  # best available proxy
-            "product_views": total_orders_count,  # proxy: order count
-            "cart_adds": total_orders_count,  # proxy
-            "checkouts": total_orders_count,  # all orders represent checkouts
+            "visitors": funnel_visitors,
+            "product_views": funnel_product_views,
+            "cart_adds": funnel_cart_adds,
+            "checkouts": funnel_checkouts,
             "completed_orders": paid_orders_count,
             "abandoned_orders": cancelled_orders_count,
             "conversion_rate": round((paid_orders_count / total_orders_count) * 100, 1) if total_orders_count else 0,
@@ -457,7 +1062,7 @@ class ReportCsvView(APIView):
                 "slug", "name_en", "brand", "stock_quantity", "track_inventory", "is_published",
             )
             if report_type == "low-stock":
-                products = products.filter(track_inventory=True, stock_quantity__lte=10)
+                products = products.filter(track_inventory=True, stock_quantity__lte=get_inventory_health_threshold())
             for product in products[: max_rows + 1]:
                 if not write_row([
                     product.slug,
@@ -1602,6 +2207,62 @@ class AdminAbandonedCartDetailView(generics.RetrieveUpdateDestroyAPIView):
     admin_write_capabilities = (CAP_ABANDONED_EDIT,)
     queryset = AbandonedCart.objects.all()
     serializer_class = AdminAbandonedCartSerializer
+
+
+class AnalyticsEventCreateView(APIView):
+    """
+    Public endpoint for recording real storefront analytics events.
+
+    Called by the Next.js storefront on: page load (page_view), product detail
+    page load (product_view), add-to-cart action (add_to_cart), and checkout page
+    load (checkout_initiated).
+
+    Authentication is intentionally not required — all visitors (including guests)
+    must be able to record events. Rate-limited by the 'analytics' throttle scope.
+
+    Body: {
+        event_type: "page_view" | "product_view" | "add_to_cart" | "checkout_initiated",
+        session_key: "<uuid>",           # localStorage-persisted anonymous visitor ID
+        product_slug: "<slug>",          # optional, for product_view / add_to_cart
+        region_code: "om" | "ae" | "sa", # optional
+    }
+    """
+
+    permission_classes = [permissions.AllowAny]
+    throttle_scope = "analytics"
+
+    VALID_EVENT_TYPES = {
+        AnalyticsEvent.EVENT_PAGE_VIEW,
+        AnalyticsEvent.EVENT_PRODUCT_VIEW,
+        AnalyticsEvent.EVENT_ADD_TO_CART,
+        AnalyticsEvent.EVENT_CHECKOUT_INITIATED,
+    }
+
+    @extend_schema(responses=dict)
+    def post(self, request):
+        event_type = str(request.data.get("event_type") or "").strip()
+        if event_type not in self.VALID_EVENT_TYPES:
+            return Response({"error": "Invalid event_type."}, status=status.HTTP_400_BAD_REQUEST)
+
+        session_key = str(request.data.get("session_key") or "").strip()[:64]
+        if not session_key:
+            return Response({"error": "session_key is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        product_slug = str(request.data.get("product_slug") or "").strip()
+        region_code = str(request.data.get("region_code") or "").strip().lower()
+
+        product = Product.objects.filter(slug=product_slug).only("id").first() if product_slug else None
+        region = Region.objects.filter(code=region_code, is_active=True).only("id").first() if region_code else None
+        user = request.user if request.user and request.user.is_authenticated else None
+
+        AnalyticsEvent.objects.create(
+            event_type=event_type,
+            session_key=session_key,
+            user=user,
+            product=product,
+            region=region,
+        )
+        return Response({"status": "ok"}, status=status.HTTP_201_CREATED)
 
 
 class AbandonedCartCreateView(APIView):

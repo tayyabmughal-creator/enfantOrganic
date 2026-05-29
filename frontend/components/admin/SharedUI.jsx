@@ -15,6 +15,16 @@ export function AdminEmpty({ label }) {
   );
 }
 
+export function EmptyState({ icon, title, message }) {
+  return (
+    <div className="admin-empty-state">
+      {icon ? <span className="admin-empty-state-icon">{icon}</span> : null}
+      {title ? <strong>{title}</strong> : null}
+      {message ? <span>{message}</span> : null}
+    </div>
+  );
+}
+
 export function AdminToast({ toast }) {
   const icons = { success: "✓", error: "✕", info: "●" };
   return (
@@ -55,25 +65,36 @@ export function RevenueChart({ values }) {
 }
 
 export function DonutChart({ values }) {
-  const items  = values?.length ? values : [{ status: "pending", count: 4 }, { status: "delivered", count: 2 }, { status: "confirmed", count: 1 }];
-  const total  = items.reduce((s, i) => s + i.count, 0) || 1;
+  const items = Array.isArray(values)
+    ? values.filter((item) => Number(item?.count || 0) > 0)
+    : [];
+  const total = items.reduce((sum, item) => sum + Number(item?.count || 0), 0);
   const colors = ["#c9a84c", "#92ab69", "#607a42", "#62b5e8", "#df5750", "#8a82ff"];
-  let offset   = 25;
+  let offset = 25;
   return (
     <svg className="admin-donut-chart" viewBox="0 0 220 220" role="img" aria-label="Order status donut chart">
       <circle cx="110" cy="110" r="66" fill="none" stroke="#f0f3ed" strokeWidth="28" />
-      {items.map((item, i) => {
-        const len = (item.count / total) * 315;
-        const el  = (
-          <circle key={item.status} cx="110" cy="110" r="66"
-            fill="none" stroke={colors[i % colors.length]} strokeWidth="28"
-            strokeDasharray={`${len} 315`} strokeDashoffset={-offset}
-            style={{ transform: "rotate(-90deg)", transformOrigin: "110px 110px" }}
-          />
-        );
-        offset += len;
-        return el;
-      })}
+      {total > 0
+        ? items.map((item, i) => {
+            const len = (Number(item.count || 0) / total) * 315;
+            const el = (
+              <circle
+                key={item.status || i}
+                cx="110"
+                cy="110"
+                r="66"
+                fill="none"
+                stroke={colors[i % colors.length]}
+                strokeWidth="28"
+                strokeDasharray={`${len} 315`}
+                strokeDashoffset={-offset}
+                style={{ transform: "rotate(-90deg)", transformOrigin: "110px 110px" }}
+              />
+            );
+            offset += len;
+            return el;
+          })
+        : null}
       <text x="110" y="105" textAnchor="middle" fill="#65705f" fontSize="13" fontWeight="700">Orders</text>
       <text x="110" y="124" textAnchor="middle" fill="#191817" fontSize="26" fontWeight="800">{total}</text>
     </svg>

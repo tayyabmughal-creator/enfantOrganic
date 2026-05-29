@@ -385,6 +385,9 @@ class SiteSettings(models.Model):
     omannet_sha_response        = models.CharField(max_length=100, blank=True, default="")
     omannet_webhook_secret      = models.CharField(max_length=100, blank=True, default="")
 
+    # Inventory operations
+    inventory_low_stock_threshold = models.PositiveIntegerField(default=10)
+
     def __str__(self):
         return self.brand_name
 
