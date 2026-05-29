@@ -143,7 +143,7 @@ Variables:
 
 - `THAWANI_PUBLISHABLE_KEY`
 - `THAWANI_SECRET_KEY`
-- `THAWANI_BASE_URL`
+- `THAWANI_BASE_URL` (origin only, e.g. `https://uatcheckout.thawani.om`)
 - `THAWANI_WEBHOOK_SECRET` (recommended)
 - `THAWANI_ENABLE_REAL_API` (`0`/`1`)
 - `THAWANI_CREATE_SESSION_PATH`

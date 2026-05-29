@@ -23,6 +23,7 @@ from .payment_config import get_thawani_config
 logger = logging.getLogger(__name__)
 
 MONEY_QUANTIZER = Decimal("0.01")
+_LEGACY_API_PREFIX = "/api/v1"
 
 
 class ThawaniError(Exception):
@@ -44,6 +45,16 @@ class ThawaniConfig:
 
 def _to_money(value):
     return Decimal(value).quantize(MONEY_QUANTIZER, rounding=ROUND_HALF_UP)
+
+
+def _build_request_url(base_url, path):
+    base = str(base_url or "").strip().rstrip("/")
+    normalized_path = f"/{str(path or '').lstrip('/')}"
+    # Backward compatibility: older configs may still include /api/v1 in the
+    # base URL while the path also starts with /api/v1/...
+    if base.endswith(_LEGACY_API_PREFIX) and normalized_path.startswith(f"{_LEGACY_API_PREFIX}/"):
+        base = base[: -len(_LEGACY_API_PREFIX)]
+    return f"{base}{normalized_path}"
 
 
 def _build_config():
@@ -77,7 +88,7 @@ def check_configuration():
 
 
 def _post_json(config, path, payload):
-    url = f"{config.base_url}{path}"
+    url = _build_request_url(config.base_url, path)
     headers = {
         "Content-Type": "application/json",
         "thawani-api-key": config.secret_key,

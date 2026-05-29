@@ -238,7 +238,9 @@ class HasAdminCapability(permissions.BasePermission):
                 )
 
         if not required_capabilities:
-            return True
+            # Safe-by-default: require explicit opt-in for staff-only access
+            # when a view does not declare capability requirements.
+            return bool(getattr(view, "allow_staff_without_capability", False))
 
         return all(has_admin_capability(user, capability) for capability in required_capabilities)
 
@@ -246,6 +248,7 @@ class HasAdminCapability(permissions.BasePermission):
 class AdminCapabilityMixin:
     admin_read_capabilities = ()
     admin_write_capabilities = ()
+    allow_staff_without_capability = False
     permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
 
     def get_required_admin_capabilities(self, request):

@@ -20,9 +20,10 @@ set -euo pipefail
 ENV_FILE="${1:-.env.production}"
 
 # ── Known-good values for this deployment ──────────────────────────────────
-DOMAIN="enfhantorganic.itwing.cloud"             # correct spelling (note the 'h')
-TYPO_DOMAIN="enfantorganic.itwing.cloud"          # common typo — missing the 'h'
-CSRF_ORIGIN="https://enfhantorganic.itwing.cloud"
+DEFAULT_DOMAIN="enfhantorganic.itwing.cloud"      # correct spelling (note the 'h')
+DOMAIN="${EXPECTED_DOMAIN:-$DEFAULT_DOMAIN}"
+TYPO_DOMAIN="${EXPECTED_TYPO_DOMAIN:-enfantorganic.itwing.cloud}"  # common typo — missing the 'h'
+CSRF_ORIGIN="${EXPECTED_CSRF_ORIGIN:-https://${DOMAIN}}"
 PAYMOB_BASE_URL_EXPECTED="https://oman.paymob.com/api"
 
 fail=0
