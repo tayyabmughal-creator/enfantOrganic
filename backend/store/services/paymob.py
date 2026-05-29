@@ -235,7 +235,8 @@ def initiate_apple_pay_payment(order) -> dict:
     Uses the apple_pay_integration_id and apple_pay_iframe_id from config.
     Falls back to standard integration if Apple Pay IDs are not set.
     """
-    cfg = get_paymob_config()
+    region_code = getattr(getattr(order, "region", None), "code", "")
+    cfg = get_paymob_config(region_code)
     apple_pay_integration_id = cfg["apple_pay_integration_id"]
     apple_pay_iframe_id = cfg["apple_pay_iframe_id"]
 
@@ -248,6 +249,8 @@ def initiate_apple_pay_payment(order) -> dict:
     missing = [
         label for key, label in [
             ("api_key", "PAYMOB_API_KEY"),
+            ("integration_id", "PAYMOB_INTEGRATION_ID"),
+            ("iframe_id", "PAYMOB_IFRAME_ID"),
             ("hmac_secret", "PAYMOB_HMAC_SECRET"),
         ]
         if not cfg.get(key)
@@ -260,8 +263,8 @@ def initiate_apple_pay_payment(order) -> dict:
     amount_cents = int(order.grand_total * 100)
     currency = order.currency_code or cfg["currency"]
 
-    auth_token = get_auth_token()
-    paymob_order_id = create_paymob_order(auth_token, amount_cents, currency, order.order_number)
+    auth_token = get_auth_token(cfg)
+    paymob_order_id = create_paymob_order(auth_token, amount_cents, currency, order.order_number, cfg=cfg)
     billing_data = build_billing_data(order)
     payment_key = create_payment_key(
         auth_token,
@@ -270,6 +273,7 @@ def initiate_apple_pay_payment(order) -> dict:
         paymob_order_id,
         billing_data,
         integration_id=int(apple_pay_integration_id),
+        cfg=cfg,
     )
 
     iframe_url = (
@@ -278,9 +282,10 @@ def initiate_apple_pay_payment(order) -> dict:
     )
 
     logger.info(
-        "Paymob Apple Pay payment initiated: order=%s paymob_order=%s",
+        "Paymob Apple Pay payment initiated: order=%s paymob_order=%s region=%s",
         order.order_number,
         paymob_order_id,
+        region_code or "default",
     )
 
     return {

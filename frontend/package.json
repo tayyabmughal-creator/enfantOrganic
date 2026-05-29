@@ -5,7 +5,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --test scripts/smoke.test.mjs"
+    "test": "node --test scripts/smoke.test.mjs",
+    "lint": "next lint",
+    "check": "npm run lint && npm run test"
+  },
+  "devDependencies": {
+    "eslint": "^9.27.0",
+    "eslint-config-next": "^15.0.0"
   },
   "dependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",

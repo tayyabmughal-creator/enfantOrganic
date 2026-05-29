@@ -2032,6 +2032,79 @@ class CheckoutAndPermsTestCase(TestCase):
         self.assertEqual(tx.status, PaymentTransaction.STATUS_PENDING)
 
     @override_settings(
+        PAYMOB_API_KEY="paymob-key",
+        PAYMOB_INTEGRATION_ID="1001",
+        PAYMOB_IFRAME_ID="2002",
+        PAYMOB_HMAC_SECRET="hmac-secret",
+        PAYMOB_APPLE_PAY_INTEGRATION_ID="3003",
+        PAYMOB_APPLE_PAY_IFRAME_ID="4004",
+    )
+    def test_payment_initiate_apple_pay_rejected_when_region_not_enabled(self):
+        self.region.payment_enabled_providers = ["paymob"]
+        self.region.default_payment_provider = "paymob"
+        self.region.payment_supported_methods = {"cards": ["visa"], "wallets": [], "badges": {"apple_pay": False}}
+        self.region.save(
+            update_fields=["payment_enabled_providers", "default_payment_provider", "payment_supported_methods"]
+        )
+        order = self._create_online_order(self.region)
+
+        response = self.api_client.post(
+            "/api/payments/initiate/",
+            {
+                "order_number": order.order_number,
+                "lookup_token": order.lookup_token,
+                "provider": "paymob",
+                "payment_type": "apple_pay",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data.get("code"), "provider_disabled")
+        self.assertIn("apple pay", str(response.data.get("error", "")).lower())
+
+    @override_settings(
+        PAYMOB_API_KEY="paymob-key",
+        PAYMOB_INTEGRATION_ID="1001",
+        PAYMOB_IFRAME_ID="2002",
+        PAYMOB_HMAC_SECRET="hmac-secret",
+        PAYMOB_APPLE_PAY_INTEGRATION_ID="3003",
+        PAYMOB_APPLE_PAY_IFRAME_ID="4004",
+    )
+    def test_payment_initiate_apple_pay_calls_paymob_when_region_enabled(self):
+        self.region.payment_enabled_providers = ["paymob"]
+        self.region.default_payment_provider = "paymob"
+        self.region.payment_supported_methods = {"cards": ["visa"], "wallets": ["apple_pay"]}
+        self.region.save(
+            update_fields=["payment_enabled_providers", "default_payment_provider", "payment_supported_methods"]
+        )
+        order = self._create_online_order(self.region)
+
+        with patch(
+            "store.services.payment_router.paymob.initiate_apple_pay_payment",
+            return_value={
+                "payment_key": "apple-key",
+                "iframe_url": "https://accept.paymob.com/iframe?payment_token=apple-key",
+                "paymob_order_id": "pm-apple-123",
+            },
+        ) as mocked_apple_pay:
+            response = self.api_client.post(
+                "/api/payments/initiate/",
+                {
+                    "order_number": order.order_number,
+                    "lookup_token": order.lookup_token,
+                    "provider": "paymob",
+                    "payment_type": "apple_pay",
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data.get("provider"), "paymob")
+        self.assertEqual(response.data.get("paymob_order_id"), "pm-apple-123")
+        mocked_apple_pay.assert_called_once()
+
+    @override_settings(
         PAYMOB_API_KEY="global-key",
         PAYMOB_INTEGRATION_ID="65592",
         PAYMOB_IFRAME_ID="60088",

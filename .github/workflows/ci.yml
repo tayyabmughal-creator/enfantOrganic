@@ -52,6 +52,9 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
+      - name: Frontend lint/static checks
+        working-directory: frontend
+        run: npm run lint
       - name: Frontend smoke tests
         working-directory: frontend
         run: npm run test

@@ -1,5 +1,6 @@
 import csv
 import logging
+from collections import Counter, defaultdict
 from datetime import datetime
 from datetime import timedelta
 from decimal import Decimal
@@ -17,6 +18,7 @@ from rest_framework.views import APIView
 from django.db import transaction
 from django.db.models import Count, Sum, Q
 from django.db.models.functions import TruncMonth
+from django.db.utils import OperationalError, ProgrammingError
 
 from ..models import (
     AbandonedCart,
@@ -155,6 +157,93 @@ def _analytics_money_total(rows):
         rate = ANALYTICS_TO_OMR_RATE.get(currency, Decimal("1.0"))
         total += Decimal(row.get("total") or 0) * rate
     return float(total)
+
+
+def _analytics_currency_normalization_metadata(*, applied):
+    return {
+        "applied": bool(applied),
+        "base_currency": "OMR",
+        "rates_to_omr": {code: float(rate) for code, rate in ANALYTICS_TO_OMR_RATE.items()},
+        "source": "static_defaults",
+        "configurable": False,
+    }
+
+
+def _customer_identity(user_id=None, customer_email=""):
+    if user_id is not None:
+        return f"user:{user_id}"
+    email = str(customer_email or "").strip().lower()
+    if email:
+        return f"email:{email}"
+    return ""
+
+
+def _distinct_customer_count(queryset):
+    identities = set()
+    for row in queryset.values("user_id", "customer_email").iterator():
+        identity = _customer_identity(row.get("user_id"), row.get("customer_email"))
+        if identity:
+            identities.add(identity)
+    return len(identities)
+
+
+def _repeat_customer_stats(queryset):
+    customer_order_counts = Counter()
+    for row in queryset.values("user_id", "customer_email").iterator():
+        identity = _customer_identity(row.get("user_id"), row.get("customer_email"))
+        if identity:
+            customer_order_counts[identity] += 1
+    repeat_customers = sum(1 for count in customer_order_counts.values() if count > 1)
+    return repeat_customers, len(customer_order_counts)
+
+
+def _monthly_distinct_customer_rows(queryset, limit=12):
+    monthly = defaultdict(set)
+    for row in (
+        queryset.annotate(month=TruncMonth("created_at"))
+        .values("month", "user_id", "customer_email")
+        .order_by("month")
+        .iterator()
+    ):
+        month = row.get("month")
+        if not month:
+            continue
+        identity = _customer_identity(row.get("user_id"), row.get("customer_email"))
+        if identity:
+            monthly[month].add(identity)
+
+    return [
+        {
+            "label": month.strftime("%b %Y"),
+            "value": len(monthly[month]),
+        }
+        for month in sorted(monthly.keys())[:limit]
+    ]
+
+
+def _repeat_purchase_counts_by_product(queryset):
+    # Repeat customer count per product using stable customer identity:
+    # user_id first, then customer_email fallback.
+    product_customer_orders = defaultdict(set)
+    for row in (
+        queryset.filter(items__product_id__isnull=False)
+        .values("id", "items__product_id", "user_id", "customer_email")
+        .iterator()
+    ):
+        product_id = row.get("items__product_id")
+        if not product_id:
+            continue
+        identity = _customer_identity(row.get("user_id"), row.get("customer_email"))
+        if not identity:
+            continue
+        product_customer_orders[(product_id, identity)].add(row.get("id"))
+
+    repeat_purchase_counts = Counter()
+    for (product_id, _identity), order_ids in product_customer_orders.items():
+        if len(order_ids) > 1:
+            repeat_purchase_counts[product_id] += 1
+
+    return {product_id: int(count) for product_id, count in repeat_purchase_counts.items()}
 
 
 def _build_sales_channel_summary(current_orders, previous_orders, *, currency_code="OMR", convert_to_omr=False):
@@ -396,17 +485,7 @@ class AdminDashboardView(APIView):
         else:
             total_revenue = float(scoped_paid_orders.aggregate(total=Sum("grand_total"))["total"] or 0)
         total_orders = scoped_orders.count()
-        total_customers = (
-            scoped_orders.exclude(customer_email="")
-            .values("customer_email")
-            .distinct()
-            .count()
-            + scoped_orders.filter(customer_email="")
-            .exclude(user_id__isnull=True)
-            .values("user_id")
-            .distinct()
-            .count()
-        )
+        total_customers = _distinct_customer_count(scoped_orders)
         if top_market == "all":
             total_products = Product.objects.filter(is_published=True).count()
         else:
@@ -422,34 +501,14 @@ class AdminDashboardView(APIView):
         else:
             monthly_revenue = float(current_period_paid.aggregate(total=Sum("grand_total"))["total"] or 0)
         monthly_orders = current_period_orders.count()
-        monthly_customers = (
-            current_period_orders.exclude(customer_email="")
-            .values("customer_email")
-            .distinct()
-            .count()
-            + current_period_orders.filter(customer_email="")
-            .exclude(user_id__isnull=True)
-            .values("user_id")
-            .distinct()
-            .count()
-        )
+        monthly_customers = _distinct_customer_count(current_period_orders)
 
         if top_market == "all":
             prev_revenue = _sum_money_in_omr(previous_period_paid, "grand_total")
         else:
             prev_revenue = float(previous_period_paid.aggregate(total=Sum("grand_total"))["total"] or 0)
         prev_orders = previous_period_orders.count()
-        prev_customers = (
-            previous_period_orders.exclude(customer_email="")
-            .values("customer_email")
-            .distinct()
-            .count()
-            + previous_period_orders.filter(customer_email="")
-            .exclude(user_id__isnull=True)
-            .values("user_id")
-            .distinct()
-            .count()
-        )
+        prev_customers = _distinct_customer_count(previous_period_orders)
 
         # Conversion breakdown using real AnalyticsEvent data.
         # Period window mirrors current_period_orders (this month / last N days / custom range).
@@ -480,29 +539,37 @@ class AdminDashboardView(APIView):
                 qs = qs.filter(region__code=top_market)
             return qs
 
-        curr_events = _period_events(event_period_start)
-        prev_events = _period_events(event_prev_start, event_prev_end)
+        try:
+            curr_events = _period_events(event_period_start)
+            prev_events = _period_events(event_prev_start, event_prev_end)
 
-        current_sessions = curr_events.filter(
-            event_type=AnalyticsEvent.EVENT_PAGE_VIEW
-        ).values("session_key").distinct().count()
-        previous_sessions = prev_events.filter(
-            event_type=AnalyticsEvent.EVENT_PAGE_VIEW
-        ).values("session_key").distinct().count()
+            current_sessions = curr_events.filter(
+                event_type=AnalyticsEvent.EVENT_PAGE_VIEW
+            ).values("session_key").distinct().count()
+            previous_sessions = prev_events.filter(
+                event_type=AnalyticsEvent.EVENT_PAGE_VIEW
+            ).values("session_key").distinct().count()
 
-        current_added_to_cart = curr_events.filter(
-            event_type=AnalyticsEvent.EVENT_ADD_TO_CART
-        ).values("session_key").distinct().count()
-        previous_added_to_cart = prev_events.filter(
-            event_type=AnalyticsEvent.EVENT_ADD_TO_CART
-        ).values("session_key").distinct().count()
+            current_added_to_cart = curr_events.filter(
+                event_type=AnalyticsEvent.EVENT_ADD_TO_CART
+            ).values("session_key").distinct().count()
+            previous_added_to_cart = prev_events.filter(
+                event_type=AnalyticsEvent.EVENT_ADD_TO_CART
+            ).values("session_key").distinct().count()
 
-        current_checkout = curr_events.filter(
-            event_type=AnalyticsEvent.EVENT_CHECKOUT_INITIATED
-        ).values("session_key").distinct().count()
-        previous_checkout = prev_events.filter(
-            event_type=AnalyticsEvent.EVENT_CHECKOUT_INITIATED
-        ).values("session_key").distinct().count()
+            current_checkout = curr_events.filter(
+                event_type=AnalyticsEvent.EVENT_CHECKOUT_INITIATED
+            ).values("session_key").distinct().count()
+            previous_checkout = prev_events.filter(
+                event_type=AnalyticsEvent.EVENT_CHECKOUT_INITIATED
+            ).values("session_key").distinct().count()
+        except (OperationalError, ProgrammingError):
+            current_sessions = 0
+            previous_sessions = 0
+            current_added_to_cart = 0
+            previous_added_to_cart = 0
+            current_checkout = 0
+            previous_checkout = 0
 
         current_completed = current_period_paid.count()
         previous_completed = previous_period_paid.count()
@@ -522,17 +589,14 @@ class AdminDashboardView(APIView):
 
         avg_order_value = round(total_revenue / total_orders, 2) if total_orders else 0
 
-        # Real conversion rate: paid orders / total orders
-        conversion_rate = round((scoped_paid_orders.count() / total_orders) * 100, 1) if total_orders else 0
+        # Payment success rate: paid orders / total orders.
+        # Keep the legacy conversion_rate key for compatibility.
+        payment_success_rate = round((scoped_paid_orders.count() / total_orders) * 100, 1) if total_orders else 0
+        conversion_rate = payment_success_rate
 
-        # Real repeat rate: customers with >1 order / customers with any order
-        customer_order_counts = (
-            scoped_orders.exclude(customer_email="")
-            .values("customer_email")
-            .annotate(order_count=Count("id"))
-        )
-        repeat_customers = customer_order_counts.filter(order_count__gt=1).count()
-        total_customers_with_orders = customer_order_counts.count()
+        # Real repeat rate: customers with >1 order / customers with any order.
+        # Customer identity uses user_id first with customer_email fallback.
+        repeat_customers, total_customers_with_orders = _repeat_customer_stats(scoped_orders)
         repeat_rate = round((repeat_customers / total_customers_with_orders) * 100, 1) if total_customers_with_orders else 0
 
         # Real cart abandonment rate: abandoned carts / (abandoned carts + paid orders in scope)
@@ -591,18 +655,8 @@ class AdminDashboardView(APIView):
             .order_by("month")[:12]
         ]
 
-        # Customers trend — distinct customer emails per month for sparkline
-        customers_trend = [
-            {
-                "label": item["month"].strftime("%b %Y"),
-                "value": item["total"],
-            }
-            for item in scoped_orders.exclude(customer_email="")
-            .annotate(month=TruncMonth("created_at"))
-            .values("month")
-            .annotate(total=Count("customer_email", distinct=True))
-            .order_by("month")[:12]
-        ]
+        # Customers trend — monthly distinct customers using user_id/email fallback.
+        customers_trend = _monthly_distinct_customer_rows(scoped_orders, limit=12)
 
         # Status mix follows the active dashboard scope (date + market).
         status_mix = list(scoped_orders.values("status").annotate(count=Count("id")).order_by("status"))
@@ -631,7 +685,7 @@ class AdminDashboardView(APIView):
 
         top_products = []
         metric_label = {
-            "rating": "By rating",
+            "rating": "By rating (sold products)",
             "revenue": "By revenue",
             "units_sold": "By units sold",
             "orders": "By orders",
@@ -710,19 +764,7 @@ class AdminDashboardView(APIView):
                     )
                 )
 
-            repeat_purchase_counts = {
-                row["items__product_id"]: int(row["repeat_customers"] or 0)
-                for row in (
-                    top_paid_orders
-                    .filter(items__product_id__isnull=False)
-                    .exclude(customer_email="")
-                    .values("items__product_id", "customer_email")
-                    .annotate(order_count=Count("id", distinct=True))
-                    .filter(order_count__gt=1)
-                    .values("items__product_id")
-                    .annotate(repeat_customers=Count("customer_email", distinct=True))
-                )
-            }
+            repeat_purchase_counts = _repeat_purchase_counts_by_product(top_paid_orders)
 
             for row in top_product_rows:
                 row["revenue"] = float(row.get("revenue") or 0)
@@ -773,6 +815,9 @@ class AdminDashboardView(APIView):
             {
                 "revenue": total_revenue,
                 "currency_code": dashboard_currency_code,
+                "analytics_currency_normalization": _analytics_currency_normalization_metadata(
+                    applied=(top_market == "all")
+                ),
                 "revenue_delta": pct_change(monthly_revenue, prev_revenue),
                 "monthly_revenue": monthly_revenue,
                 "orders": total_orders,
@@ -783,6 +828,7 @@ class AdminDashboardView(APIView):
                 "customers_delta": pct_change(monthly_customers, prev_customers),
                 "products": total_products,
                 "avg_order_value": avg_order_value,
+                "payment_success_rate": payment_success_rate,
                 "conversion_rate": conversion_rate,
                 "abandonment_rate": abandonment_rate,
                 "repeat_rate": repeat_rate,
@@ -891,19 +937,25 @@ class AdminAnalyticsView(APIView):
             }
 
         # Conversion funnel — real AnalyticsEvent counts (all-time, no date filter applied here)
-        all_events = AnalyticsEvent.objects.all()
-        funnel_visitors = all_events.filter(
-            event_type=AnalyticsEvent.EVENT_PAGE_VIEW
-        ).values("session_key").distinct().count()
-        funnel_product_views = all_events.filter(
-            event_type=AnalyticsEvent.EVENT_PRODUCT_VIEW
-        ).count()
-        funnel_cart_adds = all_events.filter(
-            event_type=AnalyticsEvent.EVENT_ADD_TO_CART
-        ).values("session_key").distinct().count()
-        funnel_checkouts = all_events.filter(
-            event_type=AnalyticsEvent.EVENT_CHECKOUT_INITIATED
-        ).values("session_key").distinct().count()
+        try:
+            all_events = AnalyticsEvent.objects.all()
+            funnel_visitors = all_events.filter(
+                event_type=AnalyticsEvent.EVENT_PAGE_VIEW
+            ).values("session_key").distinct().count()
+            funnel_product_views = all_events.filter(
+                event_type=AnalyticsEvent.EVENT_PRODUCT_VIEW
+            ).count()
+            funnel_cart_adds = all_events.filter(
+                event_type=AnalyticsEvent.EVENT_ADD_TO_CART
+            ).values("session_key").distinct().count()
+            funnel_checkouts = all_events.filter(
+                event_type=AnalyticsEvent.EVENT_CHECKOUT_INITIATED
+            ).values("session_key").distinct().count()
+        except (OperationalError, ProgrammingError):
+            funnel_visitors = 0
+            funnel_product_views = 0
+            funnel_cart_adds = 0
+            funnel_checkouts = 0
 
         total_orders_count = orders.count()
         paid_orders_count = paid_orders.count()
@@ -933,6 +985,8 @@ class AdminAnalyticsView(APIView):
             for month, total in sorted(month_map.items(), key=lambda item: item[0])[:12]
         ]
 
+        payment_success_rate = round((paid_orders_count / total_orders_count) * 100, 1) if total_orders_count else 0
+
         return Response({
             "visitors": funnel_visitors,
             "product_views": funnel_product_views,
@@ -940,7 +994,9 @@ class AdminAnalyticsView(APIView):
             "checkouts": funnel_checkouts,
             "completed_orders": paid_orders_count,
             "abandoned_orders": cancelled_orders_count,
-            "conversion_rate": round((paid_orders_count / total_orders_count) * 100, 1) if total_orders_count else 0,
+            "payment_success_rate": payment_success_rate,
+            "conversion_rate": payment_success_rate,
+            "analytics_currency_normalization": _analytics_currency_normalization_metadata(applied=True),
             "region_om": regional_revenue.get("om", {}),
             "region_ae": regional_revenue.get("ae", {}),
             "region_sa": regional_revenue.get("sa", {}),
