@@ -2,6 +2,11 @@
 
 This workspace contains a separated Django + Next.js e-commerce storefront for a regional bilingual Enfant Organic store.
 
+## Runtime Baseline
+
+- Python: `3.12` (pinned in `.python-version`)
+- Node.js: `22.x`
+
 - `backend/`: Django + DRF API, JWT auth, admin, catalog data, checkout, orders, reviews, coupons, reports, push-device registration, and regional pricing.
 - `frontend/`: Next.js App Router storefront with reusable feature components, regional currency support, Arabic/English routes, and local Enfant product assets.
 - `admin-mobile/`: Expo/React Native admin app shell connected to the same Django API.
@@ -14,6 +19,7 @@ See [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) for the current module layout a
 2. `cp .env.example .env.local`
 3. `npm install`
 4. `npm run dev`
+5. `npm run check` (lint + smoke tests)
 
 The storefront expects the API at `NEXT_PUBLIC_API_BASE_URL`, defaulting to `http://127.0.0.1:8000/api`.
 
@@ -119,3 +125,5 @@ docker compose -f docker-compose.prod.yml --env-file .env.production exec backen
 
 - The storefront currently expects the backend API to be available when rendering pages.
 - Do not commit real `.env` files or production secrets.
+- Some payment/carrier providers are marked setup-required/not-live until
+  credentials and implementation are fully production-validated.

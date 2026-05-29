@@ -12,7 +12,7 @@ from django.utils import timezone
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 
-from store.models import BlogPost, Category, HeroPromoCard, Order, Product, ProductStock, Warehouse, Region
+from store.models import BlogPost, Category, HeroPromoCard, Order, OrderItem, Product, ProductStock, Warehouse, Region
 from store.services.admin_roles import ROLE_MANAGER, ensure_default_admin_roles
 
 User = get_user_model()
@@ -109,6 +109,10 @@ class AdminOpsExtendedTestCase(TestCase):
         self.assertIn("revenue", response.data)
         self.assertIn("orders", response.data)
         self.assertIn("revenue_delta", response.data)
+        self.assertIn("payment_success_rate", response.data)
+        self.assertEqual(response.data["payment_success_rate"], response.data["conversion_rate"])
+        self.assertIn("analytics_currency_normalization", response.data)
+        self.assertTrue(response.data["analytics_currency_normalization"].get("applied"))
 
         filtered = self.api_client.get(
             "/api/admin/dashboard/",
@@ -123,6 +127,89 @@ class AdminOpsExtendedTestCase(TestCase):
         self.assertEqual(filtered.data.get("top_products_date_range"), "all_time")
         self.assertEqual(filtered.data.get("top_products_market"), "sa")
         self.assertEqual(filtered.data.get("currency_code"), "SAR")
+        self.assertEqual(filtered.data.get("payment_success_rate"), filtered.data.get("conversion_rate"))
+        self.assertFalse(filtered.data.get("analytics_currency_normalization", {}).get("applied"))
+
+    def test_dashboard_repeat_rate_and_customer_counts_use_user_id_fallback(self):
+        self.api_client.force_authenticate(self.staff_user)
+        customer = User.objects.create_user(username="repeat-customer", password="Pass12345!")
+
+        common_order_data = {
+            "region": self.region,
+            "user": customer,
+            "customer_name": "Repeat Customer",
+            "customer_email": "",
+            "customer_phone": "12345678",
+            "address_line_1": "Street 1",
+            "city": "Muscat",
+            "country": "Oman",
+            "subtotal": Decimal("10.00"),
+            "shipping_total": Decimal("0.00"),
+            "grand_total": Decimal("10.00"),
+            "currency_code": "OMR",
+        }
+        Order.objects.create(**common_order_data)
+        Order.objects.create(**common_order_data)
+
+        response = self.api_client.get("/api/admin/dashboard/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data.get("customers"), 1)
+        self.assertEqual(response.data.get("repeat_rate"), 100.0)
+        self.assertEqual(response.data.get("payment_success_rate"), response.data.get("conversion_rate"))
+
+    def test_dashboard_repeat_purchase_metric_uses_user_id_fallback(self):
+        self.api_client.force_authenticate(self.staff_user)
+        customer = User.objects.create_user(username="repeat-product-user", password="Pass12345!")
+        category = Category.objects.create(
+            slug="repeat-products",
+            name_en="Repeat Products",
+            name_ar="Repeat Products",
+            image="https://example.com/repeat.jpg",
+        )
+        product = Product.objects.create(
+            slug="repeat-product",
+            name_en="Repeat Product",
+            name_ar="Repeat Product",
+            category=category,
+            is_published=True,
+            stock_quantity=10,
+        )
+        common_order_data = {
+            "region": self.region,
+            "user": customer,
+            "customer_name": "Repeat Customer",
+            "customer_email": "",
+            "customer_phone": "12345678",
+            "address_line_1": "Street 1",
+            "city": "Muscat",
+            "country": "Oman",
+            "subtotal": Decimal("5.00"),
+            "shipping_total": Decimal("0.00"),
+            "grand_total": Decimal("5.00"),
+            "currency_code": "OMR",
+            "payment_status": Order.PAYMENT_PAID,
+        }
+        order_one = Order.objects.create(**common_order_data)
+        order_two = Order.objects.create(**common_order_data)
+
+        for order in (order_one, order_two):
+            OrderItem.objects.create(
+                order=order,
+                product=product,
+                product_slug=product.slug,
+                product_name=product.name_en,
+                quantity=1,
+                unit_price=Decimal("5.00"),
+                line_total=Decimal("5.00"),
+            )
+
+        response = self.api_client.get("/api/admin/dashboard/", {"top_metric": "repeat_purchase"})
+        self.assertEqual(response.status_code, 200)
+        top_products = response.data.get("top_products") or []
+        self.assertTrue(top_products)
+        self.assertEqual(top_products[0].get("slug"), product.slug)
+        self.assertEqual(top_products[0].get("repeat_purchase_count"), 1)
+        self.assertEqual(top_products[0].get("metric_value"), 1)
 
     def test_dashboard_inventory_health_payload(self):
         self.api_client.force_authenticate(self.staff_user)
@@ -199,6 +286,58 @@ class AdminOpsExtendedTestCase(TestCase):
         self.assertIsInstance(response.data["region_om"], dict)
         self.assertEqual(response.data["region_om"].get("currency_code"), "OMR")
         self.assertIn("revenue_omr", response.data["region_om"])
+        self.assertEqual(response.data.get("payment_success_rate"), response.data.get("conversion_rate"))
+        normalization = response.data.get("analytics_currency_normalization", {})
+        self.assertTrue(normalization.get("applied"))
+        self.assertEqual(normalization.get("base_currency"), "OMR")
+        self.assertIn("AED", normalization.get("rates_to_omr", {}))
+
+    def test_dashboard_rating_metric_label_clarifies_sold_products_scope(self):
+        self.api_client.force_authenticate(self.staff_user)
+        category = Category.objects.create(
+            slug="rated-products",
+            name_en="Rated Products",
+            name_ar="Rated Products",
+            image="https://example.com/rated.jpg",
+        )
+        product = Product.objects.create(
+            slug="rated-product",
+            name_en="Rated Product",
+            name_ar="Rated Product",
+            category=category,
+            is_published=True,
+            rating=Decimal("4.9"),
+            review_count=25,
+        )
+        order = Order.objects.create(
+            region=self.region,
+            customer_name="Rated Customer",
+            customer_email="rated@example.com",
+            customer_phone="12345678",
+            address_line_1="Street 1",
+            city="Muscat",
+            country="Oman",
+            subtotal=Decimal("10.00"),
+            shipping_total=Decimal("0.00"),
+            grand_total=Decimal("10.00"),
+            currency_code="OMR",
+            payment_status=Order.PAYMENT_PAID,
+        )
+        OrderItem.objects.create(
+            order=order,
+            product=product,
+            product_slug=product.slug,
+            product_name=product.name_en,
+            quantity=1,
+            unit_price=Decimal("10.00"),
+            line_total=Decimal("10.00"),
+        )
+
+        response = self.api_client.get("/api/admin/dashboard/", {"top_metric": "rating"})
+        self.assertEqual(response.status_code, 200)
+        top_products = response.data.get("top_products") or []
+        self.assertTrue(top_products)
+        self.assertEqual(top_products[0].get("metric_label"), "By rating (sold products)")
 
     def test_token_refresh(self):
         # Authenticate and get token

@@ -304,17 +304,6 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
   const [error, setError] = useState("");
   const [applePayAvailable, setApplePayAvailable] = useState(false);
 
-  useEffect(() => {
-    if (!PAYMOB_APPLE_PAY_INTEGRATION_ID) return;
-    try {
-      setApplePayAvailable(
-        Boolean(typeof window !== "undefined" && window.ApplePaySession && window.ApplePaySession.canMakePayments()),
-      );
-    } catch {
-      setApplePayAvailable(false);
-    }
-  }, []);
-
   const [savedAddresses, setSavedAddresses] = useState([]);
   const [selectedAddressId, setSelectedAddressId] = useState("");
   const [loadingAddresses, setLoadingAddresses] = useState(false);
@@ -378,6 +367,34 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
   const isOnlineProviderEnabled = availableOnlineProviders.length > 0;
   const activeOnlineProvider = onlineProvider || defaultOnlineProvider;
   const onlineProviderLabel = GATEWAY_PROVIDER_LABELS[activeOnlineProvider] || "Gateway";
+  const applePayRegionEnabled = useMemo(() => {
+    const hasPaymobOnline = availableOnlineProviders.some((item) => item.key === "paymob");
+    if (!hasPaymobOnline) return false;
+
+    const supported = backendRegionConfig?.payment_supported_methods;
+    const badges = supported?.badges && typeof supported.badges === "object" ? supported.badges : {};
+    if (Object.prototype.hasOwnProperty.call(badges, "apple_pay")) {
+      return Boolean(badges.apple_pay);
+    }
+
+    const wallets = Array.isArray(supported?.wallets) ? supported.wallets : [];
+    const normalizedWallets = wallets.map((item) => String(item || "").trim().toLowerCase());
+    return normalizedWallets.includes("apple_pay") || normalizedWallets.includes("applepay");
+  }, [availableOnlineProviders, backendRegionConfig]);
+
+  useEffect(() => {
+    if (!PAYMOB_APPLE_PAY_INTEGRATION_ID || !applePayRegionEnabled) {
+      setApplePayAvailable(false);
+      return;
+    }
+    try {
+      setApplePayAvailable(
+        Boolean(typeof window !== "undefined" && window.ApplePaySession && window.ApplePaySession.canMakePayments()),
+      );
+    } catch {
+      setApplePayAvailable(false);
+    }
+  }, [applePayRegionEnabled]);
 
   const paymentBadges = useMemo(() => {
     if (!isOnlineProviderEnabled) return [];

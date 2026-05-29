@@ -376,6 +376,21 @@ def _normalize_enabled_providers(raw_value):
     return [_normalize_provider_key(item) for item in candidates if _normalize_provider_key(item)]
 
 
+def _region_supports_apple_pay(region):
+    if not region:
+        return False
+    methods = getattr(region, "payment_supported_methods", {}) or {}
+    badges = methods.get("badges", {}) if isinstance(methods, dict) else {}
+    if isinstance(badges, dict) and "apple_pay" in badges:
+        return bool(badges.get("apple_pay"))
+
+    wallets = methods.get("wallets", []) if isinstance(methods, dict) else []
+    if not isinstance(wallets, list):
+        return False
+    normalized_wallets = {str(item or "").strip().lower() for item in wallets}
+    return "apple_pay" in normalized_wallets or "applepay" in normalized_wallets
+
+
 def _get_provider_client(provider_key):
     provider = PROVIDER_REGISTRY.get(provider_key)
     if not provider:
@@ -467,12 +482,16 @@ def get_region_provider_warnings(region):
 def initiate_payment(order, provider=None, *, payment_type=None):
     provider_key = _resolve_order_provider_key(order, provider)
     client = _get_provider_client(provider_key)
-    if (
-        payment_type == "apple_pay"
-        and provider_key == PaymentTransaction.PROVIDER_PAYMOB
-    ):
+    if payment_type == "apple_pay":
+        if provider_key != PaymentTransaction.PROVIDER_PAYMOB:
+            raise PaymentProviderDisabledError("Apple Pay is only available through Paymob.")
+        if not _region_supports_apple_pay(getattr(order, "region", None)):
+            raise PaymentProviderDisabledError("Apple Pay is not enabled for this region.")
         from . import paymob as _paymob
-        return _paymob.initiate_apple_pay_payment(order)
+        data = _paymob.initiate_apple_pay_payment(order)
+        data["provider"] = provider_key
+        data["provider_reference"] = str(data.get("paymob_order_id", ""))
+        return data
     return client.initiate_payment(order)
 
 

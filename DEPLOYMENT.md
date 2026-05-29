@@ -97,6 +97,9 @@ Notes:
   presence flags, not the values.
 - Disabling a region with the **Enabled** toggle turns Paymob off there even if
   credentials exist.
+- **Apple Pay is region-gated.** It is shown/usable only when the region's
+  `payment_supported_methods` explicitly enables `apple_pay` and Paymob is
+  available for that region.
 - If SAR/AED credentials are missing, Paymob shows **setup-pending** for those
   regions. Adding credentials (in the panel or env) activates them with **no
   code change**. Existing Oman config keeps working unchanged.
@@ -117,6 +120,29 @@ PAYMOB_HMAC_SECRET_AE=
 ```
 
 See `backend/.env.example` for the full annotated list.
+
+### Placeholder providers and carriers (setup-required / not live)
+
+Some gateways and carrier adapters are intentionally shipped as setup-required
+placeholders. Even if credentials are saved, they should be treated as **not
+live** until end-to-end implementation and provider certification are complete.
+
+- Payment placeholders: HyperPay, Telr, Thawani, OmanNet (status shown in admin
+  as setup-required / not live).
+- Carrier placeholders: Aramex, SMSA, Fetchr adapters remain integration
+  placeholders unless explicitly enabled and validated in production.
+
+### All-market analytics currency normalization
+
+Dashboard all-market revenue is normalized to OMR using static defaults:
+
+- `OMR = 1.0`
+- `AED = 0.1040`
+- `SAR = 0.1026`
+
+The admin dashboard/analytics payload now includes an
+`analytics_currency_normalization` metadata block so the applied rates are
+explicit. A future update should move these rates to DB/admin-managed config.
 
 ---
 

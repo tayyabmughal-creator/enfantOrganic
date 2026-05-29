@@ -2,7 +2,7 @@ import { DonutChart, EmptyState } from "./SharedUI";
 import Icon from "../icons/Icon";
 
 const TOP_PRODUCT_METRIC_OPTIONS = [
-  { value: "rating", label: "By Rating" },
+  { value: "rating", label: "By Rating (Sold Products)" },
   { value: "revenue", label: "By Revenue" },
   { value: "units_sold", label: "By Units Sold" },
   { value: "orders", label: "By Orders" },
@@ -165,7 +165,7 @@ export default function DashboardView({ data, filters, onFiltersChange, onRefres
   const orders = Number(data?.orders || 0);
   const customers = Number(data?.customers || 0);
   const avgOrder = Number(data?.avg_order_value || 0);
-  const conversion = Number(data?.conversion_rate || 0);
+  const conversion = Number(data?.payment_success_rate ?? data?.conversion_rate ?? 0);
   const abandonment = Number(data?.abandonment_rate || 0);
   const repeat = Number(data?.repeat_rate || 0);
 
@@ -175,7 +175,7 @@ export default function DashboardView({ data, filters, onFiltersChange, onRefres
   const abnDelta = fmtDelta(data?.abandonment_delta ?? null);
   // For non-deltaed metrics we don't fake a number — fmtDelta(null) returns the "—" string.
   const avgDelta = fmtDelta(data?.avg_order_value_delta ?? null);
-  const convDelta = fmtDelta(data?.conversion_delta ?? null);
+  const convDelta = fmtDelta(data?.payment_success_delta ?? data?.conversion_delta ?? null);
   const repDelta = fmtDelta(data?.repeat_delta ?? null);
 
   const revSeries = (data?.revenue_trend || []).map((p) => Number(p.value || 0));

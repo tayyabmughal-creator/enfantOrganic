@@ -1141,6 +1141,8 @@ const PAYMENT_GATEWAYS = [
     desc: "Hosted payments for Saudi Arabia, UAE, and Oman. Supports cards, MADA, and wallets.",
     regions: ["SA", "AE", "OM"],
     requiredKeys: ["paytabs_profile_id", "paytabs_server_key"],
+    setupRequired: false,
+    notLive: false,
     fields: [
       { key: "paytabs_profile_id", label: "Profile ID",  type: "text",     placeholder: "12345",                                           hint: "PayTabs Merchant Portal → Account Info → Profile ID" },
       { key: "paytabs_server_key", label: "Server Key",  type: "password", placeholder: "SXXX-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", hint: "PayTabs Merchant Portal → Developers → Server Key" },
@@ -1155,6 +1157,8 @@ const PAYMENT_GATEWAYS = [
     desc: "Payment orchestration for GCC markets. Supports cards, MADA, and STC Pay.",
     regions: ["SA", "AE", "OM", "QA", "KW", "BH"],
     requiredKeys: ["hyperpay_entity_id", "hyperpay_access_token"],
+    setupRequired: true,
+    notLive: true,
     fields: [
       { key: "hyperpay_entity_id",    label: "Entity ID",     type: "text",     placeholder: "8a829418751a7eab01751e1234567890", hint: "HyperPay → Administration → Channels → Entity ID" },
       { key: "hyperpay_access_token", label: "Access Token",  type: "password", placeholder: "OGE4Mjk0MTg3...",                 hint: "HyperPay → Administration → Users → Access Token (Bearer)" },
@@ -1168,6 +1172,8 @@ const PAYMENT_GATEWAYS = [
     desc: "Multi-currency payment gateway for UAE and MENA region.",
     regions: ["AE", "SA", "OM"],
     requiredKeys: ["telr_store_id", "telr_auth_key"],
+    setupRequired: true,
+    notLive: true,
     fields: [
       { key: "telr_store_id", label: "Store ID",  type: "text",     placeholder: "12345",              hint: "Telr Merchant Portal → Settings → Store ID" },
       { key: "telr_auth_key", label: "Auth Key",  type: "password", placeholder: "abc123def456ghi789", hint: "Telr Merchant Portal → Settings → Auth Key" },
@@ -1181,6 +1187,8 @@ const PAYMENT_GATEWAYS = [
     desc: "Oman's leading payment gateway. Supports Thawani Pay wallet and cards.",
     regions: ["OM"],
     requiredKeys: ["thawani_publishable_key", "thawani_secret_key"],
+    setupRequired: true,
+    notLive: true,
     fields: [
       { key: "thawani_publishable_key", label: "Publishable Key",  type: "text",     placeholder: "pk_test_xxxxxxxxxxxxxxxxxxxx",          hint: "Thawani Merchant Portal → API Keys → Publishable Key" },
       { key: "thawani_secret_key",      label: "Secret Key",       type: "password", placeholder: "sk_test_xxxxxxxxxxxxxxxxxxxx",           hint: "Thawani Merchant Portal → API Keys → Secret Key" },
@@ -1196,6 +1204,8 @@ const PAYMENT_GATEWAYS = [
     desc: "National payment network for Oman. Supports debit cards and online banking.",
     regions: ["OM"],
     requiredKeys: ["omannet_merchant_id", "omannet_access_code", "omannet_sha_request"],
+    setupRequired: true,
+    notLive: true,
     fields: [
       { key: "omannet_merchant_id",    label: "Merchant ID",       type: "text",     placeholder: "testOMN001",              hint: "OmanNet merchant credentials — provided by your acquirer" },
       { key: "omannet_access_code",    label: "Access Code",       type: "password", placeholder: "A1B2C3D4E5F6G7H8",        hint: "Payment gateway access code" },
@@ -1430,6 +1440,11 @@ export function PaymentGatewaysView({ data, canEdit, onPatch, request }) {
                 <div className="admin-iv-info">
                   <strong>{gw.name}</strong>
                   <span>{gw.desc}</span>
+                  {gw.setupRequired ? (
+                    <span style={{ fontSize: "0.72rem", color: "var(--admin-muted)" }}>
+                      Setup required: this provider is not live until implementation and credentials are fully validated.
+                    </span>
+                  ) : null}
                   <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
                     {gw.regions.map((r) => (
                       <span key={r} style={{ fontSize: "0.68rem", background: "var(--admin-surface-raised, #f3f4f6)", color: "var(--admin-muted)", padding: "1px 6px", borderRadius: 3, fontWeight: 600 }}>{r}</span>
@@ -1440,6 +1455,8 @@ export function PaymentGatewaysView({ data, canEdit, onPatch, request }) {
                   <span className={`admin-iv-chip ${connected ? "connected" : "idle"}`}>
                     {connected ? "Connected" : "Not configured"}
                   </span>
+                  {gw.setupRequired ? <span className="admin-iv-chip idle">Setup required</span> : null}
+                  {gw.notLive ? <span className="admin-iv-chip soon">Not live</span> : null}
                   <span style={{ fontSize: "0.7rem", color: "var(--admin-muted)" }}>{open ? "▲ Close" : "▼ Configure"}</span>
                 </div>
               </div>
