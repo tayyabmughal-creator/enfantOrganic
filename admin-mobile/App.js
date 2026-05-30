@@ -208,11 +208,11 @@ export default function App() {
               </View>
             ))}
           </View>
-          <Text style={styles.sectionTitle}>Recent orders</Text>
-          {(dashboard?.recent_orders || []).map((order) => (
-            <View style={styles.rowCard} key={order.order_number}>
-              <Text style={styles.rowTitle}>{order.order_number}</Text>
-              <Text style={styles.rowMeta}>{order.customer_name} · {order.grand_total} {order.currency_code}</Text>
+          <Text style={styles.sectionTitle}>Recent customers</Text>
+          {(dashboard?.recent_customers || []).map((customer) => (
+            <View style={styles.rowCard} key={customer.id}>
+              <Text style={styles.rowTitle}>{customer.first_name || customer.username || "Customer"}</Text>
+              <Text style={styles.rowMeta}>{customer.email || ""}</Text>
             </View>
           ))}
         </>

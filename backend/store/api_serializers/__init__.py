@@ -1,4 +1,5 @@
 from .account import (
+    BackInStockRequestSerializer,
     CustomerReturnRequestSerializer,
     CustomerAddressSerializer,
     NewsletterSubscriptionSerializer,
@@ -12,7 +13,9 @@ from .account import (
 )
 from .admin_ops import (
     AdminAuditLogSerializer,
+    AdminBackInStockRequestSerializer,
     AdminBlogPostSerializer,
+    AdminCmsPageSerializer,
     AdminCategorySerializer,
     AdminCouponSerializer,
     AdminCustomerSerializer,
@@ -33,6 +36,7 @@ from .admin_ops import (
 from .catalog import (
     BlogPostDetailSerializer,
     BlogPostSerializer,
+    CmsPageSerializer,
     CategorySerializer,
     HeroPromoCardSerializer,
     InstagramPostSerializer,
@@ -42,7 +46,7 @@ from .catalog import (
     TagSerializer,
     TestimonialSerializer,
 )
-from .checkout import CheckoutCreateSerializer, CouponValidationSerializer
+from .checkout import CheckoutCreateSerializer, CouponValidationSerializer, GiftCardValidationSerializer
 from .localization import (
     get_image_url,
     localized,
@@ -63,8 +67,12 @@ from .orders import (
 __all__ = [
     "BlogPostDetailSerializer",
     "BlogPostSerializer",
+    "CmsPageSerializer",
+    "BackInStockRequestSerializer",
     "AdminAuditLogSerializer",
+    "AdminBackInStockRequestSerializer",
     "AdminBlogPostSerializer",
+    "AdminCmsPageSerializer",
     "AdminCategorySerializer",
     "AdminCouponSerializer",
     "AdminCustomerSerializer",
@@ -83,6 +91,7 @@ __all__ = [
     "CategorySerializer",
     "CheckoutCreateSerializer",
     "CouponValidationSerializer",
+    "GiftCardValidationSerializer",
     "CustomerReturnRequestSerializer",
     "CustomerAddressSerializer",
     "get_image_url",

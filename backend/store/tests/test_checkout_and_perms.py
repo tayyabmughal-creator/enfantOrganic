@@ -2017,6 +2017,29 @@ class CheckoutAndPermsTestCase(TestCase):
             payment_status=Order.PAYMENT_UNPAID,
         )
 
+    def _create_checkout_order_with_items(self, region, *, payment_method=Order.PAYMENT_ONLINE, quantity=2):
+        payload = {
+            "region": region.code,
+            "locale": "en",
+            "customer": {
+                "name": "Payment User",
+                "phone": "12345678",
+                "address_line_1": "Street 1",
+                "city": "Muscat",
+                "country": region.name_en,
+            },
+            "payment_method": payment_method,
+            "items": [
+                {
+                    "slug": self.product.slug,
+                    "quantity": quantity,
+                }
+            ],
+        }
+        serializer = CheckoutCreateSerializer(data=payload, context={"request": None})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        return serializer.save()
+
     @override_settings(
         PAYMOB_API_KEY="paymob-key",
         PAYMOB_INTEGRATION_ID="1001",
@@ -2471,6 +2494,175 @@ class CheckoutAndPermsTestCase(TestCase):
         self.assertEqual(txs.count(), 1)
         order.refresh_from_db()
         self.assertEqual(order.payment_status, Order.PAYMENT_PAID)
+
+    @override_settings(
+        PAYTABS_PROFILE_ID_OM="888888",
+        PAYTABS_SERVER_KEY_OM="pt-server-key-stock",
+        PAYTABS_REGION_OM="https://secure-oman.paytabs.com",
+    )
+    def test_online_checkout_reserves_stock_until_payment_success(self):
+        self.region.payment_enabled_providers = ["paytabs"]
+        self.region.default_payment_provider = "paytabs"
+        self.region.save(update_fields=["payment_enabled_providers", "default_payment_provider"])
+        warehouse = Warehouse.objects.create(
+            code="om-online-reserve",
+            name_en="Oman Online Reserve",
+            name_ar="مخزون الدفع الإلكتروني",
+            region=self.region,
+            city="Muscat",
+            address="Muscat",
+            active=True,
+        )
+        self.region.fulfillment_warehouses.add(warehouse)
+        stock = ProductStock.objects.create(
+            product=self.product,
+            warehouse=warehouse,
+            quantity=5,
+            reserved_quantity=0,
+            low_stock_threshold=1,
+        )
+        order = self._create_checkout_order_with_items(self.region, payment_method=Order.PAYMENT_ONLINE, quantity=2)
+
+        stock.refresh_from_db()
+        self.assertEqual(stock.quantity, 5)
+        self.assertEqual(stock.reserved_quantity, 2)
+
+        payload = {
+            "cart_id": order.order_number,
+            "tran_ref": "TST-STOCK-COMMIT-1001",
+            "tran_type": "Sale",
+            "payment_result": {"response_status": "A"},
+        }
+        payload_bytes = json.dumps(payload).encode("utf-8")
+        signature = hmac.new(
+            b"pt-server-key-stock",
+            payload_bytes,
+            hashlib.sha256,
+        ).hexdigest()
+
+        with patch(
+            "store.services.paytabs._post_json",
+            return_value={
+                "tran_ref": "TST-STOCK-COMMIT-1001",
+                "tran_type": "Sale",
+                "cart_id": order.order_number,
+                "payment_result": {"response_status": "A"},
+            },
+        ):
+            first = self.api_client.generic(
+                method="POST",
+                path="/api/payments/webhook/paytabs/",
+                data=payload_bytes,
+                content_type="application/json",
+                HTTP_SIGNATURE=signature,
+            )
+            second = self.api_client.generic(
+                method="POST",
+                path="/api/payments/webhook/paytabs/",
+                data=payload_bytes,
+                content_type="application/json",
+                HTTP_SIGNATURE=signature,
+            )
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(second.json().get("status"), "already_processed")
+
+        stock.refresh_from_db()
+        order.refresh_from_db()
+        self.assertEqual(stock.quantity, 3)
+        self.assertEqual(stock.reserved_quantity, 0)
+        self.assertEqual(order.payment_status, Order.PAYMENT_PAID)
+
+    @override_settings(
+        PAYTABS_PROFILE_ID_OM="999999",
+        PAYTABS_SERVER_KEY_OM="pt-server-key-failed-stock",
+        PAYTABS_REGION_OM="https://secure-oman.paytabs.com",
+    )
+    def test_failed_online_payment_releases_reserved_stock_and_retry_reserves_again(self):
+        self.region.payment_enabled_providers = ["paytabs"]
+        self.region.default_payment_provider = "paytabs"
+        self.region.save(update_fields=["payment_enabled_providers", "default_payment_provider"])
+        warehouse = Warehouse.objects.create(
+            code="om-online-failed",
+            name_en="Oman Online Failed",
+            name_ar="مخزون دفع فاشل",
+            region=self.region,
+            city="Muscat",
+            address="Muscat",
+            active=True,
+        )
+        self.region.fulfillment_warehouses.add(warehouse)
+        stock = ProductStock.objects.create(
+            product=self.product,
+            warehouse=warehouse,
+            quantity=5,
+            reserved_quantity=0,
+            low_stock_threshold=1,
+        )
+        order = self._create_checkout_order_with_items(self.region, payment_method=Order.PAYMENT_ONLINE, quantity=2)
+
+        payload = {
+            "cart_id": order.order_number,
+            "tran_ref": "TST-STOCK-FAILED-1001",
+            "tran_type": "Sale",
+            "payment_result": {"response_status": "E"},
+        }
+        payload_bytes = json.dumps(payload).encode("utf-8")
+        signature = hmac.new(
+            b"pt-server-key-failed-stock",
+            payload_bytes,
+            hashlib.sha256,
+        ).hexdigest()
+
+        with patch(
+            "store.services.paytabs._post_json",
+            return_value={
+                "tran_ref": "TST-STOCK-FAILED-1001",
+                "tran_type": "Sale",
+                "cart_id": order.order_number,
+                "payment_result": {"response_status": "E"},
+            },
+        ):
+            response = self.api_client.generic(
+                method="POST",
+                path="/api/payments/webhook/paytabs/",
+                data=payload_bytes,
+                content_type="application/json",
+                HTTP_SIGNATURE=signature,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        stock.refresh_from_db()
+        order.refresh_from_db()
+        self.assertEqual(stock.quantity, 5)
+        self.assertEqual(stock.reserved_quantity, 0)
+        self.assertTrue(order.inventory_released)
+
+        with patch(
+            "store.api_views.payments.initiate_payment",
+            return_value={
+                "provider": "paytabs",
+                "provider_reference": "retry-ref-001",
+                "redirect_url": "https://secure-oman.paytabs.com/payment/page",
+            },
+        ):
+            retry = self.api_client.post(
+                "/api/payments/retry/",
+                {
+                    "order_number": order.order_number,
+                    "lookup_token": order.lookup_token,
+                    "provider": "paytabs",
+                },
+                format="json",
+            )
+
+        self.assertEqual(retry.status_code, 200)
+        stock.refresh_from_db()
+        order.refresh_from_db()
+        self.assertEqual(stock.quantity, 5)
+        self.assertEqual(stock.reserved_quantity, 2)
+        self.assertFalse(order.inventory_released)
 
     @override_settings(
         PAYTABS_PROFILE_ID_OM="444444",

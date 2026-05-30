@@ -183,6 +183,8 @@ class Order(models.Model):
 
     coupon_code = models.CharField(max_length=40, blank=True)
     discount_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    gift_card_code = models.CharField(max_length=32, blank=True)
+    gift_card_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     shipping_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -422,6 +424,12 @@ class Order(models.Model):
 
     def cancel(self, *, actor=None, note=""):
         if self.status != self.STATUS_CANCELLED:
+            try:
+                from ..services.gift_cards import release_pending_gift_card_redemption
+
+                release_pending_gift_card_redemption(self, reason="cancelled")
+            except Exception:
+                pass
             self.restore_inventory()
             self.transition_to(
                 self.STATUS_CANCELLED,
@@ -969,6 +977,76 @@ class GiftCard(models.Model):
         prefix = "EOG"
         token = secrets.token_hex(6).upper()
         return f"{prefix}-{token[:4]}-{token[4:8]}-{token[8:12]}"
+
+
+class GiftCardRedemption(models.Model):
+    STATUS_PENDING = "pending"
+    STATUS_APPLIED = "applied"
+    STATUS_RELEASED = "released"
+
+    STATUS_CHOICES = (
+        (STATUS_PENDING, "Pending"),
+        (STATUS_APPLIED, "Applied"),
+        (STATUS_RELEASED, "Released"),
+    )
+
+    order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name="gift_card_redemption")
+    gift_card = models.ForeignKey(GiftCard, on_delete=models.PROTECT, related_name="redemptions")
+    code_snapshot = models.CharField(max_length=32, blank=True, default="")
+    requested_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    applied_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    applied_at = models.DateTimeField(blank=True, null=True)
+    released_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        unique_together = ("gift_card", "order")
+
+    def __str__(self):
+        return f"{self.order.order_number} - {self.gift_card.code} ({self.status})"
+
+
+class BackInStockRequest(models.Model):
+    STATUS_PENDING = "pending"
+    STATUS_NOTIFIED = "notified"
+
+    STATUS_CHOICES = (
+        (STATUS_PENDING, "Pending"),
+        (STATUS_NOTIFIED, "Notified"),
+    )
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="back_in_stock_requests")
+    region = models.ForeignKey(
+        Region,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="back_in_stock_requests",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="back_in_stock_requests",
+    )
+    email = models.EmailField()
+    phone = models.CharField(max_length=60, blank=True, default="")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    notified_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        unique_together = ("product", "region", "email")
+
+    def __str__(self):
+        region_code = self.region.code.upper() if self.region_id else "all"
+        return f"{self.product.slug} - {self.email} ({region_code})"
 
 
 class AnalyticsEvent(models.Model):

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import StorefrontShell from "@/components/layout/StorefrontShell";
-import { getNavigationData } from "@/lib/api";
+import { getCmsPageBySlug, getNavigationData } from "@/lib/api";
 import { resolveServerRegion } from "@/lib/regionResolver";
 import { buildSeoMetadata } from "@/lib/seo";
 import { buildStorePath, normalizeLocale, normalizeRegion } from "@/lib/storefront";
@@ -341,6 +341,310 @@ const STATIC_CONTENT = {
     },
   },
 
+  "cookie-policy": {
+    en: {
+      title: "Cookie Policy",
+      sections: [
+        {
+          heading: "How We Use Cookies",
+          body: "We use cookies to keep your cart active, remember your selected region and language, and improve page performance.",
+        },
+        {
+          heading: "Essential Cookies",
+          body: "Essential cookies help core checkout and account features work correctly. Without them, some storefront features may not function.",
+        },
+        {
+          heading: "Preference Cookies",
+          body: "Preference cookies remember settings such as your region and language to make future visits easier.",
+        },
+        {
+          heading: "Manage Your Cookie Preferences",
+          body: "You can control cookies in your browser settings. Blocking all cookies may impact checkout, login, and cart behavior.",
+        },
+      ],
+    },
+    ar: {
+      title: "سياسة ملفات الارتباط",
+      sections: [
+        {
+          heading: "كيف نستخدم ملفات الارتباط",
+          body: "نستخدم ملفات الارتباط للحفاظ على سلة التسوق، وتذكر المنطقة واللغة المختارة، وتحسين أداء الصفحات.",
+        },
+        {
+          heading: "الملفات الأساسية",
+          body: "تساعد الملفات الأساسية في عمل ميزات الحساب والدفع بشكل صحيح. بدونها قد لا تعمل بعض خصائص المتجر.",
+        },
+        {
+          heading: "ملفات التفضيلات",
+          body: "تتذكر ملفات التفضيلات إعداداتك مثل المنطقة واللغة لتسهيل الزيارات القادمة.",
+        },
+        {
+          heading: "إدارة تفضيلات ملفات الارتباط",
+          body: "يمكنك التحكم بملفات الارتباط من إعدادات المتصفح. قد يؤثر حظر جميع الملفات على تسجيل الدخول والدفع والسلة.",
+        },
+      ],
+    },
+  },
+
+  "payment-options": {
+    en: {
+      title: "Payment Options",
+      sections: [
+        {
+          heading: "Available Methods",
+          body: "We support secure card payments and other regional methods shown at checkout. Payment methods may vary by region.",
+        },
+        {
+          heading: "When You Place an Order",
+          body: "The checkout page will show the payment methods available for your selected delivery region before you confirm payment.",
+        },
+        {
+          heading: "Payment Security",
+          body: "Online payments are processed through trusted payment partners. We do not store complete card details on our storefront.",
+        },
+      ],
+    },
+    ar: {
+      title: "خيارات الدفع",
+      sections: [
+        {
+          heading: "طرق الدفع المتاحة",
+          body: "ندعم الدفع الآمن بالبطاقات وطرقًا إقليمية أخرى تظهر عند الدفع. قد تختلف طرق الدفع حسب المنطقة.",
+        },
+        {
+          heading: "عند إنشاء الطلب",
+          body: "تعرض صفحة الدفع الوسائل المتاحة لمنطقتك المحددة قبل تأكيد عملية الدفع.",
+        },
+        {
+          heading: "أمان الدفع",
+          body: "تتم معالجة المدفوعات الإلكترونية عبر شركاء دفع موثوقين، ولا نقوم بتخزين بيانات البطاقة كاملة على المتجر.",
+        },
+      ],
+    },
+  },
+
+  shipping: {
+    en: {
+      title: "Shipping Information",
+      sections: [
+        {
+          heading: "Where We Deliver",
+          body: "We currently deliver across Oman, the UAE, and Saudi Arabia.",
+        },
+        {
+          heading: "Estimated Timelines",
+          body: "Delivery timing depends on your city and selected method. The latest estimate is shown during checkout.",
+        },
+        {
+          heading: "Shipping Fees",
+          body: "Shipping charges are calculated at checkout based on region and basket value. Free-shipping eligibility may vary by region.",
+        },
+      ],
+    },
+    ar: {
+      title: "معلومات الشحن",
+      sections: [
+        {
+          heading: "مناطق التوصيل",
+          body: "نوصّل حاليًا داخل عُمان والإمارات العربية المتحدة والمملكة العربية السعودية.",
+        },
+        {
+          heading: "المدة المتوقعة",
+          body: "تعتمد مدة التوصيل على المدينة وطريقة الشحن المختارة. يظهر التقدير الأحدث أثناء الدفع.",
+        },
+        {
+          heading: "رسوم الشحن",
+          body: "تُحسب رسوم الشحن أثناء الدفع حسب المنطقة وقيمة السلة. قد تختلف أهلية الشحن المجاني حسب المنطقة.",
+        },
+      ],
+    },
+  },
+
+  returns: {
+    en: {
+      title: "Returns Policy",
+      sections: [
+        {
+          heading: "Return Eligibility",
+          body: "Unopened and undamaged products may be eligible for return within the return window shown at checkout and in your order details.",
+        },
+        {
+          heading: "How to Start a Return",
+          body: "Sign in to your account and request a return from your order history, or contact our support team for guidance.",
+        },
+        {
+          heading: "Refund Timeline",
+          body: "If approved, refunds are processed to the original payment method based on your provider's processing time.",
+        },
+      ],
+    },
+    ar: {
+      title: "سياسة الإرجاع",
+      sections: [
+        {
+          heading: "أهلية الإرجاع",
+          body: "قد تكون المنتجات غير المفتوحة وغير التالفة مؤهلة للإرجاع خلال الفترة الموضحة عند الدفع وفي تفاصيل الطلب.",
+        },
+        {
+          heading: "كيفية بدء الإرجاع",
+          body: "سجّل الدخول إلى حسابك واطلب الإرجاع من سجل الطلبات، أو تواصل مع فريق الدعم للمساعدة.",
+        },
+        {
+          heading: "مدة الاسترداد",
+          body: "عند الموافقة، يُعالج الاسترداد إلى وسيلة الدفع الأصلية وفق مدة المعالجة لدى مزود الدفع.",
+        },
+      ],
+    },
+  },
+
+  ingredients: {
+    en: {
+      title: "Ingredients",
+      sections: [
+        {
+          heading: "How We Choose Ingredients",
+          body: "Our ingredients are selected with care for delicate baby skin and everyday family use.",
+        },
+        {
+          heading: "Transparency First",
+          body: "We aim to keep product ingredient information clear on product pages so parents can make informed decisions.",
+        },
+        {
+          heading: "Need Help Choosing",
+          body: "If your child has specific sensitivities, contact our support team and we can help you compare suitable options.",
+        },
+      ],
+    },
+    ar: {
+      title: "المكونات",
+      sections: [
+        {
+          heading: "كيف نختار المكونات",
+          body: "يتم اختيار مكوناتنا بعناية لتناسب بشرة الأطفال الحساسة والاستخدام اليومي للعائلة.",
+        },
+        {
+          heading: "الشفافية أولًا",
+          body: "نحرص على عرض معلومات المكونات بوضوح في صفحات المنتجات لمساعدة الأهالي على اتخاذ قرار مناسب.",
+        },
+        {
+          heading: "المساعدة في الاختيار",
+          body: "إذا كانت لدى طفلك حساسية معينة، تواصل مع فريق الدعم وسنساعدك في مقارنة الخيارات المناسبة.",
+        },
+      ],
+    },
+  },
+
+  certifications: {
+    en: {
+      title: "Certifications",
+      sections: [
+        {
+          heading: "Our Approach",
+          body: "We value third-party standards and clear product documentation whenever available.",
+        },
+        {
+          heading: "Product-Level Details",
+          body: "Certification details can be updated by the store admin and may differ by product and supplier.",
+        },
+        {
+          heading: "Before You Purchase",
+          body: "Please check the latest product page details for the most current certification information.",
+        },
+      ],
+    },
+    ar: {
+      title: "الشهادات",
+      sections: [
+        {
+          heading: "نهجنا",
+          body: "نقدّر المعايير المعتمدة من جهات خارجية وتوثيق المنتجات بوضوح عند توفره.",
+        },
+        {
+          heading: "تفاصيل حسب المنتج",
+          body: "يمكن تحديث تفاصيل الشهادات من قبل إدارة المتجر، وقد تختلف حسب المنتج والمورّد.",
+        },
+        {
+          heading: "قبل الشراء",
+          body: "يرجى مراجعة صفحة المنتج للاطلاع على أحدث معلومات الشهادات.",
+        },
+      ],
+    },
+  },
+
+  sustainability: {
+    en: {
+      title: "Sustainability",
+      sections: [
+        {
+          heading: "Responsible Choices",
+          body: "We aim to make thoughtful decisions in sourcing, packaging, and fulfillment wherever practical.",
+        },
+        {
+          heading: "Continuous Improvement",
+          body: "Sustainability is an ongoing journey. We review materials and operations regularly to reduce waste over time.",
+        },
+        {
+          heading: "What You Can Expect",
+          body: "You may see updates to packaging and logistics as we improve our sustainability practices.",
+        },
+      ],
+    },
+    ar: {
+      title: "الاستدامة",
+      sections: [
+        {
+          heading: "خيارات مسؤولة",
+          body: "نسعى لاتخاذ قرارات مدروسة في التوريد والتغليف والتوصيل كلما كان ذلك عمليًا.",
+        },
+        {
+          heading: "تحسين مستمر",
+          body: "الاستدامة رحلة مستمرة. نراجع المواد والعمليات بشكل دوري لتقليل الهدر مع الوقت.",
+        },
+        {
+          heading: "ما يمكن توقعه",
+          body: "قد تلاحظ تحديثات في التغليف والعمليات اللوجستية ضمن جهودنا لتطوير ممارسات الاستدامة.",
+        },
+      ],
+    },
+  },
+
+  "our-standards": {
+    en: {
+      title: "Our Standards",
+      sections: [
+        {
+          heading: "Built for Delicate Skin",
+          body: "We focus on gentle formulations and practical product quality checks designed for baby-care routines.",
+        },
+        {
+          heading: "Clear Communication",
+          body: "We work to keep ingredient and usage information understandable so families can shop with confidence.",
+        },
+        {
+          heading: "Regional Support",
+          body: "Our team can guide you in choosing products based on climate, routine, and age stage across GCC markets.",
+        },
+      ],
+    },
+    ar: {
+      title: "معاييرنا",
+      sections: [
+        {
+          heading: "مصممة للبشرة الحساسة",
+          body: "نركز على تركيبات لطيفة وفحوصات جودة عملية تناسب روتين العناية بالأطفال.",
+        },
+        {
+          heading: "تواصل واضح",
+          body: "نعمل على تقديم معلومات المكونات والاستخدام بشكل سهل لتسوق بثقة.",
+        },
+        {
+          heading: "دعم إقليمي",
+          body: "يمكن لفريقنا مساعدتك في اختيار المنتجات المناسبة حسب المناخ والروتين والمرحلة العمرية داخل أسواق الخليج.",
+        },
+      ],
+    },
+  },
+
   terms: {
     en: {
       title: "Terms & Conditions",
@@ -395,23 +699,67 @@ const STATIC_CONTENT = {
   },
 };
 
+function buildCmsContent(cmsPage) {
+  const bodyText = String(cmsPage?.body || "").trim();
+  return {
+    title: String(cmsPage?.title || "").trim(),
+    sections: bodyText
+      ? [
+          {
+            heading: "",
+            body: bodyText,
+          },
+        ]
+      : [],
+  };
+}
+
+async function resolvePageContent({ pageSlug, locale, region }) {
+  const cmsPage = await getCmsPageBySlug(pageSlug, locale, region);
+  if (cmsPage) {
+    return {
+      source: "cms",
+      cmsPage,
+      content: buildCmsContent(cmsPage),
+    };
+  }
+
+  const staticContent = STATIC_CONTENT?.[pageSlug]?.[locale] || null;
+  if (staticContent) {
+    return {
+      source: "static",
+      cmsPage: null,
+      content: staticContent,
+    };
+  }
+
+  return {
+    source: "none",
+    cmsPage: null,
+    content: null,
+  };
+}
+
 export async function generateMetadata({ params, searchParams }) {
   const { locale: localeParam, pageSlug } = await params;
   const locale = normalizeLocale(localeParam);
   const resolvedSearchParams = await searchParams;
   const region = resolveServerRegion(resolvedSearchParams);
-  const content = STATIC_CONTENT?.[pageSlug]?.[locale];
+  const resolved = await resolvePageContent({ pageSlug, locale, region });
+  const content = resolved.content;
   const isAr = locale === "ar";
 
   if (!content) {
     return {};
   }
 
-  const title = `${content.title} | Enfant Organics`;
+  const seoTitle = resolved.cmsPage?.seo_title;
+  const seoDescription = resolved.cmsPage?.seo_description;
+  const title = seoTitle ? `${seoTitle} | Enfant Organics` : `${content.title} | Enfant Organics`;
   const fallbackDescription = isAr
     ? "معلومات ومتطلبات الشراء من إنفانت أورجانيك."
     : "Important storefront information from Enfant Organics.";
-  const description = content.sections?.[0]?.body || fallbackDescription;
+  const description = seoDescription || content.sections?.[0]?.body || fallbackDescription;
 
   return buildSeoMetadata({
     locale,
@@ -428,13 +776,21 @@ export default async function StaticPage({ params, searchParams }) {
   const resolvedSearchParams = await searchParams;
   const locale = normalizeLocale(localeParam);
 
-  if (localeParam !== locale || !STATIC_CONTENT[pageSlug]) {
+  if (localeParam !== locale) {
     notFound();
   }
 
   const region = resolveServerRegion(resolvedSearchParams);
-  const navigation = await getNavigationData(locale, region);
-  const content = STATIC_CONTENT[pageSlug][locale];
+  const [navigation, resolved] = await Promise.all([
+    getNavigationData(locale, region),
+    resolvePageContent({ pageSlug, locale, region }),
+  ]);
+
+  if (!resolved.content) {
+    notFound();
+  }
+
+  const content = resolved.content;
   const phone = WHATSAPP_PHONE || navigation?.contact?.phone || "";
   const waLink = phone ? `https://wa.me/${phone.replace(/\D/g, "")}` : "#";
   const isAr = locale === "ar";
@@ -450,7 +806,7 @@ export default async function StaticPage({ params, searchParams }) {
           <div className="static-page-body">
             {content.sections.map((section, i) => (
               <div key={i} className="static-section">
-                <h2>{section.heading}</h2>
+                {section.heading ? <h2>{section.heading}</h2> : null}
                 {section.body.split("\n").filter(Boolean).map((line, j) => (
                   <p key={j}>{line}</p>
                 ))}

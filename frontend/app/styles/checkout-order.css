@@ -641,6 +641,21 @@
   font-size: 0.78rem;
 }
 
+.checkout-inline-clear {
+  width: fit-content;
+  border: 0;
+  background: transparent;
+  color: var(--brand-dark);
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0;
+  cursor: pointer;
+}
+
+.checkout-inline-clear:hover {
+  text-decoration: underline;
+}
+
 .coupon-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

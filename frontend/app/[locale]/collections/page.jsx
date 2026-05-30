@@ -24,7 +24,10 @@ function buildCatalogFilters(searchParams) {
     tag: pickParam(searchParams?.tag),
     min_price: pickParam(searchParams?.min_price),
     max_price: pickParam(searchParams?.max_price),
+    rating_min: pickParam(searchParams?.rating_min),
+    availability: pickParam(searchParams?.availability),
     ordering: pickParam(searchParams?.ordering),
+    collection: pickParam(searchParams?.collection),
   };
 }
 
@@ -92,7 +95,13 @@ export default async function LocalizedCollectionsPage({ params, searchParams })
         </div>
       </section>
       <section className="section container">
-        <ProductCollectionClient data={catalog} locale={locale} region={region} />
+        <ProductCollectionClient
+          data={catalog}
+          locale={locale}
+          region={region}
+          initialFilters={filters}
+          listingType="collections"
+        />
       </section>
     </StorefrontShell>
   );

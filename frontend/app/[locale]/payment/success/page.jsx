@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import PaymentOrderLink from "@/components/store/payment/PaymentOrderLink";
+import PaymentSuccessCartFinalizer from "@/components/store/payment/PaymentSuccessCartFinalizer";
 import { getNavigationData } from "@/lib/api";
 import { resolveServerRegion } from "@/lib/regionResolver";
 import { buildStorePath, normalizeLocale, normalizeRegion } from "@/lib/storefront";
@@ -32,6 +33,13 @@ export default async function PaymentSuccessPage({ params, searchParams }) {
   return (
     <StorefrontShell locale={locale} navigation={navigation}>
       <section className="section-shell">
+        {orderNumber ? (
+          <PaymentSuccessCartFinalizer
+            orderNumber={orderNumber}
+            region={region}
+            lookupToken={lookupToken}
+          />
+        ) : null}
         <div className="payment-page-card">
           <div className="payment-page-icon success" aria-hidden="true">✓</div>
 

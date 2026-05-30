@@ -21,10 +21,12 @@ from django.db.models.functions import TruncMonth
 from django.db.utils import OperationalError, ProgrammingError
 
 from ..models import (
+    BackInStockRequest,
     AbandonedCart,
     AdminAuditLog,
     AnalyticsEvent,
     BlogPost,
+    CmsPage,
     Category,
     Coupon,
     GiftCard,
@@ -49,7 +51,9 @@ from ..models import (
 from ..api_serializers.admin_ops import (
     AdminAbandonedCartSerializer,
     AdminAuditLogSerializer,
+    AdminBackInStockRequestSerializer,
     AdminBlogPostSerializer,
+    AdminCmsPageSerializer,
     AdminCategorySerializer,
     AdminCouponSerializer,
     AdminCustomerSerializer,
@@ -71,6 +75,11 @@ from ..api_serializers.admin_ops import (
     AdminWarehouseSerializer,
 )
 from ..notifications import notify_admins_low_stock, notify_admins_paid_order, notify_admins_payment_review
+from ..services.gift_cards import (
+    GiftCardRedemptionError,
+    finalize_online_gift_card_redemption,
+    release_pending_gift_card_redemption,
+)
 from ..services.admin_roles import (
     CAP_ABANDONED_EDIT,
     CAP_ABANDONED_VIEW,
@@ -126,6 +135,7 @@ from ..services.shipment import (
     should_auto_create_shipment,
     update_manual_tracking,
 )
+from ..services.stock import commit_reserved_inventory_for_order
 
 
 logger = logging.getLogger(__name__)
@@ -416,6 +426,7 @@ class AdminDashboardView(APIView):
             scoped_orders = scoped_orders.filter(created_at__gte=now - timedelta(days=day_window))
 
         scoped_paid_orders = scoped_orders.filter(payment_status=Order.PAYMENT_PAID)
+        scoped_paid_orders_count = scoped_paid_orders.count()
 
         if top_date_range == "all_time":
             current_period_orders = base_orders.filter(created_at__gte=this_month_start)
@@ -590,12 +601,17 @@ class AdminDashboardView(APIView):
                 return None
             return round(((current - previous) / previous) * 100, 1)
 
-        avg_order_value = round(total_revenue / total_orders, 2) if total_orders else 0
+        avg_order_value = round(total_revenue / scoped_paid_orders_count, 2) if scoped_paid_orders_count else 0
 
         # Payment success rate: paid orders / total orders.
         # Keep the legacy conversion_rate key for compatibility.
         payment_success_rate = round((scoped_paid_orders.count() / total_orders) * 100, 1) if total_orders else 0
         conversion_rate = payment_success_rate
+        delta_label = (
+            "Current month vs previous month"
+            if top_date_range == "all_time"
+            else "Selected period vs previous period"
+        )
 
         # Real repeat rate: customers with >1 order / customers with any order.
         # Customer identity uses user_id first with customer_email fallback.
@@ -826,18 +842,23 @@ class AdminDashboardView(APIView):
                 "orders": total_orders,
                 "orders_delta": pct_change(monthly_orders, prev_orders),
                 "pending_orders": pending_orders,
-                "paid_orders": scoped_paid_orders.count(),
+                "paid_orders": scoped_paid_orders_count,
                 "customers": total_customers,
                 "customers_delta": pct_change(monthly_customers, prev_customers),
                 "products": total_products,
                 "avg_order_value": avg_order_value,
                 "payment_success_rate": payment_success_rate,
                 "conversion_rate": conversion_rate,
+                "conversion_metric_label": "payment_success_rate",
+                "delta_label": delta_label,
                 "abandonment_rate": abandonment_rate,
                 "repeat_rate": repeat_rate,
                 "conversion_breakdown": {
                     "overall_rate": current_overall_conversion,
                     "overall_delta": pct_change(current_overall_conversion, previous_overall_conversion),
+                    "note": (
+                        "Session-based funnel. Completed step uses paid orders in the same period."
+                    ),
                     "steps": [
                         {
                             "key": "sessions",
@@ -1000,6 +1021,7 @@ class AdminAnalyticsView(APIView):
             "payment_success_rate": payment_success_rate,
             "conversion_rate": payment_success_rate,
             "analytics_currency_normalization": _analytics_currency_normalization_metadata(applied=True),
+            "conversion_metric_label": "payment_success_rate",
             "region_om": regional_revenue.get("om", {}),
             "region_ae": regional_revenue.get("ae", {}),
             "region_sa": regional_revenue.get("sa", {}),
@@ -1475,6 +1497,11 @@ class AdminOrderDetailView(generics.RetrieveUpdateAPIView):
             Order.STATUS_REFUNDED,
             Order.STATUS_FAILED,
         }:
+            if order.status == Order.STATUS_CANCELLED:
+                try:
+                    release_pending_gift_card_redemption(order, reason="cancelled")
+                except Exception:
+                    logger.exception("Gift card release failed for cancelled order %s", order.order_number)
             try:
                 order.restore_inventory()
                 order.refresh_from_db()
@@ -1483,10 +1510,24 @@ class AdminOrderDetailView(generics.RetrieveUpdateAPIView):
 
         if previous_payment_status != order.payment_status:
             if order.payment_status == Order.PAYMENT_PAID:
+                try:
+                    commit_reserved_inventory_for_order(order)
+                except Exception:
+                    logger.exception("Inventory commit failed for paid order %s", order.order_number)
+                try:
+                    finalize_online_gift_card_redemption(order)
+                except GiftCardRedemptionError:
+                    logger.exception("Gift card finalization failed for paid order %s", order.order_number)
+                except Exception:
+                    logger.exception("Unexpected gift card finalization error for paid order %s", order.order_number)
                 notify_admins_paid_order(order)
             elif order.payment_status == Order.PAYMENT_REVIEW:
                 notify_admins_payment_review(order)
             elif order.payment_status == Order.PAYMENT_REFUNDED:
+                try:
+                    release_pending_gift_card_redemption(order, reason="refunded")
+                except Exception:
+                    logger.exception("Gift card release failed for refunded order %s", order.order_number)
                 try:
                     order.restore_inventory()
                     order.refresh_from_db()
@@ -1737,6 +1778,10 @@ class AdminOrderRefundView(APIView):
                         )
 
             if not order.inventory_released:
+                try:
+                    release_pending_gift_card_redemption(order, reason="refunded")
+                except Exception:
+                    logger.exception("Gift card release failed during refund for order %s", order.order_number)
                 try:
                     order.restore_inventory()
                 except Exception:
@@ -2105,6 +2150,27 @@ class AdminBlogPostDetailView(StaffRetrieveUpdateDestroyView):
         )
 
 
+class AdminCmsPageListCreateView(StaffListCreateView):
+    admin_read_capabilities = (CAP_CONTENT_VIEW,)
+    admin_write_capabilities = (CAP_CONTENT_EDIT,)
+    queryset = CmsPage.objects.select_related("region").all()
+    serializer_class = AdminCmsPageSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        search = str(self.request.query_params.get("search", "") or "").strip()
+        if search:
+            queryset = queryset.filter(Q(slug__icontains=search) | Q(title_en__icontains=search) | Q(title_ar__icontains=search))
+        return queryset
+
+
+class AdminCmsPageDetailView(StaffRetrieveUpdateDestroyView):
+    admin_read_capabilities = (CAP_CONTENT_VIEW,)
+    admin_write_capabilities = (CAP_CONTENT_EDIT,)
+    queryset = CmsPage.objects.select_related("region").all()
+    serializer_class = AdminCmsPageSerializer
+
+
 class AdminSettingsView(APIView):
     permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
     admin_read_capabilities = (CAP_CONTENT_VIEW,)
@@ -2242,6 +2308,30 @@ class AdminGiftCardDetailView(StaffRetrieveUpdateDestroyView):
     admin_write_capabilities = (CAP_GIFTCARDS_EDIT,)
     queryset = GiftCard.objects.all()
     serializer_class = AdminGiftCardSerializer
+
+
+class AdminBackInStockRequestListView(StaffListCreateView):
+    admin_read_capabilities = (CAP_INVENTORY_VIEW,)
+    admin_write_capabilities = (CAP_INVENTORY_EDIT,)
+    queryset = BackInStockRequest.objects.select_related("product", "region", "user").all()
+    serializer_class = AdminBackInStockRequestSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        status_filter = str(self.request.query_params.get("status", "") or "").strip().lower()
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        region_code = str(self.request.query_params.get("region", "") or "").strip().lower()
+        if region_code:
+            queryset = queryset.filter(region__code=region_code)
+        return queryset
+
+
+class AdminBackInStockRequestDetailView(StaffRetrieveUpdateDestroyView):
+    admin_read_capabilities = (CAP_INVENTORY_VIEW,)
+    admin_write_capabilities = (CAP_INVENTORY_EDIT,)
+    queryset = BackInStockRequest.objects.select_related("product", "region", "user").all()
+    serializer_class = AdminBackInStockRequestSerializer
 
 
 class AdminAbandonedCartListView(generics.ListAPIView):

@@ -9,6 +9,7 @@ import JsonLd from "@/components/seo/JsonLd";
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import CategoryCarousel from "@/components/store/CategoryCarousel";
 import NewsletterForm from "@/components/store/NewsletterForm";
+import PageViewTracker from "@/components/store/analytics/PageViewTracker";
 import ProductRail from "@/components/store/ProductRail";
 import { getHomePageData, getNavigationData } from "@/lib/api";
 import { resolveServerRegion } from "@/lib/regionResolver";
@@ -71,6 +72,11 @@ export default async function LocalizedHomePage({ params, searchParams }) {
 
   const t = uiText(locale);
   const isAr = locale === "ar";
+  const categories = Array.isArray(home.categories) ? home.categories : [];
+  const homeSections = Array.isArray(home.sections) ? home.sections : [];
+  const testimonials = Array.isArray(home.testimonials) ? home.testimonials : [];
+  const instagramPosts = Array.isArray(home?.instagram?.posts) ? home.instagram.posts : [];
+  const blogPosts = Array.isArray(home?.blog?.posts) ? home.blog.posts : [];
 
   const OFFER_LABELS = {
     gift:     isAr ? "عرض حصري"       : "Exclusive Offer",
@@ -94,6 +100,24 @@ export default async function LocalizedHomePage({ params, searchParams }) {
   ];
   const heroMainCount = (heroPrimary ? 1 : 0) + (heroSecondary ? 1 : 0);
   const heroShowcaseEmpty = !heroPrimary && !heroSecondary && heroChips.length === 0;
+  const sectionPathByKey = {
+    "new-arrivals": "/new-arrivals",
+    "top-choices": "/best-sellers",
+  };
+  const sectionEmptyCopy = {
+    "new-arrivals": {
+      title: isAr ? "وصلات جديدة قريبًا" : "New arrivals are coming soon",
+      message: isAr
+        ? "نحدّث التشكيلة باستمرار. تابع العودة لاحقًا لمزيد من الخيارات."
+        : "We update this collection regularly. Please check back soon.",
+    },
+    default: {
+      title: isAr ? "يتم تحديث المنتجات لهذه المجموعة" : "Products are being updated for this collection",
+      message: isAr
+        ? "يمكنك متابعة التسوق أو اختيار مجموعة أخرى."
+        : "You can continue shopping or explore another collection.",
+    },
+  };
   const organizationJsonLd = {
     "@context": "https://schema.org",
     "@type": "Organization",
@@ -107,6 +131,7 @@ export default async function LocalizedHomePage({ params, searchParams }) {
 
   return (
     <StorefrontShell locale={locale} navigation={navigation}>
+      <PageViewTracker regionCode={region} />
       <JsonLd data={organizationJsonLd} />
       {heroShowcaseEmpty ? null : (
       <section className="section container">
@@ -239,33 +264,84 @@ export default async function LocalizedHomePage({ params, searchParams }) {
             {home.categories_heading.cta}
           </Link>
         </div>
-        <CategoryCarousel
-          categories={home.categories}
-          href={buildStorePath(locale, "/collections", region)}
-          locale={locale}
-        />
+        {categories.length ? (
+          <CategoryCarousel
+            categories={categories}
+            href={buildStorePath(locale, "/collections", region)}
+            locale={locale}
+          />
+        ) : (
+          <div className="store-empty-state">
+            <strong>{isAr ? "الفئات قيد التحديث" : "Categories are being updated"}</strong>
+            <p>
+              {isAr
+                ? "يمكنك تصفح جميع المنتجات أو التواصل معنا للمساعدة في الاختيار."
+                : "Browse all products or contact support if you need help choosing."}
+            </p>
+          </div>
+        )}
       </section>
 
-      {home.sections.map((section) => (
+      {homeSections.length ? homeSections.map((section) => {
+        const sectionProducts = Array.isArray(section.products) ? section.products : [];
+        return (
         <section key={section.key} className="section container">
           <div className="section-heading">
             <div>
               <h3>{section.title}</h3>
               {section.subtitle ? <p>{section.subtitle}</p> : null}
             </div>
-            <Link href={buildStorePath(locale, "/collections", region)} className="section-link">
+            <Link
+              href={buildStorePath(locale, sectionPathByKey[section.key] || "/collections", region)}
+              className="section-link"
+            >
               {t.viewAll}
             </Link>
           </div>
-          <ProductRail
-            products={section.products}
-            locale={locale}
-            region={region}
-            listId={`home_${section.key}`}
-            listName={section.title}
-          />
+          {sectionProducts.length ? (
+            <ProductRail
+              products={sectionProducts}
+              locale={locale}
+              region={region}
+              listId={`home_${section.key}`}
+              listName={section.title}
+            />
+          ) : (
+            <div className="store-empty-state">
+              <strong>{(sectionEmptyCopy[section.key] || sectionEmptyCopy.default).title}</strong>
+              <p>{(sectionEmptyCopy[section.key] || sectionEmptyCopy.default).message}</p>
+              <div className="store-empty-state-actions">
+                <Link href={buildStorePath(locale, "/collections", region)} className="secondary-action">
+                  {t.continueShopping}
+                </Link>
+                <Link href={buildStorePath(locale, "/contact", region)} className="secondary-action">
+                  {isAr ? "تواصل مع الدعم" : "Contact support"}
+                </Link>
+              </div>
+            </div>
+          )}
         </section>
-      ))}
+      );
+      }) : (
+        <section className="section container">
+          <div className="store-empty-state">
+            <strong>{isAr ? "يتم تحديث المنتجات لمنطقتك" : "Products are being updated for your region"}</strong>
+            <p>
+              {isAr
+                ? "يمكنك متابعة التصفح الآن أو العودة لاحقًا بعد إضافة منتجات جديدة."
+                : "You can continue browsing now or check back soon as new products are added."}
+            </p>
+            <div className="store-empty-state-actions">
+              <Link href={buildStorePath(locale, "/collections", region)} className="secondary-action">
+                {t.continueShopping}
+              </Link>
+              <Link href={buildStorePath(locale, "/contact", region)} className="secondary-action">
+                {isAr ? "تواصل مع الدعم" : "Contact support"}
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="section section-muted">
         <div className="container">
@@ -274,11 +350,22 @@ export default async function LocalizedHomePage({ params, searchParams }) {
               <h3>{home.reviews_heading}</h3>
             </div>
           </div>
-          <div className="review-grid">
-            {home.testimonials.map((testimonial) => (
-              <TestimonialCard key={`${testimonial.name}-${testimonial.location}`} testimonial={testimonial} />
-            ))}
-          </div>
+          {testimonials.length ? (
+            <div className="review-grid">
+              {testimonials.map((testimonial) => (
+                <TestimonialCard key={`${testimonial.name}-${testimonial.location}`} testimonial={testimonial} />
+              ))}
+            </div>
+          ) : (
+            <div className="store-empty-state">
+              <strong>{isAr ? "تجارب العملاء ستظهر هنا قريبًا" : "Customer stories will appear here soon"}</strong>
+              <p>
+                {isAr
+                  ? "نواصل جمع المزيد من التقييمات الموثوقة لمساعدتك في الاختيار."
+                  : "We are collecting more verified reviews to help you choose with confidence."}
+              </p>
+            </div>
+          )}
         </div>
       </section>
 
@@ -294,26 +381,37 @@ export default async function LocalizedHomePage({ params, searchParams }) {
             {home.instagram.cta}
           </a>
         </div>
-        <div className="instagram-grid">
-          {home.instagram.posts.map((post, index) => (
-            <a
-              key={`${post.href}-${index}`}
-              href={post.href}
-              className={`instagram-tile${index === 1 ? " instagram-tile-ig" : ""}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <img src={post.image} alt="Enfant Instagram" loading="lazy" />
-              {index === 1 && (
-                <div className="instagram-logo-overlay">
-                  <div className="instagram-logo-circle">
-                    <Icon name="instagram" size={42} />
+        {instagramPosts.length ? (
+          <div className="instagram-grid">
+            {instagramPosts.map((post, index) => (
+              <a
+                key={`${post.href}-${index}`}
+                href={post.href}
+                className={`instagram-tile${index === 1 ? " instagram-tile-ig" : ""}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <img src={post.image} alt="Enfant Instagram" loading="lazy" />
+                {index === 1 && (
+                  <div className="instagram-logo-overlay">
+                    <div className="instagram-logo-circle">
+                      <Icon name="instagram" size={42} />
+                    </div>
                   </div>
-                </div>
-              )}
-            </a>
-          ))}
-        </div>
+                )}
+              </a>
+            ))}
+          </div>
+        ) : (
+          <div className="store-empty-state">
+            <strong>{isAr ? "تحديثات إنستغرام قريبًا" : "Instagram updates are coming soon"}</strong>
+            <p>
+              {isAr
+                ? "يمكنك متابعة حسابنا للحصول على أحدث النصائح وإطلاقات المنتجات."
+                : "Follow our profile for the latest tips and product launches."}
+            </p>
+          </div>
+        )}
       </section>
 
       <section className="section container">
@@ -325,23 +423,34 @@ export default async function LocalizedHomePage({ params, searchParams }) {
             {home.blog.cta}
           </Link>
         </div>
-        <div className="blog-grid">
-          {home.blog.posts.map((post) => (
-            <Link key={post.slug} href={buildStorePath(locale, `/blog/${post.slug}`, region)} className="blog-card">
-              <div className="blog-card-image">
-                <img src={post.image} alt={post.title} loading="lazy" />
-              </div>
-              <div className="blog-card-body">
-                <span className="blog-date">{post.published_at}</span>
-                <h4>{post.title}</h4>
-                <p>{post.excerpt}</p>
-                <span className="blog-card-read-more">
-                  {locale === "ar" ? "اقرأ المزيد" : "Read more"} <span aria-hidden="true">{locale === "ar" ? "←" : "→"}</span>
-                </span>
-              </div>
-            </Link>
-          ))}
-        </div>
+        {blogPosts.length ? (
+          <div className="blog-grid">
+            {blogPosts.map((post) => (
+              <Link key={post.slug} href={buildStorePath(locale, `/blog/${post.slug}`, region)} className="blog-card">
+                <div className="blog-card-image">
+                  <img src={post.image} alt={post.title} loading="lazy" />
+                </div>
+                <div className="blog-card-body">
+                  <span className="blog-date">{post.published_at}</span>
+                  <h4>{post.title}</h4>
+                  <p>{post.excerpt}</p>
+                  <span className="blog-card-read-more">
+                    {locale === "ar" ? "اقرأ المزيد" : "Read more"} <span aria-hidden="true">{locale === "ar" ? "←" : "→"}</span>
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="store-empty-state">
+            <strong>{isAr ? "مقالات جديدة قريبًا" : "Fresh articles are coming soon"}</strong>
+            <p>
+              {isAr
+                ? "نشارك نصائح عناية دورية، يمكنك العودة لاحقًا للاطلاع على أحدث المقالات."
+                : "We publish baby-care insights regularly. Check back soon for the latest posts."}
+            </p>
+          </div>
+        )}
       </section>
 
       <section className="section container">

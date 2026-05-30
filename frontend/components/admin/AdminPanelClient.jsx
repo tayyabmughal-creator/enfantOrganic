@@ -37,6 +37,7 @@ const NAV_GROUPS = [
     label: "Content",
     items: [
       { key: "blog",             label: "Blog",           icon: "edit",      endpoint: "/admin/blog-posts/",       desc: "Articles, guides, and brand stories." },
+      { key: "pages",            label: "Pages",          icon: "edit",      endpoint: "/admin/cms-pages/",        desc: "CMS-managed policy and static content pages." },
       { key: "hero_cards",       label: "Hero Cards",     icon: "image",     endpoint: "/admin/hero-promo-cards/",  desc: "Homepage hero promo cards and visuals." },
       { key: "instagram_posts",  label: "Instagram Grid", icon: "instagram", endpoint: "/admin/instagram-posts/",   desc: "Instagram feed photos shown on the homepage." },
       { key: "homepage",         label: "Content",        icon: "home",      endpoint: "/admin/settings/",          desc: "Announcements, newsletter, and homepage sections." },
@@ -109,6 +110,7 @@ const NAV_READ_CAPABILITY = {
   inventory: "inventory.view",
   warehouses: "inventory.view",
   blog: "content.view",
+  pages: "content.view",
   hero_cards: "content.view",
   instagram_posts: "content.view",
   homepage: "content.view",
@@ -146,6 +148,7 @@ const NAV_WRITE_CAPABILITY = {
   inventory: "inventory.edit",
   warehouses: "inventory.edit",
   blog: "content.edit",
+  pages: "content.edit",
   hero_cards: "content.edit",
   instagram_posts: "content.edit",
   homepage: "content.edit",
@@ -263,6 +266,15 @@ const FIELD_CONFIGS = {
     ["category_en","Category EN","text"],["category_ar","Category AR","text"],
     ["published_at","Publish date","date"],["is_published","Published","checkbox"],
     ["sort_order","Sort order","number"],
+  ],
+  pages: [
+    ["slug","Slug","text"],
+    ["region","Region ID (optional)","number"],
+    ["title_en","Title EN","text"],["title_ar","Title AR","text"],
+    ["body_en","Body EN","textarea"],["body_ar","Body AR","textarea"],
+    ["seo_title_en","SEO title EN","text"],["seo_title_ar","SEO title AR","text"],
+    ["seo_description_en","SEO description EN","textarea"],["seo_description_ar","SEO description AR","textarea"],
+    ["is_published","Published","checkbox"],
   ],
   hero_cards: [
     ["title_en","Title EN","text"],["title_ar","Title AR","text"],
@@ -438,6 +450,7 @@ const CREATE_DEFAULTS = {
   reviews:    { product:"",order:"",customer_name:"",rating:5,title:"",comment:"",is_verified_purchase:false,is_approved:false },
   shipping:   { region:"",city:"",area:"",min_order_value:0,max_order_value:"",shipping_fee:0,free_shipping_threshold:0,eta_min_days:"",eta_max_days:"",carrier_name:"",active:true },
   blog:       { slug:"",title_en:"",title_ar:"",excerpt_en:"",excerpt_ar:"",body_en:"",body_ar:"",image:"",category_en:"",category_ar:"",published_at:"",is_published:false,sort_order:0 },
+  pages:      { slug:"",region:"",title_en:"",title_ar:"",body_en:"",body_ar:"",seo_title_en:"",seo_title_ar:"",seo_description_en:"",seo_description_ar:"",is_published:true },
   hero_cards: { title_en:"",title_ar:"",subtitle_en:"",subtitle_ar:"",cta_en:"Shop now",cta_ar:"تسوق الآن",href:"/collections",size:"small",accent:"soft",sort_order:0,is_visible:true,image:"" },
   taxes:      { name_en:"VAT",name_ar:"ضريبة القيمة المضافة",region:"",rate:0.05,is_inclusive:false,is_active:true,description:"" },
   staff:      { email:"",username:"",password:"",first_name:"",last_name:"",role:"Manager",is_active:true,is_staff:true },
@@ -454,8 +467,8 @@ const DASHBOARD_FILTER_DEFAULTS = {
   customEndDate: "",
 };
 const DASHBOARD_REFRESH_INTERVAL_MS = 10000;
-const CRUD_KEYS     = ["products","categories","deals","customers","payments","reviews","shipping","blog","hero_cards","returns","taxes","staff","warehouses","giftcards"];
-const DELETABLE     = ["products","categories","deals","customers","payments","reviews","shipping","blog","hero_cards","taxes","staff","warehouses","giftcards"];
+const CRUD_KEYS     = ["products","categories","deals","customers","payments","reviews","shipping","blog","pages","hero_cards","returns","taxes","staff","warehouses","giftcards"];
+const DELETABLE     = ["products","categories","deals","customers","payments","reviews","shipping","blog","pages","hero_cards","taxes","staff","warehouses","giftcards"];
 const REPORT_TYPES  = ["orders","customers","inventory","low-stock","sales","abandoned-carts"];
 
 // ─── Placeholder configs ───────────────────────────────────────────────────────
@@ -489,6 +502,7 @@ function titleFor(item, key) {
   if (key === "giftcards")   return item?.code || `Gift card ${item?.id}`;
   if (key === "abandoned")   return item?.customer_email || item?.customer_name || `Abandoned cart ${item?.id}`;
   if (key === "hero_cards")  return item?.title_en || item?.title_ar || `Hero card ${item?.id}`;
+  if (key === "pages")       return item?.title_en || item?.title_ar || item?.slug || `Page ${item?.id}`;
   return item?.order_number || item?.name_en || item?.title_en || item?.code || item?.email || item?.username || item?.provider_reference || item?.provider || `${key} item`;
 }
 
@@ -501,6 +515,7 @@ function metaFor(item, key) {
   if (key === "giftcards") return `${item.currency_code || ""} · ${item.initial_balance} / ${item.remaining_balance} · ${item.status}`;
   if (key === "abandoned") return `${item.currency_code || ""} · ${item.subtotal} · ${item.status}`;
   if (key === "hero_cards") return `${item.size || "small"} · sort ${item.sort_order ?? 0} · ${item.is_visible === false ? "hidden" : "visible"}`;
+  if (key === "pages") return `${item.slug || ""} · ${item.region_code || "Global"} · ${item.is_published ? "Published" : "Draft"}`;
   return item.customer_name || item.brand || item.status || item.payment_status || item.discount_type || item.currency_code || (item.is_approved === false ? "Pending moderation" : item.is_published !== undefined ? (item.is_published ? "Published" : "Draft") : "Ready");
 }
 
@@ -900,6 +915,7 @@ export default function AdminPanelClient() {
     if (key === "reviews")    return `/admin/reviews/${item.id}/`;
     if (key === "shipping")   return `/admin/shipping-rules/${item.id}/`;
     if (key === "blog")       return `/admin/blog-posts/${item.slug || item.id}/`;
+    if (key === "pages")      return `/admin/cms-pages/${item.id}/`;
     if (key === "hero_cards") return `/admin/hero-promo-cards/${item.id}/`;
     if (key === "returns")    return `/admin/returns/${item.id}/`;
     if (key === "taxes")      return `/admin/tax-rules/${item.id}/`;

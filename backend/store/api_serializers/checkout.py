@@ -4,7 +4,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from django.core.validators import RegexValidator
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -13,7 +13,19 @@ from rest_framework import serializers
 PHONE_PATTERN = re.compile(r"^\+?[0-9 ()\-]{8,32}$")
 NAME_PATTERN = re.compile(r"^[\w\s'\.\-؀-ۿ]{2,160}$", re.UNICODE)
 
-from ..models import Coupon, Order, OrderItem, PaymentTransaction, Product, ProductPrice, Region, ShippingRule, TaxRate
+from ..models import (
+    Coupon,
+    GiftCard,
+    GiftCardRedemption,
+    Order,
+    OrderItem,
+    PaymentTransaction,
+    Product,
+    ProductPrice,
+    Region,
+    ShippingRule,
+    TaxRate,
+)
 from ..services import carrier_router
 from ..services.stock import StockError, ensure_region_stock_available, reserve_and_deduct_stock_for_item
 
@@ -256,6 +268,57 @@ def validate_coupon_for_checkout(coupon_code, region, subtotal, prepared_items, 
     return coupon, quantize_money(discount_total)
 
 
+def validate_gift_card_for_checkout(
+    gift_card_code,
+    region,
+    payable_total,
+    *,
+    lock_gift_card=False,
+):
+    clean_code = gift_card_code.strip().upper()
+    if not clean_code:
+        return None, Decimal("0.00"), Decimal("0.00")
+
+    cards = GiftCard.objects
+    if lock_gift_card:
+        cards = cards.select_for_update()
+
+    gift_card = cards.filter(code=clean_code).first()
+    if not gift_card:
+        raise serializers.ValidationError({"gift_card_code": "Gift card code is invalid."})
+
+    now = timezone.now()
+    if gift_card.status != GiftCard.STATUS_ACTIVE:
+        raise serializers.ValidationError({"gift_card_code": "This gift card is not active."})
+    if gift_card.expiry_date and gift_card.expiry_date < now:
+        raise serializers.ValidationError({"gift_card_code": "This gift card has expired."})
+    if gift_card.region_id and gift_card.region_id != region.id:
+        raise serializers.ValidationError({"gift_card_code": "This gift card is not valid for this region."})
+    if str(gift_card.currency_code or "").strip().upper() != str(region.currency_code or "").strip().upper():
+        raise serializers.ValidationError({"gift_card_code": "This gift card currency does not match your region."})
+
+    pending_redemptions = GiftCardRedemption.objects.filter(
+        gift_card=gift_card,
+        status=GiftCardRedemption.STATUS_PENDING,
+    )
+    if lock_gift_card:
+        pending_redemptions = pending_redemptions.select_for_update()
+    pending_total = pending_redemptions.aggregate(total=Sum("requested_amount")).get("total") or Decimal("0.00")
+    available_balance = quantize_money(max(Decimal(gift_card.remaining_balance or 0) - Decimal(pending_total), Decimal("0.00")))
+    if available_balance <= 0:
+        raise serializers.ValidationError({"gift_card_code": "This gift card has no remaining balance."})
+
+    payable = quantize_money(max(Decimal(payable_total or 0), Decimal("0.00")))
+    if payable <= 0:
+        raise serializers.ValidationError({"gift_card_code": "This order has no payable amount for gift card redemption."})
+
+    redeem_amount = quantize_money(min(available_balance, payable))
+    if redeem_amount <= 0:
+        raise serializers.ValidationError({"gift_card_code": "This gift card cannot be applied to this order."})
+
+    return gift_card, redeem_amount, available_balance
+
+
 def _normalized_location(value):
     return str(value or "").strip().casefold()
 
@@ -472,6 +535,7 @@ def serialize_money(value):
 class CouponValidationSerializer(serializers.Serializer):
     region = serializers.SlugField()
     coupon_code = serializers.CharField(required=False, allow_blank=True, default="")
+    gift_card_code = serializers.CharField(required=False, allow_blank=True, default="")
     city = serializers.CharField(required=False, allow_blank=True, default="")
     area = serializers.CharField(required=False, allow_blank=True, default="")
     items = CheckoutItemInputSerializer(many=True)
@@ -511,10 +575,28 @@ class CouponValidationSerializer(serializers.Serializer):
             discount_total=discount_total,
             shipping_total=shipping_quote["shipping_total"],
         )
+        gift_card, gift_card_amount, gift_card_balance = validate_gift_card_for_checkout(
+            self.validated_data.get("gift_card_code", ""),
+            region,
+            totals["grand_total"],
+            lock_gift_card=False,
+        )
+        payable_total = quantize_money(max(totals["grand_total"] - gift_card_amount, Decimal("0.00")))
+
+        message = "Totals updated."
+        if coupon and gift_card:
+            message = "Coupon and gift card applied."
+        elif coupon:
+            message = "Coupon applied."
+        elif gift_card:
+            message = "Gift card applied."
 
         return {
             "valid": True,
             "coupon_code": coupon.code if coupon else "",
+            "gift_card_code": gift_card.code if gift_card else "",
+            "gift_card_amount": serialize_money(gift_card_amount),
+            "gift_card_balance": serialize_money(gift_card_balance),
             "discount_amount": serialize_money(totals["discount_total"]),
             "shipping_amount": serialize_money(totals["shipping_total"]),
             "shipping_fee": serialize_money(shipping_quote["shipping_total"]),
@@ -530,11 +612,15 @@ class CouponValidationSerializer(serializers.Serializer):
             "tax_label": totals["tax_label"],
             "tax_inclusive": totals["tax_inclusive"],
             "tax_applies_to_shipping": totals["tax_applies_to_shipping"],
-            "final_total": serialize_money(totals["grand_total"]),
+            "final_total": serialize_money(payable_total),
             "currency_code": region.currency_code,
             "tax_breakdown": build_tax_breakdown(totals),
-            "message": "Coupon applied." if coupon else "Totals updated.",
+            "message": message,
         }
+
+
+class GiftCardValidationSerializer(CouponValidationSerializer):
+    gift_card_code = serializers.CharField(required=True, allow_blank=False)
 
 
 class CheckoutCreateSerializer(serializers.Serializer):
@@ -547,6 +633,7 @@ class CheckoutCreateSerializer(serializers.Serializer):
     )
     notes = serializers.CharField(required=False, allow_blank=True)
     coupon_code = serializers.CharField(required=False, allow_blank=True)
+    gift_card_code = serializers.CharField(required=False, allow_blank=True)
     items = CheckoutItemInputSerializer(many=True)
 
     def validate_region(self, value):
@@ -607,6 +694,14 @@ class CheckoutCreateSerializer(serializers.Serializer):
             discount_total=discount_total,
             shipping_total=shipping_quote["shipping_total"],
         )
+        gift_card_code = validated_data.get("gift_card_code", "").strip().upper()
+        gift_card, gift_card_amount, _gift_card_balance = validate_gift_card_for_checkout(
+            gift_card_code,
+            region,
+            totals["grand_total"],
+            lock_gift_card=True,
+        )
+        payable_total = quantize_money(max(totals["grand_total"] - gift_card_amount, Decimal("0.00")))
 
         order = Order.objects.create(
             user=self.context.get("request").user
@@ -654,6 +749,8 @@ class CheckoutCreateSerializer(serializers.Serializer):
             },
             coupon_code=coupon_code,
             discount_total=totals["discount_total"],
+            gift_card_code=gift_card.code if gift_card else "",
+            gift_card_amount=gift_card_amount,
             subtotal=totals["subtotal"],
             shipping_fee=shipping_quote["shipping_total"],
             shipping_method=shipping_quote["shipping_method"],
@@ -668,7 +765,7 @@ class CheckoutCreateSerializer(serializers.Serializer):
             tax_applies_to_shipping=totals["tax_applies_to_shipping"],
             tax_label=totals["tax_label"],
             tax_breakdown=build_tax_breakdown(totals),
-            grand_total=totals["grand_total"],
+            grand_total=payable_total,
             currency_code=region.currency_code,
             sales_channel=Order.SALES_CHANNEL_ONLINE_STORE,
             payment_method=validated_data.get("payment_method", Order.PAYMENT_COD),
@@ -741,6 +838,7 @@ class CheckoutCreateSerializer(serializers.Serializer):
                         product,
                         region,
                         prepared_item["quantity"],
+                        commit_immediately=order.payment_method != Order.PAYMENT_ONLINE,
                     )
                 except StockError as exc:
                     raise serializers.ValidationError({"items": str(exc)})
@@ -772,6 +870,39 @@ class CheckoutCreateSerializer(serializers.Serializer):
         if coupon:
             coupon.used_count += 1
             coupon.save(update_fields=["used_count"])
+
+        if gift_card:
+            if order.payment_method == Order.PAYMENT_ONLINE:
+                GiftCardRedemption.objects.create(
+                    order=order,
+                    gift_card=gift_card,
+                    code_snapshot=gift_card.code,
+                    requested_amount=gift_card_amount,
+                    applied_amount=Decimal("0.00"),
+                    status=GiftCardRedemption.STATUS_PENDING,
+                )
+            else:
+                gift_card.remaining_balance = quantize_money(
+                    max(Decimal(gift_card.remaining_balance or 0) - gift_card_amount, Decimal("0.00"))
+                )
+                now = timezone.now()
+                update_fields = ["remaining_balance", "updated_at"]
+                if gift_card.remaining_balance <= 0:
+                    gift_card.status = GiftCard.STATUS_REDEEMED
+                    gift_card.redeemed_at = now
+                    request_user = self.context.get("request").user if self.context.get("request") else None
+                    gift_card.redeemed_by = request_user if request_user and request_user.is_authenticated else None
+                    update_fields.extend(["status", "redeemed_at", "redeemed_by"])
+                gift_card.save(update_fields=update_fields)
+                GiftCardRedemption.objects.create(
+                    order=order,
+                    gift_card=gift_card,
+                    code_snapshot=gift_card.code,
+                    requested_amount=gift_card_amount,
+                    applied_amount=gift_card_amount,
+                    status=GiftCardRedemption.STATUS_APPLIED,
+                    applied_at=now,
+                )
 
         PaymentTransaction.objects.create(
             order=order,

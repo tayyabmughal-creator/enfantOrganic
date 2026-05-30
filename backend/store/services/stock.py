@@ -1,8 +1,11 @@
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import F, Q, Sum
 
 from ..models import ProductStock, Warehouse
 from ..notifications import notify_admins_low_stock
+
+INVENTORY_MODE_RESERVED = "reserved_only"
+INVENTORY_MODE_DEDUCTED = "deducted_at_checkout"
 
 
 class StockError(Exception):
@@ -74,7 +77,7 @@ def filter_products_fulfillable_for_region(queryset, region):
         ProductStock.objects.filter(
             warehouse_id__in=warehouses,
             warehouse__active=True,
-            quantity__gt=0,
+            quantity__gt=F("reserved_quantity"),
         ).values_list("product_id", flat=True)
     )
     return queryset.filter(Q(track_inventory=False) | Q(pk__in=in_stock_ids))
@@ -105,12 +108,12 @@ def _notify_if_low_stock(stock):
 
 
 @transaction.atomic
-def reserve_and_deduct_stock_for_item(product, region, quantity):
+def reserve_and_deduct_stock_for_item(product, region, quantity, *, commit_immediately=True):
     """
-    Reserve and deduct inventory for a single product in a selected region.
+    Reserve inventory for a product and optionally commit deduction immediately.
 
     Returns allocation list:
-        [{"warehouse_id": 1, "warehouse_code": "sa-default", "quantity": 2}, ...]
+        [{"warehouse_id": 1, "warehouse_code": "sa-default", "quantity": 2, "inventory_mode": "..."}]
     """
     if not product.track_inventory:
         return []
@@ -135,6 +138,9 @@ def reserve_and_deduct_stock_for_item(product, region, quantity):
                 f"Only {product.stock_quantity} item(s) available for {product.name_en}.",
                 code="insufficient_stock",
             )
+        # Legacy fallback without warehouse rows cannot represent reservations.
+        # Keep historical behavior (immediate deduction) and rely on restore flow
+        # for failed/cancelled orders.
         product.stock_quantity = int(product.stock_quantity or 0) - required_qty
         product.save(update_fields=["stock_quantity"])
         allocations.append(
@@ -142,6 +148,7 @@ def reserve_and_deduct_stock_for_item(product, region, quantity):
                 "warehouse_id": None,
                 "warehouse_code": "legacy",
                 "quantity": required_qty,
+                "inventory_mode": INVENTORY_MODE_DEDUCTED,
             }
         )
         return allocations
@@ -160,7 +167,8 @@ def reserve_and_deduct_stock_for_item(product, region, quantity):
         take = min(int(stock.available_quantity), remaining)
         if take <= 0:
             continue
-        stock.quantity = int(stock.quantity or 0) - take
+        if commit_immediately:
+            stock.quantity = int(stock.quantity or 0) - take
         stock.reserved_quantity = int(stock.reserved_quantity or 0) + take
         stock.save(update_fields=["quantity", "reserved_quantity", "updated_at"])
         allocations.append(
@@ -168,6 +176,7 @@ def reserve_and_deduct_stock_for_item(product, region, quantity):
                 "warehouse_id": stock.warehouse_id,
                 "warehouse_code": stock.warehouse.code,
                 "quantity": take,
+                "inventory_mode": INVENTORY_MODE_DEDUCTED if commit_immediately else INVENTORY_MODE_RESERVED,
             }
         )
         _notify_if_low_stock(stock)
@@ -175,6 +184,99 @@ def reserve_and_deduct_stock_for_item(product, region, quantity):
 
     sync_product_stock_quantity(product)
     return allocations
+
+
+@transaction.atomic
+def commit_reserved_inventory_for_order(order):
+    """
+    Commit reserved inventory for an order exactly once.
+
+    This is used for online-payment orders after confirmed payment success.
+    """
+    committed_any = False
+    for item in order.items.select_related("product"):
+        if not item.product or not item.product.track_inventory:
+            continue
+
+        price_snapshot = item.price_snapshot or {}
+        if price_snapshot.get("inventory_committed") is True:
+            continue
+
+        allocations = price_snapshot.get("warehouse_allocations", [])
+        if not allocations:
+            continue
+
+        item_committed = False
+        for allocation in allocations:
+            warehouse_id = allocation.get("warehouse_id")
+            qty = int(allocation.get("quantity") or 0)
+            mode = str(allocation.get("inventory_mode") or INVENTORY_MODE_DEDUCTED).strip().lower()
+            if qty <= 0 or mode != INVENTORY_MODE_RESERVED or warehouse_id is None:
+                continue
+
+            stock = (
+                ProductStock.objects.select_for_update()
+                .filter(product=item.product, warehouse_id=warehouse_id)
+                .first()
+            )
+            if not stock:
+                continue
+
+            # Commit: move from reserved bucket into deducted quantity.
+            # Clamp with current reserved/quantity to stay safe under retries.
+            committed_qty = min(qty, int(stock.reserved_quantity or 0), int(stock.quantity or 0))
+            if committed_qty <= 0:
+                continue
+            stock.quantity = int(stock.quantity or 0) - committed_qty
+            stock.reserved_quantity = int(stock.reserved_quantity or 0) - committed_qty
+            stock.save(update_fields=["quantity", "reserved_quantity", "updated_at"])
+            _notify_if_low_stock(stock)
+            item_committed = True
+
+        if item_committed:
+            sync_product_stock_quantity(item.product)
+            next_snapshot = dict(price_snapshot)
+            next_snapshot["inventory_committed"] = True
+            item.price_snapshot = next_snapshot
+            item.save(update_fields=["price_snapshot"])
+            committed_any = True
+
+    return committed_any
+
+
+@transaction.atomic
+def reserve_inventory_for_online_retry(order):
+    """
+    Re-reserve stock for an online order that had its previous reservation released.
+    """
+    if not getattr(order, "inventory_released", False):
+        return False
+
+    reserved_any = False
+    for item in order.items.select_related("product"):
+        if not item.product or not item.product.track_inventory:
+            continue
+
+        allocations = reserve_and_deduct_stock_for_item(
+            item.product,
+            order.region,
+            item.quantity,
+            commit_immediately=False,
+        )
+        if not allocations:
+            continue
+
+        snapshot = dict(item.price_snapshot or {})
+        snapshot["warehouse_allocations"] = allocations
+        snapshot["inventory_committed"] = False
+        item.price_snapshot = snapshot
+        item.save(update_fields=["price_snapshot"])
+        reserved_any = True
+
+    if reserved_any:
+        order.inventory_released = False
+        order.save(update_fields=["inventory_released", "updated_at"])
+    return reserved_any
 
 
 @transaction.atomic
@@ -192,9 +294,11 @@ def restore_order_inventory(order, *, reason=""):
             for allocation in allocations:
                 warehouse_id = allocation.get("warehouse_id")
                 qty = int(allocation.get("quantity") or 0)
+                mode = str(allocation.get("inventory_mode") or INVENTORY_MODE_DEDUCTED).strip().lower()
                 if qty <= 0:
                     continue
                 if warehouse_id is None:
+                    # Legacy/non-warehouse fallback always deducts immediately.
                     item.product.stock_quantity = int(item.product.stock_quantity or 0) + qty
                     item.product.save(update_fields=["stock_quantity"])
                     continue
@@ -205,8 +309,11 @@ def restore_order_inventory(order, *, reason=""):
                 )
                 if not stock:
                     continue
-                stock.quantity = int(stock.quantity or 0) + qty
-                stock.reserved_quantity = max(int(stock.reserved_quantity or 0) - qty, 0)
+                if mode == INVENTORY_MODE_RESERVED:
+                    stock.reserved_quantity = max(int(stock.reserved_quantity or 0) - qty, 0)
+                else:
+                    stock.quantity = int(stock.quantity or 0) + qty
+                    stock.reserved_quantity = max(int(stock.reserved_quantity or 0) - qty, 0)
                 stock.save(update_fields=["quantity", "reserved_quantity", "updated_at"])
             sync_product_stock_quantity(item.product)
         else:

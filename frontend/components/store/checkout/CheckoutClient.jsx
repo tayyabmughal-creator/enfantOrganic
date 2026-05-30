@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useStore } from "@/components/store/cart/StoreProvider";
 import Icon from "@/components/icons/Icon";
 import { buildAnalyticsItems, pushDataLayerEvent } from "@/lib/analytics";
+import { trackEvent } from "@/lib/eventTracking";
 import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
 import { API_BASE_URL as CONFIG_API_BASE_URL, CUSTOMER_TOKEN_KEY, safeRedirectUrl } from "@/lib/config";
 import { readJson } from "@/lib/http";
@@ -293,17 +294,37 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     lng: "",
     location_notes: "",
     coupon_code: "",
+    gift_card_code: "",
     notes: "",
     payment_method: "cod",
   });
 
   const [submitting, setSubmitting] = useState(false);
   const [validatingCoupon, setValidatingCoupon] = useState(false);
+  const [validatingGiftCard, setValidatingGiftCard] = useState(false);
   const [couponPreview, setCouponPreview] = useState(null);
   const [couponMessage, setCouponMessage] = useState("");
+  const [giftCardMessage, setGiftCardMessage] = useState("");
   const [error, setError] = useState("");
+  const [paymentRecovery, setPaymentRecovery] = useState(null);
   const [applePayAvailable, setApplePayAvailable] = useState(false);
 
+  useEffect(() => {
+    if (!PAYMOB_APPLE_PAY_INTEGRATION_ID) return;
+    try {
+      setApplePayAvailable(
+        Boolean(typeof window !== "undefined" && window.ApplePaySession && window.ApplePaySession.canMakePayments()),
+      );
+    } catch {
+      setApplePayAvailable(false);
+    }
+  }, []);
+
+  // Record a checkout_initiated event once when the checkout page mounts.
+  useEffect(() => {
+    trackEvent("checkout_initiated", { regionCode: region });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [savedAddresses, setSavedAddresses] = useState([]);
   const [selectedAddressId, setSelectedAddressId] = useState("");
   const [loadingAddresses, setLoadingAddresses] = useState(false);
@@ -594,6 +615,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         ...mapped,
         email: current.email,
         coupon_code: current.coupon_code,
+        gift_card_code: current.gift_card_code,
         notes: current.notes,
         payment_method: current.payment_method,
         sms_opt_in: current.sms_opt_in,
@@ -612,6 +634,9 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     setForm((current) => ({ ...current, [name]: nextValue }));
     if (name === "coupon_code") {
       setCouponMessage("");
+    }
+    if (name === "gift_card_code") {
+      setGiftCardMessage("");
     }
   }, []);
 
@@ -653,8 +678,9 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
   );
 
   const runCouponValidation = useCallback(
-    async ({ couponCode = "", city = "", area = "", silent = false } = {}) => {
+    async ({ couponCode = "", giftCardCode = "", city = "", area = "", silent = false } = {}) => {
       const normalizedCouponCode = String(couponCode || "").trim();
+      const normalizedGiftCardCode = String(giftCardCode || "").trim();
       if (!cartItems.length) {
         if (!silent) {
           setCouponMessage(isAr ? "أضف منتجات قبل تطبيق الكوبون." : "Add products before applying a coupon.");
@@ -672,6 +698,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
           body: JSON.stringify({
             region,
             coupon_code: normalizedCouponCode,
+            gift_card_code: normalizedGiftCardCode,
             city,
             area,
             items: checkoutItemsPayload(),
@@ -717,6 +744,10 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
           Object.prototype.hasOwnProperty.call(options, "couponCode")
             ? options.couponCode
             : form.coupon_code,
+        giftCardCode:
+          Object.prototype.hasOwnProperty.call(options, "giftCardCode")
+            ? options.giftCardCode
+            : form.gift_card_code,
         city:
           Object.prototype.hasOwnProperty.call(options, "city")
             ? options.city
@@ -726,7 +757,82 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
             ? options.area
             : form.area,
       }),
-    [form.area, form.city, form.coupon_code, runCouponValidation],
+    [form.area, form.city, form.coupon_code, form.gift_card_code, runCouponValidation],
+  );
+
+  const runGiftCardValidation = useCallback(
+    async ({ couponCode = "", giftCardCode = "", city = "", area = "" } = {}) => {
+      const normalizedCouponCode = String(couponCode || "").trim();
+      const normalizedGiftCardCode = String(giftCardCode || "").trim();
+      if (!normalizedGiftCardCode) {
+        setGiftCardMessage(
+          isAr ? "أدخل كود بطاقة الهدية أولاً." : "Enter a gift card code first.",
+        );
+        return false;
+      }
+      if (!cartItems.length) {
+        setGiftCardMessage(
+          isAr ? "أضف منتجات قبل تطبيق بطاقة الهدية." : "Add products before applying a gift card.",
+        );
+        return false;
+      }
+      setValidatingGiftCard(true);
+      setGiftCardMessage("");
+      try {
+        const response = await fetch(`${API_BASE_URL}/gift-cards/validate/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            region,
+            coupon_code: normalizedCouponCode,
+            gift_card_code: normalizedGiftCardCode,
+            city,
+            area,
+            items: checkoutItemsPayload(),
+          }),
+        });
+        const data = await readJson(response, { isAr });
+        if (!response.ok || !data.valid) {
+          setCouponPreview(null);
+          setGiftCardMessage(
+            data.error || data.message || (isAr ? "بطاقة الهدية غير صالحة." : "Gift card is not valid."),
+          );
+          return false;
+        }
+        setCouponPreview(data);
+        setGiftCardMessage(data.message || (isAr ? "تم تطبيق بطاقة الهدية." : "Gift card applied."));
+        return true;
+      } catch (err) {
+        setGiftCardMessage(err.message || (isAr ? "تعذر التحقق من بطاقة الهدية." : "Unable to validate gift card."));
+        return false;
+      } finally {
+        setValidatingGiftCard(false);
+      }
+    },
+    [cartItems.length, checkoutItemsPayload, isAr, region],
+  );
+
+  const validateGiftCardCode = useCallback(
+    async (options = {}) =>
+      runGiftCardValidation({
+        couponCode:
+          Object.prototype.hasOwnProperty.call(options, "couponCode")
+            ? options.couponCode
+            : form.coupon_code,
+        giftCardCode:
+          Object.prototype.hasOwnProperty.call(options, "giftCardCode")
+            ? options.giftCardCode
+            : form.gift_card_code,
+        city:
+          Object.prototype.hasOwnProperty.call(options, "city")
+            ? options.city
+            : form.city,
+        area:
+          Object.prototype.hasOwnProperty.call(options, "area")
+            ? options.area
+            : form.area,
+      }),
+    [form.area, form.city, form.coupon_code, form.gift_card_code, runGiftCardValidation],
   );
 
   useEffect(() => {
@@ -737,8 +843,9 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     validateCouponCode({
       silent: true,
       couponCode: form.coupon_code,
+      giftCardCode: form.gift_card_code,
     });
-  }, [cartItems.length, form.coupon_code, locale, region, subtotal, validateCouponCode]);
+  }, [cartItems.length, form.coupon_code, form.gift_card_code, locale, region, subtotal, validateCouponCode]);
 
   useEffect(() => {
     let isMounted = true;
@@ -978,7 +1085,9 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
 
   async function submitOrder(opts = {}) {
     const applePayExpress = opts.applePay === true;
+    let createdOrderContext = null;
     setError("");
+    setPaymentRecovery(null);
     if (!cartItems.length) {
       setError(isAr ? "سلة التسوق فارغة." : "Your cart is empty.");
       return;
@@ -1004,8 +1113,8 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     }
     setSubmitting(true);
     try {
-      const couponIsValid = await validateCouponCode();
-      if (!couponIsValid) {
+      const pricingIsValid = await validateCouponCode();
+      if (!pricingIsValid) {
         setSubmitting(false);
         return;
       }
@@ -1037,6 +1146,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         },
         payment_method: applePayExpress ? "online" : form.payment_method,
         coupon_code: form.coupon_code,
+        gift_card_code: form.gift_card_code,
         notes: form.notes,
         items: checkoutItemsPayload(),
       };
@@ -1082,8 +1192,11 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
       const data = await readJson(response, { isAr });
       if (!response.ok) throw new Error(data.detail || JSON.stringify(data));
       saveOrderLookupToken(data.order_number, data.lookup_token);
-
-      clearCart();
+      createdOrderContext = {
+        orderNumber: data.order_number,
+        lookupToken: data.lookup_token || "",
+        provider: effectiveOnlineProvider,
+      };
 
       if (applePayExpress || form.payment_method === "online") {
         const initiateBody = {
@@ -1099,21 +1212,41 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
           body: JSON.stringify(initiateBody),
         });
         const payData = await readJson(payRes, { isAr });
-        if (!payRes.ok) throw new Error(payData.error || "Payment initiation failed. Please try again.");
+        if (!payRes.ok) {
+          setPaymentRecovery({
+            orderNumber: data.order_number,
+            lookupToken: data.lookup_token || "",
+            provider: effectiveOnlineProvider,
+          });
+          setError(
+            payData.error ||
+              (isAr
+                ? `تعذر بدء الدفع الآن. تم حفظ الطلب ${data.order_number} ويمكنك إعادة المحاولة.`
+                : `Unable to start payment right now. Order ${data.order_number} is saved and can be retried.`),
+          );
+          return;
+        }
         // Validate redirect against the trusted payment-origin allowlist.
         const candidate = payData.redirect_url || payData.iframe_url || "";
         const safe = safeRedirectUrl(candidate);
         if (!safe) {
-          throw new Error(
+          setPaymentRecovery({
+            orderNumber: data.order_number,
+            lookupToken: data.lookup_token || "",
+            provider: effectiveOnlineProvider,
+          });
+          setError(
             isAr
-              ? "وجهة الدفع غير موثوقة. يرجى التواصل مع الدعم."
-              : "Untrusted payment redirect. Please contact support.",
+              ? `وجهة الدفع غير موثوقة. تم حفظ الطلب ${data.order_number} ويمكنك إعادة المحاولة.`
+              : `Untrusted payment redirect. Order ${data.order_number} is saved and can be retried.`,
           );
+          return;
         }
         window.location.href = safe;
         return;
       }
 
+      clearCart();
       // Prefer the per-order lookup_token returned by /checkout/ (unguessable);
       // fall back to email_or_phone for older API responses that don't yet
       // include the token.
@@ -1122,7 +1255,17 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         : `&email_or_phone=${encodeURIComponent(form.email || form.phone)}`;
       router.push(`${buildStorePath(locale, `/thank-you/${data.order_number}`, region)}${trackingParam}`);
     } catch (err) {
-      setError(err.message || (isAr ? "حدث خطأ. حاول مرة أخرى." : "Something went wrong. Please try again."));
+      if (createdOrderContext) {
+        setPaymentRecovery(createdOrderContext);
+      }
+      const fallbackMessage = createdOrderContext
+        ? (
+          isAr
+            ? `تعذر بدء الدفع الآن. تم حفظ الطلب ${createdOrderContext.orderNumber} ويمكنك إعادة المحاولة.`
+            : `Unable to start payment right now. Order ${createdOrderContext.orderNumber} is saved and can be retried.`
+        )
+        : (isAr ? "حدث خطأ. حاول مرة أخرى." : "Something went wrong. Please try again.");
+      setError(err.message || fallbackMessage);
     } finally {
       setSubmitting(false);
     }
@@ -1540,6 +1683,16 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
               ) : null}
 
               {error ? <p className="form-error">{error}</p> : null}
+              {paymentRecovery ? (
+                <div style={{ display: "grid", gap: "8px" }}>
+                  <a
+                    href={`${buildStorePath(locale, "/payment/failed", region)}&order_number=${encodeURIComponent(paymentRecovery.orderNumber)}${paymentRecovery.lookupToken ? `&lookup_token=${encodeURIComponent(paymentRecovery.lookupToken)}` : ""}${paymentRecovery.provider ? `&provider=${encodeURIComponent(paymentRecovery.provider)}` : ""}`}
+                    className="secondary-action"
+                  >
+                    {isAr ? "إعادة محاولة الدفع لهذا الطلب" : "Retry payment for this order"}
+                  </a>
+                </div>
+              ) : null}
 
               <button
                 type="submit"
@@ -1589,6 +1742,14 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                     -{previewMoney(couponPreview.discount_amount)}
                   </strong>
                 </div>
+                {Number(couponPreview.gift_card_amount || 0) > 0 ? (
+                  <div className="subtotal-row">
+                    <span>{isAr ? "بطاقة هدية" : "Gift card"}</span>
+                    <strong className="summary-amount--discount">
+                      -{previewMoney(couponPreview.gift_card_amount)}
+                    </strong>
+                  </div>
+                ) : null}
                 <div className="subtotal-row">
                   <span>{t.shipping}</span>
                   <strong>
@@ -1666,6 +1827,40 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                   <p className={couponPreview?.valid ? "form-success" : "form-error"}>
                     {couponMessage}
                   </p>
+                ) : null}
+              </div>
+              <div className="coupon-field">
+                <label htmlFor="gift_card_code_aside">{isAr ? "بطاقة هدية" : "Gift card"}</label>
+                <div className="coupon-row">
+                  <input
+                    id="gift_card_code_aside"
+                    name="gift_card_code"
+                    value={form.gift_card_code}
+                    onChange={updateField}
+                    placeholder={isAr ? "كود بطاقة الهدية" : "Gift card code"}
+                    className="field-ltr"
+                  />
+                  <button type="button" onClick={validateGiftCardCode} disabled={validatingGiftCard}>
+                    {validatingGiftCard ? "..." : isAr ? "تطبيق" : "Apply"}
+                  </button>
+                </div>
+                {giftCardMessage ? (
+                  <p className={couponPreview?.valid ? "form-success" : "form-error"}>
+                    {giftCardMessage}
+                  </p>
+                ) : null}
+                {form.gift_card_code ? (
+                  <button
+                    type="button"
+                    className="checkout-inline-clear"
+                    onClick={() => {
+                      setForm((current) => ({ ...current, gift_card_code: "" }));
+                      setGiftCardMessage("");
+                      void validateCouponCode({ silent: true, giftCardCode: "" });
+                    }}
+                  >
+                    {isAr ? "إزالة بطاقة الهدية" : "Remove gift card"}
+                  </button>
                 ) : null}
               </div>
             </div>

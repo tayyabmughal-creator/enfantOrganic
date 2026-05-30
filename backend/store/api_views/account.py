@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 from ..models import CustomerAddress, NotificationLog, Order, Product, PushDevice, Region, ReturnRequest, Review
 from ..notifications import queue_order_notification_event
 from ..serializers import (
+    BackInStockRequestSerializer,
     CustomerReturnRequestSerializer,
     CustomerAddressSerializer,
     NewsletterSubscriptionSerializer,
@@ -298,3 +299,15 @@ class NewsletterSubscriptionView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response({"detail": "Newsletter subscription saved."}, status=status.HTTP_201_CREATED)
+
+
+class BackInStockRequestCreateView(APIView):
+    permission_classes = [permissions.AllowAny]
+    serializer_class = BackInStockRequestSerializer
+    throttle_scope = "checkout"
+
+    def post(self, request):
+        serializer = BackInStockRequestSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({"detail": "We'll let you know when this product is back in stock."}, status=status.HTTP_201_CREATED)

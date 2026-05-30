@@ -33,15 +33,19 @@ function fmtPct(v, decimals = 1) {
   return `${Number(v || 0).toFixed(decimals)}%`;
 }
 
-function fmtDelta(val) {
+function fmtDelta(val, label = "vs last period") {
   if (val === null || val === undefined) {
-    return { text: "— vs last period", up: null };
+    return { text: `— ${label}`, up: null };
   }
   const n = Number(val);
   return {
-    text: `${n >= 0 ? "+" : ""}${n.toFixed(1)}% vs last period`,
+    text: `${n >= 0 ? "+" : ""}${n.toFixed(1)}% ${label}`,
     up: n >= 0,
   };
+}
+
+function stripDeltaContext(text = "") {
+  return String(text).replace(/\s+vs\s+.*$/i, "");
 }
 
 // Mini SVG sparkline for KPI cards. Pure visual — accepts numeric values, optional negative tint.
@@ -168,15 +172,16 @@ export default function DashboardView({ data, filters, onFiltersChange, onRefres
   const conversion = Number(data?.payment_success_rate ?? data?.conversion_rate ?? 0);
   const abandonment = Number(data?.abandonment_rate || 0);
   const repeat = Number(data?.repeat_rate || 0);
+  const deltaLabel = String(data?.delta_label || "vs last period");
 
-  const revDelta = fmtDelta(data?.revenue_delta);
-  const ordDelta = fmtDelta(data?.orders_delta);
-  const cusDelta = fmtDelta(data?.customers_delta);
-  const abnDelta = fmtDelta(data?.abandonment_delta ?? null);
+  const revDelta = fmtDelta(data?.revenue_delta, deltaLabel);
+  const ordDelta = fmtDelta(data?.orders_delta, deltaLabel);
+  const cusDelta = fmtDelta(data?.customers_delta, deltaLabel);
+  const abnDelta = fmtDelta(data?.abandonment_delta ?? null, deltaLabel);
   // For non-deltaed metrics we don't fake a number — fmtDelta(null) returns the "—" string.
-  const avgDelta = fmtDelta(data?.avg_order_value_delta ?? null);
-  const convDelta = fmtDelta(data?.payment_success_delta ?? data?.conversion_delta ?? null);
-  const repDelta = fmtDelta(data?.repeat_delta ?? null);
+  const avgDelta = fmtDelta(data?.avg_order_value_delta ?? null, deltaLabel);
+  const convDelta = fmtDelta(data?.payment_success_delta ?? data?.conversion_delta ?? null, deltaLabel);
+  const repDelta = fmtDelta(data?.repeat_delta ?? null, deltaLabel);
 
   const revSeries = (data?.revenue_trend || []).map((p) => Number(p.value || 0));
   // Reuse the revenue trend as a proxy spark for both revenue cards. Orders/customers
@@ -309,8 +314,8 @@ export default function DashboardView({ data, filters, onFiltersChange, onRefres
         revDelta.up === null
           ? `Total revenue is ${fmtMoney(revenue, currency)}.`
           : revDelta.up
-          ? `Revenue is up ${revDelta.text.replace(" vs last period", "")} vs last month.`
-          : `Revenue is down ${revDelta.text.replace(" vs last period", "").replace("+", "")} vs last month.`,
+          ? `Revenue is up ${stripDeltaContext(revDelta.text)} ${deltaLabel.toLowerCase()}.`
+          : `Revenue is down ${stripDeltaContext(revDelta.text).replace("+", "")} ${deltaLabel.toLowerCase()}.`,
       tone: revDelta.up === false ? "warn" : "ok",
     },
     {
@@ -467,6 +472,11 @@ export default function DashboardView({ data, filters, onFiltersChange, onRefres
               {formatStepDelta(overallConversionDelta)}
             </span>
           </div>
+          {conversionBreakdown?.note ? (
+            <p className="admin-chart-note" style={{ margin: "0 0 10px", color: "var(--text-soft)", fontSize: "0.82rem" }}>
+              {conversionBreakdown.note}
+            </p>
+          ) : null}
           <div className="admin-conv-grid">
             {conversionSteps.map((step, i) => (
               <article key={step.key || i} className="admin-conv-col">

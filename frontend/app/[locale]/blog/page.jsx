@@ -37,9 +37,14 @@ export default async function BlogIndexPage({ params, searchParams }) {
         </div>
 
         {posts.length === 0 ? (
-          <p style={{ color: "var(--text-soft)" }}>
-            {isAr ? "لا توجد مقالات بعد." : "No posts yet."}
-          </p>
+          <div className="store-empty-state">
+            <strong>{isAr ? "مقالات جديدة قريبًا" : "Fresh articles are coming soon"}</strong>
+            <p>
+              {isAr
+                ? "نعمل على إضافة محتوى جديد. يمكنك متابعة التسوق والعودة لاحقًا."
+                : "We are preparing new content. You can continue shopping and check back soon."}
+            </p>
+          </div>
         ) : (
           <div className="blog-grid">
             {posts.map((post) => (

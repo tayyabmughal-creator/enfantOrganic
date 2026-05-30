@@ -1,4 +1,5 @@
 import { uiText } from "@/lib/storefront";
+import { resolveNavigationHref } from "@/lib/navigationLinks";
 
 const SOCIAL_ICONS = {
   facebook_url:  { label: "Facebook",  svg: "M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" },
@@ -30,6 +31,7 @@ export default function Footer({ locale, navigation }) {
   const contactPhone = s.contact_phone || navigation.current_region?.contact_phone;
   const contactEmail = s.contact_email || navigation.current_region?.contact_email;
   const address = s.address || navigation.current_region?.address;
+  const region = navigation.current_region?.code || "om";
 
   const socialLinks = Object.entries(SOCIAL_ICONS).filter(([key]) => s[key]);
 
@@ -58,7 +60,10 @@ export default function Footer({ locale, navigation }) {
           <h5>{locale === "en" ? "Policies & Guidelines" : "السياسات والإرشادات"}</h5>
           <div className="footer-links">
             {s.policy_links.map((item) => (
-              <a key={item.label} href={item.href}>
+              <a
+                key={item.label}
+                href={resolveNavigationHref(item.href, { locale, region })}
+              >
                 {item.label}
               </a>
             ))}

@@ -607,7 +607,7 @@ class ProductStock(models.Model):
 
     @property
     def available_quantity(self):
-        return max(int(self.quantity or 0), 0)
+        return max(int(self.quantity or 0) - int(self.reserved_quantity or 0), 0)
 
     @property
     def is_low_stock(self):
@@ -675,3 +675,44 @@ class BlogPost(OrderedModel):
 
     def __str__(self):
         return self.title_en
+
+
+class CmsPage(models.Model):
+    slug = models.SlugField(max_length=120)
+    title_en = models.CharField(max_length=255, default="")
+    title_ar = models.CharField(max_length=255, default="")
+    body_en = models.TextField(default="")
+    body_ar = models.TextField(default="")
+    seo_title_en = models.CharField(max_length=255, blank=True, default="")
+    seo_title_ar = models.CharField(max_length=255, blank=True, default="")
+    seo_description_en = models.TextField(blank=True, default="")
+    seo_description_ar = models.TextField(blank=True, default="")
+    is_published = models.BooleanField(default=False, db_index=True)
+    region = models.ForeignKey(
+        Region,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="cms_pages",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("slug", "region__sort_order", "region__id", "-updated_at", "id")
+        constraints = (
+            models.UniqueConstraint(
+                fields=("slug",),
+                condition=models.Q(region__isnull=True),
+                name="uniq_cms_page_slug_global",
+            ),
+            models.UniqueConstraint(
+                fields=("slug", "region"),
+                condition=models.Q(region__isnull=False),
+                name="uniq_cms_page_slug_region",
+            ),
+        )
+
+    def __str__(self):
+        suffix = self.region.code.upper() if self.region_id else "GLOBAL"
+        return f"{self.slug} ({suffix})"

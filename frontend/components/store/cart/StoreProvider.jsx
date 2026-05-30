@@ -6,6 +6,7 @@ import CartDrawer from "@/components/store/cart/CartDrawer";
 import QuickViewModal from "@/components/store/product/QuickViewModal";
 import { buildAnalyticsItem, pushDataLayerEvent } from "@/lib/analytics";
 import { API_BASE_URL as CONFIG_API_BASE_URL } from "@/lib/config";
+import { trackEvent } from "@/lib/eventTracking";
 
 const CART_STORAGE_KEY = "enfant-organics-cart";
 const API_BASE_URL = CONFIG_API_BASE_URL;
@@ -189,6 +190,11 @@ export default function StoreProvider({ children }) {
             },
           });
         }
+        // Record a real add_to_cart event for admin funnel analytics.
+        trackEvent("add_to_cart", {
+          productSlug: product.slug,
+          regionCode: product.pricing?.region_code || "",
+        });
       },
       updateQuantity: (lineId, nextQuantity) => {
         const existingItem = cartItems.find((item) => item.lineId === lineId);

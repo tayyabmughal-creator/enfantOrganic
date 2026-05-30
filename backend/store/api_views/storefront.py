@@ -1,11 +1,16 @@
+from django.db.models import DecimalField, IntegerField, OuterRef, Q, Subquery, Sum, Value
+from django.db.models.functions import Coalesce
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from ..models import (
     BlogPost,
+    CmsPage,
     Category,
     HeroPromoCard,
     InstagramPost,
+    Order,
+    OrderItem,
     Region,
     Tag,
     Testimonial,
@@ -14,6 +19,7 @@ from ..serializers import (
     BlogPostDetailSerializer,
     BlogPostSerializer,
     CategorySerializer,
+    CmsPageSerializer,
     HeroPromoCardSerializer,
     InstagramPostSerializer,
     ProductCardSerializer,
@@ -33,6 +39,38 @@ def products_available_for_region(queryset, region):
         return queryset.none()
     queryset = queryset.filter(prices__region=region)
     return filter_products_fulfillable_for_region(queryset, region).distinct()
+
+
+BEST_SELLER_EXCLUDED_STATUSES = (
+    Order.STATUS_CANCELLED,
+    Order.STATUS_FAILED,
+    Order.STATUS_REFUNDED,
+)
+
+
+def apply_best_seller_ranking(queryset):
+    paid_items = (
+        OrderItem.objects.filter(
+            product_id=OuterRef("pk"),
+            order__payment_status=Order.PAYMENT_PAID,
+        )
+        .exclude(order__status__in=BEST_SELLER_EXCLUDED_STATUSES)
+        .values("product_id")
+    )
+    units_subquery = paid_items.annotate(total_units=Coalesce(Sum("quantity"), 0)).values("total_units")[:1]
+    revenue_subquery = paid_items.annotate(
+        total_revenue=Coalesce(
+            Sum("line_total"),
+            Value(0, output_field=DecimalField(max_digits=12, decimal_places=2)),
+        )
+    ).values("total_revenue")[:1]
+    return queryset.annotate(
+        best_seller_units=Coalesce(Subquery(units_subquery, output_field=IntegerField()), Value(0)),
+        best_seller_revenue=Coalesce(
+            Subquery(revenue_subquery, output_field=DecimalField(max_digits=12, decimal_places=2)),
+            Value(0, output_field=DecimalField(max_digits=12, decimal_places=2)),
+        ),
+    )
 
 
 class NavigationView(StorefrontContextMixin, APIView):
@@ -264,6 +302,28 @@ class BlogDetailView(StorefrontContextMixin, APIView):
         return Response(BlogPostDetailSerializer(post, context=context).data)
 
 
+class CmsPageDetailView(StorefrontContextMixin, APIView):
+    serializer_class = CmsPageSerializer
+
+    def get(self, request, slug):
+        context = self.get_serializer_context()
+        region = context["region"]
+        page = (
+            CmsPage.objects.filter(slug=slug, is_published=True, region=region)
+            .select_related("region")
+            .first()
+        )
+        if not page:
+            page = (
+                CmsPage.objects.filter(slug=slug, is_published=True, region__isnull=True)
+                .select_related("region")
+                .first()
+            )
+        if not page:
+            return Response({"detail": "Not found."}, status=404)
+        return Response(CmsPageSerializer(page, context=context).data)
+
+
 def apply_catalog_filters(queryset, request, region):
     search = request.query_params.get("search", "").strip()
     category = request.query_params.get("category", "").strip()
@@ -271,7 +331,14 @@ def apply_catalog_filters(queryset, request, region):
     tag = request.query_params.get("tag", "").strip()
     min_price = request.query_params.get("min_price", "").strip()
     max_price = request.query_params.get("max_price", "").strip()
+    availability = request.query_params.get("availability", "").strip().lower()
+    rating_min = request.query_params.get("rating_min", "").strip()
     ordering = request.query_params.get("ordering", "").strip()
+    collection = request.query_params.get("collection", "").strip().lower().replace("-", "_")
+    only_new_arrivals = request.query_params.get("new_arrivals", "").strip().lower() in {"1", "true", "yes"}
+    only_best_sellers = request.query_params.get("best_sellers", "").strip().lower() in {"1", "true", "yes"}
+    ordering_best_sellers = ordering in {"best_sellers", "best-sellers", "bestsellers"}
+    use_best_seller_ranking = collection == "best_sellers" or only_best_sellers or ordering_best_sellers
 
     queryset = products_available_for_region(queryset, region)
 
@@ -287,12 +354,31 @@ def apply_catalog_filters(queryset, request, region):
         queryset = queryset.filter(prices__region=region, prices__price__gte=min_price)
     if max_price:
         queryset = queryset.filter(prices__region=region, prices__price__lte=max_price)
+    if rating_min:
+        try:
+            queryset = queryset.filter(rating__gte=float(rating_min))
+        except (TypeError, ValueError):
+            pass
+    if availability == "in_stock":
+        queryset = queryset.filter(Q(track_inventory=False) | Q(stock_quantity__gt=0))
+    elif availability == "out_of_stock":
+        queryset = queryset.filter(track_inventory=True, stock_quantity__lte=0)
+    if collection == "new_arrivals" or only_new_arrivals:
+        queryset = queryset.filter(show_in_new_arrivals=True)
+    if use_best_seller_ranking:
+        queryset = apply_best_seller_ranking(queryset)
+        if collection == "best_sellers" or only_best_sellers:
+            queryset = queryset.filter(best_seller_units__gt=0)
 
-    if ordering == "price_asc":
+    if ordering in {"price_asc", "price-asc", "price_low_to_high"}:
         queryset = queryset.order_by("prices__price")
-    elif ordering == "price_desc":
+    elif ordering in {"price_desc", "price-desc", "price_high_to_low"}:
         queryset = queryset.order_by("-prices__price")
-    elif ordering == "newest":
+    elif ordering in {"newest", "-id"}:
         queryset = queryset.order_by("-id")
+    elif ordering in {"rating", "rating_desc", "-rating"}:
+        queryset = queryset.order_by("-rating", "-review_count", "-id")
+    elif use_best_seller_ranking:
+        queryset = queryset.order_by("-best_seller_units", "-best_seller_revenue", "-id")
 
     return queryset.distinct()

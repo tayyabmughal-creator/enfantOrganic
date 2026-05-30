@@ -1,11 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import Icon from "@/components/icons/Icon";
 import { useStore } from "@/components/store/cart/StoreProvider";
 import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
+import {
+  addWishlistProduct,
+  ensureWishlistSlugs,
+  hasWishlistSession,
+  removeWishlistProduct,
+  subscribeWishlist,
+} from "@/lib/wishlist";
 
 const PRODUCT_CARD_IMAGE_MAP = {
   "/enfant/complete-care-cream.jpg": "/enfant/product-cards/complete-care-cream-card.jpg",
@@ -26,14 +33,18 @@ function resolveProductCardImage(image) {
 export default function ProductCard({ locale, product, region }) {
   const { addItem, openCart, openQuickView } = useStore();
   const t = uiText(locale);
-  const [wishToast, setWishToast] = useState(false);
+  const [wishToast, setWishToast] = useState("");
+  const [isWishlisted, setIsWishlisted] = useState(false);
+  const [isWishSubmitting, setIsWishSubmitting] = useState(false);
   const hasOptions = (product.option_groups || []).some((group) => group.values.length > 1);
   const primaryImage = resolveProductCardImage(product.image);
   const hoverImage = product.hover_image ? resolveProductCardImage(product.hover_image) : "";
   const rating = Number(product.rating || 0);
   const reviewLabel = locale === "ar" ? "تقييم" : "reviews";
   const saveLabel = locale === "ar" ? "وفر" : "Save";
-  const wishlistLabel = locale === "ar" ? "إضافة إلى المفضلة" : "Add to wishlist";
+  const wishlistLabel = isWishlisted
+    ? (locale === "ar" ? "إزالة من المفضلة" : "Remove from wishlist")
+    : (locale === "ar" ? "إضافة إلى المفضلة" : "Add to wishlist");
   const featurePills = [
     ...(product.tags || []).map((tag) => tag.name).filter(Boolean),
     product.unit,
@@ -51,6 +62,82 @@ export default function ProductCard({ locale, product, region }) {
 
     addItem({ ...product, locale }, 1, {});
     openCart();
+  };
+
+  useEffect(() => {
+    let active = true;
+
+    if (!hasWishlistSession()) {
+      setIsWishlisted(false);
+      return () => {};
+    }
+
+    ensureWishlistSlugs({ locale, region })
+      .then((slugs) => {
+        if (!active) return;
+        setIsWishlisted(slugs.has(product.slug));
+      })
+      .catch(() => {
+        if (!active) return;
+        setIsWishlisted(false);
+      });
+
+    const unsubscribe = subscribeWishlist((detail) => {
+      if (!active) return;
+      if (detail?.region && detail.region !== region) return;
+      const slugs = Array.isArray(detail?.slugs) ? detail.slugs : [];
+      setIsWishlisted(slugs.includes(product.slug));
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [locale, product.slug, region]);
+
+  const showWishlistToast = (message) => {
+    setWishToast(message);
+    setTimeout(() => setWishToast(""), 2200);
+  };
+
+  const handleWishlistToggle = async () => {
+    if (isWishSubmitting) return;
+
+    if (!hasWishlistSession()) {
+      showWishlistToast(
+        locale === "ar"
+          ? "يرجى تسجيل الدخول لحفظ المنتجات في المفضلة."
+          : "Please sign in to save items to your wishlist.",
+      );
+      return;
+    }
+
+    setIsWishSubmitting(true);
+    try {
+      if (isWishlisted) {
+        await removeWishlistProduct(product.slug, { locale, region });
+        showWishlistToast(locale === "ar" ? "تمت إزالة المنتج من المفضلة." : "Removed from wishlist.");
+      } else {
+        await addWishlistProduct(product.slug, { locale, region });
+        showWishlistToast(locale === "ar" ? "تم حفظ المنتج في المفضلة." : "Saved to wishlist.");
+      }
+    } catch (error) {
+      if (error?.code === "AUTH_REQUIRED") {
+        showWishlistToast(
+          locale === "ar"
+            ? "يرجى تسجيل الدخول لحفظ المنتجات في المفضلة."
+            : "Please sign in to save items to your wishlist.",
+        );
+      } else {
+        showWishlistToast(
+          locale === "ar"
+            ? "تعذر تحديث المفضلة. حاول مرة أخرى."
+            : "Unable to update wishlist. Please try again.",
+        );
+      }
+    } finally {
+      setIsWishSubmitting(false);
+    }
   };
 
   return (
@@ -76,17 +163,15 @@ export default function ProductCard({ locale, product, region }) {
         </Link>
         <button
           type="button"
-          className="wishlist-button product-card-wishlist"
+          className={`wishlist-button product-card-wishlist${isWishlisted ? " is-active" : ""}${isWishSubmitting ? " is-busy" : ""}`}
           aria-label={wishlistLabel}
-          onClick={() => {
-            setWishToast(true);
-            setTimeout(() => setWishToast(false), 2200);
-          }}
+          onClick={handleWishlistToggle}
+          disabled={isWishSubmitting}
         >
           <Icon name="heart" size={17} />
           {wishToast ? (
             <span className="wishlist-toast">
-              {locale === "ar" ? "سجّل دخولك لحفظ المنتجات" : "Sign in to save items"}
+              {wishToast}
             </span>
           ) : null}
         </button>

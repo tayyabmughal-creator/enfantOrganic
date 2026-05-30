@@ -4,7 +4,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from store.api_serializers.catalog import ProductCardSerializer
-from store.models import Category, Product, ProductPrice, Region, SiteSettings
+from store.models import Category, Order, OrderItem, Product, ProductPrice, Region, SiteSettings
 
 
 def create_region(code, name, currency, *, is_default=False):
@@ -119,6 +119,33 @@ class StorefrontRegionBehaviorTests(TestCase):
             show_in_new_arrivals=show_in_new_arrivals,
         )
 
+    def create_paid_order_with_item(self, product, *, quantity):
+        order = Order.objects.create(
+            region=self.om,
+            customer_name="Test Customer",
+            customer_email="customer@example.com",
+            customer_phone="12345678",
+            address_line_1="Street 1",
+            city="Muscat",
+            country="Oman",
+            subtotal=Decimal("10.00"),
+            shipping_total=Decimal("2.00"),
+            grand_total=Decimal("12.00"),
+            currency_code=self.om.currency_code,
+            payment_method=Order.PAYMENT_ONLINE,
+            payment_status=Order.PAYMENT_PAID,
+            status=Order.STATUS_PAID,
+        )
+        OrderItem.objects.create(
+            order=order,
+            product=product,
+            product_slug=product.slug,
+            product_name=product.name_en,
+            quantity=quantity,
+            unit_price=Decimal("2.00"),
+            line_total=Decimal("2.00") * Decimal(quantity),
+        )
+
     def test_product_card_serializer_does_not_fallback_to_other_region_price(self):
         product = self.create_product("oman-only")
         ProductPrice.objects.create(product=product, region=self.om, price=Decimal("2.50"))
@@ -151,3 +178,40 @@ class StorefrontRegionBehaviorTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 404)
+
+    def test_catalog_collection_filter_returns_new_arrivals_only(self):
+        new_product = self.create_product("new-product", show_in_new_arrivals=True)
+        old_product = self.create_product("classic-product", show_in_new_arrivals=False)
+        ProductPrice.objects.create(product=new_product, region=self.om, price=Decimal("3.25"))
+        ProductPrice.objects.create(product=old_product, region=self.om, price=Decimal("4.50"))
+
+        response = self.client.get(
+            "/api/catalog/",
+            {"locale": "en", "region": "om", "collection": "new_arrivals"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        slugs = [item["slug"] for item in response.data["products"]]
+        self.assertIn("new-product", slugs)
+        self.assertNotIn("classic-product", slugs)
+
+    def test_catalog_collection_filter_returns_best_sellers_from_paid_orders(self):
+        top_product = self.create_product("top-seller")
+        other_product = self.create_product("regular-seller")
+        unsold_product = self.create_product("unsold-product")
+        ProductPrice.objects.create(product=top_product, region=self.om, price=Decimal("5.00"))
+        ProductPrice.objects.create(product=other_product, region=self.om, price=Decimal("5.00"))
+        ProductPrice.objects.create(product=unsold_product, region=self.om, price=Decimal("5.00"))
+
+        self.create_paid_order_with_item(top_product, quantity=5)
+        self.create_paid_order_with_item(other_product, quantity=2)
+
+        response = self.client.get(
+            "/api/catalog/",
+            {"locale": "en", "region": "om", "collection": "best_sellers"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        slugs = [item["slug"] for item in response.data["products"]]
+        self.assertEqual(slugs[:2], ["top-seller", "regular-seller"])
+        self.assertNotIn("unsold-product", slugs)

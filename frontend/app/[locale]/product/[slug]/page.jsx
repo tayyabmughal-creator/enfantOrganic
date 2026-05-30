@@ -144,16 +144,27 @@ export default async function LocalizedProductPage({ params, searchParams }) {
             <h3>{t.related}</h3>
           </div>
         </div>
-        <div className="product-rail">
-          {productPage.related_products.map((product) => (
-            <ProductCard
-              key={product.slug}
-              locale={locale}
-              product={product}
-              region={region}
-            />
-          ))}
-        </div>
+        {productPage.related_products.length ? (
+          <div className="product-rail">
+            {productPage.related_products.map((product) => (
+              <ProductCard
+                key={product.slug}
+                locale={locale}
+                product={product}
+                region={region}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="store-empty-state">
+            <strong>{locale === "ar" ? "منتجات مشابهة قريبًا" : "Related products are coming soon"}</strong>
+            <p>
+              {locale === "ar"
+                ? "جرّب متابعة التسوق لاكتشاف منتجات مناسبة أخرى."
+                : "Continue shopping to discover more products for your routine."}
+            </p>
+          </div>
+        )}
       </section>
     </StorefrontShell>
   );

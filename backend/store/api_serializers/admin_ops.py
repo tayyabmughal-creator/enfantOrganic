@@ -3,9 +3,11 @@ from django.urls import reverse
 from rest_framework import serializers
 
 from ..models import (
+    BackInStockRequest,
     AbandonedCart,
     AdminAuditLog,
     BlogPost,
+    CmsPage,
     Category,
     Coupon,
     GiftCard,
@@ -27,6 +29,15 @@ from ..models import (
 )
 from ..services.payment_router import get_region_provider_options, get_region_provider_warnings
 from ..services.carrier_router import get_region_carrier_options, get_region_carrier_warnings
+from ..services.payment_config import (
+    get_hyperpay_config,
+    get_omannet_config,
+    get_paymob_config,
+    get_paytabs_config,
+    get_telr_config,
+    get_thawani_config,
+    paymob_config_is_complete,
+)
 from .orders import OrderStatusHistorySerializer
 from .localization import get_image_url
 
@@ -449,6 +460,18 @@ class AdminSiteSettingsSerializer(serializers.ModelSerializer):
         "paymob_apple_pay_iframe_id",
     )
 
+    PAYMENT_PROVIDER_SECRET_FIELDS = (
+        "paytabs_server_key",
+        "hyperpay_access_token",
+        "telr_auth_key",
+        "thawani_secret_key",
+        "thawani_webhook_secret",
+        "omannet_access_code",
+        "omannet_sha_request",
+        "omannet_sha_response",
+        "omannet_webhook_secret",
+    )
+
     paymob_api_key = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
     paymob_hmac_secret = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
     paymob_integration_id = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
@@ -462,6 +485,7 @@ class AdminSiteSettingsSerializer(serializers.ModelSerializer):
     paymob_iframe_id_set = serializers.SerializerMethodField()
     paymob_apple_pay_integration_id_set = serializers.SerializerMethodField()
     paymob_apple_pay_iframe_id_set = serializers.SerializerMethodField()
+    payment_provider_statuses = serializers.SerializerMethodField()
 
     clear_paymob_api_key = serializers.BooleanField(write_only=True, required=False, default=False)
     clear_paymob_hmac_secret = serializers.BooleanField(write_only=True, required=False, default=False)
@@ -473,6 +497,13 @@ class AdminSiteSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = SiteSettings
         fields = "__all__"
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        for field in self.PAYMENT_PROVIDER_SECRET_FIELDS:
+            data.pop(field, None)
+            data[f"{field}_set"] = bool(str(getattr(instance, field, "") or "").strip())
+        return data
 
     def _is_set(self, obj, field):
         return bool(str(getattr(obj, field, "") or "").strip())
@@ -495,9 +526,165 @@ class AdminSiteSettingsSerializer(serializers.ModelSerializer):
     def get_paymob_apple_pay_iframe_id_set(self, obj):
         return self._is_set(obj, "paymob_apple_pay_iframe_id")
 
+    def _provider_payload(self, *, key, label, status, credentials, helper_text):
+        return {
+            "key": key,
+            "label": label,
+            "status": status,
+            "credentials": credentials,
+            "helper_text": helper_text,
+        }
+
+    def _is_test_url(self, value):
+        lowered = str(value or "").strip().lower()
+        if not lowered:
+            return False
+        return any(marker in lowered for marker in ("uat", "sandbox", "test"))
+
+    def get_payment_provider_statuses(self, obj):
+        paymob_configs = [get_paymob_config("om"), get_paymob_config("sa"), get_paymob_config("ae")]
+        paymob_ready = any(paymob_config_is_complete(cfg) for cfg in paymob_configs)
+        paymob_api_key_set = any(bool(cfg.get("api_key")) for cfg in paymob_configs)
+        paymob_hmac_set = any(bool(cfg.get("hmac_secret")) for cfg in paymob_configs)
+        paymob_integrations_set = any(bool(cfg.get("integration_id")) for cfg in paymob_configs)
+        paymob_iframes_set = any(bool(cfg.get("iframe_id")) for cfg in paymob_configs)
+        paymob_status = "ready" if paymob_ready else "missing_keys"
+        paymob_helper = (
+            "Configured per region in the Paymob panel."
+            if paymob_ready
+            else "This provider requires real API credentials for each enabled region."
+        )
+
+        paytabs_cfg = get_paytabs_config()
+        paytabs_profile_set = bool(paytabs_cfg.get("profile_id"))
+        paytabs_server_set = bool(paytabs_cfg.get("server_key"))
+        paytabs_ready = paytabs_profile_set and paytabs_server_set
+        paytabs_status = "ready" if paytabs_ready else "missing_keys"
+        paytabs_helper = (
+            "This provider requires real API credentials."
+            if paytabs_ready
+            else "Missing required PayTabs credentials."
+        )
+
+        hyperpay_cfg = get_hyperpay_config()
+        hyperpay_entity_set = bool(hyperpay_cfg.get("entity_id"))
+        hyperpay_token_set = bool(hyperpay_cfg.get("access_token"))
+        hyperpay_status = "scaffold_only" if (hyperpay_entity_set and hyperpay_token_set) else "missing_keys"
+        hyperpay_helper = (
+            "This provider is scaffolded and not ready for live payments."
+            if hyperpay_status == "scaffold_only"
+            else "Missing required HyperPay credentials."
+        )
+
+        telr_cfg = get_telr_config()
+        telr_store_set = bool(telr_cfg.get("store_id"))
+        telr_auth_set = bool(telr_cfg.get("auth_key"))
+        telr_status = "scaffold_only" if (telr_store_set and telr_auth_set) else "missing_keys"
+        telr_helper = (
+            "This provider is scaffolded and not ready for live payments."
+            if telr_status == "scaffold_only"
+            else "Missing required Telr credentials."
+        )
+
+        thawani_cfg = get_thawani_config()
+        thawani_publishable_set = bool(thawani_cfg.get("publishable_key"))
+        thawani_secret_set = bool(thawani_cfg.get("secret_key"))
+        thawani_keys_set = thawani_publishable_set and thawani_secret_set
+        if not thawani_keys_set:
+            thawani_status = "missing_keys"
+            thawani_helper = "Missing required Thawani credentials."
+        elif not thawani_cfg.get("enable_real_api"):
+            thawani_status = "scaffold_only"
+            thawani_helper = "This provider is scaffolded and not ready for live payments."
+        elif self._is_test_url(thawani_cfg.get("base_url")):
+            thawani_status = "test_mode_only"
+            thawani_helper = "This provider is in test mode."
+        else:
+            thawani_status = "ready"
+            thawani_helper = "This provider requires real API credentials."
+
+        omannet_cfg = get_omannet_config()
+        omannet_merchant_set = bool(omannet_cfg.get("merchant_id"))
+        omannet_access_set = bool(omannet_cfg.get("access_code"))
+        omannet_sha_set = bool(omannet_cfg.get("sha_request"))
+        omannet_status = "scaffold_only" if (omannet_merchant_set and omannet_access_set and omannet_sha_set) else "missing_keys"
+        omannet_helper = (
+            "This provider is scaffolded and not ready for live payments."
+            if omannet_status == "scaffold_only"
+            else "Missing required OmanNet credentials."
+        )
+
+        return {
+            "paymob": self._provider_payload(
+                key="paymob",
+                label="Paymob",
+                status=paymob_status,
+                credentials={
+                    "api_key_set": paymob_api_key_set,
+                    "integration_id_set": paymob_integrations_set,
+                    "iframe_id_set": paymob_iframes_set,
+                    "hmac_secret_set": paymob_hmac_set,
+                },
+                helper_text=paymob_helper,
+            ),
+            "paytabs": self._provider_payload(
+                key="paytabs",
+                label="PayTabs",
+                status=paytabs_status,
+                credentials={
+                    "profile_id_set": paytabs_profile_set,
+                    "server_key_set": paytabs_server_set,
+                },
+                helper_text=paytabs_helper,
+            ),
+            "hyperpay": self._provider_payload(
+                key="hyperpay",
+                label="HyperPay",
+                status=hyperpay_status,
+                credentials={
+                    "entity_id_set": hyperpay_entity_set,
+                    "access_token_set": hyperpay_token_set,
+                },
+                helper_text=hyperpay_helper,
+            ),
+            "telr": self._provider_payload(
+                key="telr",
+                label="Telr",
+                status=telr_status,
+                credentials={
+                    "store_id_set": telr_store_set,
+                    "auth_key_set": telr_auth_set,
+                },
+                helper_text=telr_helper,
+            ),
+            "thawani": self._provider_payload(
+                key="thawani",
+                label="Thawani",
+                status=thawani_status,
+                credentials={
+                    "publishable_key_set": thawani_publishable_set,
+                    "secret_key_set": thawani_secret_set,
+                    "webhook_secret_set": bool(thawani_cfg.get("webhook_secret")),
+                },
+                helper_text=thawani_helper,
+            ),
+            "omannet": self._provider_payload(
+                key="omannet",
+                label="OmanNet",
+                status=omannet_status,
+                credentials={
+                    "merchant_id_set": omannet_merchant_set,
+                    "access_code_set": omannet_access_set,
+                    "sha_request_set": omannet_sha_set,
+                    "sha_response_set": bool(omannet_cfg.get("sha_response")),
+                },
+                helper_text=omannet_helper,
+            ),
+        }
+
     def _apply_secret_directives(self, validated_data, *, creating):
         """Honor clear_* flags and never overwrite a stored secret with a blank."""
-        for field in self.PAYMOB_SECRET_FIELDS:
+        for field in (*self.PAYMOB_SECRET_FIELDS, *self.PAYMENT_PROVIDER_SECRET_FIELDS):
             if validated_data.pop(f"clear_{field}", False):
                 validated_data[field] = ""
                 continue
@@ -582,6 +769,14 @@ class AdminBlogPostSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             "image_file": {"required": False},
         }
+
+
+class AdminCmsPageSerializer(serializers.ModelSerializer):
+    region_code = serializers.CharField(source="region.code", read_only=True, default="")
+
+    class Meta:
+        model = CmsPage
+        fields = "__all__"
 
 
 class AdminTaxRuleSerializer(serializers.ModelSerializer):
@@ -717,6 +912,18 @@ class AdminAuditLogSerializer(serializers.ModelSerializer):
 class AdminGiftCardSerializer(serializers.ModelSerializer):
     class Meta:
         model = GiftCard
+        fields = "__all__"
+
+
+class AdminBackInStockRequestSerializer(serializers.ModelSerializer):
+    product_slug = serializers.CharField(source="product.slug", read_only=True)
+    product_name = serializers.CharField(source="product.name_en", read_only=True)
+    region_code = serializers.CharField(source="region.code", read_only=True, default="")
+    region_name = serializers.CharField(source="region.name_en", read_only=True, default="")
+    user_email = serializers.CharField(source="user.email", read_only=True, default="")
+
+    class Meta:
+        model = BackInStockRequest
         fields = "__all__"
 
 

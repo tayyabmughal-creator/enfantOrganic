@@ -8,7 +8,18 @@ from django.utils.encoding import force_bytes
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from ..models import CustomerAddress, NewsletterSubscription, Product, PushDevice, Region, ReturnRequest, Review, WishlistItem
+from ..models import (
+    BackInStockRequest,
+    CustomerAddress,
+    NewsletterSubscription,
+    Product,
+    PushDevice,
+    Region,
+    ReturnRequest,
+    Review,
+    WishlistItem,
+)
+from ..services.stock import get_region_available_stock
 from .catalog import ProductCardSerializer
 
 
@@ -225,6 +236,86 @@ class WishlistItemSerializer(serializers.ModelSerializer):
             product=product,
         )
         return item
+
+
+class BackInStockRequestSerializer(serializers.ModelSerializer):
+    product_slug = serializers.SlugField(write_only=True)
+    region_code = serializers.SlugField(write_only=True, required=False, allow_blank=True)
+    message = serializers.CharField(read_only=True, default="Notification request saved.")
+
+    class Meta:
+        model = BackInStockRequest
+        fields = (
+            "id",
+            "product",
+            "product_slug",
+            "region",
+            "region_code",
+            "user",
+            "email",
+            "phone",
+            "status",
+            "notified_at",
+            "created_at",
+            "message",
+        )
+        read_only_fields = (
+            "id",
+            "product",
+            "region",
+            "user",
+            "status",
+            "notified_at",
+            "created_at",
+            "message",
+        )
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        product_slug = str(attrs.pop("product_slug", "") or "").strip()
+        region_code = str(attrs.pop("region_code", "") or "").strip().lower()
+        request = self.context.get("request")
+        user = request.user if request and request.user.is_authenticated else None
+
+        product = Product.objects.filter(slug=product_slug, is_published=True).first()
+        if not product:
+            raise serializers.ValidationError({"product_slug": "Product not found."})
+
+        region = Region.objects.filter(code=region_code, is_active=True).first() if region_code else None
+        available = get_region_available_stock(product, region)
+        if not product.track_inventory:
+            raise serializers.ValidationError(
+                {"product_slug": "Notifications are available only for inventory-tracked products."}
+            )
+        if int(available or 0) > 0:
+            raise serializers.ValidationError({"product_slug": "This product is currently in stock."})
+
+        email = str(attrs.get("email") or "").strip().lower()
+        if not email and user and user.email:
+            email = str(user.email).strip().lower()
+            attrs["email"] = email
+        if not email:
+            raise serializers.ValidationError({"email": "Email is required to notify you when this product is available."})
+
+        duplicate_exists = BackInStockRequest.objects.filter(
+            product=product,
+            region=region,
+            email__iexact=email,
+            status=BackInStockRequest.STATUS_PENDING,
+        ).exists()
+        if duplicate_exists:
+            raise serializers.ValidationError(
+                {"email": "You already requested a stock notification for this product."}
+            )
+
+        attrs["product"] = product
+        attrs["region"] = region
+        attrs["user"] = user
+        attrs["email"] = email
+        return attrs
+
+    def create(self, validated_data):
+        return BackInStockRequest.objects.create(**validated_data)
 
 
 class NewsletterSubscriptionSerializer(serializers.ModelSerializer):

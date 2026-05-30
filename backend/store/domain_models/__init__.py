@@ -1,5 +1,6 @@
 from .base import OrderedModel
 from .catalog import (
+    CmsPage,
     BlogPost,
     Category,
     HeroPromoCard,
@@ -23,7 +24,9 @@ from .commerce import (
     AnalyticsEvent,
     Coupon,
     CustomerAddress,
+    BackInStockRequest,
     GiftCard,
+    GiftCardRedemption,
     NewsletterSubscription,
     NotificationLog,
     WhatsAppLog,
@@ -40,12 +43,15 @@ from .commerce import (
 __all__ = [
     "AbandonedCart",
     "AnalyticsEvent",
+    "CmsPage",
     "BlogPost",
     "AdminAuditLog",
     "Category",
     "Coupon",
     "CustomerAddress",
+    "BackInStockRequest",
     "GiftCard",
+    "GiftCardRedemption",
     "HeroPromoCard",
     "InstagramPost",
     "NewsletterSubscription",

@@ -14,6 +14,7 @@ import {
   replaceLocaleInPath,
   uiText,
 } from "@/lib/storefront";
+import { resolveNavigationHref } from "@/lib/navigationLinks";
 import { saveSelectedRegion } from "@/lib/regionResolver";
 import { pushDataLayerEvent } from "@/lib/analytics";
 import { API_BASE_URL as CONFIG_API_BASE_URL } from "@/lib/config";
@@ -255,7 +256,11 @@ function HeaderInner({ navigation }) {
             </button>
             <div className={`nav-dropdown nav-dropdown-sm ${openDropdown === "why" ? "is-visible" : ""}`}>
               {navigation.menus.why_choose_us.map((item) => (
-                <a key={item.label} href={item.href} className="dropdown-link single">
+                <a
+                  key={item.label}
+                  href={resolveNavigationHref(item.href, { locale, region: activeRegionCode })}
+                  className="dropdown-link single"
+                >
                   <strong>{item.label}</strong>
                 </a>
               ))}
@@ -263,7 +268,11 @@ function HeaderInner({ navigation }) {
           </div>
 
           {navigation.settings.static_links.map((item) => (
-            <a key={item.label} href={item.href} className="nav-link">
+            <a
+              key={item.label}
+              href={resolveNavigationHref(item.href, { locale, region: activeRegionCode })}
+              className="nav-link"
+            >
               {item.label}
             </a>
           ))}

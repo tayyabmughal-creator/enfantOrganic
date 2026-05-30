@@ -15,11 +15,21 @@ from rest_framework.views import APIView
 
 from ..models import Order, PaymentTransaction
 from ..services.invoice import ensure_paid_order_invoice
+from ..services.gift_cards import (
+    GiftCardRedemptionError,
+    finalize_online_gift_card_redemption,
+    release_pending_gift_card_redemption,
+)
 from ..services.payment_router import (
     PaymentProviderError,
     get_status as get_provider_status,
     initiate_payment,
     verify_webhook,
+)
+from ..services.stock import (
+    StockError,
+    commit_reserved_inventory_for_order,
+    reserve_inventory_for_online_retry,
 )
 
 logger = logging.getLogger(__name__)
@@ -128,6 +138,29 @@ def _apply_webhook_update(provider_key, request, *, ignore_missing_order=False):
 
     if payment_changed:
         order.save(update_fields=["payment_status", "updated_at"])
+    if tx_status == PaymentTransaction.STATUS_PAID and order.payment_method == Order.PAYMENT_ONLINE:
+        try:
+            commit_reserved_inventory_for_order(order)
+        except Exception:
+            logger.exception(
+                "Inventory commit failed after %s paid webhook for order %s",
+                provider_key,
+                merchant_order_id,
+            )
+        try:
+            finalize_online_gift_card_redemption(order)
+        except GiftCardRedemptionError:
+            logger.exception(
+                "Gift card finalization failed after %s paid webhook for order %s",
+                provider_key,
+                merchant_order_id,
+            )
+        except Exception:
+            logger.exception(
+                "Unexpected gift card finalization error after %s paid webhook for order %s",
+                provider_key,
+                merchant_order_id,
+            )
     if order.payment_status == Order.PAYMENT_PAID:
         from ..tasks import generate_order_invoice_async
         generate_order_invoice_async.delay(order.id)
@@ -136,6 +169,15 @@ def _apply_webhook_update(provider_key, request, *, ignore_missing_order=False):
         PaymentTransaction.STATUS_FAILED,
         PaymentTransaction.STATUS_CANCELLED,
     }:
+        if tx_status in {PaymentTransaction.STATUS_REFUNDED, PaymentTransaction.STATUS_CANCELLED}:
+            try:
+                release_pending_gift_card_redemption(order, reason=tx_status)
+            except Exception:
+                logger.exception(
+                    "Gift card release failed after %s webhook for order %s",
+                    provider_key,
+                    merchant_order_id,
+                )
         try:
             order.restore_inventory()
         except Exception:
@@ -184,6 +226,20 @@ def _initiate_payment_response(request, *, is_retry=False):
 
     if is_retry and order.status == Order.STATUS_FAILED and order.can_transition_to(Order.STATUS_PENDING):
         order.transition_to(Order.STATUS_PENDING, note="Payment retry initiated.")
+    if is_retry and order.payment_method == Order.PAYMENT_ONLINE and order.inventory_released:
+        try:
+            reserve_inventory_for_online_retry(order)
+        except StockError as exc:
+            return Response(
+                {"error": str(exc), "code": exc.code},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception:
+            logger.exception("Inventory re-reservation failed for retry order %s", order_number)
+            return Response(
+                {"error": "Unable to reserve stock for payment retry."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     requested_provider = request.data.get("provider")
     payment_type = str(request.data.get("payment_type", "")).strip().lower()

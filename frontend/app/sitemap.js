@@ -11,6 +11,14 @@ const STATIC_PAGE_SLUGS = [
   "about",
   "contact",
   "faq",
+  "cookie-policy",
+  "payment-options",
+  "shipping",
+  "returns",
+  "ingredients",
+  "certifications",
+  "sustainability",
+  "our-standards",
   "shipping-policy",
   "return-policy",
   "privacy-policy",
@@ -75,4 +83,3 @@ export default async function sitemap() {
 
   return entries;
 }
-

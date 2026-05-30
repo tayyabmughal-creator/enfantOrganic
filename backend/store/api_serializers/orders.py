@@ -175,6 +175,8 @@ class OrderSerializer(serializers.ModelSerializer):
             "notes",
             "coupon_code",
             "discount_total",
+            "gift_card_code",
+            "gift_card_amount",
             "subtotal",
             "shipping_fee",
             "shipping_method",

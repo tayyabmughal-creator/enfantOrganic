@@ -1393,6 +1393,18 @@ export function PaymentGatewaysView({ data, canEdit, onPatch, request }) {
   const [expanded, setExpanded] = useState(null);
   const [draft, setDraft] = useState({});
   const [saving, setSaving] = useState(false);
+  const providerStatuses = data?.payment_provider_statuses && typeof data.payment_provider_statuses === "object"
+    ? data.payment_provider_statuses
+    : {};
+
+  function providerStatusMeta(status) {
+    if (status === "ready") return { label: "Ready", cls: "connected" };
+    if (status === "missing_keys") return { label: "Missing keys", cls: "idle" };
+    if (status === "test_mode_only") return { label: "Test mode only", cls: "idle" };
+    if (status === "scaffold_only") return { label: "Scaffold only", cls: "idle" };
+    if (status === "not_implemented") return { label: "Not implemented", cls: "idle" };
+    return { label: "Not configured", cls: "idle" };
+  }
 
   function isConnected(gw) {
     return gw.requiredKeys.every((k) => data?.[k]);
@@ -1432,15 +1444,26 @@ export function PaymentGatewaysView({ data, canEdit, onPatch, request }) {
       <div className="admin-iv-list">
         {PAYMENT_GATEWAYS.map((gw) => {
           const connected = isConnected(gw);
+          const providerStatus = providerStatuses?.[gw.key] || {};
+          const statusKey = providerStatus?.status || (connected ? "ready" : "missing_keys");
+          const statusMeta = providerStatusMeta(statusKey);
+          const credentials = providerStatus?.credentials && typeof providerStatus.credentials === "object"
+            ? providerStatus.credentials
+            : {};
+          const credentialEntries = Object.entries(credentials);
           const open = expanded === gw.key;
           return (
-            <div key={gw.key} className={`admin-iv-card${connected ? " connected" : ""}${open ? " expanded" : ""}`}>
+            <div key={gw.key} className={`admin-iv-card${statusKey === "ready" ? " connected" : ""}${open ? " expanded" : ""}`}>
               <div className="admin-iv-main" role="button" tabIndex={0} onClick={() => toggle(gw.key)} onKeyDown={(e) => e.key === "Enter" && toggle(gw.key)}>
                 <div className="admin-iv-logo" style={{ background: gw.color }}>{gw.logo}</div>
                 <div className="admin-iv-info">
                   <strong>{gw.name}</strong>
                   <span>{gw.desc}</span>
-                  {gw.setupRequired ? (
+                  {providerStatus?.helper_text ? (
+                    <span style={{ fontSize: "0.72rem", color: "var(--admin-muted)" }}>
+                      {providerStatus.helper_text}
+                    </span>
+                  ) : gw.setupRequired ? (
                     <span style={{ fontSize: "0.72rem", color: "var(--admin-muted)" }}>
                       Setup required: this provider is not live until implementation and credentials are fully validated.
                     </span>
@@ -1450,10 +1473,29 @@ export function PaymentGatewaysView({ data, canEdit, onPatch, request }) {
                       <span key={r} style={{ fontSize: "0.68rem", background: "var(--admin-surface-raised, #f3f4f6)", color: "var(--admin-muted)", padding: "1px 6px", borderRadius: 3, fontWeight: 600 }}>{r}</span>
                     ))}
                   </div>
+                  {credentialEntries.length ? (
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 6 }}>
+                      {credentialEntries.map(([name, isSet]) => (
+                        <span
+                          key={name}
+                          style={{
+                            fontSize: "0.66rem",
+                            background: "var(--admin-surface-raised, #f3f4f6)",
+                            color: isSet ? "#13803a" : "var(--admin-muted)",
+                            padding: "1px 6px",
+                            borderRadius: 3,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {isSet ? "✓" : "—"} {name.replace(/_set$/, "").replace(/_/g, " ")}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-                  <span className={`admin-iv-chip ${connected ? "connected" : "idle"}`}>
-                    {connected ? "Connected" : "Not configured"}
+                  <span className={`admin-iv-chip ${statusMeta.cls}`}>
+                    {statusMeta.label}
                   </span>
                   {gw.setupRequired ? <span className="admin-iv-chip idle">Setup required</span> : null}
                   {gw.notLive ? <span className="admin-iv-chip soon">Not live</span> : null}

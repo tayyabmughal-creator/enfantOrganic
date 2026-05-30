@@ -33,12 +33,13 @@ function CartApplePayButtonInner() {
   const region = normalizeRegion(searchParams.get("region") || "om");
   const isAr = locale === "ar";
 
-  const { cartItems, subtotal, clearCart, closeCart } = useStore();
+  const { cartItems, subtotal, closeCart } = useStore();
   const [available, setAvailable] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState({ name: "", phone: "", address_line_1: "", area: "", city: "" });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [paymentRecovery, setPaymentRecovery] = useState(null);
 
   useEffect(() => {
     setAvailable(Boolean(PAYMOB_APPLE_PAY_INTEGRATION_ID) && canUseApplePay());
@@ -62,8 +63,10 @@ function CartApplePayButtonInner() {
   const handleSubmit = useCallback(
     async (e) => {
       e.preventDefault();
+      let createdOrderContext = null;
       if (submitting) return;
       setError("");
+      setPaymentRecovery(null);
       setSubmitting(true);
       try {
         const checkoutPayload = {
@@ -111,6 +114,11 @@ function CartApplePayButtonInner() {
           throw new Error(orderData.detail || (isAr ? "فشل إنشاء الطلب." : "Order creation failed."));
         }
         saveOrderLookupToken(orderData.order_number, orderData.lookup_token);
+        createdOrderContext = {
+          orderNumber: orderData.order_number,
+          lookupToken: orderData.lookup_token || "",
+          provider: "paymob",
+        };
 
         const payRes = await fetch(`${API_BASE_URL}/payments/initiate/`, {
           method: "POST",
@@ -125,26 +133,54 @@ function CartApplePayButtonInner() {
         });
         const payData = await payRes.json();
         if (!payRes.ok) {
-          throw new Error(payData.error || (isAr ? "فشل بدء الدفع." : "Payment initiation failed."));
+          setPaymentRecovery({
+            orderNumber: orderData.order_number,
+            lookupToken: orderData.lookup_token || "",
+            provider: "paymob",
+          });
+          throw new Error(
+            payData.error ||
+              (isAr
+                ? `تعذر بدء الدفع. تم حفظ الطلب ${orderData.order_number} ويمكنك إعادة المحاولة.`
+                : `Unable to start payment. Order ${orderData.order_number} is saved and can be retried.`),
+          );
         }
 
         const candidate = payData.redirect_url || payData.iframe_url || "";
         const safe = safeRedirectUrl(candidate);
         if (!safe) {
-          throw new Error(isAr ? "وجهة الدفع غير موثوقة." : "Untrusted payment redirect.");
+          setPaymentRecovery({
+            orderNumber: orderData.order_number,
+            lookupToken: orderData.lookup_token || "",
+            provider: "paymob",
+          });
+          throw new Error(
+            isAr
+              ? `وجهة الدفع غير موثوقة. تم حفظ الطلب ${orderData.order_number} ويمكنك إعادة المحاولة.`
+              : `Untrusted payment redirect. Order ${orderData.order_number} is saved and can be retried.`,
+          );
         }
 
-        clearCart();
         closeModal();
         closeCart();
         window.location.href = safe;
       } catch (err) {
-        setError(err.message || (isAr ? "حدث خطأ غير متوقع." : "An unexpected error occurred."));
+        if (createdOrderContext) {
+          setPaymentRecovery(createdOrderContext);
+        }
+        const fallbackMessage = createdOrderContext
+          ? (
+            isAr
+              ? `تعذر بدء الدفع. تم حفظ الطلب ${createdOrderContext.orderNumber} ويمكنك إعادة المحاولة.`
+              : `Unable to start payment. Order ${createdOrderContext.orderNumber} is saved and can be retried.`
+          )
+          : (isAr ? "حدث خطأ غير متوقع." : "An unexpected error occurred.");
+        setError(err.message || fallbackMessage);
       } finally {
         setSubmitting(false);
       }
     },
-    [cartItems, clearCart, closeCart, closeModal, form, isAr, locale, region, submitting],
+    [cartItems, closeCart, closeModal, form, isAr, locale, region, submitting],
   );
 
   if (!available || cartItems.length === 0) return null;
@@ -267,9 +303,19 @@ function CartApplePayButtonInner() {
                 </div>
 
                 {error ? (
-                  <p className="form-error" style={{ margin: 0, fontSize: "0.82rem" }}>
-                    {error}
-                  </p>
+                  <div style={{ display: "grid", gap: "8px" }}>
+                    <p className="form-error" style={{ margin: 0, fontSize: "0.82rem" }}>
+                      {error}
+                    </p>
+                    {paymentRecovery ? (
+                      <a
+                        href={`${buildStorePath(locale, "/payment/failed", region)}&order_number=${encodeURIComponent(paymentRecovery.orderNumber)}${paymentRecovery.lookupToken ? `&lookup_token=${encodeURIComponent(paymentRecovery.lookupToken)}` : ""}&provider=${encodeURIComponent(paymentRecovery.provider)}`}
+                        className="secondary-action"
+                      >
+                        {isAr ? "إعادة محاولة الدفع" : "Retry Payment"}
+                      </a>
+                    ) : null}
+                  </div>
                 ) : null}
 
                 <button

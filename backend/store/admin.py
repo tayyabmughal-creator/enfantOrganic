@@ -4,8 +4,10 @@ from .models import (
     AbandonedCart,
     AdminAuditLog,
     BlogPost,
+    BackInStockRequest,
     Category,
     GiftCard,
+    GiftCardRedemption,
     HeroPromoCard,
     InstagramPost,
     CustomerAddress,
@@ -970,6 +972,35 @@ class GiftCardAdmin(admin.ModelAdmin):
     list_filter = ("status", "currency_code", "created_at")
     search_fields = ("code", "recipient_name", "recipient_email", "sender_name")
     readonly_fields = ("code", "created_at", "updated_at")
+
+
+@admin.register(GiftCardRedemption)
+class GiftCardRedemptionAdmin(admin.ModelAdmin):
+    list_display = (
+        "order",
+        "gift_card",
+        "requested_amount",
+        "applied_amount",
+        "status",
+        "created_at",
+    )
+    list_filter = ("status", "created_at")
+    search_fields = ("order__order_number", "gift_card__code", "order__customer_email")
+
+
+@admin.register(BackInStockRequest)
+class BackInStockRequestAdmin(admin.ModelAdmin):
+    list_display = (
+        "product",
+        "region",
+        "email",
+        "phone",
+        "status",
+        "created_at",
+        "notified_at",
+    )
+    list_filter = ("status", "region", "created_at")
+    search_fields = ("product__slug", "product__name_en", "email", "phone")
 
 
 @admin.register(AbandonedCart)

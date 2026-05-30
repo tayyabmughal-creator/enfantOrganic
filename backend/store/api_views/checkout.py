@@ -2,7 +2,12 @@ from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ..serializers import CheckoutCreateSerializer, CouponValidationSerializer, OrderSerializer
+from ..serializers import (
+    CheckoutCreateSerializer,
+    CouponValidationSerializer,
+    GiftCardValidationSerializer,
+    OrderSerializer,
+)
 
 
 def validation_error_message(error):
@@ -50,6 +55,32 @@ class CouponValidationView(APIView):
             return Response(
                 {
                     "valid": False,
+                    "gift_card_amount": "0.00",
+                    "gift_card_balance": "0.00",
+                    "discount_amount": "0.00",
+                    "final_total": None,
+                    "message": "",
+                    "error": validation_error_message(error),
+                }
+            )
+
+
+class GiftCardValidationView(APIView):
+    serializer_class = GiftCardValidationSerializer
+    throttle_scope = "checkout"
+
+    def post(self, request):
+        serializer = GiftCardValidationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            return Response(serializer.evaluate())
+        except serializers.ValidationError as error:
+            return Response(
+                {
+                    "valid": False,
+                    "gift_card_amount": "0.00",
+                    "gift_card_balance": "0.00",
                     "discount_amount": "0.00",
                     "final_total": None,
                     "message": "",

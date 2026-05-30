@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from ..models import (
+    CmsPage,
     BlogPost,
     Category,
     HeroPromoCard,
@@ -387,3 +388,38 @@ class BlogPostDetailSerializer(BlogPostSerializer):
 
     def get_body(self, obj):
         return localized(obj, "body", self.context.get("locale"))
+
+
+class CmsPageSerializer(serializers.ModelSerializer):
+    title = serializers.SerializerMethodField()
+    body = serializers.SerializerMethodField()
+    seo_title = serializers.SerializerMethodField()
+    seo_description = serializers.SerializerMethodField()
+    region_code = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CmsPage
+        fields = (
+            "slug",
+            "title",
+            "body",
+            "seo_title",
+            "seo_description",
+            "is_published",
+            "region_code",
+        )
+
+    def get_title(self, obj):
+        return localized(obj, "title", self.context.get("locale"))
+
+    def get_body(self, obj):
+        return localized(obj, "body", self.context.get("locale"))
+
+    def get_seo_title(self, obj):
+        return localized(obj, "seo_title", self.context.get("locale"))
+
+    def get_seo_description(self, obj):
+        return localized(obj, "seo_description", self.context.get("locale"))
+
+    def get_region_code(self, obj):
+        return obj.region.code if obj.region_id else ""
