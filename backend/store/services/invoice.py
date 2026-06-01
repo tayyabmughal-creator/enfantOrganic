@@ -203,6 +203,7 @@ def _build_invoice_pdf_bytes(order):
     buyer = _buyer_snapshot(order)
     invoice_date = timezone.localtime(order.invoice_date or timezone.now())
     vat_rate_percent = (_money(order.tax_rate) * Decimal("100")).quantize(MONEY_QUANTIZER)
+    payment_status_label = order.get_payment_status_display() if hasattr(order, "get_payment_status_display") else str(order.payment_status or "")
 
     zatca_qr_payload = None
     qr_png_bytes = None
@@ -243,6 +244,12 @@ def _build_invoice_pdf_bytes(order):
                 Paragraph(order.order_number, styles["body"]),
                 Paragraph(_bilingual("Region / Currency", "المنطقة / العملة"), styles["body_bold"]),
                 Paragraph(f"{(order.region.code or '').upper()} / {order.currency_code}", styles["body"]),
+            ],
+            [
+                Paragraph(_bilingual("Payment Status", "حالة الدفع"), styles["body_bold"]),
+                Paragraph(f"{payment_status_label} ({order.payment_status})", styles["body"]),
+                Paragraph(_bilingual("Order Status", "حالة الطلب"), styles["body_bold"]),
+                Paragraph(order.get_status_display(), styles["body"]),
             ],
         ],
         colWidths=[30 * mm, 56 * mm, 30 * mm, 60 * mm],

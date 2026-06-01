@@ -141,6 +141,9 @@ class AdminOrderSerializer(serializers.ModelSerializer):
     map_link = serializers.SerializerMethodField()
     status_timeline = serializers.SerializerMethodField(read_only=True)
     status_note = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    region_code = serializers.CharField(source="region.code", read_only=True)
+    region_name = serializers.CharField(source="region.name_en", read_only=True)
+    items_count = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Order
@@ -227,6 +230,11 @@ class AdminOrderSerializer(serializers.ModelSerializer):
             context={"current_entry": entries[-1]},
         )
         return serializer.data
+
+    def get_items_count(self, obj):
+        if hasattr(obj, "items") and hasattr(obj.items, "all"):
+            return sum(int(item.quantity or 0) for item in obj.items.all())
+        return 0
 
 
 class AdminPaymentTransactionSerializer(serializers.ModelSerializer):

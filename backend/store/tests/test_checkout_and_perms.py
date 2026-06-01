@@ -1785,6 +1785,85 @@ class CheckoutAndPermsTestCase(TestCase):
         self.assertTrue(order.invoice_pdf.name)
         self.assertIn("application/pdf", response["Content-Type"])
 
+    def test_admin_invoice_download_allows_unpaid_order(self):
+        order = self._create_online_order(self.region)
+        order.payment_status = Order.PAYMENT_UNPAID
+        order.save(update_fields=["payment_status", "updated_at"])
+        staff_user = self._create_staff_user("staff-invoice-unpaid")
+        self.api_client.force_authenticate(staff_user)
+
+        response = self.api_client.get(f"/api/admin/orders/{order.order_number}/invoice/")
+        order.refresh_from_db()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(order.payment_status, Order.PAYMENT_UNPAID)
+        self.assertEqual(order.invoice_status, Order.INVOICE_GENERATED)
+        self.assertTrue(order.invoice_pdf.name)
+        self.assertIn("application/pdf", response["Content-Type"])
+
+    def test_admin_orders_list_supports_date_and_market_filters(self):
+        now = timezone.now()
+        yesterday = now - timedelta(days=1)
+        within_last_30 = now - timedelta(days=20)
+        older_than_30 = now - timedelta(days=45)
+
+        ae_region = Region.objects.create(
+            code="ae",
+            name_en="United Arab Emirates",
+            currency_code="AED",
+            shipping_fee=Decimal("3.00"),
+            shipping_threshold=Decimal("0.00"),
+            contact_phone="9710000000",
+            address_en="Dubai",
+            address_ar="دبي",
+        )
+        sa_region = Region.objects.create(
+            code="sa",
+            name_en="Saudi Arabia",
+            currency_code="SAR",
+            shipping_fee=Decimal("4.00"),
+            shipping_threshold=Decimal("0.00"),
+            contact_phone="9660000000",
+            address_en="Riyadh",
+            address_ar="الرياض",
+        )
+
+        today_order = self._create_online_order(self.region)
+        yesterday_order = self._create_online_order(ae_region)
+        last_30_order = self._create_online_order(sa_region)
+        old_order = self._create_online_order(self.region)
+        Order.objects.filter(pk=today_order.pk).update(created_at=now)
+        Order.objects.filter(pk=yesterday_order.pk).update(created_at=yesterday)
+        Order.objects.filter(pk=last_30_order.pk).update(created_at=within_last_30)
+        Order.objects.filter(pk=old_order.pk).update(created_at=older_than_30)
+
+        staff_user = self._create_staff_user("staff-order-filters")
+        self.api_client.force_authenticate(staff_user)
+
+        market_response = self.api_client.get("/api/admin/orders/", {"market": "uae"})
+        market_rows = market_response.data.get("results", market_response.data) if isinstance(market_response.data, dict) else market_response.data
+        market_order_numbers = {row["order_number"] for row in market_rows}
+        self.assertEqual(market_response.status_code, 200)
+        self.assertEqual(market_order_numbers, {yesterday_order.order_number})
+
+        today_key = now.date().isoformat()
+        today_response = self.api_client.get("/api/admin/orders/", {"date_from": today_key, "date_to": today_key})
+        today_rows = today_response.data.get("results", today_response.data) if isinstance(today_response.data, dict) else today_response.data
+        today_order_numbers = {row["order_number"] for row in today_rows}
+        self.assertEqual(today_response.status_code, 200)
+        self.assertEqual(today_order_numbers, {today_order.order_number})
+
+        from_key = (now.date() - timedelta(days=29)).isoformat()
+        to_key = now.date().isoformat()
+        last_30_response = self.api_client.get("/api/admin/orders/", {"date_from": from_key, "date_to": to_key})
+        last_30_rows = last_30_response.data.get("results", last_30_response.data) if isinstance(last_30_response.data, dict) else last_30_response.data
+        last_30_order_numbers = {row["order_number"] for row in last_30_rows}
+        self.assertEqual(last_30_response.status_code, 200)
+        self.assertIn(today_order.order_number, last_30_order_numbers)
+        self.assertIn(yesterday_order.order_number, last_30_order_numbers)
+        self.assertIn(last_30_order.order_number, last_30_order_numbers)
+        self.assertNotIn(old_order.order_number, last_30_order_numbers)
+
     def test_order_confirmation_email_is_multipart_html_and_text(self):
         order = self._create_paid_order(self.region, customer_email="mail-en@example.com")
         captured = {}

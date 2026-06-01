@@ -466,6 +466,12 @@ const DASHBOARD_FILTER_DEFAULTS = {
   customStartDate: "",
   customEndDate: "",
 };
+const ORDER_FILTER_DEFAULTS = {
+  dateRange: "all",
+  customStartDate: "",
+  customEndDate: "",
+  market: "all",
+};
 const DASHBOARD_REFRESH_INTERVAL_MS = 10000;
 const CRUD_KEYS     = ["products","categories","deals","customers","payments","reviews","shipping","blog","pages","hero_cards","returns","taxes","staff","warehouses","giftcards"];
 const DELETABLE     = ["products","categories","deals","customers","payments","reviews","shipping","blog","pages","hero_cards","taxes","staff","warehouses","giftcards"];
@@ -544,6 +550,46 @@ function getFieldType(name, key) {
   return (FIELD_CONFIGS[key] || []).find(([n]) => n === name)?.[2];
 }
 
+function formatLocalDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function buildOrdersDateFilterParams(filters) {
+  const dateRange = filters?.dateRange || "all";
+  if (dateRange === "custom") {
+    return {
+      dateFrom: filters?.customStartDate || "",
+      dateTo: filters?.customEndDate || "",
+    };
+  }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (dateRange === "today") {
+    const value = formatLocalDate(today);
+    return { dateFrom: value, dateTo: value };
+  }
+  if (dateRange === "yesterday") {
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const value = formatLocalDate(yesterday);
+    return { dateFrom: value, dateTo: value };
+  }
+  if (dateRange === "last_7_days") {
+    const start = new Date(today);
+    start.setDate(start.getDate() - 6);
+    return { dateFrom: formatLocalDate(start), dateTo: formatLocalDate(today) };
+  }
+  if (dateRange === "last_30_days") {
+    const start = new Date(today);
+    start.setDate(start.getDate() - 29);
+    return { dateFrom: formatLocalDate(start), dateTo: formatLocalDate(today) };
+  }
+  return { dateFrom: "", dateTo: "" };
+}
+
 function buildPayload(editor, key) {
   const hasFile = Object.values(editor).some((v) => v instanceof File);
   if (hasFile) {
@@ -590,6 +636,7 @@ export default function AdminPanelClient() {
   const [totalPages, setTotalPages] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
   const [dashboardFilters, setDashboardFilters] = useState(DASHBOARD_FILTER_DEFAULTS);
+  const [orderFilters, setOrderFilters] = useState(ORDER_FILTER_DEFAULTS);
   const [inventoryThreshold, setInventoryThreshold] = useState(10);
   const [inventoryFocusSlug, setInventoryFocusSlug] = useState("");
 
@@ -807,6 +854,15 @@ export default function AdminPanelClient() {
       if (screenKey === "inventory") {
         params.set("page_size", "100");
       }
+      if (screenKey === "orders") {
+        const orderFilterSource = options.orderFilters || orderFilters;
+        if (orderFilterSource.market && orderFilterSource.market !== "all") {
+          params.set("market", orderFilterSource.market);
+        }
+        const { dateFrom, dateTo } = buildOrdersDateFilterParams(orderFilterSource);
+        if (dateFrom) params.set("date_from", dateFrom);
+        if (dateTo) params.set("date_to", dateTo);
+      }
       const qs = params.toString();
       const raw = await request(qs ? `${url}?${qs}` : url);
       if (screenKey === "dashboard" && raw?.inventory_health_threshold !== undefined) {
@@ -874,28 +930,6 @@ export default function AdminPanelClient() {
         throw new Error(detail);
       }
       showToast("Shipment created successfully.", "success");
-      await loadScreen(active);
-    } catch (err) {
-      showToast(err.message, "error");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleRefreshTracking(order) {
-    if (!order?.order_number) return;
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/admin/orders/${order.order_number}/shipment/refresh/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        let detail = "Tracking refresh failed";
-        try { const payload = await res.json(); detail = payload?.detail || detail; } catch {}
-        throw new Error(detail);
-      }
-      showToast("Tracking refreshed.", "success");
       await loadScreen(active);
     } catch (err) {
       showToast(err.message, "error");
@@ -1126,6 +1160,12 @@ export default function AdminPanelClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, adminMe, activeKey, dashboardFilters]);
 
+  useEffect(() => {
+    if (!(token && adminMe && activeKey === "orders" && active)) return;
+    void loadScreen(active, { orderFilters });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderFilters, token, adminMe, activeKey]);
+
   function navigate(key, options = {}) {
     if (!canViewKey(key)) {
       showToast("You do not have access to this section.", "error");
@@ -1309,7 +1349,6 @@ export default function AdminPanelClient() {
           onDownloadInvoice={downloadOrderInvoice}
           onRefundOrder={activeKey === "orders" ? handleRefundOrder : undefined}
           onCreateShipment={activeKey === "orders" ? handleCreateShipment : undefined}
-          onRefreshTracking={activeKey === "orders" ? handleRefreshTracking : undefined}
           titleFor={titleFor}
           metaFor={metaFor}
           fields={FIELD_CONFIGS[activeKey]}
@@ -1371,6 +1410,18 @@ export default function AdminPanelClient() {
         page={page}
         totalPages={totalPages}
         onPageChange={(p) => { setPage(p); }}
+        orderFilters={activeKey === "orders" ? orderFilters : null}
+        onOrderFiltersChange={activeKey === "orders" ? (patch) => {
+          setOrderFilters((prev) => {
+            const next = { ...prev, ...patch };
+            if (patch.dateRange && patch.dateRange !== "custom") {
+              next.customStartDate = "";
+              next.customEndDate = "";
+            }
+            return next;
+          });
+          setPage(1);
+        } : undefined}
       />
     );
   }

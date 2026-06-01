@@ -121,7 +121,7 @@ from ..services.admin_roles import (
     has_admin_capability,
 )
 from ..services.admin_audit import log_admin_action, snapshot_instance
-from ..services.invoice import ensure_paid_order_invoice
+from ..services.invoice import generate_order_invoice
 from ..services.inventory_health import (
     get_inventory_health_threshold,
     inventory_health_queryset,
@@ -1426,6 +1426,34 @@ class AdminOrderListView(generics.ListAPIView):
         status_filter = self.request.query_params.get("status", "").strip()
         if status_filter:
             queryset = queryset.filter(status=status_filter)
+        market_filter = str(
+            self.request.query_params.get("market", "")
+            or self.request.query_params.get("region", "")
+            or ""
+        ).strip().lower()
+        market_aliases = {
+            "om": "om",
+            "oman": "om",
+            "ae": "ae",
+            "uae": "ae",
+            "sa": "sa",
+            "ksa": "sa",
+            "saudi": "sa",
+            "saudi-arabia": "sa",
+            "saudi_arabia": "sa",
+        }
+        market_code = market_aliases.get(market_filter, "")
+        if market_code:
+            queryset = queryset.filter(region__code=market_code)
+
+        start_raw = str(self.request.query_params.get("date_from", "") or "").strip()
+        end_raw = str(self.request.query_params.get("date_to", "") or "").strip()
+        start_date = parse_date(start_raw) if start_raw else None
+        end_date = parse_date(end_raw) if end_raw else None
+        if start_date:
+            queryset = queryset.filter(created_at__date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(created_at__date__lte=end_date)
         return queryset
 
 
@@ -1647,13 +1675,16 @@ class AdminOrderInvoiceDownloadView(APIView):
         if not order:
             return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        if order.payment_status != Order.PAYMENT_PAID:
+        try:
+            order = generate_order_invoice(order)
+        except Exception:
+            logger.exception("Admin invoice generation failed for order %s", order.order_number)
+            order.invoice_status = Order.INVOICE_FAILED
+            order.save(update_fields=["invoice_status", "updated_at"])
             return Response(
-                {"detail": "Invoice is available after payment confirmation."},
-                status=status.HTTP_400_BAD_REQUEST,
+                {"detail": "Invoice generation failed. Please try again."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-
-        order = ensure_paid_order_invoice(order)
         if not order.invoice_pdf:
             return Response({"detail": "Invoice is not available yet."}, status=status.HTTP_404_NOT_FOUND)
 

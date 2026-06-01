@@ -803,6 +803,110 @@
   gap: 6px;
 }
 
+/* ─── Orders table ────────────────────────────────────────────────────────── */
+
+.admin-orders-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #edf2e6;
+  border-radius: 14px;
+  background: #fbfdf8;
+}
+
+.admin-orders-table {
+  width: 100%;
+  min-width: 1240px;
+  border-collapse: collapse;
+}
+
+.admin-orders-table thead th {
+  padding: 11px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #a8b49e;
+  text-align: left;
+  background: #f7faf4;
+  border-bottom: 1px solid #e5ead8;
+  white-space: nowrap;
+}
+
+.admin-orders-table tbody td {
+  padding: 12px 10px;
+  border-bottom: 1px solid #edf2e6;
+  font-size: 13px;
+  color: #2b3328;
+  vertical-align: middle;
+}
+
+.admin-orders-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.admin-orders-table .checkbox-col {
+  width: 36px;
+  text-align: center;
+}
+
+.admin-orders-table .actions-col {
+  width: 168px;
+}
+
+.admin-orders-table input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: #607a42;
+  cursor: pointer;
+}
+
+.admin-order-link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #1b2716;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.admin-order-link:hover {
+  color: #607a42;
+}
+
+.admin-order-text {
+  font-weight: 700;
+  color: #1b2716;
+}
+
+.admin-order-customer,
+.admin-order-market {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-order-customer strong,
+.admin-order-market strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2a1b;
+  white-space: nowrap;
+}
+
+.admin-order-customer span,
+.admin-order-market span {
+  font-size: 12px;
+  color: #8a9580;
+  white-space: nowrap;
+}
+
+.admin-order-total {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 /* ─── Charts ──────────────────────────────────────────────────────────────── */
 
 .admin-chart-card h3 {
@@ -1955,6 +2059,11 @@
 .admin-search-bar .admin-input {
   width: 100%;
   max-width: 380px;
+}
+
+.admin-orders-filters {
+  justify-content: flex-start;
+  padding: 0 0 10px;
 }
 
 /* ─── Pagination ──────────────────────────────────────────────────────────── */
