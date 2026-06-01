@@ -174,6 +174,19 @@ const PAYMENT_STATUS_LABELS = {
   refunded: "Refunded",
 };
 
+const ORDER_STATUS_LABELS = {
+  pending: "Pending",
+  confirmed: "Confirmed",
+  paid: "Paid",
+  processing: "Processing",
+  shipped: "Shipped",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+  returned: "Returned",
+  refunded: "Refunded",
+  failed: "Failed",
+};
+
 const SHIPMENT_STATUS_LABELS = {
   pending: "Pending",
   created: "Created",
@@ -387,7 +400,7 @@ export function CrudFormModal({ activeKey, isSettings, mode, selected, editor, s
           <button type="button" className="admin-modal-close" onClick={onClose} aria-label="Close">✕</button>
         </div>
 
-        {activeKey === "orders" && selected ? <OrderSnapshot order={selected} onDownloadInvoice={onDownloadInvoice} onRefundOrder={onRefundOrder} onCreateShipment={onCreateShipment} /> : null}
+        {activeKey === "orders" && selected ? <OrderDetailLayout order={selected} onDownloadInvoice={onDownloadInvoice} onRefundOrder={onRefundOrder} onCreateShipment={onCreateShipment} /> : null}
         {activeKey === "hero_cards" ? <HeroCardPreview editor={editor} /> : null}
 
         <div className="admin-modal-form">
@@ -405,45 +418,450 @@ export function CrudFormModal({ activeKey, isSettings, mode, selected, editor, s
   );
 }
 
-function OrderSnapshot({ order, onDownloadInvoice, onRefundOrder, onCreateShipment }) {
-  const vatLabel = order.tax_label || "VAT";
-  const vatRate = order.tax_rate ? `${(Number(order.tax_rate) * 100).toFixed(2)}%` : "0.00%";
-  const cells = [
-    ["Customer", order.customer_name || "—", order.customer_email || order.customer_phone || "—"],
-    ["Address",  order.city || "—",          [order.address_line_1, order.address_line_2, order.country].filter(Boolean).join(", ") || "—"],
-    [
-      "Totals",
-      `${order.subtotal} ${order.currency_code}`,
-      `Shipping: ${order.shipping_total} ${order.currency_code} • ${vatLabel} (${vatRate}): ${order.tax_total || "0.00"} ${order.currency_code} • Grand total: ${order.grand_total} ${order.currency_code}`,
-    ],
-    ["Payment",  order.payment_status || "—", order.payment_method || "—"],
-  ];
+function OrderDetailLayout({ order, onDownloadInvoice, onRefundOrder, onCreateShipment }) {
+  const items = Array.isArray(order.items) ? order.items : [];
+  const activityEvents = buildOrderActivityEvents(order);
+  const shippingAddressLines = buildShippingAddressLines(order);
+  const billingAddressLines = buildBillingAddressLines(order);
+  const payment = buildPaymentSummary(order);
+  const currencyCode = String(order.currency_code || "").toUpperCase();
+  const orderStatusKey = String(order.status || "").toLowerCase();
+  const shipmentStatusKey = String(order.shipment_status || "").toLowerCase();
+  const paymentStatusKey = String(order.payment_status || "").toLowerCase();
+  const orderStatusLabel = ORDER_STATUS_LABELS[orderStatusKey] || humanizeEnum(orderStatusKey) || "—";
+  const shipmentStatusLabel = SHIPMENT_STATUS_LABELS[shipmentStatusKey] || humanizeEnum(shipmentStatusKey) || "—";
+  const paymentStatusLabel = PAYMENT_STATUS_LABELS[paymentStatusKey] || humanizeEnum(paymentStatusKey) || "—";
+
   return (
-    <div className="admin-order-snapshot">
-      {cells.map(([label, main, sub]) => (
-        <div key={label} className="admin-snapshot-cell">
-          <span>{label}</span>
-          <strong>{main}</strong>
-          <p>{sub}</p>
-        </div>
-      ))}
-      <div className="admin-snapshot-actions">
-        <button type="button" className="admin-btn-sm" onClick={() => onDownloadInvoice(order)}>
-          Download Invoice
-        </button>
-        {onRefundOrder ? (
-          <button type="button" className="admin-btn-sm warning" onClick={() => onRefundOrder(order)}>
-            Issue Refund
-          </button>
-        ) : null}
-        {onCreateShipment ? (
-          <button type="button" className="admin-btn-sm" onClick={() => onCreateShipment(order)}>
-            Create Shipment
-          </button>
-        ) : null}
-      </div>
+    <div className="admin-order-detail-grid">
+      <section className="admin-order-detail-col">
+        <article className="admin-order-card">
+          <div className="admin-order-card-head">
+            <h3>Order Items</h3>
+            <span>{items.length} line{items.length === 1 ? "" : "s"}</span>
+          </div>
+          {items.length ? (
+            <div className="admin-order-items-list">
+              {items.map((item, index) => (
+                <div key={item.id || `${item.product_slug || "item"}-${index}`} className="admin-order-item-row">
+                  <div className="admin-order-item-main">
+                    <div className="admin-order-item-image-wrap">
+                      {item.product_image ? (
+                        <img src={item.product_image} alt={item.product_name || "Order item"} className="admin-order-item-image" />
+                      ) : (
+                        <div className="admin-order-item-image admin-order-item-image--placeholder">No image</div>
+                      )}
+                    </div>
+                    <div>
+                      <p className="admin-order-item-title">{item.product_name || item.product_slug || "Unnamed product"}</p>
+                      <p className="admin-order-item-meta">
+                        <span>SKU: {item.sku || item.product_slug || "—"}</span>
+                        {item.variant ? <span>Variant: {item.variant}</span> : null}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="admin-order-item-pricing">
+                    <span>{formatMoney(item.unit_price, currencyCode)} × {Number(item.quantity || 0)}</span>
+                    <strong>{formatMoney(item.line_total, currencyCode)}</strong>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="admin-order-empty">No order items are available for this record.</p>
+          )}
+        </article>
+
+        <article className="admin-order-card">
+          <div className="admin-order-card-head">
+            <h3>Fulfillment & Status</h3>
+          </div>
+          <div className="admin-order-status-grid">
+            <div className="admin-order-status-cell">
+              <span>Order status</span>
+              <strong>{orderStatusLabel}</strong>
+            </div>
+            <div className="admin-order-status-cell">
+              <span>Fulfillment status</span>
+              <strong>{shipmentStatusLabel}</strong>
+            </div>
+          </div>
+          <div className="admin-order-status-badges">
+            <span className={`admin-badge ${statusTone(orderStatusKey)}`}>{orderStatusLabel}</span>
+            <span className={`admin-badge ${shipmentStatusTone(shipmentStatusKey)}`}>{shipmentStatusLabel}</span>
+          </div>
+          <p className="admin-order-helper">Use the status fields below to update fulfillment/order state safely.</p>
+        </article>
+
+        <article className="admin-order-card">
+          <div className="admin-order-card-head">
+            <h3>Payment Summary</h3>
+            <span className={`admin-badge ${statusTone(paymentStatusKey)}`}>{paymentStatusLabel}</span>
+          </div>
+          <div className="admin-order-money-grid">
+            <span>Subtotal</span>
+            <strong>{formatMoney(payment.subtotal, currencyCode)}</strong>
+            <span>Discount</span>
+            <strong>{formatMoney(payment.discount, currencyCode)}</strong>
+            <span>Shipping</span>
+            <strong>{formatMoney(payment.shipping, currencyCode)}</strong>
+            {payment.showTax ? (
+              <>
+                <span>{order.tax_label || "Tax"}</span>
+                <strong>{formatMoney(payment.tax, currencyCode)}</strong>
+              </>
+            ) : null}
+            <span className="admin-order-money-total">Total</span>
+            <strong className="admin-order-money-total">{formatMoney(payment.total, currencyCode)}</strong>
+            <span>Paid amount</span>
+            <strong>{formatMoney(payment.paid, currencyCode)}</strong>
+            <span>Balance</span>
+            <strong>{formatMoney(payment.balance, currencyCode)}</strong>
+          </div>
+        </article>
+
+        <article className="admin-order-card">
+          <div className="admin-order-card-head">
+            <h3>Invoice & Payment Actions</h3>
+            <span>{order.invoice_number || order.order_number || "—"}</span>
+          </div>
+          <div className="admin-snapshot-actions">
+            <button type="button" className="admin-btn-sm" onClick={() => onDownloadInvoice(order)}>
+              Download Invoice
+            </button>
+            {onRefundOrder ? (
+              <button type="button" className="admin-btn-sm warning" onClick={() => onRefundOrder(order)}>
+                Issue Refund
+              </button>
+            ) : null}
+            {onCreateShipment ? (
+              <button type="button" className="admin-btn-sm" onClick={() => onCreateShipment(order)}>
+                Create Shipment
+              </button>
+            ) : null}
+          </div>
+        </article>
+      </section>
+
+      <aside className="admin-order-detail-col secondary">
+        <article className="admin-order-card">
+          <div className="admin-order-card-head">
+            <h3>Notes</h3>
+          </div>
+          <p className="admin-order-notes">{order.notes || "No notes from customer."}</p>
+        </article>
+
+        <article className="admin-order-card">
+          <div className="admin-order-card-head">
+            <h3>Customer</h3>
+          </div>
+          <div className="admin-order-info-block">
+            <h4>{order.customer_name || "Guest customer"}</h4>
+            <p>Order: {order.order_number || "—"}</p>
+            <p>Channel: {ORDER_CHANNEL_LABELS[order.sales_channel] || order.sales_channel || "—"}</p>
+          </div>
+          <div className="admin-order-info-block">
+            <h4>Contact Information</h4>
+            <p>{order.customer_email || "No email"}</p>
+            <p>{order.customer_phone || "No phone number"}</p>
+          </div>
+          <div className="admin-order-info-block">
+            <h4>Shipping Address</h4>
+            {shippingAddressLines.map((line, index) => <p key={`shipping-${index}`}>{line}</p>)}
+            {order.map_link ? (
+              <p>
+                <a href={order.map_link} target="_blank" rel="noreferrer">View map</a>
+              </p>
+            ) : null}
+          </div>
+          <div className="admin-order-info-block">
+            <h4>Billing Address</h4>
+            {billingAddressLines.map((line, index) => <p key={`billing-${index}`}>{line}</p>)}
+          </div>
+        </article>
+
+        <article className="admin-order-card">
+          <div className="admin-order-card-head">
+            <h3>Order Activity</h3>
+          </div>
+          {activityEvents.length ? (
+            <div className="admin-order-timeline">
+              {activityEvents.map((event) => (
+                <div key={event.id} className="admin-order-timeline-item">
+                  <span className="admin-order-timeline-dot" aria-hidden="true" />
+                  <div className="admin-order-timeline-content">
+                    <div className="admin-order-timeline-top">
+                      <strong>{event.title}</strong>
+                      <span>{formatOrderDate(event.timestamp)}</span>
+                    </div>
+                    {event.description ? <p>{event.description}</p> : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="admin-order-empty">No activity is available for this order yet.</p>
+          )}
+        </article>
+      </aside>
     </div>
   );
+}
+
+function buildShippingAddressLines(order) {
+  const lines = [
+    order.customer_name || "",
+    order.address_line_1 || "",
+    order.address_line_2 || "",
+    [order.area, order.city].filter(Boolean).join(", "),
+    [order.postcode, order.country].filter(Boolean).join(", "),
+  ].map((line) => String(line || "").trim()).filter(Boolean);
+  return lines.length ? lines : ["No shipping address available"];
+}
+
+function buildBillingAddressLines(order) {
+  return buildShippingAddressLines(order);
+}
+
+function toNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatMoney(amount, currencyCode) {
+  const numericAmount = toNumber(amount);
+  const code = String(currencyCode || "").toUpperCase();
+  if (!code) return numericAmount.toFixed(2);
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: code,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(numericAmount);
+  } catch {
+    return `${code} ${numericAmount.toFixed(2)}`;
+  }
+}
+
+function humanizeEnum(value) {
+  const normalized = String(value || "").trim();
+  if (!normalized) return "";
+  return normalized
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function normalizeDate(value) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function buildPaymentSummary(order) {
+  const subtotal = toNumber(order.subtotal);
+  const discount = toNumber(order.discount_total);
+  const shipping = toNumber(order.shipping_total || order.shipping_fee);
+  const tax = toNumber(order.tax_total);
+  const total = toNumber(order.grand_total);
+  const paid = inferPaidAmount(order, total);
+  const balance = Math.max(total - paid, 0);
+  return {
+    subtotal,
+    discount,
+    shipping,
+    tax,
+    total,
+    paid,
+    balance,
+    showTax: tax > 0 || Boolean(order.tax_label),
+  };
+}
+
+function inferPaidAmount(order, totalAmount) {
+  const transactions = Array.isArray(order.transactions) ? order.transactions : [];
+  let paidFromTransactions = 0;
+  transactions.forEach((transaction) => {
+    const statusKey = String(transaction?.status || "").toLowerCase();
+    const amount = toNumber(transaction?.amount);
+    if (statusKey === "paid" || statusKey === "authorized") paidFromTransactions += amount;
+    if (statusKey === "refunded") paidFromTransactions -= amount;
+  });
+  if (paidFromTransactions > 0) return paidFromTransactions;
+
+  const paymentStatus = String(order.payment_status || "").toLowerCase();
+  if (paymentStatus === "paid") return Math.max(totalAmount, 0);
+  if (paymentStatus === "refunded") {
+    const refundAmount = toNumber(order.refund_amount);
+    return Math.max(totalAmount - refundAmount, 0);
+  }
+  return 0;
+}
+
+function buildOrderActivityEvents(order) {
+  const events = [];
+
+  function pushEvent({ key, title, description = "", timestamp, source = "order", fallbackTimestamp = "" }) {
+    const parsed = normalizeDate(timestamp) || normalizeDate(fallbackTimestamp);
+    if (!parsed) return;
+    events.push({
+      id: `${source}-${key}-${parsed.getTime()}-${events.length}`,
+      title,
+      description: String(description || "").trim(),
+      timestamp: parsed.toISOString(),
+      sortKey: parsed.getTime(),
+    });
+  }
+
+  pushEvent({
+    key: "created",
+    title: "Order placed",
+    description: `${order.customer_name || "Customer"} placed this order.`,
+    timestamp: order.created_at,
+  });
+
+  const statusTimeline = Array.isArray(order.status_timeline) ? order.status_timeline : [];
+  statusTimeline.forEach((entry, index) => {
+    const nextStatusKey = String(entry?.new_status || "").toLowerCase();
+    const statusLabel = entry?.label || ORDER_STATUS_LABELS[nextStatusKey] || humanizeEnum(nextStatusKey) || "Status updated";
+    const actorDetails = entry?.actor_name ? `Updated by ${entry.actor_name}.` : "";
+    const noteDetails = entry?.note ? `Note: ${entry.note}` : "";
+    const description = [actorDetails, noteDetails].filter(Boolean).join(" ");
+    const title = entry?.old_status ? `Order status changed to ${statusLabel}` : `Order status: ${statusLabel}`;
+    pushEvent({
+      key: `status-${index}`,
+      source: "status",
+      title,
+      description,
+      timestamp: entry?.timestamp,
+    });
+  });
+
+  const transactions = Array.isArray(order.transactions) ? order.transactions : [];
+  transactions.forEach((transaction, index) => {
+    const paymentStatus = humanizeEnum(transaction?.status || "") || "Updated";
+    const providerLabel = humanizeEnum(transaction?.provider || "");
+    const amountLabel = formatMoney(transaction?.amount, transaction?.currency_code || order.currency_code);
+    const reference = transaction?.provider_reference ? `Ref: ${transaction.provider_reference}` : "";
+    const description = [
+      amountLabel,
+      providerLabel ? `via ${providerLabel}` : "",
+      reference,
+    ].filter(Boolean).join(" ");
+    pushEvent({
+      key: `payment-${index}`,
+      source: "payment",
+      title: `Payment ${paymentStatus.toLowerCase()}`,
+      description,
+      timestamp: transaction?.created_at,
+    });
+  });
+
+  const returnRequests = Array.isArray(order.return_requests) ? order.return_requests : [];
+  returnRequests.forEach((request, index) => {
+    pushEvent({
+      key: `return-${index}`,
+      source: "return",
+      title: `Return request ${humanizeEnum(request?.status || "requested").toLowerCase()}`,
+      description: request?.admin_note ? `Note: ${request.admin_note}` : "",
+      timestamp: request?.requested_at,
+    });
+  });
+
+  if (order.shipment_created_at) {
+    const shipmentDetails = [
+      order.carrier ? `Carrier: ${order.carrier}` : "",
+      order.tracking_number ? `Tracking #: ${order.tracking_number}` : "",
+    ].filter(Boolean).join(" · ");
+    pushEvent({
+      key: "shipment-created",
+      source: "shipment",
+      title: "Shipment created",
+      description: shipmentDetails,
+      timestamp: order.shipment_created_at,
+    });
+  }
+
+  if (order.delivered_at) {
+    pushEvent({
+      key: "delivered",
+      source: "shipment",
+      title: "Order delivered",
+      description: "",
+      timestamp: order.delivered_at,
+    });
+  }
+
+  if (String(order.invoice_status || "").toLowerCase() === "generated" && order.invoice_date) {
+    pushEvent({
+      key: "invoice-generated",
+      source: "invoice",
+      title: "Invoice generated",
+      description: order.invoice_number ? `Invoice #${order.invoice_number}` : "",
+      timestamp: order.invoice_date,
+    });
+  }
+
+  if (order.refunded_at || String(order.refund_status || "").toLowerCase() === "refunded") {
+    const refundDescription = [
+      order.refund_amount ? `Amount: ${formatMoney(order.refund_amount, order.currency_code)}` : "",
+      order.refund_reference ? `Ref: ${order.refund_reference}` : "",
+    ].filter(Boolean).join(" · ");
+    pushEvent({
+      key: "refund",
+      source: "refund",
+      title: "Refund issued",
+      description: refundDescription,
+      timestamp: order.refunded_at,
+      fallbackTimestamp: order.updated_at,
+    });
+  }
+
+  if (!events.length) {
+    pushEvent({
+      key: "minimal-created",
+      source: "fallback",
+      title: "Order created",
+      description: "",
+      timestamp: order.created_at,
+      fallbackTimestamp: order.updated_at,
+    });
+    pushEvent({
+      key: "minimal-payment",
+      source: "fallback",
+      title: `Current payment status: ${PAYMENT_STATUS_LABELS[String(order.payment_status || "").toLowerCase()] || humanizeEnum(order.payment_status) || "Unknown"}`,
+      description: "",
+      timestamp: order.updated_at,
+      fallbackTimestamp: order.created_at,
+    });
+    pushEvent({
+      key: "minimal-fulfillment",
+      source: "fallback",
+      title: `Current fulfillment status: ${SHIPMENT_STATUS_LABELS[String(order.shipment_status || "").toLowerCase()] || humanizeEnum(order.shipment_status) || "Unknown"}`,
+      description: "",
+      timestamp: order.updated_at,
+      fallbackTimestamp: order.created_at,
+    });
+  }
+
+  const deduped = [];
+  const seen = new Set();
+  events
+    .sort((a, b) => b.sortKey - a.sortKey)
+    .forEach((event) => {
+      const fingerprint = `${event.title}|${event.description}|${event.timestamp}`;
+      if (seen.has(fingerprint)) return;
+      seen.add(fingerprint);
+      deduped.push({
+        id: event.id,
+        title: event.title,
+        description: event.description,
+        timestamp: event.timestamp,
+      });
+    });
+
+  return deduped;
 }
 
 function FormField({ field, value, editor, setEditor }) {

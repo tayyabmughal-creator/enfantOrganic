@@ -52,3 +52,4 @@ yarn-error.log*
 dist/
 build/
 coverage/
+reference-images/

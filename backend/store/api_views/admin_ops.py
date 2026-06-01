@@ -1422,7 +1422,12 @@ class AdminOrderListView(generics.ListAPIView):
     serializer_class = AdminOrderSerializer
 
     def get_queryset(self):
-        queryset = Order.objects.select_related("region", "user").prefetch_related("items", "transactions", "status_history__actor")
+        queryset = Order.objects.select_related("region", "user").prefetch_related(
+            "items__product",
+            "transactions",
+            "status_history__actor",
+            "return_requests__reviewed_by",
+        )
         status_filter = self.request.query_params.get("status", "").strip()
         if status_filter:
             queryset = queryset.filter(status=status_filter)
@@ -1463,7 +1468,12 @@ class AdminOrderDetailView(generics.RetrieveUpdateAPIView):
     admin_write_capabilities = (CAP_ORDERS_EDIT,)
     serializer_class = AdminOrderSerializer
     lookup_field = "order_number"
-    queryset = Order.objects.select_related("region", "user").prefetch_related("items", "transactions", "status_history__actor")
+    queryset = Order.objects.select_related("region", "user").prefetch_related(
+        "items__product",
+        "transactions",
+        "status_history__actor",
+        "return_requests__reviewed_by",
+    )
 
     def perform_update(self, serializer):
         old_order = self.get_object()
@@ -1577,7 +1587,7 @@ class AdminOrderShipmentCreateView(APIView):
         order = (
             Order.objects.filter(order_number=order_number)
             .select_related("region")
-            .prefetch_related("items", "transactions", "status_history__actor")
+            .prefetch_related("items__product", "transactions", "status_history__actor", "return_requests__reviewed_by")
             .first()
         )
         if not order:
@@ -1632,7 +1642,7 @@ class AdminOrderTrackingRefreshView(APIView):
         order = (
             Order.objects.filter(order_number=order_number)
             .select_related("region")
-            .prefetch_related("items", "transactions", "status_history__actor")
+            .prefetch_related("items__product", "transactions", "status_history__actor", "return_requests__reviewed_by")
             .first()
         )
         if not order:
@@ -1704,7 +1714,7 @@ class AdminOrderRefundView(APIView):
             Order.objects.select_for_update()
             .filter(order_number=order_number)
             .select_related("region", "user")
-            .prefetch_related("items", "transactions")
+            .prefetch_related("items__product", "transactions", "status_history__actor", "return_requests__reviewed_by")
             .first()
         )
         if not order:

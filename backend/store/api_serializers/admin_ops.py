@@ -14,6 +14,7 @@ from ..models import (
     HeroPromoCard,
     InstagramPost,
     Order,
+    OrderItem,
     PaymentTransaction,
     PaymobRegionConfig,
     Product,
@@ -38,7 +39,11 @@ from ..services.payment_config import (
     get_thawani_config,
     paymob_config_is_complete,
 )
-from .orders import OrderStatusHistorySerializer
+from .orders import (
+    OrderStatusHistorySerializer,
+    PaymentTransactionSerializer,
+    ReturnRequestSerializer,
+)
 from .localization import get_image_url
 
 
@@ -136,6 +141,39 @@ class AdminCouponSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class AdminOrderItemSerializer(serializers.ModelSerializer):
+    product_image = serializers.SerializerMethodField(read_only=True)
+    sku = serializers.SerializerMethodField(read_only=True)
+    variant = serializers.CharField(source="selected_options_text", read_only=True)
+
+    class Meta:
+        model = OrderItem
+        fields = (
+            "id",
+            "product_slug",
+            "sku",
+            "product_name",
+            "product_image",
+            "variant",
+            "quantity",
+            "unit_price",
+            "line_total",
+        )
+        read_only_fields = fields
+
+    def get_product_image(self, obj):
+        product = getattr(obj, "product", None)
+        if not product:
+            return ""
+        request = self.context.get("request")
+        return get_image_url(product, request, "image_file", "image")
+
+    def get_sku(self, obj):
+        product = getattr(obj, "product", None)
+        product_sku = str(getattr(product, "sku", "") or "").strip() if product else ""
+        return product_sku or str(obj.product_slug or "")
+
+
 class AdminOrderSerializer(serializers.ModelSerializer):
     admin_invoice_download_url = serializers.SerializerMethodField()
     map_link = serializers.SerializerMethodField()
@@ -144,6 +182,9 @@ class AdminOrderSerializer(serializers.ModelSerializer):
     region_code = serializers.CharField(source="region.code", read_only=True)
     region_name = serializers.CharField(source="region.name_en", read_only=True)
     items_count = serializers.SerializerMethodField(read_only=True)
+    items = AdminOrderItemSerializer(many=True, read_only=True)
+    transactions = PaymentTransactionSerializer(many=True, read_only=True)
+    return_requests = ReturnRequestSerializer(many=True, read_only=True)
 
     class Meta:
         model = Order
