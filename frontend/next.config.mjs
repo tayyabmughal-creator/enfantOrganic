@@ -3,9 +3,6 @@ import path from "node:path";
 
 const isDev = process.env.NODE_ENV === "development";
 
-const SENSITIVE_PATH_PATTERN =
-  /^\/(?:admin(?:\/|$)|(?:en|ar)\/(?:checkout|payment|account)(?:\/|$)|api\/(?:checkout|payments|auth|admin|account|orders)(?:\/|$))/i;
-
 // Security headers applied to every route. The full CSP is enforced by nginx
 // in production (which sees both frontend and API on the same origin); this
 // set covers the cases when Next.js serves directly (dev/preview).
@@ -51,7 +48,10 @@ const nextConfig = {
 const pwaRuntimeCaching = [
   {
     urlPattern: ({ sameOrigin, url }) =>
-      sameOrigin && SENSITIVE_PATH_PATTERN.test(url.pathname),
+      sameOrigin &&
+        /^\/(?:admin(?:\/|$)|(?:en|ar)\/(?:checkout|payment|account)(?:\/|$)|api\/(?:checkout|payments|auth|admin|account|orders)(?:\/|$))/i.test(
+          url.pathname,
+        ),
     handler: "NetworkOnly",
     options: {
       cacheName: "sensitive-network-only",
