@@ -15,6 +15,8 @@ const API_BASE    = API_BASE_URL;
 const TOKEN_KEY   = ADMIN_TOKEN_KEY;
 const REFRESH_KEY = ADMIN_REFRESH_KEY;
 const SIDEBAR_COLLAPSED_KEY = "enfhant-admin-sidebar-collapsed";
+const DEFAULT_ADMIN_PAGE_SIZE = 25;
+const INVENTORY_PAGE_SIZE = 100;
 
 const NAV_GROUPS = [
   {
@@ -869,6 +871,7 @@ export default function AdminPanelClient() {
       const screenKey = screen?.key || activeKey;
       const filterSource = options.dashboardFilters || dashboardFilters;
       const params = new URLSearchParams();
+      let requestedPageSize = DEFAULT_ADMIN_PAGE_SIZE;
       if (CRUD_KEYS.includes(screenKey) && searchQuery) {
         params.set("search", searchQuery);
       }
@@ -885,7 +888,8 @@ export default function AdminPanelClient() {
         }
       }
       if (screenKey === "inventory") {
-        params.set("page_size", "100");
+        requestedPageSize = INVENTORY_PAGE_SIZE;
+        params.set("page_size", String(requestedPageSize));
       }
       if (screenKey === "orders" || screenKey === "draft_orders") {
         const orderFilterSource = options.orderFilters || orderFilters;
@@ -910,12 +914,16 @@ export default function AdminPanelClient() {
       if (raw && typeof raw === "object" && Array.isArray(raw.results)) {
         setData(raw.results);
         if (typeof raw.count === "number") {
-          const perPage = Math.ceil(raw.count / (raw.results.length || 1));
-          setTotalPages(Math.max(1, Math.ceil(raw.count / (perPage || 25))));
+          const apiPageSize = Number(raw.page_size);
+          const pageSize = Number.isFinite(apiPageSize) && apiPageSize > 0 ? apiPageSize : requestedPageSize;
+          setTotalPages(Math.max(1, Math.ceil(raw.count / pageSize)));
         }
       } else if (raw && typeof raw === "object" && "count" in raw && Array.isArray(raw.results)) {
         setData(raw.results);
-        setTotalPages(Math.max(1, Math.ceil(raw.count / (raw.results.length || 25))));
+        const totalCount = Number(raw.count);
+        const apiPageSize = Number(raw.page_size);
+        const pageSize = Number.isFinite(apiPageSize) && apiPageSize > 0 ? apiPageSize : requestedPageSize;
+        setTotalPages(Number.isFinite(totalCount) ? Math.max(1, Math.ceil(totalCount / pageSize)) : 1);
       } else {
         setData(raw);
         setTotalPages(1);
