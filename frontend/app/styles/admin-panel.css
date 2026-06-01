@@ -803,6 +803,45 @@
   gap: 6px;
 }
 
+/* ─── Orders section tabs ─────────────────────────────────────────────────── */
+
+.admin-orders-section-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid #e5ead8;
+  border-radius: 12px;
+  background: #fbfdf8;
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.admin-orders-section-tab {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: #5e6859;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 150ms, color 150ms, border-color 150ms;
+}
+
+.admin-orders-section-tab:hover {
+  background: #f4f7ef;
+  color: #2b3328;
+}
+
+.admin-orders-section-tab.active {
+  background: linear-gradient(135deg, #92ab69, #72904e);
+  border-color: #72904e;
+  color: #ffffff;
+}
+
 /* ─── Orders table ────────────────────────────────────────────────────────── */
 
 .admin-orders-table-wrap {
@@ -905,6 +944,21 @@
 .admin-order-total {
   font-weight: 600;
   white-space: nowrap;
+}
+
+.admin-abandoned-table {
+  min-width: 1120px;
+}
+
+.admin-abandoned-status {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.admin-abandoned-status-meta {
+  font-size: 11px;
+  color: #8a9580;
 }
 
 /* ─── Charts ──────────────────────────────────────────────────────────────── */

@@ -977,6 +977,9 @@ class AdminBackInStockRequestSerializer(serializers.ModelSerializer):
 
 
 class AdminAbandonedCartSerializer(serializers.ModelSerializer):
+    region_code = serializers.CharField(source="region.code", read_only=True, default="")
+    region_name = serializers.CharField(source="region.name_en", read_only=True, default="")
+
     class Meta:
         model = AbandonedCart
         fields = "__all__"

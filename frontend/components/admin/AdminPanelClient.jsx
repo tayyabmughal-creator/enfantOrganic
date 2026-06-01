@@ -21,8 +21,8 @@ const NAV_GROUPS = [
     label: "Store",
     items: [
       { key: "dashboard",  label: "Dashboard",   icon: "dashboard", endpoint: "/admin/dashboard/",  desc: "Live store signals and KPIs." },
-      { key: "orders",     label: "Orders",       icon: "clipboard", endpoint: "/admin/orders/",      desc: "Manage and fulfil customer orders." },
-      { key: "draft_orders", label: "Draft Orders", icon: "clipboard", endpoint: "/admin/orders/",    desc: "Create and manage admin-created draft orders." },
+      { key: "orders",     label: "Orders",       icon: "clipboard", endpoint: "/admin/orders/",      desc: "Manage orders, draft orders, and abandoned checkouts." },
+      { key: "draft_orders", label: "Draft Orders", icon: "clipboard", endpoint: "/admin/orders/", showInSidebar: false, desc: "Create and manage admin-created draft orders." },
       { key: "customers",  label: "Customers",    icon: "user",      endpoint: "/admin/customers/",   desc: "Customer accounts and history." },
     ],
   },
@@ -59,7 +59,7 @@ const NAV_GROUPS = [
     items: [
       { key: "deals",      label: "Promotions",     icon: "percent", endpoint: "/admin/promotions/",           desc: "Coupons, codes, and deals." },
       { key: "giftcards",  label: "Gift Cards",     icon: "gift",    endpoint: "/admin/gift-cards/",           desc: "Issue and track gift cards." },
-      { key: "abandoned",  label: "Abandoned Cart", icon: "cartX",   endpoint: "/admin/abandoned-carts/",      desc: "Recover abandoned checkouts." },
+      { key: "abandoned",  label: "Abandoned Checkouts", icon: "cartX",   endpoint: "/admin/abandoned-carts/", showInSidebar: false, desc: "Recover abandoned checkouts." },
       { key: "newsletter", label: "Newsletter",     icon: "mail",    endpoint: "/admin/newsletter-subscribers/", desc: "Subscribers and campaigns." },
     ],
   },
@@ -102,6 +102,12 @@ const NAV_GROUPS = [
 ];
 
 const ALL_NAV = NAV_GROUPS.flatMap((g) => g.items);
+const ORDER_SECTION_KEYS = new Set(["orders", "draft_orders", "abandoned"]);
+const ORDER_SECTION_TABS = [
+  { key: "orders", label: "Orders" },
+  { key: "draft_orders", label: "Draft Orders" },
+  { key: "abandoned", label: "Abandoned Checkouts" },
+];
 
 const NAV_READ_CAPABILITY = {
   dashboard: "dashboard.view",
@@ -123,7 +129,7 @@ const NAV_READ_CAPABILITY = {
   seo_legal: "content.view",
   deals: "coupons.view",
   giftcards: "coupons.view",
-  abandoned: "coupons.view",
+  abandoned: "abandoned.view",
   newsletter: "moderation.view",
   analytics: "dashboard.view",
   insights: "customers.view",
@@ -670,6 +676,17 @@ export default function AdminPanelClient() {
     () => visibleNavGroups.flatMap((group) => group.items),
     [visibleNavGroups],
   );
+  const sidebarNavGroups = useMemo(() => (
+    visibleNavGroups
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) => (
+          item.showInSidebar !== false
+          || (ORDER_SECTION_KEYS.has(item.key) && !canViewKey("orders"))
+        )),
+      }))
+      .filter((group) => group.items.length)
+  ), [visibleNavGroups, canViewKey]);
 
   const active    = visibleNavItems.find((n) => n.key === activeKey) || visibleNavItems[0] || null;
   const canCreate = Boolean(
@@ -690,6 +707,11 @@ export default function AdminPanelClient() {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3600);
   }, []);
+
+  const isOrdersSectionActive = useCallback((key) => {
+    if (key === "orders") return ORDER_SECTION_KEYS.has(activeKey);
+    return activeKey === key;
+  }, [activeKey]);
 
   useEffect(() => {
     setToken(window.localStorage.getItem(TOKEN_KEY) || "");
@@ -847,10 +869,10 @@ export default function AdminPanelClient() {
       const screenKey = screen?.key || activeKey;
       const filterSource = options.dashboardFilters || dashboardFilters;
       const params = new URLSearchParams();
-      if (CRUD_KEYS.includes(activeKey) && searchQuery) {
+      if (CRUD_KEYS.includes(screenKey) && searchQuery) {
         params.set("search", searchQuery);
       }
-      if (page > 1 && CRUD_KEYS.includes(activeKey)) {
+      if (page > 1 && (CRUD_KEYS.includes(screenKey) || screenKey === "abandoned")) {
         params.set("page", String(page));
       }
       if (screenKey === "dashboard") {
@@ -1320,14 +1342,14 @@ export default function AdminPanelClient() {
         </div>
 
         <nav className="admin-nav-scroll">
-          {visibleNavGroups.map((group) => (
+          {sidebarNavGroups.map((group) => (
             <div key={group.label} className="admin-nav-group">
               <span className="admin-nav-group-label">{group.label}</span>
               {group.items.map((item) => (
                 <button
                   key={item.key}
                   type="button"
-                  className={`admin-nav-item ${activeKey === item.key ? "active" : ""}`}
+                  className={`admin-nav-item ${isOrdersSectionActive(item.key) ? "active" : ""}`}
                   onClick={() => navigate(item.key)}
                 >
                   <span className="admin-nav-icon" aria-hidden="true">
@@ -1386,6 +1408,22 @@ export default function AdminPanelClient() {
         </header>
 
         <div className="admin-content">
+          {ORDER_SECTION_KEYS.has(activeKey) ? (
+            <section className="admin-orders-section-tabs" aria-label="Orders sections">
+              {ORDER_SECTION_TABS
+                .filter((tab) => canViewKey(tab.key))
+                .map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    className={`admin-orders-section-tab ${activeKey === tab.key ? "active" : ""}`}
+                    onClick={() => navigate(tab.key)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+            </section>
+          ) : null}
           {loading
             ? <div className="admin-loading" style={{ padding: "2rem" }}><SkeletonLoader count={5} type={activeKey === "dashboard" || activeKey === "analytics" ? "grid" : "list"} /></div>
             : renderSection()}

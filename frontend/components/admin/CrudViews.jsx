@@ -29,6 +29,7 @@ export function CrudPanel({
 }) {
   const label = labelFor ? labelFor(activeKey) : activeKey;
   const isOrderView = activeKey === "orders" || activeKey === "draft_orders";
+  const isAbandonedView = activeKey === "abandoned";
   return (
     <section className="admin-panel-card">
       <div className="admin-panel-head">
@@ -115,6 +116,8 @@ export function CrudPanel({
         {rows.length ? (
           isOrderView ? (
             <OrdersTable rows={rows} canEdit={canEdit} onEdit={onEdit} onDownloadInvoice={onDownloadInvoice} />
+          ) : isAbandonedView ? (
+            <AbandonedCheckoutsTable rows={rows} canEdit={canEdit} onEdit={onEdit} />
           ) : (
             <>
               <div className="admin-list-head"><span>Record</span><span>Status</span><span>Actions</span></div>
@@ -337,6 +340,60 @@ function OrdersTable({ rows, canEdit, onEdit, onDownloadInvoice }) {
   );
 }
 
+function AbandonedCheckoutsTable({ rows, canEdit, onEdit }) {
+  return (
+    <div className="admin-orders-table-wrap">
+      <table className="admin-orders-table admin-abandoned-table">
+        <thead>
+          <tr>
+            <th>Customer</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Market</th>
+            <th>Cart Total</th>
+            <th>Recovery Status</th>
+            <th>Created</th>
+            <th>Updated</th>
+            <th className="actions-col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((cart) => {
+            const status = String(cart.status || "").toLowerCase();
+            return (
+              <tr key={cart.id || cart.session_token || `${cart.customer_email}-${cart.abandoned_at}`}>
+                <td>
+                  <div className="admin-order-customer">
+                    <strong>{formatAbandonedCustomerName(cart)}</strong>
+                    <span>{cart.session_token ? `Session: ${String(cart.session_token).slice(0, 10)}...` : "Guest session"}</span>
+                  </div>
+                </td>
+                <td>{cart.customer_email || "—"}</td>
+                <td>{cart.customer_phone || "—"}</td>
+                <td>{formatAbandonedMarket(cart)}</td>
+                <td className="admin-order-total">{formatAbandonedTotal(cart)}</td>
+                <td>
+                  <div className="admin-abandoned-status">
+                    <span className={`admin-badge ${statusTone(status)}`}>{humanizeEnum(status) || "Unknown"}</span>
+                    <span className="admin-abandoned-status-meta">Recovery sent: {Number(cart.recovery_sent_count || 0)}</span>
+                  </div>
+                </td>
+                <td>{formatOrderDate(cart.abandoned_at)}</td>
+                <td>{formatOrderDate(cart.updated_at)}</td>
+                <td className="actions-col">
+                  <div className="admin-row-actions">
+                    {canEdit ? <button type="button" className="admin-btn-sm" onClick={() => onEdit(cart)}>Edit</button> : null}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function formatOrderDate(value) {
   if (!value) return "—";
   const parsed = new Date(value);
@@ -348,6 +405,40 @@ function formatOrderDate(value) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function formatAbandonedCustomerName(cart) {
+  const name = String(cart?.customer_name || "").trim();
+  if (name) return name;
+  const email = String(cart?.customer_email || "").trim();
+  if (email) return email.split("@")[0];
+  return "Guest";
+}
+
+function formatAbandonedMarket(cart) {
+  const regionCode = String(cart?.region_code || "").toLowerCase();
+  if (regionCode && MARKET_LABELS[regionCode]) return MARKET_LABELS[regionCode];
+  if (regionCode) return regionCode.toUpperCase();
+  const regionName = String(cart?.region_name || "").trim();
+  if (regionName) return regionName;
+  return "—";
+}
+
+function formatAbandonedTotal(cart) {
+  const currency = String(cart?.currency_code || "").toUpperCase();
+  const amount = Number(cart?.subtotal);
+  if (!Number.isFinite(amount)) return "—";
+  if (!currency) return amount.toFixed(2);
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    return `${currency} ${amount.toFixed(2)}`;
+  }
 }
 
 function formatOrderTotal(order) {
