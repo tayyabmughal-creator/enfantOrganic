@@ -5,6 +5,7 @@ import DashboardView from "./DashboardView";
 import AnalyticsView from "./AnalyticsView";
 import { StoreSettingsSection, SettingsPanel, Reports, AuditLogsPanel, IntegrationsView, PaymentGatewaysView, InventoryView, InsightsView, NewsletterPanel, RegionsView, InstagramPostsPanel, PlaceholderModule } from "./OtherViews";
 import { CrudPanel, CrudFormModal } from "./CrudViews";
+import DraftOrderComposer from "./DraftOrderComposer";
 import { AdminToast } from "./SharedUI";
 import SkeletonLoader from "../SkeletonLoader";
 import Icon from "../icons/Icon";
@@ -21,6 +22,7 @@ const NAV_GROUPS = [
     items: [
       { key: "dashboard",  label: "Dashboard",   icon: "dashboard", endpoint: "/admin/dashboard/",  desc: "Live store signals and KPIs." },
       { key: "orders",     label: "Orders",       icon: "clipboard", endpoint: "/admin/orders/",      desc: "Manage and fulfil customer orders." },
+      { key: "draft_orders", label: "Draft Orders", icon: "clipboard", endpoint: "/admin/orders/",    desc: "Create and manage admin-created draft orders." },
       { key: "customers",  label: "Customers",    icon: "user",      endpoint: "/admin/customers/",   desc: "Customer accounts and history." },
     ],
   },
@@ -104,6 +106,7 @@ const ALL_NAV = NAV_GROUPS.flatMap((g) => g.items);
 const NAV_READ_CAPABILITY = {
   dashboard: "dashboard.view",
   orders: "orders.view",
+  draft_orders: "orders.view",
   customers: "customers.view",
   products: "products.view",
   categories: "categories.view",
@@ -142,6 +145,7 @@ const NAV_READ_CAPABILITY = {
 
 const NAV_WRITE_CAPABILITY = {
   orders: "orders.edit",
+  draft_orders: "orders.edit",
   customers: "customers.edit",
   products: "products.edit",
   categories: "categories.edit",
@@ -628,6 +632,8 @@ export default function AdminPanelClient() {
   const [editor, setEditor]         = useState({});
   const [mode, setMode]             = useState("view");
   const [formOpen, setFormOpen]     = useState(false);
+  const [draftComposerOpen, setDraftComposerOpen] = useState(false);
+  const [draftComposerOrder, setDraftComposerOrder] = useState(null);
   const [loading, setLoading]       = useState(false);
   const [toast, setToast]           = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -666,7 +672,12 @@ export default function AdminPanelClient() {
   );
 
   const active    = visibleNavItems.find((n) => n.key === activeKey) || visibleNavItems[0] || null;
-  const canCreate = Boolean(active && CRUD_KEYS.includes(activeKey) && canWriteKey(activeKey));
+  const canCreate = Boolean(
+    active && (
+      (CRUD_KEYS.includes(activeKey) && canWriteKey(activeKey))
+      || (activeKey === "draft_orders" && canWriteKey("draft_orders"))
+    )
+  );
   const canDelete = Boolean(active && DELETABLE.includes(activeKey) && canWriteKey(activeKey));
   const canEdit   = Boolean(active && canWriteKey(activeKey));
 
@@ -854,8 +865,10 @@ export default function AdminPanelClient() {
       if (screenKey === "inventory") {
         params.set("page_size", "100");
       }
-      if (screenKey === "orders") {
+      if (screenKey === "orders" || screenKey === "draft_orders") {
         const orderFilterSource = options.orderFilters || orderFilters;
+        if (screenKey === "orders") params.set("sales_channel", "online_store");
+        if (screenKey === "draft_orders") params.set("sales_channel", "draft_order");
         if (orderFilterSource.market && orderFilterSource.market !== "all") {
           params.set("market", orderFilterSource.market);
         }
@@ -944,6 +957,7 @@ export default function AdminPanelClient() {
     if (key === "categories") return `/admin/categories/${item.slug}/`;
     if (key === "deals")      return `/admin/promotions/${item.id}/`;
     if (key === "orders")     return `/admin/orders/${item.order_number}/`;
+    if (key === "draft_orders") return `/admin/orders/${item.order_number}/`;
     if (key === "payments")   return `/admin/payments/${item.id}/`;
     if (key === "customers")  return `/admin/customers/${item.id}/`;
     if (key === "reviews")    return `/admin/reviews/${item.id}/`;
@@ -960,6 +974,10 @@ export default function AdminPanelClient() {
   }
 
   async function openDetail(item) {
+    if (activeKey === "draft_orders") {
+      await openDraftOrderEditor(item);
+      return;
+    }
     if (!canEdit) {
       showToast("You can view this section but cannot edit it.", "info");
       return;
@@ -976,6 +994,24 @@ export default function AdminPanelClient() {
       setEditor(makeEditor(payload));
     } catch (err) {
       showToast(err.message, "error");
+    }
+  }
+
+  async function openDraftOrderEditor(item) {
+    if (!item?.order_number) return;
+    if (!canWriteKey("draft_orders")) {
+      showToast("You can view drafts but cannot edit them.", "info");
+      return;
+    }
+    setLoading(true);
+    try {
+      const payload = await request(`/admin/orders/${item.order_number}/`);
+      setDraftComposerOrder(payload || item);
+      setDraftComposerOpen(true);
+    } catch (err) {
+      showToast(err.message, "error");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -1022,6 +1058,15 @@ export default function AdminPanelClient() {
   }
 
   function startCreate() {
+    if (activeKey === "draft_orders") {
+      if (!canWriteKey("draft_orders")) {
+        showToast("You do not have permission to create draft orders.", "error");
+        return;
+      }
+      setDraftComposerOrder(null);
+      setDraftComposerOpen(true);
+      return;
+    }
     if (!canWriteKey(activeKey)) {
       showToast("You do not have permission to create records in this section.", "error");
       return;
@@ -1065,6 +1110,17 @@ export default function AdminPanelClient() {
     setEditor({});
     setMode("view");
     setFormOpen(false);
+  }
+
+  function closeDraftComposer() {
+    setDraftComposerOrder(null);
+    setDraftComposerOpen(false);
+  }
+
+  async function handleDraftSaved() {
+    closeDraftComposer();
+    showToast("Draft order saved.", "success");
+    await loadScreen(active);
   }
 
   async function saveRecord() {
@@ -1161,7 +1217,7 @@ export default function AdminPanelClient() {
   }, [token, adminMe, activeKey, dashboardFilters]);
 
   useEffect(() => {
-    if (!(token && adminMe && activeKey === "orders" && active)) return;
+    if (!(token && adminMe && (activeKey === "orders" || activeKey === "draft_orders") && active)) return;
     void loadScreen(active, { orderFilters });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderFilters, token, adminMe, activeKey]);
@@ -1180,6 +1236,8 @@ export default function AdminPanelClient() {
     setPage(1);
     setSearchQuery("");
     setSidebarOpen(false);
+    setDraftComposerOpen(false);
+    setDraftComposerOrder(null);
   }
 
   // ─── Login screen ─────────────────────────────────────────────────────────
@@ -1322,7 +1380,7 @@ export default function AdminPanelClient() {
           </div>
           {canCreate ? (
             <button type="button" className="admin-btn-primary admin-topbar-cta" onClick={startCreate}>
-              + {activeKey === "blog" ? "New article" : activeKey === "hero_cards" ? "Add hero card" : activeKey === "deals" ? "Add deal" : activeKey === "shipping" ? "Add rule" : activeKey === "taxes" ? "Add tax rule" : activeKey === "staff" ? "Add staff" : `Add ${activeKey.slice(0, -1)}`}
+              + {activeKey === "draft_orders" ? "Create order" : activeKey === "blog" ? "New article" : activeKey === "hero_cards" ? "Add hero card" : activeKey === "deals" ? "Add deal" : activeKey === "shipping" ? "Add rule" : activeKey === "taxes" ? "Add tax rule" : activeKey === "staff" ? "Add staff" : `Add ${activeKey.slice(0, -1)}`}
             </button>
           ) : null}
         </header>
@@ -1390,6 +1448,16 @@ export default function AdminPanelClient() {
     if (activeKey === "audit_logs")            return <AuditLogsPanel rows={Array.isArray(data) ? data : []} />;
     if (activeKey === "regions")               return <RegionsView rows={Array.isArray(data) ? data : []} request={request} onSaved={() => loadScreen()} />;
     if (activeKey === "instagram_posts")       return <InstagramPostsPanel rows={Array.isArray(data) ? data : []} request={request} onSaved={() => loadScreen()} />;
+    if (activeKey === "draft_orders" && draftComposerOpen) {
+      return (
+        <DraftOrderComposer
+          request={request}
+          initialOrder={draftComposerOrder}
+          onClose={closeDraftComposer}
+          onSaved={handleDraftSaved}
+        />
+      );
+    }
     if (SETTINGS_KEYS.has(activeKey))           return <StoreSettingsSection section={activeKey} data={data} onEdit={openSettingsEditor} canEdit={canWriteKey(activeKey)} />;
     return (
       <CrudPanel
@@ -1399,7 +1467,7 @@ export default function AdminPanelClient() {
         canEdit={canEdit}
         canDelete={canDelete}
         onCreate={startCreate}
-        onEdit={openDetail}
+        onEdit={activeKey === "draft_orders" ? openDraftOrderEditor : openDetail}
         onDelete={deleteRecord}
         onDownloadInvoice={downloadOrderInvoice}
         titleFor={titleFor}
@@ -1410,8 +1478,8 @@ export default function AdminPanelClient() {
         page={page}
         totalPages={totalPages}
         onPageChange={(p) => { setPage(p); }}
-        orderFilters={activeKey === "orders" ? orderFilters : null}
-        onOrderFiltersChange={activeKey === "orders" ? (patch) => {
+        orderFilters={activeKey === "orders" || activeKey === "draft_orders" ? orderFilters : null}
+        onOrderFiltersChange={activeKey === "orders" || activeKey === "draft_orders" ? (patch) => {
           setOrderFilters((prev) => {
             const next = { ...prev, ...patch };
             if (patch.dateRange && patch.dateRange !== "custom") {

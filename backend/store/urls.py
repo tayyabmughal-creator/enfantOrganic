@@ -34,6 +34,9 @@ from .views import (
     AdminCustomerListView,
     AdminCustomerDetailView,
     AdminDashboardView,
+    AdminDraftOrderCreateView,
+    AdminDraftOrderCustomerSearchView,
+    AdminDraftOrderDetailView,
     AdminGiftCardDetailView,
     AdminGiftCardListCreateView,
     AdminHeroPromoCardDetailView,
@@ -152,6 +155,17 @@ urlpatterns = [
     path("admin/categories/", AdminCategoryListCreateView.as_view(), name="admin-categories"),
     path("admin/categories/<slug:slug>/", AdminCategoryDetailView.as_view(), name="admin-category-detail"),
     path("admin/orders/", AdminOrderListView.as_view(), name="admin-orders"),
+    path("admin/orders/drafts/", AdminDraftOrderCreateView.as_view(), name="admin-draft-orders-create"),
+    path(
+        "admin/orders/drafts/customer-search/",
+        AdminDraftOrderCustomerSearchView.as_view(),
+        name="admin-draft-orders-customer-search",
+    ),
+    path(
+        "admin/orders/drafts/<str:order_number>/",
+        AdminDraftOrderDetailView.as_view(),
+        name="admin-draft-order-detail",
+    ),
     path("admin/orders/<str:order_number>/", AdminOrderDetailView.as_view(), name="admin-order-detail"),
     path("admin/orders/<str:order_number>/refund/", AdminOrderRefundView.as_view(), name="admin-order-refund"),
     path(

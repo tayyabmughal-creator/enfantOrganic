@@ -1864,6 +1864,232 @@ class CheckoutAndPermsTestCase(TestCase):
         self.assertIn(last_30_order.order_number, last_30_order_numbers)
         self.assertNotIn(old_order.order_number, last_30_order_numbers)
 
+    def test_admin_orders_list_supports_sales_channel_filter(self):
+        online_order = self._create_online_order(self.region)
+        draft_order = Order.objects.create(
+            region=self.region,
+            sales_channel=Order.SALES_CHANNEL_DRAFT_ORDER,
+            customer_name="Draft Customer",
+            customer_email="draft-filter@example.com",
+            customer_phone="12345678",
+            address_line_1="Street 1",
+            city="Muscat",
+            country="Oman",
+            subtotal=Decimal("5.00"),
+            shipping_total=Decimal("0.00"),
+            grand_total=Decimal("5.00"),
+            currency_code="OMR",
+        )
+        staff_user = self._create_staff_user("staff-order-sales-channel-filter")
+        self.api_client.force_authenticate(staff_user)
+
+        draft_response = self.api_client.get("/api/admin/orders/", {"sales_channel": "draft_order"})
+        online_response = self.api_client.get("/api/admin/orders/", {"sales_channel": "online_store"})
+
+        self.assertEqual(draft_response.status_code, 200)
+        self.assertEqual(online_response.status_code, 200)
+
+        draft_rows = (
+            draft_response.data.get("results", draft_response.data)
+            if isinstance(draft_response.data, dict)
+            else draft_response.data
+        )
+        online_rows = (
+            online_response.data.get("results", online_response.data)
+            if isinstance(online_response.data, dict)
+            else online_response.data
+        )
+        self.assertEqual({row["order_number"] for row in draft_rows}, {draft_order.order_number})
+        self.assertEqual({row["order_number"] for row in online_rows}, {online_order.order_number})
+
+    def test_admin_can_create_draft_order_without_deducting_stock(self):
+        warehouse = Warehouse.objects.create(
+            code="om-draft-warehouse",
+            name_en="Oman Draft Warehouse",
+            name_ar="مخزن مسودات عمان",
+            region=self.region,
+            city="Muscat",
+            address="Muscat",
+            active=True,
+        )
+        self.region.fulfillment_warehouses.add(warehouse)
+        stock = ProductStock.objects.create(
+            product=self.product,
+            warehouse=warehouse,
+            quantity=6,
+            reserved_quantity=1,
+            low_stock_threshold=1,
+        )
+        staff_user = self._create_staff_user("staff-draft-create")
+        self.api_client.force_authenticate(staff_user)
+
+        response = self.api_client.post(
+            "/api/admin/orders/drafts/",
+            {
+                "region": self.region.code,
+                "notes": "Draft created by admin",
+                "customer": {
+                    "create_account": True,
+                    "first_name": "Draft",
+                    "last_name": "Buyer",
+                    "email": "draft-buyer@example.com",
+                    "phone": "96812345678",
+                    "address_line_1": "Street 1",
+                    "city": "Muscat",
+                    "country": "Oman",
+                },
+                "items": [
+                    {
+                        "slug": self.product.slug,
+                        "quantity": 2,
+                    }
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        order = Order.objects.get(order_number=response.data["order_number"])
+        stock.refresh_from_db()
+
+        self.assertEqual(order.sales_channel, Order.SALES_CHANNEL_DRAFT_ORDER)
+        self.assertEqual(order.status, Order.STATUS_PENDING)
+        self.assertEqual(order.payment_status, Order.PAYMENT_UNPAID)
+        self.assertEqual(order.currency_code, self.region.currency_code)
+        self.assertEqual(order.items.count(), 1)
+        self.assertEqual(order.items.first().quantity, 2)
+        self.assertIsNotNone(order.user_id)
+        self.assertFalse(PaymentTransaction.objects.filter(order=order).exists())
+        self.assertEqual(stock.quantity, 6)
+        self.assertEqual(stock.reserved_quantity, 1)
+
+    def test_admin_can_update_draft_order_without_stock_deduction(self):
+        warehouse = Warehouse.objects.create(
+            code="om-draft-update-warehouse",
+            name_en="Oman Draft Update Warehouse",
+            name_ar="مخزن تحديث المسودات",
+            region=self.region,
+            city="Muscat",
+            address="Muscat",
+            active=True,
+        )
+        self.region.fulfillment_warehouses.add(warehouse)
+        stock = ProductStock.objects.create(
+            product=self.product,
+            warehouse=warehouse,
+            quantity=8,
+            reserved_quantity=0,
+            low_stock_threshold=1,
+        )
+        staff_user = self._create_staff_user("staff-draft-update")
+        self.api_client.force_authenticate(staff_user)
+
+        create_response = self.api_client.post(
+            "/api/admin/orders/drafts/",
+            {
+                "region": self.region.code,
+                "notes": "Initial draft note",
+                "customer": {
+                    "first_name": "Edit",
+                    "last_name": "User",
+                    "email": "draft-edit@example.com",
+                    "phone": "96855550000",
+                    "address_line_1": "Street 5",
+                    "city": "Muscat",
+                    "country": "Oman",
+                },
+                "items": [
+                    {
+                        "slug": self.product.slug,
+                        "quantity": 1,
+                    }
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, 201, create_response.data)
+        order_number = create_response.data["order_number"]
+
+        update_response = self.api_client.patch(
+            f"/api/admin/orders/drafts/{order_number}/",
+            {
+                "region": self.region.code,
+                "notes": "Updated draft note",
+                "customer": {
+                    "first_name": "Edit",
+                    "last_name": "User",
+                    "email": "draft-edit@example.com",
+                    "phone": "96855550000",
+                    "address_line_1": "Street 5",
+                    "city": "Muscat",
+                    "country": "Oman",
+                },
+                "items": [
+                    {
+                        "slug": self.product.slug,
+                        "quantity": 3,
+                    }
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(update_response.status_code, 200, update_response.data)
+        order = Order.objects.get(order_number=order_number)
+        stock.refresh_from_db()
+
+        self.assertEqual(order.sales_channel, Order.SALES_CHANNEL_DRAFT_ORDER)
+        self.assertEqual(order.notes, "Updated draft note")
+        self.assertEqual(order.items.count(), 1)
+        self.assertEqual(order.items.first().quantity, 3)
+        self.assertEqual(stock.quantity, 8)
+        self.assertEqual(stock.reserved_quantity, 0)
+
+    def test_draft_order_customer_search_returns_results(self):
+        draft_history_order = Order.objects.create(
+            region=self.region,
+            sales_channel=Order.SALES_CHANNEL_DRAFT_ORDER,
+            customer_name="Search Customer",
+            customer_email="search.customer@example.com",
+            customer_phone="96877770000",
+            address_line_1="Search Street",
+            city="Muscat",
+            country="Oman",
+            subtotal=Decimal("5.00"),
+            shipping_total=Decimal("0.00"),
+            grand_total=Decimal("5.00"),
+            currency_code="OMR",
+        )
+        staff_user = self._create_staff_user("staff-draft-customer-search")
+        self.api_client.force_authenticate(staff_user)
+
+        response = self.api_client.get(
+            "/api/admin/orders/drafts/customer-search/",
+            {"q": "96877770000"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        rows = response.data.get("results", [])
+        self.assertTrue(rows)
+        self.assertTrue(any(row.get("phone") == draft_history_order.customer_phone for row in rows))
+
+    def test_draft_order_creation_skips_notification_queue(self):
+        with patch("store.notifications.queue_order_notification_event") as queue_event_mock:
+            Order.objects.create(
+                region=self.region,
+                sales_channel=Order.SALES_CHANNEL_DRAFT_ORDER,
+                customer_name="No Notify Draft",
+                customer_email="notify-draft@example.com",
+                customer_phone="12345678",
+                address_line_1="Street 1",
+                city="Muscat",
+                country="Oman",
+                subtotal=Decimal("5.00"),
+                shipping_total=Decimal("0.00"),
+                grand_total=Decimal("5.00"),
+                currency_code="OMR",
+            )
+
+        self.assertFalse(queue_event_mock.called)
+
     def test_order_confirmation_email_is_multipart_html_and_text(self):
         order = self._create_paid_order(self.region, customer_email="mail-en@example.com")
         captured = {}

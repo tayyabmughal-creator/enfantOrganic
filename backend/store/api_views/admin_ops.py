@@ -10,7 +10,7 @@ from django.http import FileResponse, HttpResponse
 from django.utils.dateparse import parse_date
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
-from rest_framework import generics, permissions, status
+from rest_framework import generics, permissions, serializers, status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -35,6 +35,7 @@ from ..models import (
     NewsletterSubscription,
     NotificationLog,
     Order,
+    OrderItem,
     PaymentTransaction,
     PaymobRegionConfig,
     Product,
@@ -47,6 +48,7 @@ from ..models import (
     SiteSettings,
     TaxRule,
     Warehouse,
+    CustomerAddress,
 )
 from ..api_serializers.admin_ops import (
     AdminAbandonedCartSerializer,
@@ -75,6 +77,13 @@ from ..api_serializers.admin_ops import (
     AdminWarehouseSerializer,
 )
 from ..notifications import notify_admins_low_stock, notify_admins_paid_order, notify_admins_payment_review
+from ..api_serializers.checkout import (
+    build_tax_breakdown,
+    calculate_checkout_totals,
+    calculate_shipping_quote,
+    prepare_checkout_items,
+    quantize_money,
+)
 from ..services.gift_cards import (
     GiftCardRedemptionError,
     finalize_online_gift_card_redemption,
@@ -306,6 +315,463 @@ def _build_sales_channel_summary(current_orders, previous_orders, *, currency_co
             for channel in channels
         ],
     }
+
+
+DRAFT_CUSTOMER_SEARCH_LIMIT = 20
+
+
+class DraftOrderItemInputSerializer(serializers.Serializer):
+    slug = serializers.SlugField()
+    quantity = serializers.IntegerField(min_value=1)
+    selected_options_text = serializers.CharField(required=False, allow_blank=True)
+
+
+class DraftOrderCustomerInputSerializer(serializers.Serializer):
+    user_id = serializers.IntegerField(required=False, allow_null=True)
+    create_account = serializers.BooleanField(required=False, default=False)
+    first_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
+    last_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    phone = serializers.CharField(required=False, allow_blank=True, max_length=60)
+    address_line_1 = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    address_line_2 = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    building = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    floor = serializers.CharField(required=False, allow_blank=True, max_length=60)
+    apartment = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    landmark = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    area = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    city = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    postcode = serializers.CharField(required=False, allow_blank=True, max_length=40)
+    country = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    formatted_address = serializers.CharField(required=False, allow_blank=True, max_length=500)
+    place_id = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    latitude = serializers.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        required=False,
+        allow_null=True,
+    )
+    longitude = serializers.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        required=False,
+        allow_null=True,
+    )
+    location_notes = serializers.CharField(required=False, allow_blank=True)
+    notes = serializers.CharField(required=False, allow_blank=True)
+    tags = serializers.CharField(required=False, allow_blank=True)
+
+
+class DraftOrderUpsertSerializer(serializers.Serializer):
+    region = serializers.SlugField()
+    locale = serializers.CharField(required=False, allow_blank=True, default="en", max_length=8)
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+    payment_method = serializers.ChoiceField(
+        required=False,
+        choices=[choice[0] for choice in Order.PAYMENT_METHOD_CHOICES],
+        default=Order.PAYMENT_COD,
+    )
+    customer = DraftOrderCustomerInputSerializer()
+    items = DraftOrderItemInputSerializer(many=True)
+
+    def validate_region(self, value):
+        region = Region.objects.filter(code=value, is_active=True).first()
+        if not region:
+            raise serializers.ValidationError("Invalid or inactive region.")
+        return region
+
+    def validate_items(self, value):
+        if not value:
+            raise serializers.ValidationError("At least one product is required.")
+        return value
+
+
+def _clean_text(value):
+    return str(value or "").strip()
+
+
+def _join_full_name(first_name, last_name):
+    joined = " ".join(part for part in [_clean_text(first_name), _clean_text(last_name)] if part).strip()
+    return joined
+
+
+def _default_address_for_user(user):
+    if not user:
+        return None
+    return user.addresses.order_by("-is_default", "-updated_at", "-id").first()
+
+
+def _username_base_from_customer_data(*, first_name="", last_name="", email="", phone=""):
+    if email:
+        base = str(email).split("@", 1)[0]
+    elif phone:
+        base = "".join(ch for ch in str(phone) if ch.isalnum())
+    else:
+        base = _join_full_name(first_name, last_name).replace(" ", ".")
+    cleaned = "".join(ch for ch in str(base).lower() if ch.isalnum() or ch in "._-")
+    return cleaned[:120] or "customer"
+
+
+def _unique_username(*, first_name="", last_name="", email="", phone=""):
+    UserModel = get_user_model()
+    base = _username_base_from_customer_data(
+        first_name=first_name,
+        last_name=last_name,
+        email=email,
+        phone=phone,
+    )
+    username = base
+    suffix = 1
+    while UserModel.objects.filter(username=username).exists():
+        suffix += 1
+        username = f"{base[:100]}-{suffix}"
+    return username
+
+
+def _resolve_user_for_draft_customer(*, actor, customer_data):
+    UserModel = get_user_model()
+    user_id = customer_data.get("user_id")
+    if user_id:
+        user = UserModel.objects.filter(pk=user_id).first()
+        if not user:
+            raise serializers.ValidationError({"customer": {"user_id": "Selected customer does not exist."}})
+        return user
+
+    email = _clean_text(customer_data.get("email", "")).lower()
+    if email:
+        existing = UserModel.objects.filter(email__iexact=email).first()
+        if existing:
+            return existing
+
+    if not bool(customer_data.get("create_account")):
+        return None
+
+    if not has_admin_capability(actor, CAP_CUSTOMERS_EDIT):
+        return None
+
+    user = UserModel(
+        username=_unique_username(
+            first_name=customer_data.get("first_name", ""),
+            last_name=customer_data.get("last_name", ""),
+            email=email,
+            phone=customer_data.get("phone", ""),
+        ),
+        email=email,
+        first_name=_clean_text(customer_data.get("first_name", "")),
+        last_name=_clean_text(customer_data.get("last_name", "")),
+        is_active=True,
+        is_staff=False,
+    )
+    user.set_unusable_password()
+    user.save()
+    return user
+
+
+def _normalized_draft_customer(*, user, customer_data, region):
+    default_address = _default_address_for_user(user)
+    first_name = _clean_text(customer_data.get("first_name")) or _clean_text(getattr(user, "first_name", ""))
+    last_name = _clean_text(customer_data.get("last_name")) or _clean_text(getattr(user, "last_name", ""))
+    email = _clean_text(customer_data.get("email")) or _clean_text(getattr(user, "email", ""))
+    phone = (
+        _clean_text(customer_data.get("phone"))
+        or _clean_text(getattr(default_address, "phone", ""))
+        or "N/A"
+    )
+    customer_name = (
+        _join_full_name(first_name, last_name)
+        or _clean_text(getattr(user, "get_full_name", lambda: "")())
+        or email
+        or phone
+        or "Guest Customer"
+    )
+
+    resolved = {
+        "name": customer_name,
+        "email": email,
+        "phone": phone,
+        "first_name": first_name,
+        "last_name": last_name,
+        "address_line_1": _clean_text(customer_data.get("address_line_1")) or _clean_text(getattr(default_address, "address_line_1", "")) or "N/A",
+        "address_line_2": _clean_text(customer_data.get("address_line_2")) or _clean_text(getattr(default_address, "address_line_2", "")),
+        "building": _clean_text(customer_data.get("building")) or _clean_text(getattr(default_address, "building", "")),
+        "floor": _clean_text(customer_data.get("floor")) or _clean_text(getattr(default_address, "floor", "")),
+        "apartment": _clean_text(customer_data.get("apartment")) or _clean_text(getattr(default_address, "apartment", "")),
+        "landmark": _clean_text(customer_data.get("landmark")) or _clean_text(getattr(default_address, "landmark", "")),
+        "area": _clean_text(customer_data.get("area")) or _clean_text(getattr(default_address, "area", "")),
+        "city": _clean_text(customer_data.get("city")) or _clean_text(getattr(default_address, "city", "")) or _clean_text(region.name_en),
+        "postcode": _clean_text(customer_data.get("postcode")) or _clean_text(getattr(default_address, "postcode", "")),
+        "country": _clean_text(customer_data.get("country")) or _clean_text(getattr(default_address, "country", "")) or _clean_text(region.name_en),
+        "formatted_address": _clean_text(customer_data.get("formatted_address")) or _clean_text(getattr(default_address, "formatted_address", "")),
+        "place_id": _clean_text(customer_data.get("place_id")) or _clean_text(getattr(default_address, "place_id", "")),
+        "latitude": customer_data.get("latitude") if customer_data.get("latitude") is not None else getattr(default_address, "latitude", None),
+        "longitude": customer_data.get("longitude") if customer_data.get("longitude") is not None else getattr(default_address, "longitude", None),
+        "location_notes": _clean_text(customer_data.get("location_notes")) or _clean_text(getattr(default_address, "location_notes", "")),
+        "notes": _clean_text(customer_data.get("notes")),
+        "tags": _clean_text(customer_data.get("tags")),
+    }
+    return resolved
+
+
+def _upsert_default_customer_address(*, user, customer, customer_data):
+    if not user:
+        return
+    address_input_present = any(
+        _clean_text(customer_data.get(key))
+        for key in (
+            "address_line_1",
+            "address_line_2",
+            "city",
+            "country",
+            "phone",
+            "postcode",
+            "area",
+        )
+    )
+    if not address_input_present:
+        return
+
+    address = user.addresses.order_by("-is_default", "-updated_at", "-id").first()
+    if address is None:
+        address = CustomerAddress(user=user)
+
+    address.full_name = customer["name"]
+    address.phone = customer["phone"]
+    address.address_line_1 = customer["address_line_1"]
+    address.address_line_2 = customer["address_line_2"]
+    address.building = customer["building"]
+    address.floor = customer["floor"]
+    address.apartment = customer["apartment"]
+    address.landmark = customer["landmark"]
+    address.area = customer["area"]
+    address.city = customer["city"]
+    address.postcode = customer["postcode"]
+    address.country = customer["country"]
+    address.formatted_address = customer["formatted_address"]
+    address.place_id = customer["place_id"]
+    address.latitude = customer["latitude"]
+    address.longitude = customer["longitude"]
+    address.location_notes = customer["location_notes"]
+    if address.pk is None and not user.addresses.filter(is_default=True).exists():
+        address.is_default = True
+    address.save()
+
+
+def _replace_draft_order_items(*, order, region, prepared_items, totals):
+    order.items.all().delete()
+
+    subtotal = quantize_money(totals["subtotal"])
+    subtotal_after_discount = quantize_money(totals["subtotal_after_discount"])
+    item_entries = []
+
+    for prepared_item in prepared_items:
+        line_total = quantize_money(prepared_item["line_total"])
+        if subtotal > 0:
+            discount_share = quantize_money(totals["discount_total"] * line_total / subtotal)
+        else:
+            discount_share = Decimal("0.00")
+        line_after_discount = quantize_money(max(line_total - discount_share, Decimal("0.00")))
+
+        if totals["tax_applies_to_shipping"] and subtotal_after_discount > 0:
+            shipping_share = quantize_money(totals["shipping_total"] * line_after_discount / subtotal_after_discount)
+        else:
+            shipping_share = Decimal("0.00")
+
+        item_entries.append(
+            {
+                "prepared_item": prepared_item,
+                "line_total": line_total,
+                "discount_share": discount_share,
+                "shipping_share": shipping_share,
+            }
+        )
+
+    allocated_taxable = Decimal("0.00")
+    allocated_tax = Decimal("0.00")
+    for index, entry in enumerate(item_entries):
+        taxable_base = quantize_money(
+            max(entry["line_total"] - entry["discount_share"], Decimal("0.00")) + entry["shipping_share"]
+        )
+        is_last = index == len(item_entries) - 1
+
+        if totals["tax_rate"] > 0 and taxable_base > 0:
+            if is_last:
+                item_taxable = quantize_money(totals["taxable_amount"] - allocated_taxable)
+                item_tax = quantize_money(totals["tax_total"] - allocated_tax)
+            elif totals["tax_inclusive"]:
+                divisor = Decimal("1.00") + totals["tax_rate"]
+                item_taxable = quantize_money(taxable_base / divisor)
+                item_tax = quantize_money(taxable_base - item_taxable)
+            else:
+                item_taxable = taxable_base
+                item_tax = quantize_money(item_taxable * totals["tax_rate"])
+        else:
+            item_taxable = taxable_base
+            item_tax = Decimal("0.00")
+
+        entry["item_taxable"] = item_taxable
+        entry["item_tax"] = item_tax
+        allocated_taxable += item_taxable
+        allocated_tax += item_tax
+
+    for entry in item_entries:
+        prepared_item = entry["prepared_item"]
+        OrderItem.objects.create(
+            order=order,
+            taxable_amount=entry["item_taxable"],
+            tax_rate=totals["tax_rate"],
+            tax_total=entry["item_tax"],
+            tax_inclusive=totals["tax_inclusive"],
+            tax_breakdown={
+                "taxable_amount": str(entry["item_taxable"]),
+                "tax_total": str(entry["item_tax"]),
+                "discount_share": str(entry["discount_share"]),
+                "shipping_share": str(entry["shipping_share"]),
+                "tax_rate": str(totals["tax_rate"]),
+                "tax_label": totals["tax_label"],
+                "tax_inclusive": totals["tax_inclusive"],
+            },
+            price_snapshot={
+                "unit_price": str(prepared_item["unit_price"]),
+                "line_total": str(prepared_item["line_total"]),
+                "currency_code": region.currency_code,
+                "warehouse_allocations": [],
+                "inventory_committed": False,
+                "inventory_mode": "draft_unreserved",
+            },
+            **prepared_item,
+        )
+
+
+@transaction.atomic
+def _upsert_draft_order(*, request, payload, order=None):
+    region = payload["region"]
+    customer_data = payload["customer"]
+    actor = request.user if request else None
+    user = _resolve_user_for_draft_customer(actor=actor, customer_data=customer_data)
+    customer = _normalized_draft_customer(user=user, customer_data=customer_data, region=region)
+    _upsert_default_customer_address(user=user, customer=customer, customer_data=customer_data)
+    items_data = payload["items"]
+    subtotal, prepared_items = prepare_checkout_items(items_data, region, lock_products=True)
+
+    shipping_quote = calculate_shipping_quote(
+        region,
+        subtotal,
+        coupon=None,
+        city=customer.get("city", ""),
+        area=customer.get("area", ""),
+    )
+    totals = calculate_checkout_totals(
+        region=region,
+        subtotal=subtotal,
+        discount_total=Decimal("0.00"),
+        shipping_total=shipping_quote["shipping_total"],
+    )
+
+    if order is None:
+        order = Order(
+            sales_channel=Order.SALES_CHANNEL_DRAFT_ORDER,
+            status=Order.STATUS_PENDING,
+            payment_status=Order.PAYMENT_UNPAID,
+        )
+
+    order.user = user
+    order.region = region
+    order.locale = _clean_text(payload.get("locale", "")) or "en"
+    order.customer_name = customer["name"]
+    order.customer_email = customer["email"]
+    order.customer_phone = customer["phone"]
+    order.address_line_1 = customer["address_line_1"]
+    order.address_line_2 = customer["address_line_2"]
+    order.building = customer["building"]
+    order.floor = customer["floor"]
+    order.apartment = customer["apartment"]
+    order.landmark = customer["landmark"]
+    order.area = customer["area"]
+    order.city = customer["city"]
+    order.postcode = customer["postcode"]
+    order.country = customer["country"]
+    order.formatted_address = customer["formatted_address"]
+    order.place_id = customer["place_id"]
+    order.latitude = customer["latitude"]
+    order.longitude = customer["longitude"]
+    order.location_notes = customer["location_notes"]
+    order.notes = _clean_text(payload.get("notes", ""))
+    order.customer_snapshot = {
+        "name": customer["name"],
+        "first_name": customer.get("first_name", ""),
+        "last_name": customer.get("last_name", ""),
+        "email": customer["email"],
+        "phone": customer["phone"],
+        "notes": customer.get("notes", ""),
+        "tags": customer.get("tags", ""),
+        "source": "draft_order_admin",
+        "user_id": user.id if user else None,
+    }
+    order.address_snapshot = {
+        "address_line_1": customer["address_line_1"],
+        "address_line_2": customer["address_line_2"],
+        "building": customer["building"],
+        "floor": customer["floor"],
+        "apartment": customer["apartment"],
+        "landmark": customer["landmark"],
+        "area": customer["area"],
+        "city": customer["city"],
+        "postcode": customer["postcode"],
+        "country": customer["country"],
+        "formatted_address": customer["formatted_address"],
+        "place_id": customer["place_id"],
+        "latitude": str(customer["latitude"]) if customer["latitude"] is not None else None,
+        "longitude": str(customer["longitude"]) if customer["longitude"] is not None else None,
+        "location_notes": customer["location_notes"],
+    }
+    order.coupon_code = ""
+    order.discount_total = totals["discount_total"]
+    order.gift_card_code = ""
+    order.gift_card_amount = Decimal("0.00")
+    order.subtotal = totals["subtotal"]
+    order.shipping_fee = shipping_quote["shipping_total"]
+    order.shipping_method = shipping_quote["shipping_method"]
+    order.shipping_carrier_name = shipping_quote["carrier_name"]
+    order.shipping_eta_min_days = shipping_quote["eta_min_days"]
+    order.shipping_eta_max_days = shipping_quote["eta_max_days"]
+    order.shipping_total = totals["shipping_total"]
+    order.taxable_amount = totals["taxable_amount"]
+    order.tax_rate = totals["tax_rate"]
+    order.tax_total = totals["tax_total"]
+    order.tax_inclusive = totals["tax_inclusive"]
+    order.tax_applies_to_shipping = totals["tax_applies_to_shipping"]
+    order.tax_label = totals["tax_label"]
+    order.tax_breakdown = build_tax_breakdown(totals)
+    order.grand_total = totals["grand_total"]
+    order.currency_code = region.currency_code
+    order.sales_channel = Order.SALES_CHANNEL_DRAFT_ORDER
+    order.payment_method = payload.get("payment_method") or order.payment_method or Order.PAYMENT_COD
+    order.save()
+
+    _replace_draft_order_items(
+        order=order,
+        region=region,
+        prepared_items=prepared_items,
+        totals=totals,
+    )
+
+    return order
+
+
+def _resolve_market_code(value):
+    market_filter = _clean_text(value).lower()
+    aliases = {
+        "om": "om",
+        "oman": "om",
+        "ae": "ae",
+        "uae": "ae",
+        "sa": "sa",
+        "ksa": "sa",
+        "saudi": "sa",
+        "saudi-arabia": "sa",
+        "saudi_arabia": "sa",
+    }
+    return aliases.get(market_filter, "")
 
 
 class IsStaffUser(permissions.BasePermission):
@@ -1428,26 +1894,19 @@ class AdminOrderListView(generics.ListAPIView):
             "status_history__actor",
             "return_requests__reviewed_by",
         )
+        sales_channel_filter = _clean_text(self.request.query_params.get("sales_channel", "")).lower()
+        if sales_channel_filter in {Order.SALES_CHANNEL_ONLINE_STORE, Order.SALES_CHANNEL_DRAFT_ORDER}:
+            queryset = queryset.filter(sales_channel=sales_channel_filter)
+
         status_filter = self.request.query_params.get("status", "").strip()
         if status_filter:
             queryset = queryset.filter(status=status_filter)
-        market_filter = str(
+        market_filter = (
             self.request.query_params.get("market", "")
             or self.request.query_params.get("region", "")
             or ""
-        ).strip().lower()
-        market_aliases = {
-            "om": "om",
-            "oman": "om",
-            "ae": "ae",
-            "uae": "ae",
-            "sa": "sa",
-            "ksa": "sa",
-            "saudi": "sa",
-            "saudi-arabia": "sa",
-            "saudi_arabia": "sa",
-        }
-        market_code = market_aliases.get(market_filter, "")
+        )
+        market_code = _resolve_market_code(market_filter)
         if market_code:
             queryset = queryset.filter(region__code=market_code)
 
@@ -1460,6 +1919,175 @@ class AdminOrderListView(generics.ListAPIView):
         if end_date:
             queryset = queryset.filter(created_at__date__lte=end_date)
         return queryset
+
+
+class AdminDraftOrderCreateView(AdminCapabilityMixin, APIView):
+    admin_read_capabilities = (CAP_ORDERS_VIEW,)
+    admin_write_capabilities = (CAP_ORDERS_EDIT,)
+
+    @extend_schema(request=DraftOrderUpsertSerializer, responses=AdminOrderSerializer)
+    def post(self, request):
+        serializer = DraftOrderUpsertSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        order = _upsert_draft_order(request=request, payload=serializer.validated_data)
+        order = (
+            Order.objects.filter(pk=order.pk)
+            .select_related("region", "user")
+            .prefetch_related("items__product", "transactions", "status_history__actor", "return_requests__reviewed_by")
+            .first()
+        )
+        return Response(
+            AdminOrderSerializer(order, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class AdminDraftOrderDetailView(AdminCapabilityMixin, APIView):
+    admin_read_capabilities = (CAP_ORDERS_VIEW,)
+    admin_write_capabilities = (CAP_ORDERS_EDIT,)
+
+    @extend_schema(request=DraftOrderUpsertSerializer, responses=AdminOrderSerializer)
+    def patch(self, request, order_number):
+        order = Order.objects.filter(
+            order_number=order_number,
+            sales_channel=Order.SALES_CHANNEL_DRAFT_ORDER,
+        ).first()
+        if not order:
+            return Response({"detail": "Draft order not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = DraftOrderUpsertSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        updated_order = _upsert_draft_order(request=request, payload=serializer.validated_data, order=order)
+        updated_order = (
+            Order.objects.filter(pk=updated_order.pk)
+            .select_related("region", "user")
+            .prefetch_related("items__product", "transactions", "status_history__actor", "return_requests__reviewed_by")
+            .first()
+        )
+        return Response(AdminOrderSerializer(updated_order, context={"request": request}).data)
+
+
+class AdminDraftOrderCustomerSearchView(AdminCapabilityMixin, APIView):
+    admin_read_capabilities = (CAP_ORDERS_VIEW,)
+    admin_write_capabilities = (CAP_ORDERS_EDIT,)
+
+    def get(self, request):
+        query = _clean_text(request.query_params.get("q", ""))
+        raw_limit = _clean_text(request.query_params.get("limit", ""))
+        try:
+            limit = int(raw_limit or DRAFT_CUSTOMER_SEARCH_LIMIT)
+        except ValueError:
+            limit = DRAFT_CUSTOMER_SEARCH_LIMIT
+        limit = max(1, min(limit, 50))
+
+        UserModel = get_user_model()
+        users_queryset = UserModel.objects.all().order_by("-date_joined")
+        if query:
+            users_queryset = users_queryset.filter(
+                Q(first_name__icontains=query)
+                | Q(last_name__icontains=query)
+                | Q(email__icontains=query)
+                | Q(username__icontains=query)
+                | Q(addresses__phone__icontains=query)
+            )
+        users = list(users_queryset.distinct()[:limit])
+
+        results = []
+        seen_keys = set()
+
+        for user in users:
+            address = _default_address_for_user(user)
+            full_name = _join_full_name(user.first_name, user.last_name)
+            label = full_name or _clean_text(user.email) or _clean_text(user.username) or f"Customer #{user.id}"
+            subtitle_parts = []
+            if user.email:
+                subtitle_parts.append(user.email)
+            if address and address.phone:
+                subtitle_parts.append(address.phone)
+
+            payload = {
+                "type": "user",
+                "user_id": user.id,
+                "name": label,
+                "first_name": _clean_text(user.first_name),
+                "last_name": _clean_text(user.last_name),
+                "email": _clean_text(user.email),
+                "phone": _clean_text(getattr(address, "phone", "")),
+                "address_line_1": _clean_text(getattr(address, "address_line_1", "")),
+                "address_line_2": _clean_text(getattr(address, "address_line_2", "")),
+                "area": _clean_text(getattr(address, "area", "")),
+                "city": _clean_text(getattr(address, "city", "")),
+                "postcode": _clean_text(getattr(address, "postcode", "")),
+                "country": _clean_text(getattr(address, "country", "")),
+                "label": label,
+                "subtitle": " · ".join(subtitle_parts),
+            }
+            results.append(payload)
+            seen_keys.add(f"user:{user.id}")
+
+        remaining = max(limit - len(results), 0)
+        if remaining > 0:
+            orders_queryset = Order.objects.order_by("-created_at")
+            if query:
+                orders_queryset = orders_queryset.filter(
+                    Q(customer_name__icontains=query)
+                    | Q(customer_email__icontains=query)
+                    | Q(customer_phone__icontains=query)
+                )
+            history_rows = list(
+                orders_queryset.values(
+                    "order_number",
+                    "user_id",
+                    "customer_name",
+                    "customer_email",
+                    "customer_phone",
+                    "address_line_1",
+                    "address_line_2",
+                    "area",
+                    "city",
+                    "postcode",
+                    "country",
+                )[: remaining * 4]
+            )
+            for row in history_rows:
+                user_id = row.get("user_id")
+                dedupe_key = f"user:{user_id}" if user_id else (
+                    f"history:{_clean_text(row.get('customer_email')).lower()}|{_clean_text(row.get('customer_phone'))}|{_clean_text(row.get('customer_name')).lower()}"
+                )
+                if dedupe_key in seen_keys:
+                    continue
+                name = _clean_text(row.get("customer_name"))
+                email = _clean_text(row.get("customer_email"))
+                phone = _clean_text(row.get("customer_phone"))
+                if not name and not email and not phone:
+                    continue
+                label = name or email or phone
+                subtitle = " · ".join(part for part in [email, phone] if part)
+                results.append(
+                    {
+                        "type": "history",
+                        "user_id": user_id,
+                        "name": label,
+                        "first_name": "",
+                        "last_name": "",
+                        "email": email,
+                        "phone": phone,
+                        "address_line_1": _clean_text(row.get("address_line_1")),
+                        "address_line_2": _clean_text(row.get("address_line_2")),
+                        "area": _clean_text(row.get("area")),
+                        "city": _clean_text(row.get("city")),
+                        "postcode": _clean_text(row.get("postcode")),
+                        "country": _clean_text(row.get("country")),
+                        "label": label,
+                        "subtitle": subtitle,
+                        "source_order_number": row.get("order_number"),
+                    }
+                )
+                seen_keys.add(dedupe_key)
+                if len(results) >= limit:
+                    break
+
+        return Response({"results": results[:limit]})
 
 
 class AdminOrderDetailView(generics.RetrieveUpdateAPIView):
@@ -1977,6 +2605,15 @@ class AdminCustomerListView(generics.ListCreateAPIView):
         queryset = get_user_model().objects.all().order_by("-date_joined")
         if not has_admin_capability(self.request.user, CAP_STAFF_MANAGE):
             queryset = queryset.filter(is_staff=False)
+        search = _clean_text(self.request.query_params.get("search", ""))
+        if search:
+            queryset = queryset.filter(
+                Q(username__icontains=search)
+                | Q(email__icontains=search)
+                | Q(first_name__icontains=search)
+                | Q(last_name__icontains=search)
+                | Q(addresses__phone__icontains=search)
+            ).distinct()
         return queryset
 
     def perform_create(self, serializer):

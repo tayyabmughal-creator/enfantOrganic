@@ -3627,3 +3627,258 @@
   .admin-conv-col:nth-child(2) { border-top: 0; }
   .admin-conv-bar-track { height: 92px; }
 }
+
+/* ─── Draft order composer ────────────────────────────────────────────────── */
+
+.admin-draft-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.admin-draft-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-draft-header h3 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #2e352b;
+}
+
+.admin-draft-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.9fr) minmax(320px, 1fr);
+  gap: 14px;
+}
+
+.admin-draft-main,
+.admin-draft-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.admin-draft-card {
+  background: #fff;
+  border: 1px solid #e5ebdb;
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: 0 10px 24px rgba(28, 52, 32, 0.04);
+}
+
+.admin-draft-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.admin-draft-card-head h4 {
+  margin: 0;
+  font-size: 16px;
+  color: #2f372b;
+}
+
+.admin-draft-card-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-draft-card-tools .admin-input {
+  min-width: 220px;
+}
+
+.admin-draft-product-search,
+.admin-draft-customer-dropdown {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;
+  overflow: auto;
+  margin-bottom: 10px;
+}
+
+.admin-draft-customer-dropdown {
+  margin-top: 8px;
+  border: 1px solid #e5ebdb;
+  border-radius: 12px;
+  padding: 8px;
+}
+
+.admin-draft-search-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid #e7edde;
+  border-radius: 10px;
+  background: #fbfdf8;
+  color: #2f372b;
+  padding: 8px 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-draft-search-row.create {
+  background: #f1f7e9;
+}
+
+.admin-draft-search-row div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-draft-search-row strong {
+  font-size: 14px;
+}
+
+.admin-draft-search-row span {
+  font-size: 12px;
+  color: #697062;
+}
+
+.admin-draft-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-draft-line-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) minmax(90px, 1fr) 72px minmax(90px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #e7edde;
+  border-radius: 10px;
+  padding: 9px;
+}
+
+.admin-draft-line-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.admin-draft-line-main div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admin-draft-line-main strong {
+  font-size: 14px;
+  color: #2f372b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-draft-line-main span {
+  font-size: 12px;
+  color: #737c69;
+}
+
+.admin-draft-qty {
+  text-align: center;
+}
+
+.admin-draft-summary-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 10px;
+  align-items: center;
+}
+
+.admin-draft-summary-grid span {
+  color: #6d7563;
+}
+
+.admin-draft-summary-grid strong {
+  color: #2f372b;
+  justify-self: end;
+}
+
+.admin-draft-summary-total {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.admin-draft-disabled-actions {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-draft-customer-form {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-draft-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.admin-draft-hint {
+  margin: 0;
+  color: #78826f;
+  font-size: 13px;
+}
+
+.admin-draft-error {
+  margin: 0;
+  color: #b22a2a;
+  font-size: 13px;
+  background: #fff4f2;
+  border: 1px solid #ffd9d3;
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.admin-draft-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 1120px) {
+  .admin-draft-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .admin-draft-card-tools {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-draft-card-tools .admin-input {
+    min-width: 0;
+  }
+
+  .admin-draft-line-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .admin-draft-two-col {
+    grid-template-columns: 1fr;
+  }
+}

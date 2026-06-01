@@ -28,16 +28,17 @@ export function CrudPanel({
   onOrderFiltersChange,
 }) {
   const label = labelFor ? labelFor(activeKey) : activeKey;
+  const isOrderView = activeKey === "orders" || activeKey === "draft_orders";
   return (
     <section className="admin-panel-card">
       <div className="admin-panel-head">
         <div>
-          <h3>{activeKey === "deals" ? "Promotions" : activeKey === "blog" ? "Blog Articles" : activeKey.charAt(0).toUpperCase() + activeKey.slice(1)}</h3>
+          <h3>{activeKey === "deals" ? "Promotions" : activeKey === "blog" ? "Blog Articles" : activeKey === "draft_orders" ? "Draft Orders" : activeKey.charAt(0).toUpperCase() + activeKey.slice(1)}</h3>
           <span>{rows.length} record{rows.length === 1 ? "" : "s"}{totalPages > 1 ? ` · Page ${page} of ${totalPages}` : ""}</span>
         </div>
         {canCreate ? (
           <button type="button" className="admin-btn-primary" onClick={onCreate}>
-            + {activeKey === "blog" ? "New article" : `Add ${activeKey === "deals" ? "deal" : activeKey.slice(0, -1)}`}
+            + {activeKey === "draft_orders" ? "Create order" : activeKey === "blog" ? "New article" : `Add ${activeKey === "deals" ? "deal" : activeKey.slice(0, -1)}`}
           </button>
         ) : null}
       </div>
@@ -52,7 +53,7 @@ export function CrudPanel({
           />
         </div>
       ) : null}
-      {activeKey === "orders" && orderFilters && onOrderFiltersChange ? (
+      {isOrderView && orderFilters && onOrderFiltersChange ? (
         <div className="admin-top-products-filters admin-orders-filters">
           <label className="admin-filter-field">
             <span>Date Range</span>
@@ -112,7 +113,7 @@ export function CrudPanel({
       ) : null}
       <div className="admin-record-list">
         {rows.length ? (
-          activeKey === "orders" ? (
+          isOrderView ? (
             <OrdersTable rows={rows} canEdit={canEdit} onEdit={onEdit} onDownloadInvoice={onDownloadInvoice} />
           ) : (
             <>
@@ -400,7 +401,7 @@ export function CrudFormModal({ activeKey, isSettings, mode, selected, editor, s
           <button type="button" className="admin-modal-close" onClick={onClose} aria-label="Close">✕</button>
         </div>
 
-        {activeKey === "orders" && selected ? <OrderDetailLayout order={selected} onDownloadInvoice={onDownloadInvoice} onRefundOrder={onRefundOrder} onCreateShipment={onCreateShipment} /> : null}
+        {(activeKey === "orders" || activeKey === "draft_orders") && selected ? <OrderDetailLayout order={selected} onDownloadInvoice={onDownloadInvoice} onRefundOrder={onRefundOrder} onCreateShipment={onCreateShipment} /> : null}
         {activeKey === "hero_cards" ? <HeroCardPreview editor={editor} /> : null}
 
         <div className="admin-modal-form">

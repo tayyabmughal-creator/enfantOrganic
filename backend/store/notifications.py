@@ -586,6 +586,9 @@ def queue_order_notification_event(order, event, *, extra_payload=None):
 
 
 def queue_order_notification_events(order, *, is_create=False, previous_status=None):
+    if getattr(order, "sales_channel", "") == Order.SALES_CHANNEL_DRAFT_ORDER:
+        return
+
     if is_create:
         queue_order_notification_event(order, NotificationLog.EVENT_ORDER_CREATED)
 
