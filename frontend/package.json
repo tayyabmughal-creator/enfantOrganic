@@ -10,7 +10,7 @@
     "check": "npm run lint && npm run test"
   },
   "devDependencies": {
-    "eslint": "^9.27.0",
+    "eslint": "^9.39.4",
     "eslint-config-next": "^15.0.0"
   },
   "dependencies": {
