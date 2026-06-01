@@ -6,3 +6,10 @@
 .next.*
 node_modules
 npm-debug.log
+# PWA build artifacts — regenerated during npm run build
+public/sw.js
+public/sw.js.map
+public/workbox-*.js
+public/workbox-*.js.map
+public/fallback-*.js
+public/swe-worker-*.js

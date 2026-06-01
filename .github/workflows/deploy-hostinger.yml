@@ -63,6 +63,7 @@ jobs:
             REDIS_HOST=redis
             REDIS_PORT=6379
             NEXT_PUBLIC_API_BASE_URL=${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
+            NEXT_PUBLIC_APP_URL=${{ secrets.NEXT_PUBLIC_APP_URL || format('https://{0}', secrets.PRODUCTION_DOMAIN || 'enfhantorganic.itwing.cloud') }}
             API_INTERNAL_BASE_URL=http://backend:8000/api
             DEFAULT_FROM_EMAIL=${{ secrets.DEFAULT_FROM_EMAIL }}
             EMAIL_BACKEND=${{ secrets.EMAIL_BACKEND || 'django.core.mail.backends.console.EmailBackend' }}
