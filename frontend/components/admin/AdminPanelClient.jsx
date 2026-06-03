@@ -944,10 +944,16 @@ export default function AdminPanelClient() {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       });
+      let payload = null;
       if (!res.ok) {
         let detail = "Refund failed";
-        try { const payload = await res.json(); detail = payload?.detail || detail; } catch {}
+        try { payload = await res.json(); detail = payload?.detail || payload?.error || detail; } catch {}
         throw new Error(detail);
+      }
+      payload = await res.json();
+      if (payload?.order) {
+        setSelected(payload.order);
+        setEditor(makeEditor(payload.order, activeKey));
       }
       showToast("Refund processed successfully.", "success");
       await loadScreen(active);
@@ -967,12 +973,53 @@ export default function AdminPanelClient() {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       });
+      let payload = null;
       if (!res.ok) {
         let detail = "Shipment creation failed";
-        try { const payload = await res.json(); detail = payload?.detail || detail; } catch {}
+        try { payload = await res.json(); detail = payload?.detail || payload?.error || detail; } catch {}
         throw new Error(detail);
       }
+      payload = await res.json();
+      if (payload?.order) {
+        setSelected(payload.order);
+        setEditor(makeEditor(payload.order, activeKey));
+      }
       showToast("Shipment created successfully.", "success");
+      await loadScreen(active);
+    } catch (err) {
+      showToast(err.message, "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleRollbackOrderStatus(order) {
+    if (!order?.order_number) return;
+    const previousLabel = order?.previous_status_label || order?.previous_status || "previous status";
+    const promptValue = window.prompt(`Revert order ${order.order_number} to ${previousLabel}?\nOptional note:`);
+    if (promptValue === null) return;
+    const adminNote = promptValue;
+    setLoading(true);
+    try {
+      const rollbackPath = order?.rollback_action?.url || `${API_BASE}/admin/orders/${order.order_number}/status-rollback/`;
+      const rollbackUrl = String(rollbackPath).startsWith("http") ? rollbackPath : `${API_BASE}${rollbackPath.replace(/^\/api/, "")}`;
+      const res = await fetch(rollbackUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ admin_note: adminNote }),
+      });
+      let payload = null;
+      if (!res.ok) {
+        let detail = "Status rollback failed";
+        try { payload = await res.json(); detail = payload?.detail || payload?.error || detail; } catch {}
+        throw new Error(detail);
+      }
+      payload = await res.json();
+      if (payload && typeof payload === "object") {
+        setSelected(payload);
+        setEditor(makeEditor(payload, activeKey));
+      }
+      showToast(`Order reverted to ${previousLabel}.`, "success");
       await loadScreen(active);
     } catch (err) {
       showToast(err.message, "error");
@@ -1012,18 +1059,18 @@ export default function AdminPanelClient() {
       showToast("You can view this section but cannot edit it.", "info");
       return;
     }
-    setMode("edit");
-    setSelected(item);
-    setEditor(makeEditor(item));
-    setFormOpen(true);
     const path = detailPath(item);
-    if (!path) return;
+    setLoading(true);
     try {
-      const payload = await request(path);
+      const payload = path ? await request(path) : item;
+      setMode("edit");
       setSelected(payload);
       setEditor(makeEditor(payload));
+      setFormOpen(true);
     } catch (err) {
       showToast(err.message, "error");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -1163,7 +1210,11 @@ export default function AdminPanelClient() {
       const path = mode === "create" ? active.endpoint : SETTINGS_KEYS.has(activeKey) ? active.endpoint : detailPath();
       const method = mode === "create" ? "POST" : "PATCH";
       const payload = buildPayload(editor, activeKey);
-      await request(path, { method, body: payload instanceof FormData ? payload : JSON.stringify(payload) });
+      const saved = await request(path, { method, body: payload instanceof FormData ? payload : JSON.stringify(payload) });
+      if (saved && typeof saved === "object" && mode === "edit") {
+        setSelected(saved);
+        setEditor(makeEditor(saved, activeKey));
+      }
       showToast(mode === "create" ? "Created successfully." : "Saved successfully.", "success");
       await loadScreen(active);
     } catch (err) {
@@ -1453,6 +1504,7 @@ export default function AdminPanelClient() {
           onDownloadInvoice={downloadOrderInvoice}
           onRefundOrder={activeKey === "orders" ? handleRefundOrder : undefined}
           onCreateShipment={activeKey === "orders" ? handleCreateShipment : undefined}
+          onRollbackOrderStatus={activeKey === "orders" ? handleRollbackOrderStatus : undefined}
           titleFor={titleFor}
           metaFor={metaFor}
           fields={FIELD_CONFIGS[activeKey]}

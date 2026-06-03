@@ -15,6 +15,26 @@
 import { API_BASE_URL } from "@/lib/config";
 
 const SESSION_KEY = "enfant-session-id";
+const ATTRIBUTION_KEY = "enfant-attribution";
+
+function inferSource({ utmSource = "", referrer = "" } = {}) {
+  const raw = String(utmSource || "").trim().toLowerCase();
+  const ref = String(referrer || "").trim().toLowerCase();
+  const value = raw || ref;
+  if (!value) return "Direct";
+  if (value.includes("instagram") || value === "ig") return "Instagram";
+  if (value.includes("facebook") || value === "fb") return "Facebook";
+  if (value.includes("tiktok")) return "TikTok";
+  if (value.includes("snapchat")) return "Snapchat";
+  if (value.includes("google")) return "Google";
+  if (value.includes("whatsapp")) return "WhatsApp";
+  if (raw) return raw.replace(/[_-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+  try {
+    return new URL(referrer).hostname.replace(/^www\./, "");
+  } catch {
+    return "Referral";
+  }
+}
 
 /**
  * Returns the persisted anonymous session ID, creating and storing a new UUID
@@ -39,6 +59,50 @@ export function getOrCreateSessionKey() {
   }
 }
 
+export function getAttributionSnapshot(extras = {}) {
+  if (typeof window === "undefined") return {};
+
+  const sessionKey = getOrCreateSessionKey();
+  if (!sessionKey) return {};
+
+  try {
+    const existing = window.localStorage.getItem(ATTRIBUTION_KEY);
+    if (existing) {
+      const parsed = JSON.parse(existing);
+      if (parsed?.session_key === sessionKey) {
+        return { ...parsed, current_page: window.location.href, region_code: extras.regionCode || parsed.region_code || "" };
+      }
+    }
+  } catch {
+    // Fall through and rebuild attribution below.
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const referrer = document.referrer || "";
+  const snapshot = {
+    session_key: sessionKey,
+    source: inferSource({ utmSource: params.get("utm_source") || "", referrer }),
+    medium: params.get("utm_medium") || "",
+    campaign: params.get("utm_campaign") || "",
+    utm_source: params.get("utm_source") || "",
+    utm_medium: params.get("utm_medium") || "",
+    utm_campaign: params.get("utm_campaign") || "",
+    utm_content: params.get("utm_content") || "",
+    utm_term: params.get("utm_term") || "",
+    referrer,
+    landing_page: window.location.href,
+    current_page: window.location.href,
+    region_code: extras.regionCode || "",
+  };
+
+  try {
+    window.localStorage.setItem(ATTRIBUTION_KEY, JSON.stringify(snapshot));
+  } catch {
+    // Attribution is helpful context, not required for checkout.
+  }
+  return snapshot;
+}
+
 /**
  * Records a storefront analytics event.
  *
@@ -49,7 +113,8 @@ export function getOrCreateSessionKey() {
 export function trackEvent(eventType, extras = {}) {
   if (typeof window === "undefined") return;
 
-  const sessionKey = getOrCreateSessionKey();
+  const attribution = getAttributionSnapshot(extras);
+  const sessionKey = attribution.session_key || getOrCreateSessionKey();
   if (!sessionKey) return;
 
   const body = {
@@ -57,6 +122,7 @@ export function trackEvent(eventType, extras = {}) {
     session_key: sessionKey,
     product_slug: extras.productSlug || undefined,
     region_code: extras.regionCode || undefined,
+    metadata: attribution,
   };
 
   // Fire-and-forget — intentionally no await, no error surfacing.

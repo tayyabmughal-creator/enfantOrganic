@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.db.models import Max, Min
 from django.urls import reverse
 from rest_framework import serializers
 
@@ -6,6 +7,7 @@ from ..models import (
     BackInStockRequest,
     AbandonedCart,
     AdminAuditLog,
+    AnalyticsEvent,
     BlogPost,
     CmsPage,
     Category,
@@ -178,6 +180,15 @@ class AdminOrderSerializer(serializers.ModelSerializer):
     admin_invoice_download_url = serializers.SerializerMethodField()
     map_link = serializers.SerializerMethodField()
     status_timeline = serializers.SerializerMethodField(read_only=True)
+    conversion_summary = serializers.SerializerMethodField(read_only=True)
+    allowed_status_transitions = serializers.SerializerMethodField(read_only=True)
+    previous_status = serializers.SerializerMethodField(read_only=True)
+    previous_status_label = serializers.SerializerMethodField(read_only=True)
+    can_revert_status = serializers.SerializerMethodField(read_only=True)
+    revert_status_label = serializers.SerializerMethodField(read_only=True)
+    revert_status_helper = serializers.SerializerMethodField(read_only=True)
+    rollback_action = serializers.SerializerMethodField(read_only=True)
+    previous_status_option = serializers.SerializerMethodField(read_only=True)
     status_note = serializers.CharField(write_only=True, required=False, allow_blank=True)
     region_code = serializers.CharField(source="region.code", read_only=True)
     region_name = serializers.CharField(source="region.name_en", read_only=True)
@@ -271,6 +282,209 @@ class AdminOrderSerializer(serializers.ModelSerializer):
             context={"current_entry": entries[-1]},
         )
         return serializer.data
+
+    @staticmethod
+    def _ordinal(value):
+        number = max(1, int(value or 1))
+        if 10 <= number % 100 <= 20:
+            suffix = "th"
+        else:
+            suffix = {1: "st", 2: "nd", 3: "rd"}.get(number % 10, "th")
+        return f"{number}{suffix}"
+
+    @staticmethod
+    def _plural(value, singular, plural=None):
+        count = int(value or 0)
+        label = singular if count == 1 else (plural or f"{singular}s")
+        return f"{count} {label}"
+
+    def _customer_orders_queryset(self, obj):
+        qs = Order.objects.filter(sales_channel=Order.SALES_CHANNEL_ONLINE_STORE)
+        if obj.user_id:
+            return qs.filter(user_id=obj.user_id)
+        customer_email = str(obj.customer_email or "").strip()
+        if customer_email:
+            return qs.filter(customer_email__iexact=customer_email)
+        customer_phone = str(obj.customer_phone or "").strip()
+        if customer_phone:
+            return qs.filter(customer_phone=customer_phone)
+        return qs.filter(pk=obj.pk)
+
+    def get_conversion_summary(self, obj):
+        attribution = obj.conversion_attribution if isinstance(obj.conversion_attribution, dict) else {}
+        session_key = str(obj.conversion_session_key or attribution.get("session_key") or "").strip()
+        events = AnalyticsEvent.objects.none()
+        event_summary = {"first_seen": None, "last_seen": None}
+        event_count = 0
+
+        if session_key:
+            events = AnalyticsEvent.objects.filter(session_key=session_key)
+            event_summary = events.aggregate(first_seen=Min("created_at"), last_seen=Max("created_at"))
+            event_count = events.count()
+
+        source = str(
+            attribution.get("source")
+            or attribution.get("utm_source")
+            or ""
+        ).strip()
+        if not source and session_key:
+            for event in events.order_by("created_at")[:25]:
+                metadata = event.metadata if isinstance(event.metadata, dict) else {}
+                source = str(metadata.get("source") or metadata.get("utm_source") or "").strip()
+                if source:
+                    break
+        source = source or "Direct"
+
+        customer_orders = self._customer_orders_queryset(obj)
+        if obj.created_at:
+            order_sequence = customer_orders.filter(created_at__lte=obj.created_at).count()
+        elif obj.pk:
+            order_sequence = customer_orders.filter(pk__lte=obj.pk).count()
+        else:
+            order_sequence = 1
+        order_sequence = max(1, order_sequence)
+
+        first_seen = event_summary.get("first_seen")
+        last_seen = event_summary.get("last_seen") or first_seen
+        session_days = 1
+        if first_seen and last_seen:
+            session_days = max(1, (last_seen.date() - first_seen.date()).days + 1)
+
+        session_count = 1 if session_key else 0
+        has_conversion_data = bool(session_key or attribution)
+        order_line = f"This is their {self._ordinal(order_sequence)} order"
+        source_line = f"{self._ordinal(1)} session from {source}" if has_conversion_data else ""
+        session_line = (
+            f"{self._plural(session_count, 'session')} over {self._plural(session_days, 'day')}"
+            if has_conversion_data
+            else ""
+        )
+
+        return {
+            "available": has_conversion_data,
+            "helper": "" if has_conversion_data else "No conversion data captured for this order.",
+            "is_first_order": order_sequence == 1,
+            "order_sequence": order_sequence,
+            "order_line": order_line,
+            "session_key": session_key,
+            "source": source if has_conversion_data else "",
+            "source_line": source_line,
+            "session_count": session_count,
+            "session_duration_days": session_days if has_conversion_data else 0,
+            "session_line": session_line,
+            "event_count": event_count,
+            "details": {
+                "landing_page": attribution.get("landing_page", ""),
+                "current_page": attribution.get("current_page", ""),
+                "referrer": attribution.get("referrer", ""),
+                "utm_source": attribution.get("utm_source", ""),
+                "utm_medium": attribution.get("utm_medium", ""),
+                "utm_campaign": attribution.get("utm_campaign", ""),
+                "first_seen": first_seen.isoformat() if first_seen else "",
+                "last_seen": last_seen.isoformat() if last_seen else "",
+            },
+        }
+
+    def get_allowed_status_transitions(self, obj):
+        allowed = set(obj.STATUS_TRANSITIONS.get(obj.status, set()))
+        return [
+            {
+                "value": status_key,
+                "label": obj.get_status_label(status_key, locale="en"),
+            }
+            for status_key, _ in obj.STATUS_CHOICES
+            if status_key in allowed
+        ]
+
+    def _get_previous_status_metadata(self, obj):
+        cached = getattr(obj, "_admin_previous_status_metadata", None)
+        if cached is not None:
+            return cached
+
+        previous_status = obj.get_previous_status()
+        source = "status_history" if previous_status else ""
+
+        if not previous_status:
+            audit_entries = (
+                AdminAuditLog.objects.filter(resource_type="order", resource_id=obj.order_number)
+                .order_by("-timestamp", "-id")[:25]
+            )
+            current_status = str(obj.status or "").strip().lower()
+            for entry in audit_entries:
+                before_snapshot = entry.before_snapshot or {}
+                after_snapshot = entry.after_snapshot or {}
+                before_status = str(before_snapshot.get("status") or "").strip().lower()
+                after_status = str(after_snapshot.get("status") or "").strip().lower()
+                if before_status and after_status == current_status and before_status != after_status:
+                    previous_status = before_status
+                    source = "audit_log"
+                    break
+
+        can_revert = bool(previous_status)
+        previous_label = obj.get_status_label(previous_status, locale="en") if previous_status else ""
+        rollback_path = (
+            reverse("admin-order-status-rollback", kwargs={"order_number": obj.order_number})
+            if can_revert and obj.order_number
+            else ""
+        )
+        helper = (
+            ""
+            if can_revert
+            else "No previous status found in history."
+        )
+        metadata = {
+            "previous_status": previous_status,
+            "previous_status_label": previous_label,
+            "can_revert_status": can_revert,
+            "revert_status_label": f"Revert to {previous_label}" if previous_label else "",
+            "revert_status_helper": helper,
+            "rollback_action": (
+                {
+                    "label": f"Revert to {previous_label}",
+                    "method": "POST",
+                    "url": rollback_path,
+                    "enabled": True,
+                    "source": source or "unknown",
+                }
+                if can_revert
+                else {
+                    "label": "",
+                    "method": "POST",
+                    "url": rollback_path,
+                    "enabled": False,
+                    "source": source or "",
+                }
+            ),
+        }
+        obj._admin_previous_status_metadata = metadata
+        return metadata
+
+    def get_previous_status(self, obj):
+        return self._get_previous_status_metadata(obj)["previous_status"]
+
+    def get_previous_status_label(self, obj):
+        return self._get_previous_status_metadata(obj)["previous_status_label"]
+
+    def get_can_revert_status(self, obj):
+        return self._get_previous_status_metadata(obj)["can_revert_status"]
+
+    def get_revert_status_label(self, obj):
+        return self._get_previous_status_metadata(obj)["revert_status_label"]
+
+    def get_revert_status_helper(self, obj):
+        return self._get_previous_status_metadata(obj)["revert_status_helper"]
+
+    def get_rollback_action(self, obj):
+        return self._get_previous_status_metadata(obj)["rollback_action"]
+
+    def get_previous_status_option(self, obj):
+        previous_status = self.get_previous_status(obj)
+        if not previous_status:
+            return None
+        return {
+            "value": previous_status,
+            "label": self.get_previous_status_label(obj),
+        }
 
     def get_items_count(self, obj):
         if hasattr(obj, "items") and hasattr(obj.items, "all"):

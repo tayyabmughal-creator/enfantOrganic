@@ -323,3 +323,41 @@ def restore_order_inventory(order, *, reason=""):
     order.inventory_released = True
     order.save(update_fields=["inventory_released", "updated_at"])
     return True
+
+
+@transaction.atomic
+def reapply_order_inventory(order, *, inventory_committed=None):
+    if not getattr(order, "inventory_released", False):
+        return False
+
+    if inventory_committed is None:
+        inventory_committed = (
+            order.payment_method != getattr(order, "PAYMENT_ONLINE", "online")
+            or order.payment_status == getattr(order, "PAYMENT_PAID", "paid")
+        )
+
+    reapplied_any = False
+    for item in order.items.select_related("product"):
+        if not item.product or not item.product.track_inventory:
+            continue
+
+        allocations = reserve_and_deduct_stock_for_item(
+            item.product,
+            order.region,
+            item.quantity,
+            commit_immediately=inventory_committed,
+        )
+        if not allocations:
+            continue
+
+        snapshot = dict(item.price_snapshot or {})
+        snapshot["warehouse_allocations"] = allocations
+        snapshot["inventory_committed"] = bool(inventory_committed)
+        item.price_snapshot = snapshot
+        item.save(update_fields=["price_snapshot"])
+        reapplied_any = True
+
+    if reapplied_any:
+        order.inventory_released = False
+        order.save(update_fields=["inventory_released", "updated_at"])
+    return reapplied_any

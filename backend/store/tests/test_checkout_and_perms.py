@@ -15,6 +15,7 @@ from rest_framework.test import APIClient
 
 from store.models import (
     AdminAuditLog,
+    AnalyticsEvent,
     Region,
     Category,
     Product,
@@ -3317,6 +3318,364 @@ class CheckoutAndPermsTestCase(TestCase):
         ).first()
         self.assertIsNotNone(refund_tx)
         self.assertEqual(refund_tx.amount, Decimal("3.50"))
+
+    def test_admin_refunded_order_detail_exposes_no_further_status_transitions(self):
+        staff_user = self._create_staff_user("refund-detail-staff")
+        order = self._create_online_order(self.region)
+        order.payment_status = Order.PAYMENT_PAID
+        order.save(update_fields=["payment_status", "updated_at"])
+        order.transition_to(Order.STATUS_PAID)
+        order.transition_to(Order.STATUS_DELIVERED)
+
+        self.api_client.force_authenticate(staff_user)
+        self.api_client.post(
+            f"/api/admin/orders/{order.order_number}/refund/",
+            {
+                "mode": "manual",
+                "amount": "3.50",
+                "manual_reference": "MANUAL-RFD-DETAIL-1",
+            },
+            format="json",
+        )
+
+        response = self.api_client.get(f"/api/admin/orders/{order.order_number}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], Order.STATUS_REFUNDED)
+        self.assertEqual(response.data["allowed_status_transitions"], [])
+        self.assertEqual(response.data["previous_status"], Order.STATUS_DELIVERED)
+        self.assertEqual(response.data["previous_status_label"], "Delivered")
+        self.assertTrue(response.data["can_revert_status"])
+        self.assertEqual(response.data["revert_status_label"], "Revert to Delivered")
+        self.assertEqual(
+            response.data["rollback_action"]["url"],
+            f"/api/admin/orders/{order.order_number}/status-rollback/",
+        )
+
+    def test_analytics_event_stores_attribution_metadata(self):
+        response = self.api_client.post(
+            "/api/analytics/event/",
+            {
+                "event_type": AnalyticsEvent.EVENT_PAGE_VIEW,
+                "session_key": "session-instagram-1",
+                "region_code": self.region.code,
+                "metadata": {
+                    "source": "Instagram",
+                    "utm_source": "instagram",
+                    "landing_page": "https://shop.example/en?utm_source=instagram",
+                    "ignored": "not stored",
+                },
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        event = AnalyticsEvent.objects.get(session_key="session-instagram-1")
+        self.assertEqual(event.metadata["source"], "Instagram")
+        self.assertEqual(event.metadata["utm_source"], "instagram")
+        self.assertNotIn("ignored", event.metadata)
+
+    def test_checkout_stores_conversion_attribution_on_order(self):
+        payload = {
+            "region": self.region.code,
+            "customer": {
+                "name": "Instagram Customer",
+                "email": "insta@example.com",
+                "phone": "12345678",
+                "address_line_1": "Street 1",
+                "city": "Muscat",
+                "country": "Oman",
+            },
+            "payment_method": "cod",
+            "analytics": {
+                "session_key": "checkout-session-1",
+                "source": "Instagram",
+                "utm_source": "instagram",
+                "landing_page": "https://shop.example/en?utm_source=instagram",
+                "unsupported": "discard me",
+            },
+            "items": [
+                {
+                    "slug": self.product.slug,
+                    "quantity": 1,
+                }
+            ],
+        }
+        serializer = CheckoutCreateSerializer(data=payload)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+        order = serializer.save()
+
+        self.assertEqual(order.conversion_session_key, "checkout-session-1")
+        self.assertEqual(order.conversion_attribution["source"], "Instagram")
+        self.assertEqual(order.conversion_attribution["utm_source"], "instagram")
+        self.assertNotIn("unsupported", order.conversion_attribution)
+
+    def test_admin_order_detail_exposes_conversion_summary(self):
+        staff_user = self._create_staff_user("conversion-summary-staff")
+        order = self._create_online_order(self.region)
+        order.customer_email = "conversion@example.com"
+        order.conversion_session_key = "conversion-session-1"
+        order.conversion_attribution = {
+            "session_key": "conversion-session-1",
+            "source": "Instagram",
+            "utm_source": "instagram",
+            "landing_page": "https://shop.example/en?utm_source=instagram",
+            "referrer": "https://instagram.com/",
+        }
+        order.save(update_fields=["customer_email", "conversion_session_key", "conversion_attribution", "updated_at"])
+        first_event = AnalyticsEvent.objects.create(
+            event_type=AnalyticsEvent.EVENT_PAGE_VIEW,
+            session_key="conversion-session-1",
+            region=self.region,
+            metadata={"source": "Instagram"},
+        )
+        second_event = AnalyticsEvent.objects.create(
+            event_type=AnalyticsEvent.EVENT_CHECKOUT_INITIATED,
+            session_key="conversion-session-1",
+            region=self.region,
+            metadata={"source": "Instagram"},
+        )
+        AnalyticsEvent.objects.filter(pk=first_event.pk).update(created_at=timezone.now() - timedelta(days=1))
+        AnalyticsEvent.objects.filter(pk=second_event.pk).update(created_at=timezone.now())
+
+        self.api_client.force_authenticate(staff_user)
+        response = self.api_client.get(f"/api/admin/orders/{order.order_number}/")
+
+        self.assertEqual(response.status_code, 200)
+        summary = response.data["conversion_summary"]
+        self.assertTrue(summary["available"])
+        self.assertTrue(summary["is_first_order"])
+        self.assertEqual(summary["order_line"], "This is their 1st order")
+        self.assertEqual(summary["source_line"], "1st session from Instagram")
+        self.assertEqual(summary["session_line"], "1 session over 2 days")
+        self.assertEqual(summary["details"]["utm_source"], "instagram")
+
+    def test_admin_order_detail_reports_missing_conversion_summary(self):
+        staff_user = self._create_staff_user("conversion-missing-staff")
+        order = self._create_online_order(self.region)
+
+        self.api_client.force_authenticate(staff_user)
+        response = self.api_client.get(f"/api/admin/orders/{order.order_number}/")
+
+        self.assertEqual(response.status_code, 200)
+        summary = response.data["conversion_summary"]
+        self.assertFalse(summary["available"])
+        self.assertEqual(summary["helper"], "No conversion data captured for this order.")
+
+    def test_admin_order_list_exposes_rollback_metadata(self):
+        staff_user = self._create_staff_user("refund-list-staff")
+        order = self._create_online_order(self.region)
+        order.payment_status = Order.PAYMENT_PAID
+        order.save(update_fields=["payment_status", "updated_at"])
+        order.transition_to(Order.STATUS_PAID)
+        order.transition_to(Order.STATUS_DELIVERED)
+
+        self.api_client.force_authenticate(staff_user)
+        self.api_client.post(
+            f"/api/admin/orders/{order.order_number}/refund/",
+            {
+                "mode": "manual",
+                "amount": "3.50",
+                "manual_reference": "MANUAL-RFD-LIST-1",
+            },
+            format="json",
+        )
+
+        response = self.api_client.get("/api/admin/orders/")
+
+        self.assertEqual(response.status_code, 200)
+        rows = response.data.get("results", response.data)
+        payload = next((row for row in rows if row["order_number"] == order.order_number), None)
+        self.assertIsNotNone(payload)
+        self.assertEqual(payload["previous_status"], Order.STATUS_DELIVERED)
+        self.assertEqual(payload["previous_status_label"], "Delivered")
+        self.assertTrue(payload["can_revert_status"])
+        self.assertEqual(payload["revert_status_label"], "Revert to Delivered")
+        self.assertEqual(
+            payload["rollback_action"]["url"],
+            f"/api/admin/orders/{order.order_number}/status-rollback/",
+        )
+        self.assertTrue(payload["rollback_action"]["enabled"])
+
+    def test_admin_order_detail_falls_back_to_audit_log_for_previous_status(self):
+        staff_user = self._create_staff_user("rollback-fallback-staff")
+        order = self._create_online_order(self.region)
+        order.transition_to(Order.STATUS_CONFIRMED)
+        order.transition_to(Order.STATUS_CANCELLED)
+        order.status_history.all().delete()
+        AdminAuditLog.objects.create(
+            actor=staff_user,
+            action=AdminAuditLog.ACTION_ORDER_STATUS_CHANGED,
+            resource_type="order",
+            resource_id=order.order_number,
+            before_snapshot={"status": Order.STATUS_CONFIRMED},
+            after_snapshot={"status": Order.STATUS_CANCELLED},
+        )
+
+        self.api_client.force_authenticate(staff_user)
+        response = self.api_client.get(f"/api/admin/orders/{order.order_number}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["previous_status"], Order.STATUS_CONFIRMED)
+        self.assertEqual(response.data["previous_status_label"], "Confirmed")
+        self.assertTrue(response.data["can_revert_status"])
+        self.assertEqual(response.data["rollback_action"]["source"], "audit_log")
+
+    def test_admin_order_detail_reports_missing_previous_status_helper(self):
+        staff_user = self._create_staff_user("rollback-helper-staff")
+        order = self._create_online_order(self.region)
+        order.status_history.all().delete()
+
+        self.api_client.force_authenticate(staff_user)
+        response = self.api_client.get(f"/api/admin/orders/{order.order_number}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["previous_status"], "")
+        self.assertFalse(response.data["can_revert_status"])
+        self.assertEqual(response.data["revert_status_helper"], "No previous status found in history.")
+
+    def test_admin_can_update_refunded_order_notes_without_status_resubmission(self):
+        staff_user = self._create_staff_user("refund-notes-staff")
+        order = self._create_online_order(self.region)
+        order.payment_status = Order.PAYMENT_PAID
+        order.save(update_fields=["payment_status", "updated_at"])
+        order.transition_to(Order.STATUS_PAID)
+        order.transition_to(Order.STATUS_DELIVERED)
+
+        self.api_client.force_authenticate(staff_user)
+        refund_response = self.api_client.post(
+            f"/api/admin/orders/{order.order_number}/refund/",
+            {
+                "mode": "manual",
+                "amount": "3.50",
+                "manual_reference": "MANUAL-RFD-NOTES-1",
+            },
+            format="json",
+        )
+        self.assertEqual(refund_response.status_code, 200)
+
+        response = self.api_client.patch(
+            f"/api/admin/orders/{order.order_number}/",
+            {"notes": "Refund recorded and customer informed."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.STATUS_REFUNDED)
+        self.assertEqual(order.notes, "Refund recorded and customer informed.")
+
+    def test_admin_status_rollback_reverts_refunded_order_to_previous_status(self):
+        staff_user = self._create_staff_user("rollback-refund-staff")
+        order = self._create_online_order(self.region)
+        order.payment_status = Order.PAYMENT_PAID
+        order.save(update_fields=["payment_status", "updated_at"])
+        order.transition_to(Order.STATUS_PAID)
+        order.transition_to(Order.STATUS_DELIVERED)
+
+        self.api_client.force_authenticate(staff_user)
+        refund_response = self.api_client.post(
+            f"/api/admin/orders/{order.order_number}/refund/",
+            {
+                "mode": "manual",
+                "amount": "3.50",
+                "manual_reference": "MANUAL-RFD-ROLLBACK-1",
+            },
+            format="json",
+        )
+        self.assertEqual(refund_response.status_code, 200)
+
+        response = self.api_client.post(
+            f"/api/admin/orders/{order.order_number}/status-rollback/",
+            {"admin_note": "Refund was marked on the wrong order state."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.STATUS_DELIVERED)
+        self.assertEqual(order.payment_status, Order.PAYMENT_REFUNDED)
+        self.assertEqual(order.refund_status, Order.REFUND_REFUNDED)
+        rollback_log = AdminAuditLog.objects.filter(
+            action=AdminAuditLog.ACTION_ORDER_STATUS_CHANGED,
+            resource_type="order",
+            resource_id=order.order_number,
+            after_snapshot__rollback=True,
+        ).order_by("-timestamp", "-id").first()
+        self.assertIsNotNone(rollback_log)
+        self.assertEqual(rollback_log.before_snapshot["status"], Order.STATUS_REFUNDED)
+        self.assertEqual(rollback_log.after_snapshot["status"], Order.STATUS_DELIVERED)
+
+    def test_admin_status_rollback_reapplies_inventory_for_cancelled_order(self):
+        warehouse = Warehouse.objects.create(
+            code="om-rollback-warehouse",
+            name_en="Oman Rollback Warehouse",
+            name_ar="مخزن التراجع عمان",
+            region=self.region,
+            city="Muscat",
+            address="Muscat",
+            active=True,
+        )
+        self.region.fulfillment_warehouses.add(warehouse)
+        stock = ProductStock.objects.create(
+            product=self.product,
+            warehouse=warehouse,
+            quantity=5,
+            reserved_quantity=0,
+            low_stock_threshold=1,
+        )
+        staff_user = self._create_staff_user("rollback-stock-staff")
+        payload = {
+            "region": self.region.code,
+            "customer": {
+                "name": "Rollback Customer",
+                "email": "rollback@example.com",
+                "phone": "12345678",
+                "address_line_1": "Street 1",
+                "city": "Muscat",
+                "country": "Oman",
+            },
+            "payment_method": "cod",
+            "items": [
+                {
+                    "slug": self.product.slug,
+                    "quantity": 2,
+                }
+            ],
+        }
+        serializer = CheckoutCreateSerializer(data=payload)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        order = serializer.save()
+        order.cancel()
+
+        stock.refresh_from_db()
+        order.refresh_from_db()
+        self.assertTrue(order.inventory_released)
+        self.assertEqual(stock.quantity, 5)
+        self.assertEqual(stock.reserved_quantity, 0)
+
+        self.api_client.force_authenticate(staff_user)
+        detail_response = self.api_client.get(f"/api/admin/orders/{order.order_number}/")
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertEqual(detail_response.data["status"], Order.STATUS_CANCELLED)
+        self.assertEqual(detail_response.data["previous_status"], Order.STATUS_PENDING)
+        self.assertEqual(detail_response.data["previous_status_label"], "Pending")
+        self.assertTrue(detail_response.data["can_revert_status"])
+        self.assertEqual(detail_response.data["revert_status_label"], "Revert to Pending")
+        response = self.api_client.post(
+            f"/api/admin/orders/{order.order_number}/status-rollback/",
+            {"admin_note": "Cancellation was a mistake."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        order.refresh_from_db()
+        stock.refresh_from_db()
+        self.assertEqual(order.status, Order.STATUS_PENDING)
+        self.assertFalse(order.inventory_released)
+        self.assertEqual(stock.quantity, 3)
+        self.assertEqual(stock.reserved_quantity, 2)
 
     def test_admin_gateway_refund_uses_provider_router(self):
         staff_user = self._create_staff_user("gateway-refund-staff")

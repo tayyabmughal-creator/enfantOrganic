@@ -49,6 +49,7 @@ from .views import (
     AdminOrderRefundView,
     AdminOrderInvoiceDownloadView,
     AdminOrderListView,
+    AdminOrderStatusRollbackView,
     AdminOrderShipmentCreateView,
     AdminOrderTrackingRefreshView,
     AdminPaymentDetailView,
@@ -167,6 +168,11 @@ urlpatterns = [
         name="admin-draft-order-detail",
     ),
     path("admin/orders/<str:order_number>/", AdminOrderDetailView.as_view(), name="admin-order-detail"),
+    path(
+        "admin/orders/<str:order_number>/status-rollback/",
+        AdminOrderStatusRollbackView.as_view(),
+        name="admin-order-status-rollback",
+    ),
     path("admin/orders/<str:order_number>/refund/", AdminOrderRefundView.as_view(), name="admin-order-refund"),
     path(
         "admin/orders/<str:order_number>/shipment/create/",

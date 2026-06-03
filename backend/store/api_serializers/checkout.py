@@ -635,6 +635,36 @@ class CheckoutCreateSerializer(serializers.Serializer):
     coupon_code = serializers.CharField(required=False, allow_blank=True)
     gift_card_code = serializers.CharField(required=False, allow_blank=True)
     items = CheckoutItemInputSerializer(many=True)
+    analytics = serializers.JSONField(required=False)
+
+    ATTRIBUTION_KEYS = {
+        "session_key": 64,
+        "source": 80,
+        "medium": 80,
+        "campaign": 160,
+        "utm_source": 80,
+        "utm_medium": 80,
+        "utm_campaign": 160,
+        "utm_content": 160,
+        "utm_term": 160,
+        "referrer": 500,
+        "landing_page": 500,
+        "current_page": 500,
+        "region_code": 16,
+    }
+
+    def _clean_analytics(self, value):
+        if not isinstance(value, dict):
+            return {}
+        cleaned = {}
+        for key, max_length in self.ATTRIBUTION_KEYS.items():
+            raw = value.get(key)
+            if raw is None:
+                continue
+            text = str(raw).strip()
+            if text:
+                cleaned[key] = text[:max_length]
+        return cleaned
 
     def validate_region(self, value):
         return resolve_region(value)
@@ -702,6 +732,8 @@ class CheckoutCreateSerializer(serializers.Serializer):
             lock_gift_card=True,
         )
         payable_total = quantize_money(max(totals["grand_total"] - gift_card_amount, Decimal("0.00")))
+        conversion_attribution = self._clean_analytics(validated_data.get("analytics"))
+        conversion_session_key = conversion_attribution.get("session_key", "")
 
         order = Order.objects.create(
             user=self.context.get("request").user
@@ -730,6 +762,8 @@ class CheckoutCreateSerializer(serializers.Serializer):
             longitude=customer.get("longitude"),
             location_notes=customer.get("location_notes", ""),
             notes=validated_data.get("notes", ""),
+            conversion_session_key=conversion_session_key,
+            conversion_attribution=conversion_attribution,
             address_snapshot={
                 "address_line_1": customer["address_line_1"],
                 "address_line_2": customer.get("address_line_2", ""),

@@ -67,6 +67,22 @@ class Order(models.Model):
         STATUS_FAILED: {STATUS_PENDING, STATUS_CONFIRMED, STATUS_PAID, STATUS_CANCELLED},
     }
 
+    INVENTORY_ACTIVE_STATUSES = {
+        STATUS_PENDING,
+        STATUS_CONFIRMED,
+        STATUS_PAID,
+        STATUS_PROCESSING,
+        STATUS_SHIPPED,
+        STATUS_DELIVERED,
+    }
+
+    INVENTORY_RELEASED_STATUSES = {
+        STATUS_CANCELLED,
+        STATUS_RETURNED,
+        STATUS_REFUNDED,
+        STATUS_FAILED,
+    }
+
     PAYMENT_COD = "cod"
     PAYMENT_WHATSAPP = "whatsapp"
     PAYMENT_BANK_TRANSFER = "bank_transfer"
@@ -180,6 +196,8 @@ class Order(models.Model):
     notes = models.TextField(blank=True)
     customer_snapshot = models.JSONField(default=dict, blank=True)
     address_snapshot = models.JSONField(default=dict, blank=True)
+    conversion_session_key = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    conversion_attribution = models.JSONField(default=dict, blank=True)
 
     coupon_code = models.CharField(max_length=40, blank=True)
     discount_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -254,9 +272,10 @@ class Order(models.Model):
     def save(self, *args, **kwargs):
         is_create = self.pk is None
         previous_status = None
+        skip_status_transition_validation = bool(getattr(self, "_skip_status_transition_validation", False))
         if not is_create:
             previous_status = Order.objects.filter(pk=self.pk).values_list("status", flat=True).first()
-            if previous_status and previous_status != self.status:
+            if previous_status and previous_status != self.status and not skip_status_transition_validation:
                 if not self.can_transition_to(self.status, from_status=previous_status):
                     raise ValidationError(
                         {
@@ -343,6 +362,7 @@ class Order(models.Model):
                 pass
         self._status_actor = None
         self._status_note = ""
+        self._skip_status_transition_validation = False
 
     @classmethod
     def get_status_label(cls, status_key, *, locale="en"):
@@ -362,6 +382,14 @@ class Order(models.Model):
         source_status = from_status if from_status is not None else self.status
         return self.is_valid_transition(source_status, new_status)
 
+    def get_previous_status(self):
+        previous_entry = (
+            self.status_history.order_by("-timestamp", "-id")
+            .values_list("old_status", flat=True)
+            .first()
+        )
+        return str(previous_entry or "").strip().lower() or ""
+
     def transition_to(self, new_status, *, actor=None, note=""):
         target_status = str(new_status or "").strip().lower()
         if not target_status:
@@ -377,6 +405,23 @@ class Order(models.Model):
         self._status_note = str(note or "").strip()
         self.status = target_status
         self.save(update_fields=["status", "updated_at"])
+        return True
+
+    def force_status_to(self, new_status, *, actor=None, note=""):
+        target_status = str(new_status or "").strip().lower()
+        if not target_status:
+            raise ValidationError({"status": "Target status is required."})
+        if target_status == self.status:
+            return False
+
+        self._status_actor = actor
+        self._status_note = str(note or "").strip()
+        self._skip_status_transition_validation = True
+        self.status = target_status
+        try:
+            self.save(update_fields=["status", "updated_at"])
+        finally:
+            self._skip_status_transition_validation = False
         return True
 
     def ensure_invoice_number(self, when=None):

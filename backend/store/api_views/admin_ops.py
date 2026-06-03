@@ -87,6 +87,7 @@ from ..api_serializers.checkout import (
 from ..services.gift_cards import (
     GiftCardRedemptionError,
     finalize_online_gift_card_redemption,
+    reopen_released_gift_card_redemption,
     release_pending_gift_card_redemption,
 )
 from ..services.admin_roles import (
@@ -144,7 +145,7 @@ from ..services.shipment import (
     should_auto_create_shipment,
     update_manual_tracking,
 )
-from ..services.stock import commit_reserved_inventory_for_order
+from ..services.stock import commit_reserved_inventory_for_order, reapply_order_inventory
 
 
 logger = logging.getLogger(__name__)
@@ -2207,6 +2208,92 @@ class AdminOrderDetailView(generics.RetrieveUpdateAPIView):
             generate_order_invoice_async.delay(order.id)
 
 
+class AdminOrderStatusRollbackView(APIView):
+    permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
+    admin_write_capabilities = (CAP_ORDERS_EDIT,)
+
+    @transaction.atomic
+    def post(self, request, order_number):
+        order = (
+            Order.objects.select_for_update()
+            .filter(order_number=order_number)
+            .select_related("region", "user")
+            .prefetch_related("items__product", "transactions", "status_history__actor", "return_requests__reviewed_by")
+            .first()
+        )
+        if not order:
+            return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        previous_status = order.get_previous_status()
+        if not previous_status:
+            return Response(
+                {"detail": "No previous order status is available for rollback."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if previous_status == order.status:
+            return Response(
+                {"detail": "The previous status matches the current order status."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        admin_note = str(request.data.get("admin_note", "")).strip()
+        before_snapshot = {
+            "status": order.status,
+            "payment_status": order.payment_status,
+            "refund_status": order.refund_status,
+            "inventory_released": bool(order.inventory_released),
+        }
+
+        moving_back_to_inventory_active = (
+            order.status in Order.INVENTORY_RELEASED_STATUSES
+            and previous_status in Order.INVENTORY_ACTIVE_STATUSES
+        )
+        inventory_committed = (
+            order.payment_method != Order.PAYMENT_ONLINE
+            or previous_status in {
+                Order.STATUS_PAID,
+                Order.STATUS_PROCESSING,
+                Order.STATUS_SHIPPED,
+                Order.STATUS_DELIVERED,
+            }
+        )
+
+        try:
+            if moving_back_to_inventory_active and order.inventory_released:
+                reapply_order_inventory(order, inventory_committed=inventory_committed)
+                reopen_released_gift_card_redemption(order)
+
+            order.force_status_to(
+                previous_status,
+                actor=request.user,
+                note=admin_note or f"Admin rollback to previous status: {previous_status}.",
+            )
+        except Exception as exc:
+            message = getattr(exc, "message", "") or str(exc) or "Unable to roll back order status."
+            return Response({"detail": message}, status=status.HTTP_400_BAD_REQUEST)
+
+        order.refresh_from_db()
+        log_admin_action(
+            request=request,
+            actor=request.user,
+            action=AdminAuditLog.ACTION_ORDER_STATUS_CHANGED,
+            resource_type="order",
+            resource_id=order.order_number,
+            before_snapshot=before_snapshot,
+            after_snapshot={
+                "status": order.status,
+                "payment_status": order.payment_status,
+                "refund_status": order.refund_status,
+                "inventory_released": bool(order.inventory_released),
+                "rollback": True,
+            },
+        )
+        return Response(
+            AdminOrderSerializer(order, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
+
+
 class AdminOrderShipmentCreateView(APIView):
     permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
     admin_write_capabilities = (CAP_ORDERS_EDIT,)
@@ -3074,6 +3161,28 @@ class AnalyticsEventCreateView(APIView):
 
         product_slug = str(request.data.get("product_slug") or "").strip()
         region_code = str(request.data.get("region_code") or "").strip().lower()
+        metadata = request.data.get("metadata") if isinstance(request.data.get("metadata"), dict) else {}
+        safe_metadata = {}
+        for key, value in metadata.items():
+            if key not in {
+                "session_key",
+                "source",
+                "medium",
+                "campaign",
+                "utm_source",
+                "utm_medium",
+                "utm_campaign",
+                "utm_content",
+                "utm_term",
+                "referrer",
+                "landing_page",
+                "current_page",
+                "region_code",
+            }:
+                continue
+            text = str(value).strip()
+            if text:
+                safe_metadata[key] = text[:500]
 
         product = Product.objects.filter(slug=product_slug).only("id").first() if product_slug else None
         region = Region.objects.filter(code=region_code, is_active=True).only("id").first() if region_code else None
@@ -3085,6 +3194,7 @@ class AnalyticsEventCreateView(APIView):
             user=user,
             product=product,
             region=region,
+            metadata=safe_metadata,
         )
         return Response({"status": "ok"}, status=status.HTTP_201_CREATED)
 

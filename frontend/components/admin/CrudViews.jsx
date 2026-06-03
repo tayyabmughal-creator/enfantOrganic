@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import Icon from "@/components/icons/Icon";
 import { AdminEmpty, statusTone } from "./SharedUI";
 
 // ─── Shared Utility Functions ────────────────────────────────────────────────
@@ -189,6 +190,19 @@ const ORDER_STATUS_LABELS = {
   returned: "Returned",
   refunded: "Refunded",
   failed: "Failed",
+};
+
+const ORDER_STATUS_TRANSITIONS = {
+  pending: ["confirmed", "paid", "processing", "cancelled", "failed"],
+  confirmed: ["paid", "processing", "cancelled", "failed"],
+  paid: ["processing", "shipped", "delivered", "cancelled", "refunded", "failed"],
+  processing: ["shipped", "delivered", "cancelled", "failed"],
+  shipped: ["delivered", "returned", "failed"],
+  delivered: ["returned", "refunded"],
+  cancelled: ["refunded"],
+  returned: ["refunded"],
+  refunded: [],
+  failed: ["pending", "confirmed", "paid", "cancelled"],
 };
 
 const SHIPMENT_STATUS_LABELS = {
@@ -473,12 +487,13 @@ function shipmentStatusTone(status) {
   return "neutral";
 }
 
-export function CrudFormModal({ activeKey, isSettings, mode, selected, editor, setEditor, canDelete, onClose, onSave, onDelete, onDownloadInvoice, onRefundOrder, onCreateShipment, titleFor, metaFor, fields }) {
+export function CrudFormModal({ activeKey, isSettings, mode, selected, editor, setEditor, canDelete, onClose, onSave, onDelete, onDownloadInvoice, onRefundOrder, onCreateShipment, onRollbackOrderStatus, titleFor, metaFor, fields }) {
   const title  = mode === "create"
     ? `Add ${activeKey === "deals" ? "promotion" : activeKey === "blog" ? "article" : activeKey.replace(/_/g, " ")}`
     : (titleFor ? titleFor(selected, activeKey) : "Edit");
 
   const eyebrow = isSettings ? "Store settings" : mode === "create" ? "Create record" : "Edit record";
+  const resolvedFields = resolveFields(activeKey, fields, selected);
 
   return (
     <div className="admin-modal-backdrop" role="presentation" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -492,11 +507,11 @@ export function CrudFormModal({ activeKey, isSettings, mode, selected, editor, s
           <button type="button" className="admin-modal-close" onClick={onClose} aria-label="Close">✕</button>
         </div>
 
-        {(activeKey === "orders" || activeKey === "draft_orders") && selected ? <OrderDetailLayout order={selected} onDownloadInvoice={onDownloadInvoice} onRefundOrder={onRefundOrder} onCreateShipment={onCreateShipment} /> : null}
+        {(activeKey === "orders" || activeKey === "draft_orders") && selected ? <OrderDetailLayout order={selected} onDownloadInvoice={onDownloadInvoice} onRefundOrder={onRefundOrder} onCreateShipment={onCreateShipment} onRollbackOrderStatus={onRollbackOrderStatus} /> : null}
         {activeKey === "hero_cards" ? <HeroCardPreview editor={editor} /> : null}
 
         <div className="admin-modal-form">
-          {(fields || []).map((field) => (
+          {resolvedFields.map((field) => (
             <FormField key={field[0]} field={field} value={editor[field[0]]} editor={editor} setEditor={setEditor} />
           ))}
           <div className="admin-modal-actions">
@@ -510,7 +525,24 @@ export function CrudFormModal({ activeKey, isSettings, mode, selected, editor, s
   );
 }
 
-function OrderDetailLayout({ order, onDownloadInvoice, onRefundOrder, onCreateShipment }) {
+function resolveFields(activeKey, fields, selected) {
+  const baseFields = Array.isArray(fields) ? fields : [];
+  if (!(activeKey === "orders" || activeKey === "draft_orders") || !selected) return baseFields;
+  return baseFields.map((field) => {
+    const [name, label, type, options, config = {}] = field;
+    if (name !== "status" || type !== "select") return field;
+    const resolvedOptions = getOrderStatusOptions(selected, options);
+    const isTerminal = resolvedOptions.length <= 1;
+    const currentStatus = String(selected?.status || "").toLowerCase();
+    const currentLabel = ORDER_STATUS_LABELS[currentStatus] || humanizeEnum(currentStatus) || "Current status";
+    const helpText = isTerminal
+      ? `${currentLabel} is a terminal order state. You can still update notes, tracking, and payment metadata.`
+      : "Only valid next order statuses are available for this order.";
+    return [name, label, type, resolvedOptions, { ...config, disabled: isTerminal, helpText }];
+  });
+}
+
+function OrderDetailLayout({ order, onDownloadInvoice, onRefundOrder, onCreateShipment, onRollbackOrderStatus }) {
   const items = Array.isArray(order.items) ? order.items : [];
   const activityEvents = buildOrderActivityEvents(order);
   const shippingAddressLines = buildShippingAddressLines(order);
@@ -523,6 +555,10 @@ function OrderDetailLayout({ order, onDownloadInvoice, onRefundOrder, onCreateSh
   const orderStatusLabel = ORDER_STATUS_LABELS[orderStatusKey] || humanizeEnum(orderStatusKey) || "—";
   const shipmentStatusLabel = SHIPMENT_STATUS_LABELS[shipmentStatusKey] || humanizeEnum(shipmentStatusKey) || "—";
   const paymentStatusLabel = PAYMENT_STATUS_LABELS[paymentStatusKey] || humanizeEnum(paymentStatusKey) || "—";
+  const canRevertStatus = Boolean(order?.can_revert_status);
+  const previousStatusLabel = order?.previous_status_label || order?.previous_status || "";
+  const revertStatusLabel = order?.revert_status_label || (previousStatusLabel ? `Revert to ${previousStatusLabel}` : "Revert to previous status");
+  const revertStatusHelper = order?.revert_status_helper || "";
 
   return (
     <div className="admin-order-detail-grid">
@@ -583,6 +619,16 @@ function OrderDetailLayout({ order, onDownloadInvoice, onRefundOrder, onCreateSh
             <span className={`admin-badge ${shipmentStatusTone(shipmentStatusKey)}`}>{shipmentStatusLabel}</span>
           </div>
           <p className="admin-order-helper">Use the status fields below to update fulfillment/order state safely.</p>
+          {onRollbackOrderStatus && canRevertStatus ? (
+            <div className="admin-snapshot-actions">
+              <button type="button" className="admin-btn-sm" onClick={() => onRollbackOrderStatus(order)}>
+                {revertStatusLabel}
+              </button>
+            </div>
+          ) : null}
+          {!canRevertStatus && revertStatusHelper ? (
+            <p className="admin-order-helper">{revertStatusHelper}</p>
+          ) : null}
         </article>
 
         <article className="admin-order-card">
@@ -643,6 +689,8 @@ function OrderDetailLayout({ order, onDownloadInvoice, onRefundOrder, onCreateSh
           <p className="admin-order-notes">{order.notes || "No notes from customer."}</p>
         </article>
 
+        <ConversionSummaryCard summary={order.conversion_summary} />
+
         <article className="admin-order-card">
           <div className="admin-order-card-head">
             <h3>Customer</h3>
@@ -697,6 +745,59 @@ function OrderDetailLayout({ order, onDownloadInvoice, onRefundOrder, onCreateSh
         </article>
       </aside>
     </div>
+  );
+}
+
+function ConversionSummaryCard({ summary }) {
+  const [expanded, setExpanded] = useState(false);
+  const available = Boolean(summary?.available);
+  const detailEntries = Object.entries(summary?.details || {})
+    .filter(([, value]) => value !== null && value !== undefined && String(value).trim())
+    .map(([key, value]) => [humanizeEnum(key), String(value)]);
+
+  return (
+    <article className="admin-order-card admin-conversion-card">
+      <div className="admin-order-card-head">
+        <h3>Conversion Summary</h3>
+      </div>
+      {available ? (
+        <>
+          <div className="admin-conversion-list">
+            <div className="admin-conversion-row">
+              <Icon name="bag" size={16} />
+              <span>{summary.order_line || "Order history unavailable"}</span>
+            </div>
+            <div className="admin-conversion-row">
+              <Icon name="globe" size={16} />
+              <span>{summary.source_line || "Session source unavailable"}</span>
+            </div>
+            <div className="admin-conversion-row">
+              <Icon name="calendar" size={16} />
+              <span>{summary.session_line || "Session duration unavailable"}</span>
+            </div>
+          </div>
+          {detailEntries.length ? (
+            <>
+              <button type="button" className="admin-link-button" onClick={() => setExpanded((value) => !value)}>
+                {expanded ? "Hide conversion details" : "View conversion details"}
+              </button>
+              {expanded ? (
+                <dl className="admin-conversion-details">
+                  {detailEntries.map(([label, value]) => (
+                    <div key={label}>
+                      <dt>{label}</dt>
+                      <dd>{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : null}
+            </>
+          ) : null}
+        </>
+      ) : (
+        <p className="admin-order-helper">{summary?.helper || "No conversion data captured for this order."}</p>
+      )}
+    </article>
   );
 }
 
@@ -957,8 +1058,10 @@ function buildOrderActivityEvents(order) {
 }
 
 function FormField({ field, value, editor, setEditor }) {
-  const [name, label, type, options] = field;
+  const [name, label, type, options, config = {}] = field;
   const [objectPreviewUrl, setObjectPreviewUrl] = useState("");
+  const disabled = Boolean(config?.disabled);
+  const helpText = config?.helpText || "";
 
   useEffect(() => {
     if (!(value instanceof File)) {
@@ -978,8 +1081,9 @@ function FormField({ field, value, editor, setEditor }) {
   if (type === "checkbox") {
     return (
       <label className="admin-label admin-check-label">
-        <input type="checkbox" className="admin-checkbox" checked={Boolean(value)} onChange={(e) => setEditor({ ...editor, [name]: e.target.checked })} />
+        <input type="checkbox" className="admin-checkbox" checked={Boolean(value)} disabled={disabled} onChange={(e) => setEditor({ ...editor, [name]: e.target.checked })} />
         <span>{label}</span>
+        {helpText ? <small className="admin-field-help">{helpText}</small> : null}
       </label>
     );
   }
@@ -987,9 +1091,10 @@ function FormField({ field, value, editor, setEditor }) {
     return (
       <label className="admin-label">
         {label}
-        <select className="admin-input" value={value || ""} onChange={(e) => setEditor({ ...editor, [name]: e.target.value })}>
+        <select className="admin-input" value={value || ""} disabled={disabled} onChange={(e) => setEditor({ ...editor, [name]: e.target.value })}>
           {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
+        {helpText ? <small className="admin-field-help">{helpText}</small> : null}
       </label>
     );
   }
@@ -997,7 +1102,8 @@ function FormField({ field, value, editor, setEditor }) {
     return (
       <label className="admin-label full-width">
         {label}
-        <textarea className="admin-input admin-textarea" value={value || ""} onChange={(e) => setEditor({ ...editor, [name]: e.target.value })} />
+        <textarea className="admin-input admin-textarea" value={value || ""} disabled={disabled} onChange={(e) => setEditor({ ...editor, [name]: e.target.value })} />
+        {helpText ? <small className="admin-field-help">{helpText}</small> : null}
       </label>
     );
   }
@@ -1005,9 +1111,10 @@ function FormField({ field, value, editor, setEditor }) {
     return (
       <label className="admin-label">
         {label}
-        <input type="file" className="admin-input" accept="image/*" onChange={(e) => setEditor({ ...editor, [name]: e.target.files[0] })} />
+        <input type="file" className="admin-input" accept="image/*" disabled={disabled} onChange={(e) => setEditor({ ...editor, [name]: e.target.files[0] })} />
         {value instanceof File ? <span className="admin-file-name">{value.name}</span> : null}
         {showImagePreview ? <img src={previewUrl} alt={`${label} preview`} className="admin-record-thumb" /> : null}
+        {helpText ? <small className="admin-field-help">{helpText}</small> : null}
       </label>
     );
   }
@@ -1020,12 +1127,14 @@ function FormField({ field, value, editor, setEditor }) {
           list={listId}
           className="admin-input"
           value={value ?? ""}
+          disabled={disabled}
           placeholder="Type a path or pick from suggestions…"
           onChange={(e) => setEditor({ ...editor, [name]: e.target.value })}
         />
         <datalist id={listId}>
           {(options || []).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </datalist>
+        {helpText ? <small className="admin-field-help">{helpText}</small> : null}
       </label>
     );
   }
@@ -1036,10 +1145,36 @@ function FormField({ field, value, editor, setEditor }) {
         type={type}
         className="admin-input"
         value={value ?? ""}
+        disabled={disabled}
         onChange={(e) => setEditor({ ...editor, [name]: type === "number" ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value })}
       />
+      {helpText ? <small className="admin-field-help">{helpText}</small> : null}
     </label>
   );
+}
+
+function getOrderStatusOptions(order, fallbackOptions = []) {
+  const currentStatus = String(order?.status || "").trim().toLowerCase();
+  const currentLabel = ORDER_STATUS_LABELS[currentStatus] || humanizeEnum(currentStatus) || "Current";
+  const serverTransitions = Array.isArray(order?.allowed_status_transitions)
+    ? order.allowed_status_transitions
+    : null;
+  const allowedTransitions = serverTransitions
+    ? serverTransitions
+    : (ORDER_STATUS_TRANSITIONS[currentStatus] || []).map((value) => ({
+        value,
+        label: ORDER_STATUS_LABELS[value] || humanizeEnum(value) || value,
+      }));
+  const nextOptions = allowedTransitions
+    .map((item) => {
+      const value = String(item?.value || item || "").trim().toLowerCase();
+      if (!value || value === currentStatus) return null;
+      return [value, item?.label || ORDER_STATUS_LABELS[value] || humanizeEnum(value) || value];
+    })
+    .filter(Boolean);
+  const currentOption = currentStatus ? [[currentStatus, currentLabel]] : [];
+  const merged = [...currentOption, ...nextOptions];
+  return merged.length ? merged : fallbackOptions;
 }
 
 const ACCENT_LABELS = {

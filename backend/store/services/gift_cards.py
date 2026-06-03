@@ -83,3 +83,19 @@ def release_pending_gift_card_redemption(order, *, reason=""):
     redemption.released_at = timezone.now()
     redemption.save(update_fields=["status", "released_at", "updated_at"])
     return True
+
+
+@transaction.atomic
+def reopen_released_gift_card_redemption(order):
+    redemption = (
+        GiftCardRedemption.objects.select_for_update()
+        .filter(order=order, status=GiftCardRedemption.STATUS_RELEASED)
+        .first()
+    )
+    if not redemption:
+        return False
+
+    redemption.status = GiftCardRedemption.STATUS_PENDING
+    redemption.released_at = None
+    redemption.save(update_fields=["status", "released_at", "updated_at"])
+    return True

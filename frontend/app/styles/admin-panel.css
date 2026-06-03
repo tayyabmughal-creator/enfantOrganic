@@ -1858,6 +1858,12 @@
   font-weight: 600;
 }
 
+.admin-field-help {
+  font-size: 12px;
+  line-height: 1.45;
+  color: #7b8572;
+}
+
 /* ─── Modal ───────────────────────────────────────────────────────────────── */
 
 .admin-modal-backdrop {
@@ -2215,6 +2221,76 @@
   margin: 0;
   color: #7e8b73;
   font-size: 12px;
+}
+
+.admin-conversion-card {
+  background: #fff;
+}
+
+.admin-conversion-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-conversion-row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  color: #2f352a;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.admin-conversion-row svg {
+  color: #5f6a55;
+}
+
+.admin-link-button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #1f6f9e;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  margin: 12px 0 0;
+  padding: 0;
+  text-align: left;
+}
+
+.admin-link-button:hover {
+  color: #154f73;
+  text-decoration: underline;
+}
+
+.admin-conversion-details {
+  border-top: 1px solid #edf2e6;
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding-top: 12px;
+}
+
+.admin-conversion-details div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admin-conversion-details dt {
+  color: #8a9580;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.admin-conversion-details dd {
+  color: #2a3125;
+  font-size: 12px;
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .admin-order-money-grid {

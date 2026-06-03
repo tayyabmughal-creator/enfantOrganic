@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useStore } from "@/components/store/cart/StoreProvider";
 import Icon from "@/components/icons/Icon";
 import { buildAnalyticsItems, pushDataLayerEvent } from "@/lib/analytics";
-import { trackEvent } from "@/lib/eventTracking";
+import { getAttributionSnapshot, trackEvent } from "@/lib/eventTracking";
 import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
 import { API_BASE_URL as CONFIG_API_BASE_URL, CUSTOMER_TOKEN_KEY, safeRedirectUrl } from "@/lib/config";
 import { readJson } from "@/lib/http";
@@ -1149,6 +1149,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         gift_card_code: form.gift_card_code,
         notes: form.notes,
         items: checkoutItemsPayload(),
+        analytics: getAttributionSnapshot({ regionCode: region }),
       };
 
       const orderValue = asNumber(couponPreview?.final_total ?? subtotal);
