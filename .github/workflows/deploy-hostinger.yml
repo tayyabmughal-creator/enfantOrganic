@@ -19,10 +19,40 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Normalize SSH deploy inputs
+        id: ssh_target
+        env:
+          RAW_SSH_HOST: ${{ secrets.HOSTINGER_SSH_HOST }}
+          RAW_SSH_PORT: ${{ secrets.HOSTINGER_SSH_PORT || 22 }}
+          RAW_SSH_USER: ${{ secrets.HOSTINGER_SSH_USER }}
+          RAW_DEPLOY_PATH: ${{ secrets.HOSTINGER_DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          trim() {
+            printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
+          }
+
+          ssh_host="$(trim "$RAW_SSH_HOST")"
+          ssh_port="$(trim "$RAW_SSH_PORT")"
+          ssh_user="$(trim "$RAW_SSH_USER")"
+          deploy_path="$(trim "$RAW_DEPLOY_PATH")"
+
+          [ -n "$ssh_host" ] || { echo "FATAL: HOSTINGER_SSH_HOST is empty after trimming."; exit 1; }
+          [ -n "$ssh_port" ] || { echo "FATAL: HOSTINGER_SSH_PORT is empty after trimming."; exit 1; }
+          [ -n "$ssh_user" ] || { echo "FATAL: HOSTINGER_SSH_USER is empty after trimming."; exit 1; }
+          [ -n "$deploy_path" ] || { echo "FATAL: HOSTINGER_DEPLOY_PATH is empty after trimming."; exit 1; }
+
+          {
+            echo "host=$ssh_host"
+            echo "port=$ssh_port"
+            echo "user=$ssh_user"
+            echo "deploy_path=$deploy_path"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Preflight SSH connectivity
         env:
-          SSH_HOST: ${{ secrets.HOSTINGER_SSH_HOST }}
-          SSH_PORT: ${{ secrets.HOSTINGER_SSH_PORT || 22 }}
+          SSH_HOST: ${{ steps.ssh_target.outputs.host }}
+          SSH_PORT: ${{ steps.ssh_target.outputs.port }}
         run: |
           set -e
           echo "Checking TCP connectivity to ${SSH_HOST}:${SSH_PORT}"
@@ -37,12 +67,12 @@ jobs:
       - name: Upload project to Hostinger
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.HOSTINGER_SSH_HOST }}
-          username: ${{ secrets.HOSTINGER_SSH_USER }}
+          host: ${{ steps.ssh_target.outputs.host }}
+          username: ${{ steps.ssh_target.outputs.user }}
           key: ${{ secrets.HOSTINGER_SSH_KEY }}
-          port: ${{ secrets.HOSTINGER_SSH_PORT || 22 }}
+          port: ${{ steps.ssh_target.outputs.port }}
           source: "backend,frontend,deploy,scripts,docker-compose.prod.yml,.env.production.example"
-          target: ${{ secrets.HOSTINGER_DEPLOY_PATH }}
+          target: ${{ steps.ssh_target.outputs.deploy_path }}
           overwrite: true
           timeout: 2m
           command_timeout: 15m
@@ -50,15 +80,15 @@ jobs:
       - name: Run deployment on Hostinger
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.HOSTINGER_SSH_HOST }}
-          username: ${{ secrets.HOSTINGER_SSH_USER }}
+          host: ${{ steps.ssh_target.outputs.host }}
+          username: ${{ steps.ssh_target.outputs.user }}
           key: ${{ secrets.HOSTINGER_SSH_KEY }}
-          port: ${{ secrets.HOSTINGER_SSH_PORT || 22 }}
+          port: ${{ steps.ssh_target.outputs.port }}
           timeout: 2m
           command_timeout: 20m
           script_stop: false
           script: |
-            cd "${{ secrets.HOSTINGER_DEPLOY_PATH }}"
+            cd "${{ steps.ssh_target.outputs.deploy_path }}"
             set -e
 
             cat > .env.production <<'EOF'
