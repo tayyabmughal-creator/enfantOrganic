@@ -19,6 +19,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Preflight SSH connectivity
+        env:
+          SSH_HOST: ${{ secrets.HOSTINGER_SSH_HOST }}
+          SSH_PORT: ${{ secrets.HOSTINGER_SSH_PORT || 22 }}
+        run: |
+          set -e
+          echo "Checking TCP connectivity to ${SSH_HOST}:${SSH_PORT}"
+          if nc -zvw 15 "$SSH_HOST" "$SSH_PORT"; then
+            echo "SSH port is reachable."
+          else
+            echo "FATAL: cannot reach ${SSH_HOST}:${SSH_PORT} from the GitHub runner."
+            echo "Check the SSH host/IP, port, firewall allowlist, and whether the server is online."
+            exit 1
+          fi
+
       - name: Upload project to Hostinger
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -29,6 +44,8 @@ jobs:
           source: "backend,frontend,deploy,scripts,docker-compose.prod.yml,.env.production.example"
           target: ${{ secrets.HOSTINGER_DEPLOY_PATH }}
           overwrite: true
+          timeout: 2m
+          command_timeout: 15m
 
       - name: Run deployment on Hostinger
         uses: appleboy/ssh-action@v1.2.0
@@ -37,6 +54,8 @@ jobs:
           username: ${{ secrets.HOSTINGER_SSH_USER }}
           key: ${{ secrets.HOSTINGER_SSH_KEY }}
           port: ${{ secrets.HOSTINGER_SSH_PORT || 22 }}
+          timeout: 2m
+          command_timeout: 20m
           script_stop: false
           script: |
             cd "${{ secrets.HOSTINGER_DEPLOY_PATH }}"
