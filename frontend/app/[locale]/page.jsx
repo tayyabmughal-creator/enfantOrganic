@@ -9,7 +9,6 @@ import JsonLd from "@/components/seo/JsonLd";
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import CategoryCarousel from "@/components/store/CategoryCarousel";
 import NewsletterForm from "@/components/store/NewsletterForm";
-import PageViewTracker from "@/components/store/analytics/PageViewTracker";
 import ProductRail from "@/components/store/ProductRail";
 import { getHomePageData, getNavigationData } from "@/lib/api";
 import { resolveServerRegion } from "@/lib/regionResolver";
@@ -131,7 +130,6 @@ export default async function LocalizedHomePage({ params, searchParams }) {
 
   return (
     <StorefrontShell locale={locale} navigation={navigation}>
-      <PageViewTracker regionCode={region} />
       <JsonLd data={organizationJsonLd} />
       {heroShowcaseEmpty ? null : (
       <section className="section container">

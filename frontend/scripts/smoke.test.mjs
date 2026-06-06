@@ -12,6 +12,10 @@ import {
   safeRedirectUrl,
   shouldPreferSameOriginApiBase,
 } from "../lib/config.js";
+import {
+  buildPageViewTrackingKey,
+  shouldTrackStorefrontPageView,
+} from "../lib/eventTracking.js";
 
 test("normalizeLocale defaults to en", () => {
   assert.equal(normalizeLocale(""), "en");
@@ -69,4 +73,22 @@ test("safeRedirectUrl allows the Oman Paymob iframe origin", () => {
   );
   // A non-allowlisted origin is still rejected.
   assert.equal(safeRedirectUrl("https://evil.example.com/steal"), "");
+});
+
+test("page view tracking only runs on localized storefront routes", () => {
+  assert.equal(shouldTrackStorefrontPageView("/en"), true);
+  assert.equal(shouldTrackStorefrontPageView("/ar/products/baby-oil"), true);
+  assert.equal(shouldTrackStorefrontPageView("/admin"), false);
+  assert.equal(shouldTrackStorefrontPageView("/offline"), false);
+});
+
+test("page view dedupe key ignores region-only query churn", () => {
+  assert.equal(
+    buildPageViewTrackingKey("/en/products", "region=om&utm_source=instagram"),
+    "/en/products?utm_source=instagram",
+  );
+  assert.equal(
+    buildPageViewTrackingKey("/en/products", new URLSearchParams("utm_source=instagram&region=ae")),
+    "/en/products?utm_source=instagram",
+  );
 });

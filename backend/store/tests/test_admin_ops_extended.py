@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import timedelta
 from decimal import Decimal
 import tempfile
 from unittest.mock import patch
@@ -12,7 +13,7 @@ from django.utils import timezone
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 
-from store.models import BlogPost, Category, HeroPromoCard, Order, OrderItem, Product, ProductStock, Warehouse, Region
+from store.models import AnalyticsEvent, BlogPost, Category, HeroPromoCard, Order, OrderItem, Product, ProductStock, Warehouse, Region
 from store.services.admin_roles import ROLE_MANAGER, ensure_default_admin_roles
 
 User = get_user_model()
@@ -156,6 +157,69 @@ class AdminOpsExtendedTestCase(TestCase):
         self.assertEqual(response.data.get("customers"), 1)
         self.assertEqual(response.data.get("repeat_rate"), 100.0)
         self.assertEqual(response.data.get("payment_success_rate"), response.data.get("conversion_rate"))
+
+    def test_dashboard_all_time_conversion_breakdown_uses_all_historical_events(self):
+        self.api_client.force_authenticate(self.staff_user)
+        old_created_at = timezone.now() - timedelta(days=45)
+        order = Order.objects.create(
+            region=self.region,
+            customer_name="Historical Customer",
+            customer_email="historical@example.com",
+            customer_phone="12345678",
+            address_line_1="Street 1",
+            city="Muscat",
+            country="Oman",
+            subtotal=Decimal("10.00"),
+            shipping_total=Decimal("0.00"),
+            grand_total=Decimal("10.00"),
+            currency_code="OMR",
+            payment_status=Order.PAYMENT_PAID,
+        )
+        Order.objects.filter(pk=order.pk).update(created_at=old_created_at, updated_at=old_created_at)
+        for event_type in (
+            AnalyticsEvent.EVENT_PAGE_VIEW,
+            AnalyticsEvent.EVENT_ADD_TO_CART,
+            AnalyticsEvent.EVENT_CHECKOUT_INITIATED,
+        ):
+            event = AnalyticsEvent.objects.create(
+                event_type=event_type,
+                session_key="historical-session-1",
+                region=self.region,
+            )
+            AnalyticsEvent.objects.filter(pk=event.pk).update(created_at=old_created_at)
+
+        response = self.api_client.get(
+            "/api/admin/dashboard/",
+            {"top_date_range": "all_time", "top_market": "om"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        breakdown = response.data.get("conversion_breakdown") or {}
+        steps = {step["key"]: step for step in breakdown.get("steps") or []}
+        self.assertEqual(steps["sessions"]["count"], 1)
+        self.assertEqual(steps["added_to_cart"]["count"], 1)
+        self.assertEqual(steps["checkout"]["count"], 1)
+        self.assertEqual(steps["completed"]["count"], 1)
+        self.assertEqual(breakdown.get("overall_rate"), 100.0)
+        self.assertIsNone(breakdown.get("overall_delta"))
+        self.assertIn("All-time session-based funnel", breakdown.get("note", ""))
+        health = response.data.get("analytics_health") or {}
+        self.assertEqual(health.get("source"), "storefront_events")
+        self.assertEqual(health.get("event_count"), 3)
+        self.assertTrue(health.get("has_page_views"))
+        self.assertTrue(health.get("has_checkout_events"))
+
+    def test_dashboard_conversion_breakdown_surfaces_missing_event_collection(self):
+        self.api_client.force_authenticate(self.staff_user)
+
+        response = self.api_client.get("/api/admin/dashboard/", {"top_date_range": "all_time"})
+
+        self.assertEqual(response.status_code, 200)
+        breakdown = response.data.get("conversion_breakdown") or {}
+        self.assertIn("No storefront analytics events were captured", breakdown.get("note", ""))
+        health = response.data.get("analytics_health") or {}
+        self.assertEqual(health.get("event_count"), 0)
+        self.assertFalse(health.get("has_page_views"))
 
     def test_dashboard_repeat_purchase_metric_uses_user_id_fallback(self):
         self.api_client.force_authenticate(self.staff_user)

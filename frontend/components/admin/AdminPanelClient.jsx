@@ -786,11 +786,15 @@ export default function AdminPanelClient() {
       return null;
     }
     let payload = null;
+    let rawText = "";
     try {
-      const text = await res.text();
-      payload = text ? JSON.parse(text) : null;
+      rawText = await res.text();
+      payload = rawText ? JSON.parse(rawText) : null;
     } catch { payload = null; }
-    if (!res.ok) throw new Error(payload?.detail || JSON.stringify(payload) || "Request failed");
+    if (!res.ok) {
+      const fallbackDetail = typeof rawText === "string" ? rawText.trim() : "";
+      throw new Error(payload?.detail || payload?.error || fallbackDetail || "Request failed");
+    }
     return payload;
   }
 
@@ -1003,34 +1007,32 @@ export default function AdminPanelClient() {
 
   async function handleRollbackOrderStatus(order) {
     if (!order?.order_number) return;
-    const previousLabel = order?.previous_status_label || order?.previous_status || "previous status";
-    const promptValue = window.prompt(`Revert order ${order.order_number} to ${previousLabel}?\nOptional note:`);
-    if (promptValue === null) return;
-    const adminNote = promptValue;
     setLoading(true);
     try {
-      const rollbackPath = order?.rollback_action?.url || `${API_BASE}/admin/orders/${order.order_number}/status-rollback/`;
-      const rollbackUrl = String(rollbackPath).startsWith("http") ? rollbackPath : `${API_BASE}${rollbackPath.replace(/^\/api/, "")}`;
-      const res = await fetch(rollbackUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ admin_note: adminNote }),
-      });
-      let payload = null;
-      if (!res.ok) {
-        let detail = "Status rollback failed";
-        try { payload = await res.json(); detail = payload?.detail || payload?.error || detail; } catch {}
-        throw new Error(detail);
+      const latestOrder = await request(`/admin/orders/${order.order_number}/`);
+      const previousLabel = latestOrder?.previous_status_label || latestOrder?.previous_status || "previous status";
+      if (!latestOrder?.can_revert_status) {
+        throw new Error(latestOrder?.revert_status_helper || "No previous order status is available for rollback.");
       }
-      payload = await res.json();
-      if (payload && typeof payload === "object") {
-        setSelected(payload);
-        setEditor(makeEditor(payload, activeKey));
+
+      const promptValue = window.prompt(`Revert order ${order.order_number} to ${previousLabel}?\nOptional note:`);
+      if (promptValue === null) return;
+
+      const rollbackPath = latestOrder?.rollback_action?.url || `/admin/orders/${order.order_number}/status-rollback/`;
+      const normalizedRollbackPath = String(rollbackPath).replace(/^https?:\/\/[^/]+\/api/, "").replace(/^\/api/, "");
+      const payload = await request(normalizedRollbackPath, {
+        method: "POST",
+        body: JSON.stringify({ admin_note: promptValue }),
+      });
+      const refreshedOrder = payload?.order_number ? await request(`/admin/orders/${payload.order_number}/`) : payload;
+      if (refreshedOrder && typeof refreshedOrder === "object") {
+        setSelected(refreshedOrder);
+        setEditor(makeEditor(refreshedOrder, activeKey));
       }
       showToast(`Order reverted to ${previousLabel}.`, "success");
       await loadScreen(active);
     } catch (err) {
-      showToast(err.message, "error");
+      showToast(err.message || "Status rollback failed", "error");
     } finally {
       setLoading(false);
     }

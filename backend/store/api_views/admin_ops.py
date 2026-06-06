@@ -896,8 +896,8 @@ class AdminDashboardView(APIView):
         scoped_paid_orders_count = scoped_paid_orders.count()
 
         if top_date_range == "all_time":
-            current_period_orders = base_orders.filter(created_at__gte=this_month_start)
-            previous_period_orders = base_orders.filter(created_at__gte=last_month_start, created_at__lt=this_month_start)
+            current_period_orders = base_orders
+            previous_period_orders = base_orders.none()
         elif top_date_range in {"last_7_days", "last_30_days", "last_60_days", "last_90_days"}:
             day_window = {
                 "last_7_days": 7,
@@ -994,9 +994,9 @@ class AdminDashboardView(APIView):
         # Conversion breakdown using real AnalyticsEvent data.
         # Period window mirrors current_period_orders (this month / last N days / custom range).
         if top_date_range == "all_time":
-            event_period_start = this_month_start
-            event_prev_start = last_month_start
-            event_prev_end = this_month_start
+            event_period_start = None
+            event_prev_start = None
+            event_prev_end = None
         elif top_date_range in {"last_7_days", "last_30_days", "last_60_days", "last_90_days"}:
             _dw = {"last_7_days": 7, "last_30_days": 30, "last_60_days": 60, "last_90_days": 90}[top_date_range]
             event_period_start = now - timedelta(days=_dw)
@@ -1012,9 +1012,11 @@ class AdminDashboardView(APIView):
             event_prev_start = last_month_start
             event_prev_end = this_month_start
 
-        def _period_events(start, end=None):
-            qs = AnalyticsEvent.objects.filter(created_at__gte=start)
-            if end:
+        def _period_events(start=None, end=None):
+            qs = AnalyticsEvent.objects.all()
+            if start is not None:
+                qs = qs.filter(created_at__gte=start)
+            if end is not None:
                 qs = qs.filter(created_at__lt=end)
             if top_market != "all":
                 qs = qs.filter(region__code=top_market)
@@ -1022,7 +1024,7 @@ class AdminDashboardView(APIView):
 
         try:
             curr_events = _period_events(event_period_start)
-            prev_events = _period_events(event_prev_start, event_prev_end)
+            prev_events = _period_events(event_prev_start, event_prev_end) if event_prev_start is not None else AnalyticsEvent.objects.none()
 
             current_sessions = curr_events.filter(
                 event_type=AnalyticsEvent.EVENT_PAGE_VIEW
@@ -1044,6 +1046,8 @@ class AdminDashboardView(APIView):
             previous_checkout = prev_events.filter(
                 event_type=AnalyticsEvent.EVENT_CHECKOUT_INITIATED
             ).values("session_key").distinct().count()
+            current_event_total = curr_events.count()
+            latest_event_at = curr_events.order_by("-created_at").values_list("created_at", flat=True).first()
         except (OperationalError, ProgrammingError):
             current_sessions = 0
             previous_sessions = 0
@@ -1051,6 +1055,8 @@ class AdminDashboardView(APIView):
             previous_added_to_cart = 0
             current_checkout = 0
             previous_checkout = 0
+            current_event_total = 0
+            latest_event_at = None
 
         current_completed = current_period_paid.count()
         previous_completed = previous_period_paid.count()
@@ -1074,11 +1080,7 @@ class AdminDashboardView(APIView):
         # Keep the legacy conversion_rate key for compatibility.
         payment_success_rate = round((scoped_paid_orders.count() / total_orders) * 100, 1) if total_orders else 0
         conversion_rate = payment_success_rate
-        delta_label = (
-            "Current month vs previous month"
-            if top_date_range == "all_time"
-            else "Selected period vs previous period"
-        )
+        delta_label = "All-time snapshot" if top_date_range == "all_time" else "Selected period vs previous period"
 
         # Real repeat rate: customers with >1 order / customers with any order.
         # Customer identity uses user_id first with customer_email fallback.
@@ -1297,6 +1299,17 @@ class AdminDashboardView(APIView):
                     }
                 )
 
+        conversion_note = (
+            "All-time session-based funnel. Completed step uses all paid orders in the selected market scope."
+            if top_date_range == "all_time"
+            else "Session-based funnel. Completed step uses paid orders in the same period."
+        )
+        if current_event_total == 0:
+            conversion_note = (
+                "No storefront analytics events were captured for the selected scope yet. "
+                "Page views, add-to-cart, and checkout starts must reach /api/analytics/event/ before this funnel can populate."
+            )
+
         return Response(
             {
                 "revenue": total_revenue,
@@ -1323,9 +1336,7 @@ class AdminDashboardView(APIView):
                 "conversion_breakdown": {
                     "overall_rate": current_overall_conversion,
                     "overall_delta": pct_change(current_overall_conversion, previous_overall_conversion),
-                    "note": (
-                        "Session-based funnel. Completed step uses paid orders in the same period."
-                    ),
+                    "note": conversion_note,
                     "steps": [
                         {
                             "key": "sessions",
@@ -1365,6 +1376,15 @@ class AdminDashboardView(APIView):
                             ),
                         },
                     ],
+                },
+                "analytics_health": {
+                    "source": "storefront_events",
+                    "date_scope": top_date_range,
+                    "market_scope": top_market,
+                    "event_count": current_event_total,
+                    "latest_event_at": latest_event_at,
+                    "has_page_views": bool(current_sessions),
+                    "has_checkout_events": bool(current_checkout),
                 },
                 "low_stock": inventory_health_count,
                 "low_stock_products": inventory_health_count,

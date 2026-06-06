@@ -3733,6 +3733,39 @@ class CheckoutAndPermsTestCase(TestCase):
         order.refresh_from_db()
         self.assertEqual(order.status, Order.STATUS_CONFIRMED)
 
+    def test_admin_status_rollback_reverts_confirmed_order_to_pending(self):
+        staff_user = self._create_staff_user("rollback-confirmed-staff")
+        order = self._create_online_order(self.region)
+        order.transition_to(Order.STATUS_CONFIRMED)
+
+        self.api_client.force_authenticate(staff_user)
+        detail_response = self.api_client.get(f"/api/admin/orders/{order.order_number}/")
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertEqual(detail_response.data["status"], Order.STATUS_CONFIRMED)
+        self.assertEqual(detail_response.data["previous_status"], Order.STATUS_PENDING)
+        self.assertEqual(detail_response.data["previous_status_label"], "Pending")
+        self.assertTrue(detail_response.data["can_revert_status"])
+        self.assertEqual(detail_response.data["revert_status_label"], "Revert to Pending")
+
+        response = self.api_client.post(
+            f"/api/admin/orders/{order.order_number}/status-rollback/",
+            {"admin_note": "Confirmation was applied too early."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, getattr(response, "data", response.content))
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.STATUS_PENDING)
+        rollback_log = AdminAuditLog.objects.filter(
+            action=AdminAuditLog.ACTION_ORDER_STATUS_CHANGED,
+            resource_type="order",
+            resource_id=order.order_number,
+            after_snapshot__rollback=True,
+        ).order_by("-timestamp", "-id").first()
+        self.assertIsNotNone(rollback_log)
+        self.assertEqual(rollback_log.before_snapshot["status"], Order.STATUS_CONFIRMED)
+        self.assertEqual(rollback_log.after_snapshot["status"], Order.STATUS_PENDING)
+
     def test_admin_can_update_refunded_order_notes_without_status_resubmission(self):
         staff_user = self._create_staff_user("refund-notes-staff")
         order = self._create_online_order(self.region)

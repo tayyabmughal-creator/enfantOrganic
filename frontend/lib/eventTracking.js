@@ -12,10 +12,12 @@
  * - SSR-safe: all localStorage/fetch calls are guarded with typeof window checks.
  */
 
-import { API_BASE_URL } from "@/lib/config";
+import { API_BASE_URL } from "./config.js";
+import { readStoredRegion, regionFromSearchParams } from "./regionResolver.js";
 
 const SESSION_KEY = "enfant-session-id";
 const ATTRIBUTION_KEY = "enfant-attribution";
+const LOCALIZED_STOREFRONT_PATH = /^\/(en|ar)(?=\/|$)/i;
 
 function inferSource({ utmSource = "", referrer = "" } = {}) {
   const raw = String(utmSource || "").trim().toLowerCase();
@@ -70,7 +72,13 @@ export function getAttributionSnapshot(extras = {}) {
     if (existing) {
       const parsed = JSON.parse(existing);
       if (parsed?.session_key === sessionKey) {
-        return { ...parsed, current_page: window.location.href, region_code: extras.regionCode || parsed.region_code || "" };
+        const snapshot = {
+          ...parsed,
+          current_page: window.location.href,
+          region_code: extras.regionCode || parsed.region_code || "",
+        };
+        window.localStorage.setItem(ATTRIBUTION_KEY, JSON.stringify(snapshot));
+        return snapshot;
       }
     }
   } catch {
@@ -101,6 +109,27 @@ export function getAttributionSnapshot(extras = {}) {
     // Attribution is helpful context, not required for checkout.
   }
   return snapshot;
+}
+
+export function shouldTrackStorefrontPageView(pathname = "") {
+  return LOCALIZED_STOREFRONT_PATH.test(String(pathname || ""));
+}
+
+export function buildPageViewTrackingKey(pathname = "", searchParamsLike = "") {
+  const params = new URLSearchParams(
+    typeof searchParamsLike === "string"
+      ? searchParamsLike
+      : typeof searchParamsLike?.toString === "function"
+        ? searchParamsLike.toString()
+        : "",
+  );
+  params.delete("region");
+  const query = params.toString();
+  return `${pathname || ""}?${query}`;
+}
+
+export function resolveTrackingRegionCode(searchParams) {
+  return regionFromSearchParams(searchParams) || readStoredRegion() || "om";
 }
 
 /**

@@ -4,6 +4,7 @@ import ChunkLoadRecovery from "@/components/system/ChunkLoadRecovery";
 import LocalServiceWorkerReset from "@/components/system/LocalServiceWorkerReset";
 import RegionResolver from "@/components/system/RegionResolver";
 import GtmScript from "@/components/store/analytics/GtmScript";
+import StorefrontPageViewTracker from "@/components/store/analytics/StorefrontPageViewTracker";
 import StoreProvider from "@/components/store/cart/StoreProvider";
 import { LocaleProvider } from "@/contexts/LocaleContext";
 import { getBaseUrl, getLocaleDir } from "@/lib/seo";
@@ -69,6 +70,7 @@ export default async function RootLayout({ children }) {
         <GtmScript />
         <ChunkLoadRecovery />
         <LocalServiceWorkerReset />
+        <StorefrontPageViewTracker />
         <LocaleProvider initialLocale={locale}>
           <LocaleHtmlAttributes />
           <RegionResolver />

@@ -1,5 +1,5 @@
-import { API_BASE_URL } from "@/lib/config";
-import { SUPPORTED_REGIONS, normalizeRegion } from "@/lib/storefront-core/routing";
+import { API_BASE_URL } from "./config.js";
+import { SUPPORTED_REGIONS, normalizeRegion } from "./storefront-core/routing.js";
 
 export const SELECTED_REGION_STORAGE_KEY = "selectedRegion";
 

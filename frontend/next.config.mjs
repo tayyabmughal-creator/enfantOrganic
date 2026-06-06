@@ -49,7 +49,7 @@ const pwaRuntimeCaching = [
   {
     urlPattern: ({ sameOrigin, url }) =>
       sameOrigin &&
-        /^\/(?:admin(?:\/|$)|(?:en|ar)\/(?:checkout|payment|account)(?:\/|$)|api\/(?:checkout|payments|auth|admin|account|orders)(?:\/|$))/i.test(
+        /^\/(?:admin(?:\/|$)|(?:en|ar)\/(?:checkout|payment|account)(?:\/|$)|api\/(?:checkout|payments|auth|admin|account|orders|analytics)(?:\/|$))/i.test(
           url.pathname,
         ),
     handler: "NetworkOnly",
@@ -75,7 +75,7 @@ const withPWAConfig = withPWA({
     navigateFallbackDenylist: [
       /^\/admin(?:\/|$)/i,
       /^\/(?:en|ar)\/(?:checkout|payment|account)(?:\/|$)/i,
-      /^\/api\/(?:checkout|payments|auth|admin|account|orders)(?:\/|$)/i,
+      /^\/api\/(?:checkout|payments|auth|admin|account|orders|analytics)(?:\/|$)/i,
     ],
   },
 });
