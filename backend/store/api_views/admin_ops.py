@@ -2236,7 +2236,8 @@ class AdminOrderStatusRollbackView(APIView):
         if not order:
             return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        previous_status = order.get_previous_status()
+        serializer = AdminOrderSerializer(context={"request": request})
+        previous_status = serializer.get_previous_status(order)
         if not previous_status:
             return Response(
                 {"detail": "No previous order status is available for rollback."},

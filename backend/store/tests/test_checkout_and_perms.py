@@ -3707,6 +3707,32 @@ class CheckoutAndPermsTestCase(TestCase):
         self.assertFalse(response.data["can_revert_status"])
         self.assertEqual(response.data["revert_status_helper"], "No previous status found in history.")
 
+    def test_admin_status_rollback_uses_audit_log_fallback_for_previous_status(self):
+        staff_user = self._create_staff_user("rollback-endpoint-fallback-staff")
+        order = self._create_online_order(self.region)
+        order.transition_to(Order.STATUS_CONFIRMED)
+        order.transition_to(Order.STATUS_CANCELLED)
+        order.status_history.all().delete()
+        AdminAuditLog.objects.create(
+            actor=staff_user,
+            action=AdminAuditLog.ACTION_ORDER_STATUS_CHANGED,
+            resource_type="order",
+            resource_id=order.order_number,
+            before_snapshot={"status": Order.STATUS_CONFIRMED},
+            after_snapshot={"status": Order.STATUS_CANCELLED},
+        )
+
+        self.api_client.force_authenticate(staff_user)
+        response = self.api_client.post(
+            f"/api/admin/orders/{order.order_number}/status-rollback/",
+            {"admin_note": "Restore previous state from audit history."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.STATUS_CONFIRMED)
+
     def test_admin_can_update_refunded_order_notes_without_status_resubmission(self):
         staff_user = self._create_staff_user("refund-notes-staff")
         order = self._create_online_order(self.region)
