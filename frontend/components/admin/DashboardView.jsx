@@ -137,13 +137,19 @@ function SalesChannelDonut({ channels = [], totalSales = 0, currency = "OMR" }) 
         offset += len;
         return circle;
       }) : null}
-      <text x="110" y="97" textAnchor="middle" fill="#74806c" fontSize="12" fontWeight="800">
+      <text x="110" y="89" textAnchor="middle" className="admin-donut-center-label admin-donut-center-label--compact">
         {currency}
       </text>
-      <text x="110" y="122" textAnchor="middle" fill="#191817" fontSize={valueFontSize} fontWeight="800">
+      <text
+        x="110"
+        y="118"
+        textAnchor="middle"
+        className="admin-donut-center-value admin-donut-center-value--compact"
+        style={{ fontSize: `${valueFontSize}px` }}
+      >
         {totalValueText}
       </text>
-      <text x="110" y="142" textAnchor="middle" fill="#7b876f" fontSize="12" fontWeight="700">
+      <text x="110" y="143" textAnchor="middle" className="admin-donut-center-meta">
         Total sales
       </text>
     </svg>

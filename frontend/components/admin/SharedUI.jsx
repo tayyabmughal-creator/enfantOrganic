@@ -70,6 +70,8 @@ export function DonutChart({ values }) {
     : [];
   const total = items.reduce((sum, item) => sum + Number(item?.count || 0), 0);
   const colors = ["#c9a84c", "#92ab69", "#607a42", "#62b5e8", "#df5750", "#8a82ff"];
+  const totalText = total.toLocaleString();
+  const totalFontSize = totalText.length > 5 ? 22 : totalText.length > 3 ? 24 : 28;
   let offset = 25;
   return (
     <svg className="admin-donut-chart" viewBox="0 0 220 220" role="img" aria-label="Order status donut chart">
@@ -95,8 +97,16 @@ export function DonutChart({ values }) {
             return el;
           })
         : null}
-      <text x="110" y="105" textAnchor="middle" fill="#65705f" fontSize="13" fontWeight="700">Orders</text>
-      <text x="110" y="124" textAnchor="middle" fill="#191817" fontSize="26" fontWeight="800">{total}</text>
+      <text x="110" y="97" textAnchor="middle" className="admin-donut-center-label">Orders</text>
+      <text
+        x="110"
+        y="128"
+        textAnchor="middle"
+        className="admin-donut-center-value"
+        style={{ fontSize: `${totalFontSize}px` }}
+      >
+        {totalText}
+      </text>
     </svg>
   );
 }

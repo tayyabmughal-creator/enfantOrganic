@@ -3172,6 +3172,35 @@
   display: block;
 }
 
+.admin-donut-center-label {
+  fill: #65705f;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.admin-donut-center-label--compact {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-donut-center-value {
+  fill: #191817;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.admin-donut-center-value--compact {
+  letter-spacing: -0.03em;
+}
+
+.admin-donut-center-meta {
+  fill: #7b876f;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
 .admin-donut-legend {
   list-style: none;
   margin: 16px 0 0;
@@ -3798,6 +3827,18 @@
 
   .admin-status-mix-donut .admin-donut-chart {
     max-width: 210px;
+  }
+
+  .admin-donut-center-label {
+    font-size: 12px;
+  }
+
+  .admin-donut-center-value {
+    font-size: 24px !important;
+  }
+
+  .admin-donut-center-meta {
+    font-size: 11px;
   }
 }
 
