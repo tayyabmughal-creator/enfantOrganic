@@ -68,6 +68,19 @@ function normalizeDraftItemsFromOrder(order) {
   }));
 }
 
+function normalizeProductRow(row, regionCode) {
+  const prices = Array.isArray(row?.prices) ? row.prices : [];
+  const normalizedRegion = String(regionCode || "").toLowerCase();
+  const matchedPrice = prices.find((price) => String(price?.region_code || "").toLowerCase() === normalizedRegion);
+  if (!matchedPrice) return null;
+  return {
+    slug: row.slug,
+    name: row.name_en || row.slug,
+    unit_price: asNumber(matchedPrice.price),
+    image: row.image || "",
+  };
+}
+
 export default function DraftOrderComposer({
   request,
   initialOrder = null,
@@ -86,6 +99,7 @@ export default function DraftOrderComposer({
   const [productSearch, setProductSearch] = useState("");
   const [productRows, setProductRows] = useState([]);
   const [productsLoading, setProductsLoading] = useState(false);
+  const [productPickerOpen, setProductPickerOpen] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerRows, setCustomerRows] = useState([]);
   const [customerLoading, setCustomerLoading] = useState(false);
@@ -103,6 +117,14 @@ export default function DraftOrderComposer({
     () => items.reduce((sum, item) => sum + asNumber(item.unit_price) * Math.max(1, asNumber(item.quantity)), 0),
     [items],
   );
+  const filteredProductRows = useMemo(() => {
+    const clean = String(productSearch || "").trim().toLowerCase();
+    if (!clean) return productRows;
+    return productRows.filter((row) => (
+      String(row?.name || "").toLowerCase().includes(clean)
+      || String(row?.slug || "").toLowerCase().includes(clean)
+    ));
+  }, [productRows, productSearch]);
 
   useEffect(() => {
     let ignore = false;
@@ -152,37 +174,61 @@ export default function DraftOrderComposer({
     setCustomerSearch(fromOrder?.customer_name || "");
   }, [initialOrder]);
 
-  async function searchProducts(query) {
-    const clean = String(query || "").trim();
-    if (!clean) {
-      setProductRows([]);
-      return;
+  useEffect(() => {
+    if (!productPickerOpen) return undefined;
+    let ignore = false;
+    async function loadProducts() {
+      setProductsLoading(true);
+      setErrors("");
+      try {
+        const collected = [];
+        let nextPath = "/admin/products/?page_size=100";
+        while (nextPath) {
+          const payload = await request(nextPath);
+          const rows = mapPaginated(payload);
+          rows.forEach((row) => {
+            const normalized = normalizeProductRow(row, regionCode);
+            if (normalized) {
+              collected.push(normalized);
+            }
+          });
+          const nextUrl = String(payload?.next || "");
+          nextPath = "";
+          if (nextUrl) {
+            try {
+              nextPath = new URL(nextUrl).pathname + new URL(nextUrl).search;
+            } catch {
+              nextPath = nextUrl.startsWith("/api") ? nextUrl.replace(/^\/api/, "") : nextUrl;
+            }
+          }
+        }
+        if (!ignore) {
+          collected.sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+          setProductRows(collected);
+        }
+      } catch (err) {
+        if (!ignore) {
+          setProductRows([]);
+          setErrors(err.message || "Failed to load products.");
+        }
+      } finally {
+        if (!ignore) setProductsLoading(false);
+      }
     }
-    setProductsLoading(true);
-    setErrors("");
-    try {
-      const payload = await request(`/admin/products/?search=${encodeURIComponent(clean)}`);
-      const rows = mapPaginated(payload);
-      const normalizedRegion = String(regionCode || "").toLowerCase();
-      const mapped = rows
-        .map((row) => {
-          const prices = Array.isArray(row?.prices) ? row.prices : [];
-          const matchedPrice = prices.find((price) => String(price?.region_code || "").toLowerCase() === normalizedRegion);
-          if (!matchedPrice) return null;
-          return {
-            slug: row.slug,
-            name: row.name_en || row.slug,
-            unit_price: asNumber(matchedPrice.price),
-            image: row.image || "",
-          };
-        })
-        .filter(Boolean);
-      setProductRows(mapped.slice(0, 15));
-    } catch (err) {
-      setErrors(err.message || "Failed to search products.");
-    } finally {
-      setProductsLoading(false);
-    }
+    void loadProducts();
+    return () => {
+      ignore = true;
+    };
+  }, [productPickerOpen, regionCode, request]);
+
+  function openProductPicker() {
+    setProductPickerOpen(true);
+    setProductSearch("");
+  }
+
+  function closeProductPicker() {
+    setProductPickerOpen(false);
+    setProductSearch("");
   }
 
   async function searchCustomers(query) {
@@ -232,6 +278,7 @@ export default function DraftOrderComposer({
       };
       return next;
     });
+    closeProductPicker();
   }
 
   function updateItemQuantity(index, quantityValue) {
@@ -335,101 +382,6 @@ export default function DraftOrderComposer({
       {errors ? <p className="admin-draft-error">{errors}</p> : null}
 
       <div className="admin-draft-grid">
-        <div className="admin-draft-main">
-          <article className="admin-draft-card">
-            <div className="admin-draft-card-head">
-              <h4>Products</h4>
-              <div className="admin-draft-card-tools">
-                <input
-                  className="admin-input"
-                  placeholder="Search products..."
-                  value={productSearch}
-                  onChange={(event) => setProductSearch(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      void searchProducts(productSearch);
-                    }
-                  }}
-                />
-                <button type="button" className="admin-btn-sm" onClick={() => { void searchProducts(productSearch); }}>
-                  Add product
-                </button>
-              </div>
-            </div>
-            {productsLoading ? <p className="admin-draft-hint">Searching products...</p> : null}
-            {productRows.length ? (
-              <div className="admin-draft-product-search">
-                {productRows.map((row) => (
-                  <button
-                    key={`${row.slug}-${row.unit_price}`}
-                    type="button"
-                    className="admin-draft-search-row"
-                    onClick={() => addProduct(row)}
-                  >
-                    <div>
-                      <strong>{row.name}</strong>
-                      <span>{row.slug}</span>
-                    </div>
-                    <span>{formatMoney(row.unit_price, currencyCode)}</span>
-                  </button>
-                ))}
-              </div>
-            ) : null}
-            <div className="admin-draft-lines">
-              {items.length ? (
-                items.map((item, index) => (
-                  <div key={`${item.slug}-${index}`} className="admin-draft-line-row">
-                    <div className="admin-draft-line-main">
-                      {item.image ? <img src={item.image} alt={item.name} className="admin-record-thumb" /> : null}
-                      <div>
-                        <strong>{item.name}</strong>
-                        <span>{item.slug}</span>
-                      </div>
-                    </div>
-                    <span>{formatMoney(item.unit_price, currencyCode)}</span>
-                    <input
-                      className="admin-input admin-draft-qty"
-                      type="number"
-                      min="1"
-                      value={item.quantity}
-                      onChange={(event) => updateItemQuantity(index, event.target.value)}
-                    />
-                    <strong>{formatMoney(item.unit_price * item.quantity, currencyCode)}</strong>
-                    <button type="button" className="admin-btn-sm danger" onClick={() => removeItem(index)}>
-                      Remove
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <p className="admin-draft-hint">No products added yet.</p>
-              )}
-            </div>
-          </article>
-
-          <article className="admin-draft-card">
-            <div className="admin-draft-card-head">
-              <h4>Payment Summary</h4>
-            </div>
-            <div className="admin-draft-summary-grid">
-              <span>Subtotal</span>
-              <strong>{formatMoney(subtotal, currencyCode)}</strong>
-              <span>Shipping</span>
-              <strong>{isEditing ? formatMoney(initialOrder?.shipping_total || 0, currencyCode) : "Calculated on save"}</strong>
-              <span>Tax</span>
-              <strong>{isEditing ? formatMoney(initialOrder?.tax_total || 0, currencyCode) : "Calculated on save"}</strong>
-              <span className="admin-draft-summary-total">Total</span>
-              <strong className="admin-draft-summary-total">
-                {isEditing ? formatMoney(initialOrder?.grand_total || subtotal, currencyCode) : formatMoney(subtotal, currencyCode)}
-              </strong>
-            </div>
-            <div className="admin-draft-disabled-actions">
-              <button type="button" className="admin-btn-sm" disabled>Send invoice (Future)</button>
-              <button type="button" className="admin-btn-sm" disabled>Mark as paid (Use order status flow)</button>
-            </div>
-          </article>
-        </div>
-
         <aside className="admin-draft-side">
           <article className="admin-draft-card">
             <div className="admin-draft-card-head">
@@ -561,7 +513,16 @@ export default function DraftOrderComposer({
             </div>
             <label className="admin-label">
               Market
-              <select className="admin-input" value={regionCode} onChange={(event) => setRegionCode(event.target.value)}>
+              <select
+                className="admin-input"
+                value={regionCode}
+                onChange={(event) => {
+                  setRegionCode(event.target.value);
+                  setProductPickerOpen(false);
+                  setProductRows([]);
+                  setProductSearch("");
+                }}
+              >
                 {regions.map((region) => (
                   <option key={region.code} value={region.code}>
                     {MARKET_LABELS[String(region.code || "").toLowerCase()] || region.name_en || region.code}
@@ -584,6 +545,119 @@ export default function DraftOrderComposer({
             />
           </article>
         </aside>
+
+        <div className="admin-draft-main">
+          <article className="admin-draft-card">
+            <div className="admin-draft-card-head">
+              <h4>Products</h4>
+              <div className="admin-draft-card-tools">
+                <button type="button" className="admin-btn-sm" onClick={openProductPicker}>
+                  Add product
+                </button>
+              </div>
+            </div>
+            {productPickerOpen ? (
+              <div className="admin-draft-product-picker">
+                <div className="admin-draft-picker-head">
+                  <div>
+                    <strong>Select a product</strong>
+                    <span>
+                      {productSearch
+                        ? `${filteredProductRows.length} matching products`
+                        : `Showing all ${productRows.length} products for ${MARKET_LABELS[regionCode] || "this market"}`}
+                    </span>
+                  </div>
+                  <button type="button" className="admin-btn-sm" onClick={closeProductPicker}>
+                    Close
+                  </button>
+                </div>
+                <div className="admin-draft-picker-search">
+                  <input
+                    className="admin-input"
+                    placeholder="Search products by name..."
+                    value={productSearch}
+                    onChange={(event) => setProductSearch(event.target.value)}
+                  />
+                </div>
+                {productsLoading ? <p className="admin-draft-hint">Loading products...</p> : null}
+                {!productsLoading && filteredProductRows.length ? (
+                  <div className="admin-draft-product-search">
+                    {filteredProductRows.map((row) => (
+                      <button
+                        key={`${row.slug}-${row.unit_price}`}
+                        type="button"
+                        className="admin-draft-search-row"
+                        onClick={() => addProduct(row)}
+                      >
+                        <div>
+                          <strong>{row.name}</strong>
+                          <span>{row.slug}</span>
+                        </div>
+                        <span>{formatMoney(row.unit_price, currencyCode)}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                {!productsLoading && !filteredProductRows.length ? (
+                  <p className="admin-draft-hint">
+                    {productRows.length ? "No products match your search." : "No products found for this market."}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            <div className="admin-draft-lines">
+              {items.length ? (
+                items.map((item, index) => (
+                  <div key={`${item.slug}-${index}`} className="admin-draft-line-row">
+                    <div className="admin-draft-line-main">
+                      {item.image ? <img src={item.image} alt={item.name} className="admin-record-thumb" /> : null}
+                      <div>
+                        <strong>{item.name}</strong>
+                        <span>{item.slug}</span>
+                      </div>
+                    </div>
+                    <span>{formatMoney(item.unit_price, currencyCode)}</span>
+                    <input
+                      className="admin-input admin-draft-qty"
+                      type="number"
+                      min="1"
+                      value={item.quantity}
+                      onChange={(event) => updateItemQuantity(index, event.target.value)}
+                    />
+                    <strong>{formatMoney(item.unit_price * item.quantity, currencyCode)}</strong>
+                    <button type="button" className="admin-btn-sm danger" onClick={() => removeItem(index)}>
+                      Remove
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <p className="admin-draft-hint">No products added yet.</p>
+              )}
+            </div>
+          </article>
+
+          <article className="admin-draft-card">
+            <div className="admin-draft-card-head">
+              <h4>Payment Summary</h4>
+            </div>
+            <div className="admin-draft-summary-grid">
+              <span>Subtotal</span>
+              <strong>{formatMoney(subtotal, currencyCode)}</strong>
+              <span>Shipping</span>
+              <strong>{isEditing ? formatMoney(initialOrder?.shipping_total || 0, currencyCode) : "Calculated on save"}</strong>
+              <span>Tax</span>
+              <strong>{isEditing ? formatMoney(initialOrder?.tax_total || 0, currencyCode) : "Calculated on save"}</strong>
+              <span className="admin-draft-summary-total">Total</span>
+              <strong className="admin-draft-summary-total">
+                {isEditing ? formatMoney(initialOrder?.grand_total || subtotal, currencyCode) : formatMoney(subtotal, currencyCode)}
+              </strong>
+            </div>
+            <div className="admin-draft-disabled-actions">
+              <button type="button" className="admin-btn-sm" disabled>Send invoice (Future)</button>
+              <button type="button" className="admin-btn-sm" disabled>Mark as paid (Use order status flow)</button>
+            </div>
+          </article>
+        </div>
       </div>
 
       <div className="admin-draft-footer">

@@ -3,16 +3,32 @@ from celery import shared_task
 from django.core.management import call_command
 
 from .models import Order
-from .notifications import _dispatch_order_event, send_admin_inventory_health_email
+from .notifications import (
+    NotificationDispatchRetryableError,
+    _dispatch_order_event,
+    send_admin_inventory_health_email,
+)
 from .services.invoice import ensure_paid_order_invoice
 from .services.shipment import create_order_shipment
 
 logger = logging.getLogger(__name__)
 
-@shared_task
-def process_order_event_async(order_id, event, extra_payload=None):
+@shared_task(bind=True, max_retries=3)
+def process_order_event_async(self, order_id, event, extra_payload=None):
     try:
         _dispatch_order_event(order_id, event, extra_payload=extra_payload)
+    except NotificationDispatchRetryableError as exc:
+        retries = int(getattr(self.request, "retries", 0))
+        logger.warning(
+            "Retrying order notification dispatch for order=%s event=%s attempt=%s/%s: %s",
+            order_id,
+            event,
+            retries + 1,
+            self.max_retries,
+            exc,
+        )
+        countdown = min(60, 2 ** retries)
+        raise self.retry(exc=exc, countdown=countdown, max_retries=self.max_retries)
     except Exception:
         logger.exception("Order notification dispatch crashed for order=%s event=%s", order_id, event)
 

@@ -19,6 +19,7 @@ from ..models import (
     OrderItem,
     PaymentTransaction,
     PaymobRegionConfig,
+    NotificationLog,
     Product,
     ProductPrice,
     ProductStock,
@@ -188,6 +189,8 @@ class AdminOrderSerializer(serializers.ModelSerializer):
     revert_status_label = serializers.SerializerMethodField(read_only=True)
     revert_status_helper = serializers.SerializerMethodField(read_only=True)
     rollback_action = serializers.SerializerMethodField(read_only=True)
+    notification_summary = serializers.SerializerMethodField(read_only=True)
+    notification_history = serializers.SerializerMethodField(read_only=True)
     previous_status_option = serializers.SerializerMethodField(read_only=True)
     status_note = serializers.CharField(write_only=True, required=False, allow_blank=True)
     region_code = serializers.CharField(source="region.code", read_only=True)
@@ -282,6 +285,51 @@ class AdminOrderSerializer(serializers.ModelSerializer):
             context={"current_entry": entries[-1]},
         )
         return serializer.data
+
+    def _notification_logs(self, obj):
+        return list(
+            obj.notification_logs.filter(channel=NotificationLog.CHANNEL_EMAIL)
+            .order_by("-created_at", "-id")
+        )
+
+    def get_notification_summary(self, obj):
+        logs = self._notification_logs(obj)
+        latest = logs[0] if logs else None
+        if latest is None:
+            return {
+                "has_email": bool(obj.customer_email),
+                "latest_status": "",
+                "latest_event": "",
+                "latest_error": "",
+                "sent_at": None,
+                "updated_at": None,
+            }
+        return {
+            "has_email": bool(obj.customer_email),
+            "latest_status": latest.status,
+            "latest_event": latest.event,
+            "latest_error": latest.error_message,
+            "sent_at": latest.sent_at,
+            "updated_at": latest.updated_at,
+        }
+
+    def get_notification_history(self, obj):
+        return [
+            {
+                "id": log.id,
+                "event": log.event,
+                "channel": log.channel,
+                "recipient": log.recipient,
+                "status": log.status,
+                "attempt_count": log.attempt_count,
+                "task_id": log.task_id,
+                "error_message": log.error_message,
+                "sent_at": log.sent_at,
+                "created_at": log.created_at,
+                "updated_at": log.updated_at,
+            }
+            for log in self._notification_logs(obj)[:10]
+        ]
 
     @staticmethod
     def _ordinal(value):

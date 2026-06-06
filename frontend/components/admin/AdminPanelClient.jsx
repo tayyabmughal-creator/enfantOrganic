@@ -649,6 +649,7 @@ export default function AdminPanelClient() {
   const [page, setPage]             = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [dashboardFilters, setDashboardFilters] = useState(DASHBOARD_FILTER_DEFAULTS);
   const [orderFilters, setOrderFilters] = useState(ORDER_FILTER_DEFAULTS);
   const [inventoryThreshold, setInventoryThreshold] = useState(10);
@@ -743,6 +744,13 @@ export default function AdminPanelClient() {
     if (token && adminMe && active) loadScreen(active);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, adminMe, activeKey]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery]);
 
   async function request(path, options = {}, _isRetry = false) {
     const isFormData = options.body instanceof FormData;
@@ -872,8 +880,8 @@ export default function AdminPanelClient() {
       const filterSource = options.dashboardFilters || dashboardFilters;
       const params = new URLSearchParams();
       let requestedPageSize = DEFAULT_ADMIN_PAGE_SIZE;
-      if (CRUD_KEYS.includes(screenKey) && searchQuery) {
-        params.set("search", searchQuery);
+      if ((CRUD_KEYS.includes(screenKey) || screenKey === "orders" || screenKey === "draft_orders" || screenKey === "abandoned") && debouncedSearchQuery) {
+        params.set("search", debouncedSearchQuery);
       }
       if (page > 1 && (CRUD_KEYS.includes(screenKey) || screenKey === "abandoned")) {
         params.set("page", String(page));
@@ -1303,6 +1311,20 @@ export default function AdminPanelClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderFilters, token, adminMe, activeKey]);
 
+  useEffect(() => {
+    if (!(token && adminMe && active && page > 1)) return;
+    if (!(CRUD_KEYS.includes(activeKey) || activeKey === "orders" || activeKey === "draft_orders" || activeKey === "abandoned")) return;
+    void loadScreen(active, { silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, token, adminMe, activeKey]);
+
+  useEffect(() => {
+    if (!(token && adminMe && active)) return;
+    if (!(CRUD_KEYS.includes(activeKey) || activeKey === "orders" || activeKey === "draft_orders" || activeKey === "abandoned")) return;
+    void loadScreen(active, { silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearchQuery, token, adminMe, activeKey]);
+
   function navigate(key, options = {}) {
     if (!canViewKey(key)) {
       showToast("You do not have access to this section.", "error");
@@ -1459,14 +1481,14 @@ export default function AdminPanelClient() {
             <h1>{active.label}</h1>
             <p>{active.desc}</p>
           </div>
-          {canCreate ? (
+          {canCreate && !(activeKey === "draft_orders" && draftComposerOpen) ? (
             <button type="button" className="admin-btn-primary admin-topbar-cta" onClick={startCreate}>
               + {activeKey === "draft_orders" ? "Create order" : activeKey === "blog" ? "New article" : activeKey === "hero_cards" ? "Add hero card" : activeKey === "deals" ? "Add deal" : activeKey === "shipping" ? "Add rule" : activeKey === "taxes" ? "Add tax rule" : activeKey === "staff" ? "Add staff" : `Add ${activeKey.slice(0, -1)}`}
             </button>
           ) : null}
         </header>
 
-        <div className="admin-content">
+        <div className={`admin-content ${activeKey === "draft_orders" && draftComposerOpen ? "admin-content--draft-order" : ""}`}>
           {ORDER_SECTION_KEYS.has(activeKey) ? (
             <section className="admin-orders-section-tabs" aria-label="Orders sections">
               {ORDER_SECTION_TABS

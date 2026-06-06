@@ -271,15 +271,15 @@ function OrdersTable({ rows, canEdit, onEdit, onDownloadInvoice }) {
                 aria-label="Select all orders"
               />
             </th>
-            <th>Order number</th>
-            <th>Date</th>
-            <th>Customer</th>
-            <th>Fulfilled by / Market</th>
-            <th>Channel</th>
-            <th>Total</th>
-            <th>Payment status</th>
-            <th>Fulfillment status</th>
-            <th>Items</th>
+            <th className="order-number-col">Order number</th>
+            <th className="date-col">Date</th>
+            <th className="customer-col">Customer</th>
+            <th className="market-col">Fulfilled by / Market</th>
+            <th className="channel-col">Channel</th>
+            <th className="total-col">Total</th>
+            <th className="payment-col">Payment status</th>
+            <th className="fulfillment-col">Fulfillment status</th>
+            <th className="items-col">Items</th>
             <th className="actions-col">Actions</th>
           </tr>
         </thead>
@@ -304,7 +304,7 @@ function OrdersTable({ rows, canEdit, onEdit, onDownloadInvoice }) {
                     aria-label={`Select order ${orderNumber}`}
                   />
                 </td>
-                <td>
+                <td className="order-number-col">
                   {canEdit ? (
                     <button type="button" className="admin-order-link" onClick={() => onEdit(order)}>
                       {orderNumber || "—"}
@@ -313,32 +313,32 @@ function OrdersTable({ rows, canEdit, onEdit, onDownloadInvoice }) {
                     <span className="admin-order-text">{orderNumber || "—"}</span>
                   )}
                 </td>
-                <td>{formatOrderDate(order.created_at)}</td>
-                <td>
+                <td className="date-col">{formatOrderDate(order.created_at)}</td>
+                <td className="customer-col">
                   <div className="admin-order-customer">
                     <strong>{order.customer_name || "Guest"}</strong>
                     <span>{order.customer_phone || order.customer_email || "—"}</span>
                   </div>
                 </td>
-                <td>
+                <td className="market-col">
                   <div className="admin-order-market">
                     <strong>{carrierLabel}</strong>
                     <span>{marketLabel}</span>
                   </div>
                 </td>
-                <td>{channelLabel}</td>
-                <td className="admin-order-total">{formatOrderTotal(order)}</td>
-                <td>
+                <td className="channel-col">{channelLabel}</td>
+                <td className="total-col admin-order-total">{formatOrderTotal(order)}</td>
+                <td className="payment-col">
                   <span className={`admin-badge ${statusTone(paymentStatus)}`}>
                     {PAYMENT_STATUS_LABELS[paymentStatus] || "—"}
                   </span>
                 </td>
-                <td>
+                <td className="fulfillment-col">
                   <span className={`admin-badge ${shipmentStatusTone(shipmentStatus)}`}>
                     {SHIPMENT_STATUS_LABELS[shipmentStatus] || "—"}
                   </span>
                 </td>
-                <td>{itemsCount} {itemsCount === 1 ? "item" : "items"}</td>
+                <td className="items-col">{itemsCount} {itemsCount === 1 ? "item" : "items"}</td>
                 <td className="actions-col">
                   <div className="admin-row-actions">
                     {canEdit ? <button type="button" className="admin-btn-sm" onClick={() => onEdit(order)}>Edit</button> : null}
@@ -494,10 +494,18 @@ export function CrudFormModal({ activeKey, isSettings, mode, selected, editor, s
 
   const eyebrow = isSettings ? "Store settings" : mode === "create" ? "Create record" : "Edit record";
   const resolvedFields = resolveFields(activeKey, fields, selected);
+  const modalClassName = [
+    "admin-modal",
+    activeKey === "orders" || activeKey === "draft_orders" ? "admin-modal--order" : "",
+  ].filter(Boolean).join(" ");
+  const modalFormClassName = [
+    "admin-modal-form",
+    activeKey === "orders" || activeKey === "draft_orders" ? "admin-modal-form--order" : "",
+  ].filter(Boolean).join(" ");
 
   return (
     <div className="admin-modal-backdrop" role="presentation" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <section className="admin-modal" role="dialog" aria-modal="true" aria-label={title}>
+      <section className={modalClassName} role="dialog" aria-modal="true" aria-label={title}>
         <div className="admin-modal-head">
           <div>
             <p className="admin-modal-eyebrow">{eyebrow}</p>
@@ -510,7 +518,7 @@ export function CrudFormModal({ activeKey, isSettings, mode, selected, editor, s
         {(activeKey === "orders" || activeKey === "draft_orders") && selected ? <OrderDetailLayout order={selected} onDownloadInvoice={onDownloadInvoice} onRefundOrder={onRefundOrder} onCreateShipment={onCreateShipment} onRollbackOrderStatus={onRollbackOrderStatus} /> : null}
         {activeKey === "hero_cards" ? <HeroCardPreview editor={editor} /> : null}
 
-        <div className="admin-modal-form">
+        <div className={modalFormClassName}>
           {resolvedFields.map((field) => (
             <FormField key={field[0]} field={field} value={editor[field[0]]} editor={editor} setEditor={setEditor} />
           ))}
@@ -690,6 +698,7 @@ function OrderDetailLayout({ order, onDownloadInvoice, onRefundOrder, onCreateSh
         </article>
 
         <ConversionSummaryCard summary={order.conversion_summary} />
+        <NotificationStatusCard summary={order.notification_summary} history={order.notification_history} />
 
         <article className="admin-order-card">
           <div className="admin-order-card-head">
@@ -796,6 +805,53 @@ function ConversionSummaryCard({ summary }) {
         </>
       ) : (
         <p className="admin-order-helper">{summary?.helper || "No conversion data captured for this order."}</p>
+      )}
+    </article>
+  );
+}
+
+function NotificationStatusCard({ summary, history }) {
+  const entries = Array.isArray(history) ? history : [];
+  const latest = summary && typeof summary === "object" ? summary : {};
+  const latestStatus = latest.latest_status || "";
+  const latestError = latest.latest_error || "";
+  const latestEvent = latest.latest_event || "";
+  const latestSentAt = latest.sent_at || null;
+  const hasEmail = Boolean(latest.has_email);
+
+  return (
+    <article className="admin-order-card">
+      <div className="admin-order-card-head">
+        <h3>Email Notification</h3>
+        <span className={`admin-badge ${statusTone(latestStatus)}`}>{humanizeEnum(latestStatus) || "No activity"}</span>
+      </div>
+      <div className="admin-order-info-block">
+        <h4>{hasEmail ? "Customer email available" : "No customer email on this order"}</h4>
+        <p>Latest event: {humanizeEnum(latestEvent) || "—"}</p>
+        <p>Last sent: {latestSentAt ? formatOrderDate(latestSentAt) : "Not sent yet"}</p>
+        {latestError ? <p>{latestError}</p> : null}
+      </div>
+      {entries.length ? (
+        <div className="admin-order-timeline">
+          {entries.slice(0, 4).map((entry) => (
+            <div key={entry.id || `${entry.event}-${entry.created_at}`} className="admin-order-timeline-item">
+              <span className="admin-order-timeline-dot" aria-hidden="true" />
+              <div className="admin-order-timeline-content">
+                <div className="admin-order-timeline-top">
+                  <strong>{humanizeEnum(entry.event) || "Notification event"}</strong>
+                  <span>{formatOrderDate(entry.updated_at || entry.created_at)}</span>
+                </div>
+                <p>
+                  {humanizeEnum(entry.status) || "Unknown status"}
+                  {entry.attempt_count ? ` • Attempts: ${entry.attempt_count}` : ""}
+                </p>
+                {entry.error_message ? <p>{entry.error_message}</p> : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="admin-order-empty">No email notification activity is available for this order yet.</p>
       )}
     </article>
   );

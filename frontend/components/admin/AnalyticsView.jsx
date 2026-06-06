@@ -66,7 +66,7 @@ export default function AnalyticsView({ data }) {
       </div>
 
       <div className="admin-chart-row">
-        <section className="admin-chart-card">
+        <section className="admin-chart-card admin-analytics-funnel-card">
           <h3>Conversion Funnel</h3>
           {visitors === 0 && (
             <p className="admin-chart-notice">
@@ -76,7 +76,10 @@ export default function AnalyticsView({ data }) {
           <div className="admin-funnel">
             {funnel.map((step, i) => (
               <div key={step.label} className="admin-funnel-step">
-                <div className="admin-funnel-bar" style={{ "--fw": `${step.pct}%` }}>
+                <div
+                  className="admin-funnel-bar"
+                  style={{ "--fw": `${step.value > 0 ? (i === 0 ? 100 : Math.max(46, step.pct)) : 38}%` }}
+                >
                   <span>{step.label}</span>
                   <strong>{step.value.toLocaleString()}</strong>
                 </div>
@@ -92,9 +95,11 @@ export default function AnalyticsView({ data }) {
           </div>
         </section>
 
-        <section className="admin-chart-card">
+        <section className="admin-chart-card admin-analytics-status-card">
           <h3>Order Status Distribution</h3>
-          <DonutChart values={data?.status_mix || []} />
+          <div className="admin-analytics-donut-wrap">
+            <DonutChart values={data?.status_mix || []} />
+          </div>
         </section>
       </div>
 

@@ -815,12 +815,16 @@ class NotificationLog(models.Model):
     STATUS_SENT = "sent"
     STATUS_FAILED = "failed"
     STATUS_SKIPPED = "skipped"
+    STATUS_SKIPPED_NO_EMAIL = "skipped_no_email"
+    STATUS_SKIPPED_DRAFT_ORDER = "skipped_draft_order"
 
     STATUS_CHOICES = (
         (STATUS_PENDING, "Pending"),
         (STATUS_SENT, "Sent"),
         (STATUS_FAILED, "Failed"),
         (STATUS_SKIPPED, "Skipped"),
+        (STATUS_SKIPPED_NO_EMAIL, "Skipped (no customer email)"),
+        (STATUS_SKIPPED_DRAFT_ORDER, "Skipped (draft order)"),
     )
 
     EVENT_ORDER_CREATED = "order_created"
@@ -872,7 +876,11 @@ class NotificationLog(models.Model):
     payload = models.JSONField(default=dict, blank=True)
     success = models.BooleanField(default=False)
     error_message = models.TextField(blank=True)
+    attempt_count = models.PositiveIntegerField(default=0)
+    task_id = models.CharField(max_length=255, blank=True, default="")
+    sent_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ("-created_at",)

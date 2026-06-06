@@ -1895,6 +1895,18 @@ class AdminOrderListView(generics.ListAPIView):
             "status_history__actor",
             "return_requests__reviewed_by",
         )
+        search = _clean_text(self.request.query_params.get("search", ""))
+        if search:
+            queryset = queryset.filter(
+                Q(order_number__icontains=search)
+                | Q(customer_name__icontains=search)
+                | Q(customer_email__icontains=search)
+                | Q(customer_phone__icontains=search)
+                | Q(region__code__icontains=search)
+                | Q(region__name_en__icontains=search)
+                | Q(items__product_name__icontains=search)
+                | Q(items__product_slug__icontains=search)
+            ).distinct()
         sales_channel_filter = _clean_text(self.request.query_params.get("sales_channel", "")).lower()
         if sales_channel_filter in {Order.SALES_CHANNEL_ONLINE_STORE, Order.SALES_CHANNEL_DRAFT_ORDER}:
             queryset = queryset.filter(sales_channel=sales_channel_filter)

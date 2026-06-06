@@ -34,11 +34,14 @@ from store.models import (
     Warehouse,
 )
 from store.api_serializers.checkout import CheckoutCreateSerializer
+from store.api_serializers.admin_ops import AdminOrderSerializer
 from store.api_serializers.catalog import RegionSerializer
 from store.api_views.admin_ops import HasAdminCapability, IsStaffUser
 from store.emails import send_order_confirmation_email, send_payment_paid_email
+from store.notifications import NotificationDispatchRetryableError
 from store.services.invoice import ensure_paid_order_invoice
 from store.services import carrier_router, sms_router
+from store.tasks import process_order_event_async
 from store.services.admin_roles import (
     ROLE_FINANCE,
     ROLE_MANAGER,
@@ -220,6 +223,129 @@ class CheckoutAndPermsTestCase(TestCase):
         ).first()
         self.assertIsNotNone(failed_log)
         self.assertIn("SMTP unavailable", failed_log.error_message)
+
+    def test_order_created_notification_log_is_pending_when_queued(self):
+        payload = {
+            "region": self.region.code,
+            "locale": "en",
+            "customer": {
+                "name": "Pending Log User",
+                "email": "pending@example.com",
+                "phone": "12345678",
+                "address_line_1": "Street 1",
+                "city": "Muscat",
+                "country": "Oman",
+            },
+            "payment_method": "cod",
+            "items": [{"slug": self.product.slug, "quantity": 1}],
+        }
+
+        serializer = CheckoutCreateSerializer(data=payload)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+        with patch("store.tasks.process_order_event_async.delay") as delay_mock:
+            delay_mock.return_value.id = "task-123"
+            with self.captureOnCommitCallbacks(execute=True):
+                order = serializer.save()
+
+        log = NotificationLog.objects.filter(
+            order=order,
+            event=NotificationLog.EVENT_ORDER_CREATED,
+            channel=NotificationLog.CHANNEL_EMAIL,
+        ).first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.status, NotificationLog.STATUS_PENDING)
+        self.assertEqual(log.task_id, "task-123")
+        self.assertEqual(log.attempt_count, 0)
+
+    def test_missing_customer_email_marks_notification_as_skipped_no_email(self):
+        payload = {
+            "region": self.region.code,
+            "locale": "en",
+            "customer": {
+                "name": "No Email User",
+                "phone": "12345678",
+                "address_line_1": "Street 1",
+                "city": "Muscat",
+                "country": "Oman",
+            },
+            "payment_method": "cod",
+            "items": [{"slug": self.product.slug, "quantity": 1}],
+        }
+
+        serializer = CheckoutCreateSerializer(data=payload)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        with self.captureOnCommitCallbacks(execute=True):
+            order = serializer.save()
+
+        log = NotificationLog.objects.filter(
+            order=order,
+            event=NotificationLog.EVENT_ORDER_CREATED,
+            channel=NotificationLog.CHANNEL_EMAIL,
+        ).first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.status, NotificationLog.STATUS_SKIPPED_NO_EMAIL)
+        self.assertIn("Customer email is not set", log.error_message)
+
+    def test_draft_order_records_skipped_draft_notification_without_queueing_email(self):
+        with patch("store.tasks.process_order_event_async.delay") as delay_mock:
+            with self.captureOnCommitCallbacks(execute=True):
+                order = Order.objects.create(
+                    region=self.region,
+                    sales_channel=Order.SALES_CHANNEL_DRAFT_ORDER,
+                    customer_name="Draft User",
+                    customer_email="draft@example.com",
+                    customer_phone="12345678",
+                    address_line_1="Street 1",
+                    city="Muscat",
+                    country="Oman",
+                    subtotal=Decimal("5.00"),
+                    shipping_total=Decimal("2.00"),
+                    grand_total=Decimal("7.00"),
+                    currency_code=self.region.currency_code,
+                    payment_method=Order.PAYMENT_COD,
+                )
+
+        delay_mock.assert_not_called()
+        log = NotificationLog.objects.filter(
+            order=order,
+            event=NotificationLog.EVENT_ORDER_CREATED,
+            channel=NotificationLog.CHANNEL_EMAIL,
+        ).first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.status, NotificationLog.STATUS_SKIPPED_DRAFT_ORDER)
+
+    def test_successful_order_email_marks_notification_as_sent(self):
+        payload = {
+            "region": self.region.code,
+            "locale": "en",
+            "customer": {
+                "name": "Sent User",
+                "email": "sent@example.com",
+                "phone": "12345678",
+                "address_line_1": "Street 1",
+                "city": "Muscat",
+                "country": "Oman",
+            },
+            "payment_method": "cod",
+            "items": [{"slug": self.product.slug, "quantity": 1}],
+        }
+
+        serializer = CheckoutCreateSerializer(data=payload)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        with patch("store.notifications.send_order_confirmation_email", return_value=True):
+            with self.captureOnCommitCallbacks(execute=True):
+                order = serializer.save()
+
+        log = NotificationLog.objects.filter(
+            order=order,
+            event=NotificationLog.EVENT_ORDER_CREATED,
+            channel=NotificationLog.CHANNEL_EMAIL,
+        ).first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.status, NotificationLog.STATUS_SENT)
+        self.assertEqual(log.attempt_count, 1)
+        self.assertIsNotNone(log.sent_at)
 
     def test_checkout_stores_sms_and_whatsapp_opt_in_flags(self):
         payload = {
@@ -3184,6 +3310,52 @@ class CheckoutAndPermsTestCase(TestCase):
         ).first()
         self.assertIsNotNone(failed_log)
         self.assertIn("SMTP down", failed_log.error_message)
+
+    def test_process_order_event_async_retries_retryable_failures(self):
+        with patch("store.tasks._dispatch_order_event", side_effect=NotificationDispatchRetryableError("SMTP unavailable")):
+            with patch.object(process_order_event_async, "retry", side_effect=RuntimeError("retry called")) as retry_mock:
+                with self.assertRaises(RuntimeError):
+                    process_order_event_async.run(123, NotificationLog.EVENT_ORDER_CREATED, None)
+
+        retry_mock.assert_called_once()
+        self.assertEqual(retry_mock.call_args.kwargs["countdown"], 1)
+
+    def test_admin_order_serializer_exposes_notification_summary(self):
+        order = Order.objects.create(
+            region=self.region,
+            customer_name="Summary User",
+            customer_email="summary@example.com",
+            customer_phone="12345678",
+            address_line_1="Street 1",
+            city="Muscat",
+            country="Oman",
+            subtotal=Decimal("8.00"),
+            shipping_total=Decimal("2.00"),
+            grand_total=Decimal("10.00"),
+            currency_code=self.region.currency_code,
+            payment_method=Order.PAYMENT_COD,
+        )
+        log = NotificationLog.objects.create(
+            order=order,
+            event=NotificationLog.EVENT_ORDER_CREATED,
+            channel=NotificationLog.CHANNEL_EMAIL,
+            recipient="summary@example.com",
+            status=NotificationLog.STATUS_FAILED,
+            title="order_created - summary",
+            body="failure",
+            payload={"event": NotificationLog.EVENT_ORDER_CREATED},
+            error_message="SMTP down",
+            attempt_count=2,
+        )
+
+        serializer = AdminOrderSerializer(instance=order)
+        summary = serializer.data["notification_summary"]
+        history = serializer.data["notification_history"]
+
+        self.assertEqual(summary["latest_status"], NotificationLog.STATUS_FAILED)
+        self.assertEqual(summary["latest_error"], "SMTP down")
+        self.assertEqual(history[0]["id"], log.id)
+        self.assertEqual(history[0]["attempt_count"], 2)
 
     def test_admin_can_approve_and_reject_return_request(self):
         staff_user = self._create_staff_user("returns-staff")

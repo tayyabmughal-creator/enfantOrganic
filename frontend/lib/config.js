@@ -37,6 +37,17 @@ export function isBrowserUnreachableApiBase(value) {
   }
 }
 
+function isLocalBrowserHostname(hostname) {
+  return NON_BROWSER_API_HOSTS.has(String(hostname || "").toLowerCase());
+}
+
+export function shouldPreferSameOriginApiBase(value, currentHostname) {
+  if (!isBrowserUnreachableApiBase(value)) {
+    return false;
+  }
+  return !isLocalBrowserHostname(currentHostname);
+}
+
 function resolveApiBaseUrl() {
   const envValue =
     (typeof process !== "undefined" && process.env && process.env.NEXT_PUBLIC_API_BASE_URL) || "";
@@ -44,7 +55,10 @@ function resolveApiBaseUrl() {
     // Strip non-browser-reachable hostnames that occasionally leak in from a
     // misconfigured deploy. In the browser, prefer same-origin instead so
     // client-side fetches keep working.
-    if (typeof window !== "undefined" && isBrowserUnreachableApiBase(envValue)) {
+    if (
+      typeof window !== "undefined" &&
+      shouldPreferSameOriginApiBase(envValue, window.location?.hostname || "")
+    ) {
       return "/api";
     }
     return envValue;

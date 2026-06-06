@@ -7,7 +7,11 @@ import {
   normalizeLocale,
   normalizeRegion,
 } from "../lib/storefront-core/routing.js";
-import { isBrowserUnreachableApiBase, safeRedirectUrl } from "../lib/config.js";
+import {
+  isBrowserUnreachableApiBase,
+  safeRedirectUrl,
+  shouldPreferSameOriginApiBase,
+} from "../lib/config.js";
 
 test("normalizeLocale defaults to en", () => {
   assert.equal(normalizeLocale(""), "en");
@@ -35,6 +39,21 @@ test("loopback and internal API hosts are not browser reachable", () => {
   assert.equal(isBrowserUnreachableApiBase("http://localhost:8000/api"), true);
   assert.equal(isBrowserUnreachableApiBase("http://backend:8000/api"), true);
   assert.equal(isBrowserUnreachableApiBase("https://shop.example.com/api"), false);
+});
+
+test("local browser origins keep explicit local API base", () => {
+  assert.equal(
+    shouldPreferSameOriginApiBase("http://127.0.0.1:8000/api", "127.0.0.1"),
+    false,
+  );
+  assert.equal(
+    shouldPreferSameOriginApiBase("http://localhost:8000/api", "localhost"),
+    false,
+  );
+  assert.equal(
+    shouldPreferSameOriginApiBase("http://127.0.0.1:8000/api", "shop.example.com"),
+    true,
+  );
 });
 
 test("safeRedirectUrl allows the Oman Paymob iframe origin", () => {

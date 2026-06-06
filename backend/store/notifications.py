@@ -5,6 +5,7 @@ from urllib import request as urlrequest
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
+from django.utils import timezone
 from django.utils.html import escape
 
 from .emails import (
@@ -26,6 +27,10 @@ from .services.sms_templates import render_sms_template
 from .services.whatsapp_cloud import WhatsAppCloudError, send_template as send_whatsapp_template
 
 logger = logging.getLogger(__name__)
+
+
+class NotificationDispatchRetryableError(Exception):
+    """Raised for transient notification failures that Celery should retry."""
 
 
 ORDER_STATUS_EVENT_MAP = {
@@ -87,6 +92,31 @@ def _notification_exists(event, channel, recipient, *, order=None):
     return queryset.exists()
 
 
+def _get_notification_log(event, channel, recipient, *, order=None):
+    queryset = NotificationLog.objects.filter(
+        event=event,
+        channel=channel,
+        recipient=recipient,
+    )
+    if order is None:
+        queryset = queryset.filter(order__isnull=True)
+    else:
+        queryset = queryset.filter(order=order)
+    return queryset.order_by("-created_at", "-id").first()
+
+
+def _normalize_notification_status(status):
+    allowed = {
+        NotificationLog.STATUS_PENDING,
+        NotificationLog.STATUS_SENT,
+        NotificationLog.STATUS_FAILED,
+        NotificationLog.STATUS_SKIPPED,
+        NotificationLog.STATUS_SKIPPED_NO_EMAIL,
+        NotificationLog.STATUS_SKIPPED_DRAFT_ORDER,
+    }
+    return status if status in allowed else NotificationLog.STATUS_PENDING
+
+
 def _create_notification_log(
     *,
     event,
@@ -115,12 +145,7 @@ def _create_notification_log(
         resolved_body = _event_log_body(event, order)
     else:
         resolved_body = ""
-    status_key = status if status in {
-        NotificationLog.STATUS_PENDING,
-        NotificationLog.STATUS_SENT,
-        NotificationLog.STATUS_FAILED,
-        NotificationLog.STATUS_SKIPPED,
-    } else NotificationLog.STATUS_PENDING
+    status_key = _normalize_notification_status(status)
 
     return NotificationLog.objects.create(
         channel=channel,
@@ -133,14 +158,108 @@ def _create_notification_log(
         title=resolved_title,
         body=resolved_body,
         payload=resolved_payload,
-        success=(status_key != NotificationLog.STATUS_FAILED),
+        success=(status_key == NotificationLog.STATUS_SENT),
         error_message=str(error_message or ""),
+    )
+
+
+def _save_notification_log(
+    log,
+    *,
+    status=None,
+    provider=None,
+    provider_message_id=None,
+    title=None,
+    body=None,
+    payload=None,
+    error_message=None,
+    attempt_count=None,
+    task_id=None,
+    sent_at=None,
+):
+    if log is None:
+        return None
+
+    update_fields = ["updated_at"]
+    if status is not None:
+        log.status = _normalize_notification_status(status)
+        log.success = log.status == NotificationLog.STATUS_SENT
+        update_fields.extend(["status", "success"])
+    if provider is not None:
+        log.provider = provider
+        update_fields.append("provider")
+    if provider_message_id is not None:
+        log.provider_message_id = provider_message_id
+        update_fields.append("provider_message_id")
+    if title is not None:
+        log.title = title
+        update_fields.append("title")
+    if body is not None:
+        log.body = body
+        update_fields.append("body")
+    if payload is not None:
+        log.payload = payload
+        update_fields.append("payload")
+    if error_message is not None:
+        log.error_message = str(error_message or "")
+        update_fields.append("error_message")
+    if attempt_count is not None:
+        log.attempt_count = max(0, int(attempt_count))
+        update_fields.append("attempt_count")
+    if task_id is not None:
+        log.task_id = str(task_id or "")
+        update_fields.append("task_id")
+    if sent_at is not None or status == NotificationLog.STATUS_SENT:
+        log.sent_at = sent_at if sent_at is not None else timezone.now()
+        update_fields.append("sent_at")
+    elif status is not None and log.status != NotificationLog.STATUS_SENT and log.sent_at is not None:
+        log.sent_at = None
+        update_fields.append("sent_at")
+
+    log.save(update_fields=list(dict.fromkeys(update_fields)))
+    return log
+
+
+def _ensure_email_notification_log(order, event, *, status, payload=None):
+    recipient = str(order.customer_email or "").strip().lower()
+    existing = _get_notification_log(
+        event,
+        NotificationLog.CHANNEL_EMAIL,
+        recipient,
+        order=order,
+    )
+    if existing:
+        if existing.status in {
+            NotificationLog.STATUS_SENT,
+            NotificationLog.STATUS_SKIPPED,
+            NotificationLog.STATUS_SKIPPED_NO_EMAIL,
+            NotificationLog.STATUS_SKIPPED_DRAFT_ORDER,
+        } and status == NotificationLog.STATUS_PENDING:
+            return existing
+        return _save_notification_log(
+            existing,
+            status=status,
+            title=_event_log_title(event, order),
+            body=_event_log_body(event, order),
+            payload=payload if payload is not None else existing.payload,
+        )
+    return _create_notification_log(
+        event=event,
+        channel=NotificationLog.CHANNEL_EMAIL,
+        recipient=recipient,
+        order=order,
+        provider="smtp",
+        provider_message_id="",
+        title=_event_log_title(event, order),
+        body=_event_log_body(event, order),
+        payload=payload or {},
+        status=status,
     )
 
 
 def _send_customer_event_email(order, event):
     if not order.customer_email:
-        return False, "Customer email is not set.", NotificationLog.STATUS_SKIPPED
+        return False, "Customer email is not set.", NotificationLog.STATUS_SKIPPED_NO_EMAIL
 
     if event == NotificationLog.EVENT_ORDER_CREATED:
         sent = bool(send_order_confirmation_email(order))
@@ -168,9 +287,6 @@ def _send_customer_event_email(order, event):
 
 def _dispatch_customer_event(order, event, *, extra_payload=None):
     recipient = str(order.customer_email or "").strip().lower()
-    if _notification_exists(event, NotificationLog.CHANNEL_EMAIL, recipient, order=order):
-        return None
-
     payload = {
         "event": event,
         "locale": _order_locale(order),
@@ -182,27 +298,61 @@ def _dispatch_customer_event(order, event, *, extra_payload=None):
     if extra_payload:
         payload.update(extra_payload)
 
+    log = _ensure_email_notification_log(
+        order,
+        event,
+        status=NotificationLog.STATUS_PENDING,
+        payload=payload,
+    )
+    if log and log.status in {
+        NotificationLog.STATUS_SENT,
+        NotificationLog.STATUS_SKIPPED,
+        NotificationLog.STATUS_SKIPPED_NO_EMAIL,
+        NotificationLog.STATUS_SKIPPED_DRAFT_ORDER,
+    }:
+        return log
+
     try:
         sent, send_error, send_status = _send_customer_event_email(order, event)
     except Exception as exc:
         logger.exception("Notification send failed for order=%s event=%s", order.order_number, event)
-        sent = False
-        send_error = str(exc)
-        send_status = NotificationLog.STATUS_FAILED
+        attempt_count = (log.attempt_count if log else 0) + 1
+        _save_notification_log(
+            log,
+            status=NotificationLog.STATUS_FAILED,
+            provider="smtp",
+            title=_event_log_title(event, order),
+            body=_event_log_body(event, order),
+            payload=payload,
+            error_message=str(exc),
+            attempt_count=attempt_count,
+        )
+        raise NotificationDispatchRetryableError(str(exc)) from exc
 
-    return _create_notification_log(
-        event=event,
-        channel=NotificationLog.CHANNEL_EMAIL,
-        recipient=recipient,
-        order=order,
+    attempt_count = (log.attempt_count if log else 0) + (0 if send_status in {
+        NotificationLog.STATUS_SKIPPED,
+        NotificationLog.STATUS_SKIPPED_NO_EMAIL,
+        NotificationLog.STATUS_SKIPPED_DRAFT_ORDER,
+    } else 1)
+    resolved_status = send_status if sent or send_status in {
+        NotificationLog.STATUS_SKIPPED,
+        NotificationLog.STATUS_SKIPPED_NO_EMAIL,
+        NotificationLog.STATUS_SKIPPED_DRAFT_ORDER,
+    } else NotificationLog.STATUS_FAILED
+    _save_notification_log(
+        log,
+        status=resolved_status,
         provider="smtp",
-        provider_message_id="",
         title=_event_log_title(event, order),
         body=_event_log_body(event, order),
         payload=payload,
-        status=send_status if sent or send_status == NotificationLog.STATUS_SKIPPED else NotificationLog.STATUS_FAILED,
         error_message=send_error,
+        attempt_count=attempt_count,
+        sent_at=timezone.now() if resolved_status == NotificationLog.STATUS_SENT else None,
     )
+    if resolved_status == NotificationLog.STATUS_FAILED:
+        raise NotificationDispatchRetryableError(send_error or "Email provider did not confirm delivery.")
+    return log
 
 
 def _send_customer_event_sms(order, event, *, payload=None):
@@ -576,10 +726,34 @@ def queue_order_notification_event(order, event, *, extra_payload=None):
     order_id = order.pk
 
     def _callback():
+        payload = {
+            "event": event,
+            "locale": _order_locale(order),
+            "order_number": order.order_number,
+            "customer_name": order.customer_name,
+            "currency_code": order.currency_code,
+            "total_amount": str(order.grand_total),
+        }
+        if extra_payload:
+            payload.update(extra_payload)
+        notification_log = _ensure_email_notification_log(
+            order,
+            event,
+            status=NotificationLog.STATUS_PENDING,
+            payload=payload,
+        )
         try:
             from .tasks import process_order_event_async
-            process_order_event_async.delay(order_id, event, extra_payload=extra_payload)
-        except Exception:
+            task_result = process_order_event_async.delay(order_id, event, extra_payload=extra_payload)
+            if notification_log is not None:
+                _save_notification_log(notification_log, task_id=getattr(task_result, "id", ""))
+        except Exception as exc:
+            if notification_log is not None:
+                _save_notification_log(
+                    notification_log,
+                    status=NotificationLog.STATUS_FAILED,
+                    error_message=str(exc),
+                )
             logger.exception("Failed to queue order notification task for order=%s event=%s", order_id, event)
 
     transaction.on_commit(_callback)
@@ -587,6 +761,28 @@ def queue_order_notification_event(order, event, *, extra_payload=None):
 
 def queue_order_notification_events(order, *, is_create=False, previous_status=None):
     if getattr(order, "sales_channel", "") == Order.SALES_CHANNEL_DRAFT_ORDER:
+        if is_create:
+            def _draft_skip_callback():
+                existing = _get_notification_log(
+                    NotificationLog.EVENT_ORDER_CREATED,
+                    NotificationLog.CHANNEL_EMAIL,
+                    str(order.customer_email or "").strip().lower(),
+                    order=order,
+                )
+                if existing is None:
+                    _ensure_email_notification_log(
+                        order,
+                        NotificationLog.EVENT_ORDER_CREATED,
+                        status=NotificationLog.STATUS_SKIPPED_DRAFT_ORDER,
+                        payload={
+                            "event": NotificationLog.EVENT_ORDER_CREATED,
+                            "locale": _order_locale(order),
+                            "order_number": order.order_number,
+                            "skip_reason": "draft_order",
+                        },
+                    )
+
+            transaction.on_commit(_draft_skip_callback)
         return
 
     if is_create:
