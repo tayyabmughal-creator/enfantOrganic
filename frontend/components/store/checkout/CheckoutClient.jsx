@@ -305,6 +305,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
   const [couponPreview, setCouponPreview] = useState(null);
   const [couponMessage, setCouponMessage] = useState("");
   const [giftCardMessage, setGiftCardMessage] = useState("");
+  const [activeDiscountField, setActiveDiscountField] = useState("coupon");
   const [error, setError] = useState("");
   const [paymentRecovery, setPaymentRecovery] = useState(null);
   const [applePayAvailable, setApplePayAvailable] = useState(false);
@@ -846,6 +847,28 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
       giftCardCode: form.gift_card_code,
     });
   }, [cartItems.length, form.coupon_code, form.gift_card_code, locale, region, subtotal, validateCouponCode]);
+
+  useEffect(() => {
+    if (form.gift_card_code && !form.coupon_code) {
+      setActiveDiscountField("gift_card");
+      return;
+    }
+    if (form.coupon_code && !form.gift_card_code) {
+      setActiveDiscountField("coupon");
+    }
+  }, [form.coupon_code, form.gift_card_code]);
+
+  const removeCouponCode = useCallback(() => {
+    setForm((current) => ({ ...current, coupon_code: "" }));
+    setCouponMessage("");
+    void validateCouponCode({ silent: true, couponCode: "" });
+  }, [validateCouponCode]);
+
+  const removeGiftCardCode = useCallback(() => {
+    setForm((current) => ({ ...current, gift_card_code: "" }));
+    setGiftCardMessage("");
+    void validateCouponCode({ silent: true, giftCardCode: "" });
+  }, [validateCouponCode]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1809,61 +1832,88 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
             )}
 
             <div className="checkout-aside-coupon">
-              <div className="coupon-field">
-                <label htmlFor="coupon_code_aside">{isAr ? "كود الخصم" : "Coupon"}</label>
-                <div className="coupon-row">
-                  <input
-                    id="coupon_code_aside"
-                    name="coupon_code"
-                    value={form.coupon_code}
-                    onChange={updateField}
-                    placeholder={isAr ? "كود الخصم" : "Coupon code"}
-                    className="field-ltr"
-                  />
-                  <button type="button" onClick={validateCouponCode} disabled={validatingCoupon}>
-                    {validatingCoupon ? "..." : isAr ? "تطبيق" : "Apply"}
-                  </button>
-                </div>
-                {couponMessage ? (
-                  <p className={couponPreview?.valid ? "form-success" : "form-error"}>
-                    {couponMessage}
-                  </p>
-                ) : null}
+              <div className="checkout-discount-switcher" role="tablist" aria-label={isAr ? "طرق الخصم" : "Discount methods"}>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeDiscountField === "coupon"}
+                  className={`checkout-discount-tab ${activeDiscountField === "coupon" ? "is-active" : ""}`}
+                  onClick={() => setActiveDiscountField("coupon")}
+                >
+                  <span>{isAr ? "كوبون" : "Coupon"}</span>
+                  {form.coupon_code ? (
+                    <span className="checkout-discount-tab-badge">{isAr ? "مضاف" : "Added"}</span>
+                  ) : null}
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeDiscountField === "gift_card"}
+                  className={`checkout-discount-tab ${activeDiscountField === "gift_card" ? "is-active" : ""}`}
+                  onClick={() => setActiveDiscountField("gift_card")}
+                >
+                  <span>{isAr ? "بطاقة هدية" : "Gift card"}</span>
+                  {form.gift_card_code ? (
+                    <span className="checkout-discount-tab-badge">{isAr ? "مضاف" : "Added"}</span>
+                  ) : null}
+                </button>
               </div>
-              <div className="coupon-field">
-                <label htmlFor="gift_card_code_aside">{isAr ? "بطاقة هدية" : "Gift card"}</label>
-                <div className="coupon-row">
-                  <input
-                    id="gift_card_code_aside"
-                    name="gift_card_code"
-                    value={form.gift_card_code}
-                    onChange={updateField}
-                    placeholder={isAr ? "كود بطاقة الهدية" : "Gift card code"}
-                    className="field-ltr"
-                  />
-                  <button type="button" onClick={validateGiftCardCode} disabled={validatingGiftCard}>
-                    {validatingGiftCard ? "..." : isAr ? "تطبيق" : "Apply"}
-                  </button>
+
+              {activeDiscountField === "coupon" ? (
+                <div className="coupon-field">
+                  <label htmlFor="coupon_code_aside">{isAr ? "كود الخصم" : "Coupon"}</label>
+                  <div className="coupon-row">
+                    <input
+                      id="coupon_code_aside"
+                      name="coupon_code"
+                      value={form.coupon_code}
+                      onChange={updateField}
+                      placeholder={isAr ? "كود الخصم" : "Coupon code"}
+                      className="field-ltr"
+                    />
+                    <button type="button" onClick={validateCouponCode} disabled={validatingCoupon}>
+                      {validatingCoupon ? "..." : isAr ? "تطبيق" : "Apply"}
+                    </button>
+                  </div>
+                  {couponMessage ? (
+                    <p className={couponPreview?.valid ? "form-success" : "form-error"}>
+                      {couponMessage}
+                    </p>
+                  ) : null}
+                  {form.coupon_code ? (
+                    <button type="button" className="checkout-inline-clear" onClick={removeCouponCode}>
+                      {isAr ? "إزالة الكوبون" : "Remove coupon"}
+                    </button>
+                  ) : null}
                 </div>
-                {giftCardMessage ? (
-                  <p className={couponPreview?.valid ? "form-success" : "form-error"}>
-                    {giftCardMessage}
-                  </p>
-                ) : null}
-                {form.gift_card_code ? (
-                  <button
-                    type="button"
-                    className="checkout-inline-clear"
-                    onClick={() => {
-                      setForm((current) => ({ ...current, gift_card_code: "" }));
-                      setGiftCardMessage("");
-                      void validateCouponCode({ silent: true, giftCardCode: "" });
-                    }}
-                  >
-                    {isAr ? "إزالة بطاقة الهدية" : "Remove gift card"}
-                  </button>
-                ) : null}
-              </div>
+              ) : (
+                <div className="coupon-field">
+                  <label htmlFor="gift_card_code_aside">{isAr ? "بطاقة هدية" : "Gift card"}</label>
+                  <div className="coupon-row">
+                    <input
+                      id="gift_card_code_aside"
+                      name="gift_card_code"
+                      value={form.gift_card_code}
+                      onChange={updateField}
+                      placeholder={isAr ? "كود بطاقة الهدية" : "Gift card code"}
+                      className="field-ltr"
+                    />
+                    <button type="button" onClick={validateGiftCardCode} disabled={validatingGiftCard}>
+                      {validatingGiftCard ? "..." : isAr ? "تطبيق" : "Apply"}
+                    </button>
+                  </div>
+                  {giftCardMessage ? (
+                    <p className={couponPreview?.valid ? "form-success" : "form-error"}>
+                      {giftCardMessage}
+                    </p>
+                  ) : null}
+                  {form.gift_card_code ? (
+                    <button type="button" className="checkout-inline-clear" onClick={removeGiftCardCode}>
+                      {isAr ? "إزالة بطاقة الهدية" : "Remove gift card"}
+                    </button>
+                  ) : null}
+                </div>
+              )}
             </div>
 
             <button

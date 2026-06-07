@@ -36,12 +36,16 @@ export default function ProductCollectionClient({
   emptyState = null,
 }) {
   const t = uiText(locale);
-  const products = Array.isArray(data?.products) ? data.products : [];
+  const products = useMemo(() => (Array.isArray(data?.products) ? data.products : []), [data?.products]);
   const categories = Array.isArray(data?.categories) ? data.categories : [];
   const tags = Array.isArray(data?.tags) ? data.tags : [];
   const isAr = locale === "ar";
   const searchTerm = String(initialFilters?.search || "").trim();
   const lastTrackedListSignatureRef = useRef("");
+  const indexedProducts = useMemo(
+    () => products.map((product, index) => ({ product, index })),
+    [products],
+  );
 
   const prices = products
     .map((product) => Number(product?.pricing?.amount || 0))
@@ -77,9 +81,43 @@ export default function ProductCollectionClient({
   );
   const [maxPrice, setMaxPrice] = useState(absoluteMaxPrice);
 
+  const priceScopedProducts = useMemo(() => {
+    return indexedProducts.filter(({ product }) => {
+      const isInStock = (
+        !product?.stock_status?.track_inventory
+        || Boolean(product?.stock_status?.is_in_stock)
+      );
+      const matchesCategory = selectedCategory === "all" || product?.category?.slug === selectedCategory;
+      const matchesTag = selectedTag === "all" || (product?.tags || []).some((tag) => tag.slug === selectedTag);
+      const matchesBrand = selectedBrand === "all" || String(product?.brand || "").trim() === selectedBrand;
+      const matchesAvailability = (
+        availability === "all"
+        || (availability === "in_stock" && isInStock)
+        || (availability === "out_of_stock" && !isInStock)
+      );
+      const matchesRating = Number(product?.rating || 0) >= minRating;
+      return matchesCategory && matchesTag && matchesBrand && matchesAvailability && matchesRating;
+    });
+  }, [availability, indexedProducts, minRating, selectedBrand, selectedCategory, selectedTag]);
+
+  const scopedPrices = priceScopedProducts
+    .map(({ product }) => Number(product?.pricing?.amount || 0))
+    .filter((value) => Number.isFinite(value));
+  const rangeMinPrice = scopedPrices.length ? Math.min(...scopedPrices) : absoluteMinPrice;
+  const rangeMaxPrice = scopedPrices.length ? Math.max(...scopedPrices) : absoluteMaxPrice;
+  const hasPriceRange = rangeMaxPrice > rangeMinPrice;
+  const priceStep = scopedPrices.some((value) => !Number.isInteger(value)) ? 0.01 : 1;
+
   useEffect(() => {
-    setMaxPrice(absoluteMaxPrice);
-  }, [absoluteMaxPrice]);
+    if (!scopedPrices.length) {
+      setMaxPrice(absoluteMaxPrice);
+      return;
+    }
+    setMaxPrice((currentValue) => {
+      if (!Number.isFinite(currentValue)) return rangeMaxPrice;
+      return Math.min(rangeMaxPrice, Math.max(rangeMinPrice, currentValue));
+    });
+  }, [absoluteMaxPrice, rangeMaxPrice, rangeMinPrice, scopedPrices.length]);
 
   const sortLabels = isAr
     ? {
@@ -106,7 +144,7 @@ export default function ProductCollectionClient({
     || availability !== "all"
     || minRating > 0
     || sortBy !== "featured"
-    || maxPrice < absoluteMaxPrice
+    || (hasPriceRange && maxPrice < rangeMaxPrice)
   );
 
   function resetFilters() {
@@ -116,29 +154,17 @@ export default function ProductCollectionClient({
     setAvailability("all");
     setMinRating(0);
     setSortBy("featured");
-    setMaxPrice(absoluteMaxPrice);
+    setMaxPrice(rangeMaxPrice);
   }
 
   const filteredProducts = useMemo(() => {
-    return products
-      .map((product, index) => ({ product, index }))
+    return priceScopedProducts
       .filter(({ product }) => {
         const productPrice = Number(product?.pricing?.amount || 0);
-        const isInStock = (
-          !product?.stock_status?.track_inventory
-          || Boolean(product?.stock_status?.is_in_stock)
-        );
-        const matchesCategory = selectedCategory === "all" || product?.category?.slug === selectedCategory;
-        const matchesTag = selectedTag === "all" || (product?.tags || []).some((tag) => tag.slug === selectedTag);
-        const matchesBrand = selectedBrand === "all" || String(product?.brand || "").trim() === selectedBrand;
-        const matchesPrice = productPrice <= maxPrice;
-        const matchesAvailability = (
-          availability === "all"
-          || (availability === "in_stock" && isInStock)
-          || (availability === "out_of_stock" && !isInStock)
-        );
-        const matchesRating = Number(product?.rating || 0) >= minRating;
-        return matchesCategory && matchesTag && matchesBrand && matchesPrice && matchesAvailability && matchesRating;
+        const matchesPrice = !Number.isFinite(productPrice) || !hasPriceRange
+          ? true
+          : productPrice >= rangeMinPrice && productPrice <= maxPrice;
+        return matchesPrice;
       })
       .sort((left, right) => {
         if (sortBy === "newest") {
@@ -162,7 +188,7 @@ export default function ProductCollectionClient({
         return left.index - right.index;
       })
       .map(({ product }) => product);
-  }, [availability, maxPrice, minRating, products, selectedBrand, selectedCategory, selectedTag, sortBy]);
+  }, [hasPriceRange, maxPrice, priceScopedProducts, rangeMinPrice, sortBy]);
 
   const selectedCategoryName = (
     selectedCategory === "all"
@@ -191,7 +217,9 @@ export default function ProductCollectionClient({
   if (selectedBrand !== "all") activeChips.push({ key: "brand", label: selectedBrandName, clear: () => setSelectedBrand("all") });
   if (availability !== "all") activeChips.push({ key: "availability", label: availabilityLabel, clear: () => setAvailability("all") });
   if (minRating > 0) activeChips.push({ key: "rating", label: isAr ? `${minRating}+ تقييم` : `${minRating}+ rating`, clear: () => setMinRating(0) });
-  if (maxPrice < absoluteMaxPrice) activeChips.push({ key: "price", label: `≤ ${formatCatalogPrice(maxPrice)}`, clear: () => setMaxPrice(absoluteMaxPrice) });
+  if (hasPriceRange && maxPrice < rangeMaxPrice) {
+    activeChips.push({ key: "price", label: `≤ ${formatCatalogPrice(maxPrice)}`, clear: () => setMaxPrice(rangeMaxPrice) });
+  }
   if (sortBy !== "featured") activeChips.push({ key: "sort", label: sortLabels[sortBy], clear: () => setSortBy("featured") });
 
   const hasCatalogProducts = products.length > 0;
@@ -369,21 +397,28 @@ export default function ProductCollectionClient({
         <div className="filters-group">
           <div className="filters-group-heading">
             <h4>{t.price}</h4>
-            <span>{formatCatalogPrice(maxPrice)}</span>
+            <span>{hasPriceRange ? formatCatalogPrice(maxPrice) : formatCatalogPrice(rangeMaxPrice)}</span>
           </div>
           <div className="catalog-range-control">
             <input
               type="range"
-              min={absoluteMinPrice}
-              max={absoluteMaxPrice}
-              value={maxPrice}
+              min={rangeMinPrice}
+              max={rangeMaxPrice}
+              step={priceStep}
+              value={hasPriceRange ? maxPrice : rangeMaxPrice}
               onChange={(event) => setMaxPrice(Number(event.target.value))}
               aria-label={t.price}
+              disabled={!hasPriceRange}
             />
             <div className="catalog-range-labels">
-              <span>{formatCatalogPrice(absoluteMinPrice)}</span>
-              <span>{formatCatalogPrice(absoluteMaxPrice)}</span>
+              <span>{formatCatalogPrice(rangeMinPrice)}</span>
+              <span>{formatCatalogPrice(rangeMaxPrice)}</span>
             </div>
+            {!hasPriceRange && scopedPrices.length ? (
+              <p className="catalog-range-helper">
+                {isAr ? "جميع المنتجات ضمن هذا الاختيار بنفس السعر." : "All products in this selection share the same price."}
+              </p>
+            ) : null}
           </div>
         </div>
       </aside>

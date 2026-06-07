@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import Icon from "@/components/icons/Icon";
 import { useStore } from "@/components/store/cart/StoreProvider";
@@ -8,14 +10,26 @@ import { buildAnalyticsItem, pushDataLayerEvent } from "@/lib/analytics";
 import { API_BASE_URL, CUSTOMER_TOKEN_KEY } from "@/lib/config";
 import { trackEvent } from "@/lib/eventTracking";
 import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
+import {
+  addWishlistProduct,
+  ensureWishlistSlugs,
+  hasWishlistSession,
+  removeWishlistProduct,
+  subscribeWishlist,
+} from "@/lib/wishlist";
 
 export default function ProductDetailClient({ locale, product, region }) {
   const { addItem, openCart } = useStore();
+  const router = useRouter();
   const t = uiText(locale);
   const isAr = locale === "ar";
   const galleryImages = Array.from(
     new Set((product.gallery?.length ? product.gallery : [product.image]).filter(Boolean)),
   );
+  const optionGroups = Array.isArray(product.option_groups) ? product.option_groups : [];
+  const detailPoints = Array.isArray(product.details) ? product.details : [];
+  const editorialReviews = Array.isArray(product.reviews) ? product.reviews : [];
+  const customerReviews = Array.isArray(product.customer_reviews) ? product.customer_reviews : [];
   const [selectedImage, setSelectedImage] = useState(galleryImages[0] || product.image);
   const [selectedTab, setSelectedTab] = useState("description");
   const [quantity, setQuantity] = useState(1);
@@ -26,16 +40,94 @@ export default function ProductDetailClient({ locale, product, region }) {
   const [notifySubmitting, setNotifySubmitting] = useState(false);
   const [notifySuccess, setNotifySuccess] = useState("");
   const [notifyError, setNotifyError] = useState("");
+  const [isWishlisted, setIsWishlisted] = useState(false);
+  const [isWishSubmitting, setIsWishSubmitting] = useState(false);
+  const [wishFeedback, setWishFeedback] = useState("");
   const lastTrackedViewItemRef = useRef("");
   const [selectedOptions, setSelectedOptions] = useState(
-    Object.fromEntries((product.option_groups || []).map((group) => [group.name, group.values[0]])),
+    Object.fromEntries(optionGroups.map((group) => [group.name, group.values[0]])),
   );
   const isOutOfStock = Boolean(product?.stock_status?.track_inventory) && !Boolean(product?.stock_status?.is_in_stock);
+  const reviewCount = Number(product.review_count || customerReviews.length || editorialReviews.length || 0);
+  const vendorLabel = String(product.vendor || product.brand || "ENFANT ORGANICS").toUpperCase();
+  const compareAmount = Number(product?.pricing?.compare_amount || 0);
+  const showComparePrice = compareAmount > Number(product?.pricing?.amount || 0);
+  const promoCopy = isAr
+    ? {
+        om: "استمتع بخصم 15٪ على طلبك فوق 25 ر.ع عند الدفع",
+        ae: "استمتع بخصم 15٪ على طلبك فوق 250 د.إ عند الدفع",
+        sa: "استمتع بخصم 15٪ على طلبك فوق 250 ر.س عند الدفع",
+      }[region] || "استمتع بعرض خاص على الطلبات الكبيرة عند الدفع"
+    : {
+        om: "Enjoy 15% OFF on your order above 25 OMR at checkout",
+        ae: "Enjoy 15% OFF on your order above 250 AED at checkout",
+        sa: "Enjoy 15% OFF on your order above 250 SAR at checkout",
+      }[region] || "Enjoy a special offer on larger orders at checkout";
+  const socialProofPills = [
+    {
+      icon: "heart",
+      label: isAr ? "محبوب من عائلات إنفانت" : "Loved by Enfant families",
+    },
+    {
+      icon: "check",
+      label: product.organic_certification_name || (isAr ? "عناية موثوقة يوميًا" : "Trusted everyday care"),
+    },
+  ];
+  const trustFeatures = [
+    {
+      icon: "truck",
+      title: isAr ? "شحن سريع" : "Fast shipping",
+      copy: t.freeShipping,
+    },
+    {
+      icon: "check",
+      title: isAr ? "منتج أصلي" : "Original product",
+      copy: t.originalProducts,
+    },
+    {
+      icon: "shield",
+      title: isAr ? "دفع آمن" : "Secure payment",
+      copy: t.securePayment,
+    },
+  ];
+  const paymentMethods = isAr
+    ? ["Apple Pay", "Visa", "Mastercard", "COD"]
+    : ["Apple Pay", "Visa", "Mastercard", "COD"];
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       setCurrentUrl(window.location.href);
     }
+  }, [locale, product.slug, region]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function syncWishlist() {
+      if (!hasWishlistSession()) {
+        if (active) setIsWishlisted(false);
+        return;
+      }
+      try {
+        const slugs = await ensureWishlistSlugs({ region, locale });
+        if (active) setIsWishlisted(slugs.has(product.slug));
+      } catch {
+        if (active) setIsWishlisted(false);
+      }
+    }
+
+    syncWishlist();
+
+    const unsubscribe = subscribeWishlist((detail) => {
+      if (detail?.region !== region) return;
+      const nextSlugs = new Set(detail?.slugs || []);
+      setIsWishlisted(nextSlugs.has(product.slug));
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, [locale, product.slug, region]);
 
   useEffect(() => {
@@ -92,9 +184,16 @@ export default function ProductDetailClient({ locale, product, region }) {
     trackEvent("product_view", { productSlug: product.slug, regionCode: region });
   }, [locale, product, region]);
 
-  const addCurrentProduct = () => {
+  const addCurrentProduct = ({ openMiniCart = true } = {}) => {
     addItem({ ...product, locale }, quantity, selectedOptions);
-    openCart();
+    if (openMiniCart) {
+      openCart();
+    }
+  };
+
+  const buyCurrentProduct = () => {
+    addCurrentProduct({ openMiniCart: false });
+    router.push(buildStorePath(locale, "/checkout", region));
   };
 
   const getShareUrl = () => {
@@ -134,6 +233,42 @@ export default function ProductDetailClient({ locale, product, region }) {
       setCopyFeedback(isAr ? "تعذر نسخ الرابط." : "Unable to copy the link.");
     }
     window.setTimeout(() => setCopyFeedback(""), 2200);
+  };
+
+  const showWishFeedback = (message) => {
+    setWishFeedback(message);
+    window.setTimeout(() => setWishFeedback(""), 2200);
+  };
+
+  const handleWishlistToggle = async () => {
+    if (isWishSubmitting) return;
+    setIsWishSubmitting(true);
+
+    try {
+      if (isWishlisted) {
+        await removeWishlistProduct(product.slug, { locale, region });
+        showWishFeedback(isAr ? "تمت إزالة المنتج من المفضلة." : "Removed from wishlist.");
+      } else {
+        await addWishlistProduct(product.slug, { locale, region });
+        showWishFeedback(isAr ? "تم حفظ المنتج في المفضلة." : "Saved to wishlist.");
+      }
+    } catch (error) {
+      if (error?.code === "AUTH_REQUIRED") {
+        showWishFeedback(
+          isAr
+            ? "يرجى تسجيل الدخول لحفظ المنتجات في المفضلة."
+            : "Please sign in to save items to your wishlist.",
+        );
+      } else {
+        showWishFeedback(
+          isAr
+            ? "تعذر تحديث المفضلة. حاول مرة أخرى."
+            : "Unable to update wishlist. Please try again.",
+        );
+      }
+    } finally {
+      setIsWishSubmitting(false);
+    }
   };
 
   const submitBackInStockRequest = async (event) => {
@@ -184,8 +319,13 @@ export default function ProductDetailClient({ locale, product, region }) {
   return (
     <div className="product-layout">
       <div className={`gallery-layout ${galleryImages.length === 1 ? "is-single" : ""}`}>
+        <div className="main-product-image-shell">
+          <div className={`main-product-image ${galleryImages.length === 1 ? "is-single" : ""}`}>
+            <img src={selectedImage} alt={product.name} />
+          </div>
+        </div>
         {galleryImages.length > 1 ? (
-          <div className="thumb-list">
+          <div className="thumb-list" aria-label={isAr ? "صور المنتج" : "Product gallery"}>
             {galleryImages.map((image) => (
               <button
                 key={image}
@@ -198,22 +338,23 @@ export default function ProductDetailClient({ locale, product, region }) {
             ))}
           </div>
         ) : null}
-        <div className={`main-product-image ${galleryImages.length === 1 ? "is-single" : ""}`}>
-          <img src={selectedImage} alt={product.name} />
-        </div>
       </div>
 
       <div className="product-summary">
-        <div className="summary-block">
-          <span className="summary-badge">{product.badge || product.category.name}</span>
+        <div className="summary-block product-summary-header">
+          <span className="summary-eyebrow">{vendorLabel}</span>
+          <span className="summary-badge">{product.badge || product.category?.name}</span>
           <h1>{product.name}</h1>
-          <div className="product-reviews">
-            <span className="review-stars small">★★★★★</span>
-            <span>{product.review_count}</span>
+          <div className="product-reviews product-reviews-inline">
+            <span className="review-stars small" aria-hidden="true">★★★★★</span>
+            <span>{reviewCount}</span>
+            <span className="product-review-caption">
+              {isAr ? "مراجعات" : "reviews"}
+            </span>
           </div>
           <div className="product-pricing large">
             <strong>{formatMoney(product.pricing, locale)}</strong>
-            {product.pricing?.compare_amount ? (
+            {showComparePrice ? (
               <span>
                 {formatMoney(
                   { ...product.pricing, amount: product.pricing.compare_amount, prefix: "" },
@@ -222,31 +363,61 @@ export default function ProductDetailClient({ locale, product, region }) {
               </span>
             ) : null}
           </div>
-          <p>{product.short_description}</p>
+          <p className="product-short-copy">{product.short_description}</p>
         </div>
 
-        {product.option_groups.map((group) => (
-          <div key={group.name} className="summary-block">
-            <h4>{group.name}</h4>
-            <div className="option-pills">
-              {group.values.map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  className={`option-pill ${selectedOptions[group.name] === value ? "is-active" : ""}`}
-                  onClick={() =>
-                    setSelectedOptions((current) => ({
-                      ...current,
-                      [group.name]: value,
-                    }))
-                  }
-                >
-                  {value}
-                </button>
-              ))}
+        <div className="product-promo-banner" role="note">
+          <div className="product-promo-copy">
+            <Icon name="leaf" size={18} />
+            <span>{promoCopy}</span>
+          </div>
+          <Icon name="sparkle" size={16} className="product-promo-sparkle" />
+        </div>
+
+        <div className="product-purchase-meta">
+          {optionGroups.map((group) => (
+            <div key={group.name} className="summary-block product-option-block">
+              <h4>{group.name}</h4>
+              <div className="option-pills">
+                {group.values.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={`option-pill ${selectedOptions[group.name] === value ? "is-active" : ""}`}
+                    onClick={() =>
+                      setSelectedOptions((current) => ({
+                        ...current,
+                        [group.name]: value,
+                      }))
+                    }
+                  >
+                    {value}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          <div className="summary-block product-quantity-block">
+            <div className="summary-label-row">
+              <h4>{t.quantity}</h4>
+              {product?.stock_status?.is_low_stock ? (
+                <span className="summary-helper-pill">
+                  {isAr ? "كمية محدودة" : "Limited stock"}
+                </span>
+              ) : null}
+            </div>
+            <div className="quantity-control">
+              <button type="button" onClick={() => setQuantity((value) => Math.max(1, value - 1))}>
+                <Icon name="minus" size={16} />
+              </button>
+              <span>{quantity}</span>
+              <button type="button" onClick={() => setQuantity((value) => value + 1)}>
+                <Icon name="plus" size={16} />
+              </button>
             </div>
           </div>
-        ))}
+        </div>
 
         <div className="summary-actions">
           {isOutOfStock ? (
@@ -285,28 +456,79 @@ export default function ProductDetailClient({ locale, product, region }) {
               {notifyError ? <p className="product-stock-notify-error">{notifyError}</p> : null}
             </div>
           ) : (
-            <>
-              <div className="quantity-control">
-                <button type="button" onClick={() => setQuantity((value) => Math.max(1, value - 1))}>
-                  <Icon name="minus" size={16} />
-                </button>
-                <span>{quantity}</span>
-                <button type="button" onClick={() => setQuantity((value) => value + 1)}>
-                  <Icon name="plus" size={16} />
-                </button>
-              </div>
-              <button type="button" className="primary-action" onClick={addCurrentProduct}>
-                {t.addToCart}
+            <div className="product-cta-stack">
+              <button type="button" className="secondary-action product-cart-action" onClick={() => addCurrentProduct()}>
+                <Icon name="bag" size={18} />
+                <span>{t.addToCart}</span>
               </button>
-              <a className="secondary-action" href={buildStorePath(locale, "/collections", region)}>
-                {t.continueShopping}
-              </a>
-            </>
+              <button type="button" className="primary-action product-buy-action" onClick={buyCurrentProduct}>
+                <Icon name="sparkle" size={17} />
+                <span>{isAr ? "اشتر الآن" : "Buy it now"}</span>
+              </button>
+            </div>
           )}
         </div>
 
+        <div className="product-trust-grid">
+          {trustFeatures.map((feature) => (
+            <div key={feature.title} className="product-trust-item">
+              <span className="product-trust-icon">
+                <Icon name={feature.icon} size={18} />
+              </span>
+              <div>
+                <strong>{feature.title}</strong>
+                <span>{feature.copy}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="product-proof-row">
+          {socialProofPills.map((pill) => (
+            <span key={pill.label} className="product-proof-pill">
+              <Icon name={pill.icon} size={14} />
+              {pill.label}
+            </span>
+          ))}
+        </div>
+
+        <div className="product-summary-footer">
+          <div className="product-payment-block">
+            <p>{isAr ? "خيارات دفع آمنة على موقعنا" : "Safe payment on our website"}</p>
+            <div className="product-payment-methods">
+              {paymentMethods.map((method) => (
+                <span key={method} className="product-payment-chip">{method}</span>
+              ))}
+            </div>
+          </div>
+
+          <div className="product-summary-side-actions">
+            <div className="product-utility-row">
+              <button
+                type="button"
+                className={`product-wishlist-button${isWishlisted ? " is-active" : ""}`}
+                onClick={handleWishlistToggle}
+                disabled={isWishSubmitting}
+              >
+                <Icon name="heart" size={18} />
+                <span>{isAr ? "أضف إلى المفضلة" : "Add to wishlist"}</span>
+              </button>
+              <Link className="product-continue-link" href={buildStorePath(locale, "/collections", region)}>
+                {t.continueShopping}
+              </Link>
+            </div>
+            {wishFeedback ? <p className="product-wishlist-feedback">{wishFeedback}</p> : null}
+          </div>
+        </div>
+
         <div className="summary-block product-share-block">
-          <h4>{isAr ? "مشاركة المنتج" : "Share this product"}</h4>
+          <div className="product-share-header">
+            <h4>{isAr ? "مشاركة المنتج" : "Share this product"}</h4>
+            <span className="product-share-label">
+              <Icon name="link" size={14} />
+              {isAr ? "مشاركة سريعة" : "Quick share"}
+            </span>
+          </div>
           <div className="product-share-actions">
             <button
               type="button"
@@ -351,12 +573,6 @@ export default function ProductDetailClient({ locale, product, region }) {
           </div>
           {copyFeedback ? <p className="product-share-feedback">{copyFeedback}</p> : null}
         </div>
-
-        <div className="trust-bar">
-          <span>{t.freeShipping}</span>
-          <span>{t.originalProducts}</span>
-          <span>{t.securePayment}</span>
-        </div>
       </div>
 
       <div className="detail-tabs">
@@ -373,22 +589,64 @@ export default function ProductDetailClient({ locale, product, region }) {
           ))}
         </div>
         <div className="tab-panel">
-          {selectedTab === "description" ? <p>{product.description}</p> : null}
+          {selectedTab === "description" ? (
+            <div className="product-tab-copy">
+              <p>{product.description}</p>
+              {product.ingredients ? (
+                <div className="product-tab-section">
+                  <strong>{isAr ? "المكونات" : "Ingredients"}</strong>
+                  <p>{product.ingredients}</p>
+                </div>
+              ) : null}
+              {product.usage_instructions ? (
+                <div className="product-tab-section">
+                  <strong>{isAr ? "طريقة الاستخدام" : "How to use"}</strong>
+                  <p>{product.usage_instructions}</p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           {selectedTab === "details" ? (
             <ul>
-              {product.details.map((detail) => (
+              {detailPoints.map((detail) => (
                 <li key={detail}>{detail}</li>
               ))}
+              {product.origin_source ? <li>{product.origin_source}</li> : null}
+              {product.shelf_life ? <li>{product.shelf_life}</li> : null}
             </ul>
           ) : null}
           {selectedTab === "reviews" ? (
             <div className="review-list">
-              {product.reviews.map((review) => (
-                <article key={`${review.name}-${review.copy}`} className="product-review-item">
-                  <strong>{review.name}</strong>
-                  <p>{review.copy}</p>
-                </article>
-              ))}
+              {customerReviews.length
+                ? customerReviews.map((review) => (
+                    <article key={`${review.customer_name}-${review.created_at}`} className="product-review-item">
+                      <div className="product-review-head">
+                        <strong>{review.customer_name}</strong>
+                        <span className="product-review-rating">
+                          {"★".repeat(Math.max(1, Math.min(5, Number(review.rating || 5))))}
+                        </span>
+                      </div>
+                      {review.title ? <h5>{review.title}</h5> : null}
+                      <p>{review.comment}</p>
+                    </article>
+                  ))
+                : editorialReviews.length
+                  ? editorialReviews.map((review) => (
+                      <article key={`${review.name}-${review.copy}`} className="product-review-item">
+                        <strong>{review.name}</strong>
+                        <p>{review.copy}</p>
+                      </article>
+                    ))
+                  : (
+                    <article className="product-review-item">
+                      <strong>{isAr ? "لا توجد مراجعات بعد" : "No reviews yet"}</strong>
+                      <p>
+                        {isAr
+                          ? "كوني أول من يشارك تجربته مع هذا المنتج."
+                          : "Be the first to share feedback on this product."}
+                      </p>
+                    </article>
+                  )}
             </div>
           ) : null}
         </div>

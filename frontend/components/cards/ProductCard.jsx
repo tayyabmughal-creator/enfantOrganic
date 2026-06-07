@@ -143,7 +143,10 @@ export default function ProductCard({ locale, product, region }) {
   return (
     <article className={`product-card ${hoverImage ? "has-hover-image" : ""}`}>
       <div className="product-card-media-wrap">
-        <Link href={buildStorePath(locale, `/product/${product.slug}`, region)} className="product-card-image">
+        <Link
+          href={buildStorePath(locale, `/product/${product.slug}`, region)}
+          className="product-card-image"
+        >
           <img
             src={primaryImage}
             alt={product.name}

@@ -71,11 +71,11 @@ jobs:
           username: ${{ steps.ssh_target.outputs.user }}
           key: ${{ secrets.HOSTINGER_SSH_KEY }}
           port: ${{ steps.ssh_target.outputs.port }}
-          source: "backend,frontend,deploy,scripts,docker-compose.prod.yml,.env.production.example"
+          source: "backend,frontend,deploy,scripts,Images,products_export_1.csv,docker-compose.prod.yml,.env.production.example"
           target: ${{ steps.ssh_target.outputs.deploy_path }}
           overwrite: true
           timeout: 2m
-          command_timeout: 15m
+          command_timeout: 45m
 
       - name: Run deployment on Hostinger
         uses: appleboy/ssh-action@v1.2.0
@@ -158,6 +158,14 @@ jobs:
             docker compose -f docker-compose.prod.yml --env-file .env.production ps
             docker compose -f docker-compose.prod.yml --env-file .env.production logs nginx --tail=100
             docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend python manage.py check
+            if [ -f products_export_1.csv ] && [ -d Images ]; then
+              docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend \
+                python manage.py import_client_catalog \
+                  --products-csv /import-data/products_export_1.csv \
+                  --images-dir /import-data/Images
+            else
+              echo "WARN: products_export_1.csv or Images directory missing; skipping catalog import"
+            fi
             # Confirm the public domain actually reached the backend container's
             # ALLOWED_HOSTS — a wrong/typo domain here breaks all browser API calls.
             domain="${{ secrets.PRODUCTION_DOMAIN || 'enfhantorganic.itwing.cloud' }}"

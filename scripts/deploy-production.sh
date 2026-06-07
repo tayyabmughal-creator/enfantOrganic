@@ -47,7 +47,19 @@ else
 fi
 
 echo
-echo "==> [4/4] Public API smoke tests (expect: 200 application/json)"
+echo "==> [4/5] Importing client catalog media if source files are present"
+if [ -f "products_export_1.csv" ] && [ -d "Images" ]; then
+  "${COMPOSE[@]}" exec -T backend \
+    python manage.py import_client_catalog \
+      --products-csv /import-data/products_export_1.csv \
+      --images-dir /import-data/Images
+  printf '  \033[32mPASS\033[0m  catalog import completed\n'
+else
+  printf '  \033[33mWARN\033[0m  products_export_1.csv or Images/ missing; skipped catalog import\n'
+fi
+
+echo
+echo "==> [5/5] Public API smoke tests (expect: 200 application/json)"
 smoke_fail=0
 smoke() {
   local url="$1" result code ctype

@@ -1,3 +1,4 @@
+from django.conf import settings
 from rest_framework import serializers
 
 from ..models import (
@@ -265,7 +266,7 @@ class ProductDetailSerializer(ProductCardSerializer):
     reviews = serializers.SerializerMethodField()
     customer_reviews = serializers.SerializerMethodField()
     certification_file = serializers.SerializerMethodField()
-    gallery = serializers.ReadOnlyField()
+    gallery = serializers.SerializerMethodField()
     stock_quantity = serializers.SerializerMethodField()
 
     class Meta(ProductCardSerializer.Meta):
@@ -319,6 +320,21 @@ class ProductDetailSerializer(ProductCardSerializer):
             }
             for review in reviews
         ]
+
+    def get_gallery(self, obj):
+        request = self.context.get("request")
+        urls = []
+        for entry in obj.gallery or []:
+            value = str(entry or "").strip()
+            if not value:
+                continue
+            if value.startswith("http://") or value.startswith("https://"):
+                urls.append(value)
+                continue
+            if not value.startswith("/"):
+                value = f"{settings.MEDIA_URL.rstrip('/')}/{value.lstrip('/')}"
+            urls.append(request.build_absolute_uri(value) if request else value)
+        return urls
 
     def get_certification_file(self, obj):
         request = self.context.get("request")

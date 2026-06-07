@@ -38,7 +38,10 @@ backend/staticfiles/
 node_modules/
 */node_modules/
 frontend/.next/
+frontend/.next-dev/
 frontend/.next.*/
+frontend/.next-dev*/
+frontend/.next_dev*/
 frontend/out/
 npm-debug.log*
 yarn-debug.log*
@@ -63,3 +66,7 @@ dist/
 build/
 coverage/
 reference-images/
+
+# Client raw archives are source handoff files; production import only needs
+# extracted images, so keep zip bundles out of git history.
+Images/**/*.zip

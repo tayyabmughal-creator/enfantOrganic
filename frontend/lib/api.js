@@ -6,7 +6,7 @@ const API_BASE_URL =
 
 const DEFAULT_TIMEOUT_MS = 15000;
 
-class ApiError extends Error {
+export class ApiError extends Error {
   constructor(message, status, path) {
     super(message);
     this.name = "ApiError";

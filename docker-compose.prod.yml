@@ -67,6 +67,8 @@ services:
     volumes:
       - media-data:/app/media
       - static-data:/app/staticfiles
+      - ./Images:/import-data/Images:ro
+      - ./products_export_1.csv:/import-data/products_export_1.csv:ro
     expose:
       - "8000"
     depends_on:

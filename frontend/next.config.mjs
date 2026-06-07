@@ -19,6 +19,9 @@ const SECURITY_HEADERS = [
 
 const nextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
+  // Keep dev and production builds isolated so running `next build`
+  // while local review is open does not corrupt the dev server runtime.
+  distDir: isDev ? ".next-dev" : ".next",
   // Keep trace collection scoped to this app by default to avoid expensive
   // parent-directory scans in container/CI builds.
   outputFileTracingRoot: process.env.NEXT_OUTPUT_FILE_TRACING_ROOT

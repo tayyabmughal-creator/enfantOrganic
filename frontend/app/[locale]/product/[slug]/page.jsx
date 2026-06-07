@@ -6,7 +6,7 @@ import ProductCard from "@/components/cards/ProductCard";
 import JsonLd from "@/components/seo/JsonLd";
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import ProductDetailClient from "@/components/store/product/ProductDetailClient";
-import { getNavigationData, getProductBySlug } from "@/lib/api";
+import { ApiError, getNavigationData, getProductBySlug } from "@/lib/api";
 import { resolveServerRegion } from "@/lib/regionResolver";
 import { buildSeoMetadata, buildLocalizedPath, toAbsoluteUrl, SITE_NAME } from "@/lib/seo";
 import { normalizeLocale, normalizeRegion, uiText } from "@/lib/storefront";
@@ -65,10 +65,20 @@ export default async function LocalizedProductPage({ params, searchParams }) {
 
   const resolvedSearchParams = await searchParams;
   const region = resolveServerRegion(resolvedSearchParams);
-  const [navigation, productPage] = await Promise.all([
-    getNavigationData(locale, region),
-    getProductBySlug(slug, locale, region),
-  ]);
+  let navigation;
+  let productPage;
+
+  try {
+    [navigation, productPage] = await Promise.all([
+      getNavigationData(locale, region),
+      getProductBySlug(slug, locale, region),
+    ]);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      notFound();
+    }
+    throw error;
+  }
 
   if (!productPage?.product) {
     notFound();
