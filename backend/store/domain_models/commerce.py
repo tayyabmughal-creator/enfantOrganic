@@ -383,8 +383,14 @@ class Order(models.Model):
         return self.is_valid_transition(source_status, new_status)
 
     def get_previous_status(self):
+        # Only consider entries that moved INTO the current status and were not
+        # themselves rollback operations. This ensures that repeated reverts walk
+        # the history backwards correctly instead of bouncing between two states.
         previous_entry = (
-            self.status_history.order_by("-timestamp", "-id")
+            self.status_history
+            .filter(new_status=self.status)
+            .exclude(note__startswith="Admin rollback")
+            .order_by("-timestamp", "-id")
             .values_list("old_status", flat=True)
             .first()
         )

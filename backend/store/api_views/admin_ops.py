@@ -2256,8 +2256,12 @@ class AdminOrderStatusRollbackView(APIView):
         if not order:
             return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = AdminOrderSerializer(context={"request": request})
-        previous_status = serializer.get_previous_status(order)
+        try:
+            serializer = AdminOrderSerializer(context={"request": request})
+            previous_status = serializer.get_previous_status(order)
+        except Exception:
+            previous_status = order.get_previous_status()
+
         if not previous_status:
             return Response(
                 {"detail": "No previous order status is available for rollback."},
@@ -2296,35 +2300,50 @@ class AdminOrderStatusRollbackView(APIView):
                 reapply_order_inventory(order, inventory_committed=inventory_committed)
                 reopen_released_gift_card_redemption(order)
 
+            rollback_marker = f"Admin rollback to previous status: {previous_status}."
+            rollback_note = f"{rollback_marker} {admin_note}".strip() if admin_note else rollback_marker
             order.force_status_to(
                 previous_status,
                 actor=request.user,
-                note=admin_note or f"Admin rollback to previous status: {previous_status}.",
+                note=rollback_note,
             )
         except Exception as exc:
             message = getattr(exc, "message", "") or str(exc) or "Unable to roll back order status."
             return Response({"detail": message}, status=status.HTTP_400_BAD_REQUEST)
 
         order.refresh_from_db()
-        log_admin_action(
-            request=request,
-            actor=request.user,
-            action=AdminAuditLog.ACTION_ORDER_STATUS_CHANGED,
-            resource_type="order",
-            resource_id=order.order_number,
-            before_snapshot=before_snapshot,
-            after_snapshot={
-                "status": order.status,
-                "payment_status": order.payment_status,
-                "refund_status": order.refund_status,
-                "inventory_released": bool(order.inventory_released),
-                "rollback": True,
-            },
-        )
-        return Response(
-            AdminOrderSerializer(order, context={"request": request}).data,
-            status=status.HTTP_200_OK,
-        )
+        # Clear the cached previous-status metadata so the response reflects the new state.
+        try:
+            del order._admin_previous_status_metadata
+        except AttributeError:
+            pass
+
+        try:
+            log_admin_action(
+                request=request,
+                actor=request.user,
+                action=AdminAuditLog.ACTION_ORDER_STATUS_CHANGED,
+                resource_type="order",
+                resource_id=order.order_number,
+                before_snapshot=before_snapshot,
+                after_snapshot={
+                    "status": order.status,
+                    "payment_status": order.payment_status,
+                    "refund_status": order.refund_status,
+                    "inventory_released": bool(order.inventory_released),
+                    "rollback": True,
+                },
+            )
+        except Exception:
+            pass
+
+        try:
+            response_data = AdminOrderSerializer(order, context={"request": request}).data
+        except Exception as exc:
+            message = getattr(exc, "message", "") or str(exc) or "Rollback succeeded but response serialization failed."
+            return Response({"detail": message, "status": order.status}, status=status.HTTP_200_OK)
+
+        return Response(response_data, status=status.HTTP_200_OK)
 
 
 class AdminOrderShipmentCreateView(APIView):

@@ -9,6 +9,45 @@ const MARKET_LABELS = {
   sa: "KSA/Saudi",
 };
 
+const ORDER_STATUS_LABELS = {
+  pending: "Pending",
+  confirmed: "Confirmed",
+  paid: "Paid",
+  processing: "Processing",
+  shipped: "Shipped",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+  returned: "Returned",
+  refunded: "Refunded",
+  failed: "Failed",
+};
+
+const ORDER_STATUS_TRANSITIONS = {
+  pending: ["confirmed", "paid", "processing", "cancelled", "failed"],
+  confirmed: ["paid", "processing", "cancelled", "failed"],
+  paid: ["processing", "shipped", "delivered", "cancelled", "refunded", "failed"],
+  processing: ["shipped", "delivered", "cancelled", "failed"],
+  shipped: ["delivered", "returned", "failed"],
+  delivered: ["returned", "refunded"],
+  cancelled: ["refunded"],
+  returned: ["refunded"],
+  refunded: [],
+  failed: ["pending", "confirmed", "paid", "cancelled"],
+};
+
+const STATUS_TONE = {
+  pending: "neutral",
+  confirmed: "info",
+  paid: "success",
+  processing: "info",
+  shipped: "info",
+  delivered: "success",
+  cancelled: "danger",
+  returned: "warning",
+  refunded: "warning",
+  failed: "danger",
+};
+
 const EMPTY_CUSTOMER = {
   user_id: null,
   create_account: false,
@@ -90,6 +129,10 @@ export default function DraftOrderComposer({
   const isEditing = Boolean(initialOrder?.order_number);
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState("");
+  const [currentStatus, setCurrentStatus] = useState(initialOrder?.status || "pending");
+  const [selectedNextStatus, setSelectedNextStatus] = useState("");
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [statusSuccess, setStatusSuccess] = useState("");
   const [regions, setRegions] = useState([]);
   const [regionCode, setRegionCode] = useState("om");
   const [notes, setNotes] = useState("");
@@ -172,6 +215,9 @@ export default function DraftOrderComposer({
       create_account: false,
     });
     setCustomerSearch(fromOrder?.customer_name || "");
+    setCurrentStatus(fromOrder?.status || "pending");
+    setSelectedNextStatus("");
+    setStatusSuccess("");
   }, [initialOrder]);
 
   useEffect(() => {
@@ -328,6 +374,27 @@ export default function DraftOrderComposer({
       first_name: customer.first_name || customerSearch || "",
       create_account: true,
     });
+  }
+
+  async function updateStatus() {
+    if (!selectedNextStatus) return;
+    setIsUpdatingStatus(true);
+    setErrors("");
+    setStatusSuccess("");
+    try {
+      const updated = await request(`/admin/orders/${initialOrder.order_number}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: selectedNextStatus }),
+      });
+      setCurrentStatus(updated?.status || selectedNextStatus);
+      setSelectedNextStatus("");
+      setStatusSuccess(`Status updated to ${ORDER_STATUS_LABELS[updated?.status || selectedNextStatus] || selectedNextStatus}.`);
+      onSaved(updated);
+    } catch (err) {
+      setErrors(err.message || "Failed to update order status.");
+    } finally {
+      setIsUpdatingStatus(false);
+    }
   }
 
   async function saveDraft() {
@@ -544,6 +611,57 @@ export default function DraftOrderComposer({
               onChange={(event) => setTags(event.target.value)}
             />
           </article>
+
+          {isEditing ? (
+            <article className="admin-draft-card">
+              <div className="admin-draft-card-head">
+                <h4>Order Status</h4>
+                <span className={`admin-badge ${STATUS_TONE[currentStatus] || "neutral"}`}>
+                  {ORDER_STATUS_LABELS[currentStatus] || currentStatus}
+                </span>
+              </div>
+              {statusSuccess ? <p className="admin-draft-status-success">{statusSuccess}</p> : null}
+              {(() => {
+                const nextOptions = ORDER_STATUS_TRANSITIONS[currentStatus] || [];
+                const isTerminal = nextOptions.length === 0;
+                if (isTerminal) {
+                  return (
+                    <p className="admin-draft-hint">
+                      {ORDER_STATUS_LABELS[currentStatus] || currentStatus} is a terminal status — no further transitions available.
+                    </p>
+                  );
+                }
+                return (
+                  <>
+                    <p className="admin-draft-hint">
+                      Changing status will notify the customer by email where applicable.
+                    </p>
+                    <label className="admin-label">
+                      New status
+                      <select
+                        className="admin-input"
+                        value={selectedNextStatus}
+                        onChange={(e) => setSelectedNextStatus(e.target.value)}
+                      >
+                        <option value="">— Select —</option>
+                        {nextOptions.map((s) => (
+                          <option key={s} value={s}>{ORDER_STATUS_LABELS[s] || s}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      className="admin-btn-sm"
+                      onClick={updateStatus}
+                      disabled={!selectedNextStatus || isUpdatingStatus}
+                    >
+                      {isUpdatingStatus ? "Updating…" : "Update Status"}
+                    </button>
+                  </>
+                );
+              })()}
+            </article>
+          ) : null}
         </aside>
 
         <div className="admin-draft-main">

@@ -461,6 +461,9 @@ class AdminOrderSerializer(serializers.ModelSerializer):
             for entry in audit_entries:
                 before_snapshot = entry.before_snapshot or {}
                 after_snapshot = entry.after_snapshot or {}
+                # Skip rollback entries — they would produce the same bounce-back bug
+                if after_snapshot.get("rollback"):
+                    continue
                 before_status = str(before_snapshot.get("status") or "").strip().lower()
                 after_status = str(after_snapshot.get("status") or "").strip().lower()
                 if before_status and after_status == current_status and before_status != after_status:

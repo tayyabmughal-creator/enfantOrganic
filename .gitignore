@@ -70,3 +70,10 @@ reference-images/
 # Client raw archives are source handoff files; production import only needs
 # extracted images, so keep zip bundles out of git history.
 Images/**/*.zip
+
+# Data exports — customer/reviewer dumps contain PII and product handoffs are
+# large; never commit them. The tracked products_export_1.csv stays tracked
+# (intentional catalog import); these patterns block stray exports only.
+*-data-export.csv
+*-reviewer-*.csv
+reviewer-data-export.csv

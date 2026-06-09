@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import Icon from "@/components/icons/Icon";
 import { useStore } from "@/components/store/cart/StoreProvider";
 import { formatMoney, uiText } from "@/lib/storefront";
 
 export default function QuickViewModal() {
-  const { addItem, closeQuickView, openCart, quickViewProduct } = useStore();
+  const { addItem, closeQuickView, flyToCart, quickViewProduct } = useStore();
+  const addBtnRef = useRef(null);
   const [quantity, setQuantity] = useState(1);
   const [selectedOptions, setSelectedOptions] = useState({});
 
@@ -91,12 +92,13 @@ export default function QuickViewModal() {
                 </button>
               </div>
               <button
+                ref={addBtnRef}
                 type="button"
                 className="primary-action"
                 onClick={() => {
                   addItem(quickViewProduct, quantity, selectedOptions);
+                  flyToCart(addBtnRef.current);
                   closeQuickView();
-                  openCart();
                 }}
               >
                 {t.addToCart}

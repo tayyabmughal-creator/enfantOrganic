@@ -100,6 +100,16 @@ const icons = {
       strokeWidth="1.8"
     />
   ),
+  chevronLeft: (
+    <path
+      d="m15 18-6-6 6-6"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+    />
+  ),
   chevronDown: (
     <path
       d="m6 9 6 6 6-6"

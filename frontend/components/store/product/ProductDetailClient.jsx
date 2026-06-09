@@ -19,7 +19,8 @@ import {
 } from "@/lib/wishlist";
 
 export default function ProductDetailClient({ locale, product, region }) {
-  const { addItem, openCart } = useStore();
+  const { addItem, flyToCart } = useStore();
+  const addBtnRef = useRef(null);
   const router = useRouter();
   const t = uiText(locale);
   const isAr = locale === "ar";
@@ -184,15 +185,13 @@ export default function ProductDetailClient({ locale, product, region }) {
     trackEvent("product_view", { productSlug: product.slug, regionCode: region });
   }, [locale, product, region]);
 
-  const addCurrentProduct = ({ openMiniCart = true } = {}) => {
+  const addCurrentProduct = () => {
     addItem({ ...product, locale }, quantity, selectedOptions);
-    if (openMiniCart) {
-      openCart();
-    }
+    flyToCart(addBtnRef.current);
   };
 
   const buyCurrentProduct = () => {
-    addCurrentProduct({ openMiniCart: false });
+    addItem({ ...product, locale }, quantity, selectedOptions);
     router.push(buildStorePath(locale, "/checkout", region));
   };
 
@@ -457,7 +456,7 @@ export default function ProductDetailClient({ locale, product, region }) {
             </div>
           ) : (
             <div className="product-cta-stack">
-              <button type="button" className="secondary-action product-cart-action" onClick={() => addCurrentProduct()}>
+              <button ref={addBtnRef} type="button" className="secondary-action product-cart-action" onClick={() => addCurrentProduct()}>
                 <Icon name="bag" size={18} />
                 <span>{t.addToCart}</span>
               </button>

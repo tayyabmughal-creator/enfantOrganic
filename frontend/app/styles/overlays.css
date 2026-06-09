@@ -194,6 +194,33 @@
   color: var(--text-soft);
 }
 
+.cart-continue-shopping-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  padding: 9px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: color 160ms ease, background 160ms ease;
+}
+
+.cart-continue-shopping-btn:hover {
+  color: var(--brand-dark);
+  background: rgba(96, 122, 66, 0.07);
+}
+
+[dir="rtl"] .cart-continue-shopping-btn svg {
+  transform: scaleX(-1);
+}
+
 .cart-drawer-footer {
   display: grid;
   gap: 14px;

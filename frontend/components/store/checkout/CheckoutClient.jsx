@@ -300,6 +300,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
   });
 
   const [submitting, setSubmitting] = useState(false);
+  const [pricingRefreshing, setPricingRefreshing] = useState(false);
   const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [validatingGiftCard, setValidatingGiftCard] = useState(false);
   const [couponPreview, setCouponPreview] = useState(null);
@@ -459,7 +460,8 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
 
   useEffect(() => {
     if (!cartItems.length) return;
-    void refreshCartPricing(locale, region);
+    setPricingRefreshing(true);
+    refreshCartPricing(locale, region).finally(() => setPricingRefreshing(false));
   }, [cartItems.length, locale, refreshCartPricing, region]);
 
   useEffect(() => {
@@ -688,8 +690,8 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         }
         return false;
       }
-      setValidatingCoupon(true);
       if (!silent) {
+        setValidatingCoupon(true);
         setCouponMessage("");
       }
       try {
@@ -731,7 +733,9 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         }
         return false;
       } finally {
-        setValidatingCoupon(false);
+        if (!silent) {
+          setValidatingCoupon(false);
+        }
       }
     },
     [cartItems.length, checkoutItemsPayload, isAr, region],
@@ -1699,11 +1703,37 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
               </div>
 
               {currencyMismatch ? (
-                <p className="form-error">
-                  {isAr
-                    ? `العملة المعروضة (${cartCurrency}) لا تطابق المنطقة المختارة (${regionCurrency}). يتم تحديث الأسعار...`
-                    : `The displayed currency (${cartCurrency}) doesn't match the selected region (${regionCurrency}). Updating prices…`}
-                </p>
+                <div className="currency-mismatch-alert">
+                  <p className="form-error" style={{ margin: 0 }}>
+                    {pricingRefreshing
+                      ? (isAr ? "جارٍ تحديث الأسعار…" : "Updating prices…")
+                      : (isAr
+                          ? `تعذر تحديث أسعار السلة للمنطقة المختارة (${regionCurrency}). يرجى مسح السلة والإضافة من جديد.`
+                          : `Cart prices couldn't be updated for the selected region (${regionCurrency}). Please clear your cart and add items again.`)}
+                  </p>
+                  {!pricingRefreshing ? (
+                    <div className="currency-mismatch-actions">
+                      <button
+                        type="button"
+                        className="secondary-action"
+                        onClick={() => {
+                          setPricingRefreshing(true);
+                          refreshCartPricing(locale, region).finally(() => setPricingRefreshing(false));
+                        }}
+                      >
+                        {isAr ? "إعادة المحاولة" : "Retry"}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-action"
+                        style={{ color: "var(--error, #c0392b)" }}
+                        onClick={() => { clearCart(); }}
+                      >
+                        {isAr ? "مسح السلة" : "Clear Cart"}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               ) : null}
 
               {error ? <p className="form-error">{error}</p> : null}

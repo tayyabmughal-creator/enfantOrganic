@@ -70,6 +70,53 @@ export default function StoreProvider({ children }) {
       quickViewProduct,
       openCart: () => setDrawerOpen(true),
       closeCart: () => setDrawerOpen(false),
+      flyToCart: (fromEl) => {
+        const cartEl = document.querySelector(".cart-link");
+        if (!cartEl || !fromEl) return;
+
+        const fromRect = fromEl.getBoundingClientRect();
+        const toRect = cartEl.getBoundingClientRect();
+
+        const dot = document.createElement("div");
+        dot.className = "fly-to-cart-dot";
+        const startX = fromRect.left + fromRect.width / 2 - 7;
+        const startY = fromRect.top + fromRect.height / 2 - 7;
+        dot.style.left = `${startX}px`;
+        dot.style.top = `${startY}px`;
+        document.body.appendChild(dot);
+
+        // Force reflow so transition fires
+        dot.getBoundingClientRect();
+
+        const endX = toRect.left + toRect.width / 2 - 7;
+        const endY = toRect.top + toRect.height / 2 - 7;
+        const dx = endX - startX;
+        const dy = endY - startY;
+
+        // Phase 1: fly to cart at full opacity
+        dot.style.transition = "transform 0.65s cubic-bezier(0.25, 0.46, 0.45, 0.94)";
+        dot.style.transform = `translate(${dx}px, ${dy}px) scale(0.35)`;
+
+        setTimeout(() => {
+          // Phase 2: quick fade once arrived
+          dot.style.transition = "opacity 0.15s ease";
+          dot.style.opacity = "0";
+          setTimeout(() => {
+            dot.remove();
+            const badge = cartEl.querySelector(".cart-badge");
+            if (badge) {
+              badge.classList.remove("cart-badge-bump");
+              badge.getBoundingClientRect();
+              badge.classList.add("cart-badge-bump");
+              badge.addEventListener(
+                "animationend",
+                () => badge.classList.remove("cart-badge-bump"),
+                { once: true },
+              );
+            }
+          }, 160);
+        }, 660);
+      },
       openQuickView: (product) => setQuickViewProduct(product),
       closeQuickView: () => setQuickViewProduct(null),
       refreshCartPricing: async (locale, region) => {
@@ -88,10 +135,11 @@ export default function StoreProvider({ children }) {
         try {
           const refreshedProducts = await Promise.all(
             uniqueSlugs.map(async (slug) => {
-              const params = new URLSearchParams({ locale, region });
-              const response = await fetch(`${API_BASE_URL}/products/${slug}/?${params.toString()}`, {
-                cache: "no-store",
-              });
+              // Use timestamp cache-bust instead of cache:"no-store" —
+              // Safari silently fails fetches with that directive on some
+              // cross-origin requests, causing the cart to stay mis-priced.
+              const params = new URLSearchParams({ locale, region, _t: Date.now() });
+              const response = await fetch(`${API_BASE_URL}/products/${slug}/?${params.toString()}`);
 
               if (!response.ok) {
                 return null;
@@ -133,7 +181,9 @@ export default function StoreProvider({ children }) {
                 image: refreshed.image || item.image,
                 locale,
                 name: refreshed.name || item.name,
-                pricing: refreshed.pricing,
+                // Stamp region_code so needsRefresh evaluates correctly next
+                // time — API may omit it, causing an infinite reprice loop.
+                pricing: { ...refreshed.pricing, region_code: region },
               };
             }),
           );

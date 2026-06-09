@@ -263,14 +263,23 @@
 */
 .offers-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  grid-auto-rows: clamp(174px, 17vw, 212px);
+  /* Mobile-first: single full-width column so every card spans the full width
+     on all phone sizes regardless of OS or browser. */
+  grid-template-columns: 1fr;
+  grid-auto-rows: clamp(190px, 48vw, 240px);
   gap: 10px;
 }
 
-/* Desktop-only count-aware overrides — mobile media queries below collapse to
-   simpler grids. Wrapped in min-width so the [data-count] selectors don't beat
-   the mobile rules on specificity. */
+/* From tablet upward restore the auto-fit multi-column behaviour. */
+@media (min-width: 640px) {
+  .offers-grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-auto-rows: clamp(174px, 17vw, 212px);
+  }
+}
+
+/* Desktop-only count-aware overrides — wrapped in min-width so the
+   [data-count] selectors don't beat the mobile rules on specificity. */
 @media (min-width: 821px) {
   /* 2-card row */
   .offers-grid[data-count="2"] {
@@ -1684,8 +1693,8 @@
   }
 }
 
-@media (max-width: 820px) {
-  /* Collapse bento to 2-column equal grid */
+@media (min-width: 640px) and (max-width: 820px) {
+  /* Collapse bento to 2-column equal grid on tablet (640–820px) */
   .offers-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-auto-rows: auto;
@@ -1762,11 +1771,7 @@
   }
 }
 
-@media (max-width: 420px) {
-  .offers-grid {
-    grid-template-columns: repeat(1, minmax(0, 1fr));
-  }
-}
+/* offers-grid mobile-first 1fr baseline covers <640px — no max-width override needed */
 
 @media (max-width: 480px) {
   .trust-strip {

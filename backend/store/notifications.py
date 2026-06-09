@@ -759,37 +759,61 @@ def queue_order_notification_event(order, event, *, extra_payload=None):
     transaction.on_commit(_callback)
 
 
-def queue_order_notification_events(order, *, is_create=False, previous_status=None):
-    if getattr(order, "sales_channel", "") == Order.SALES_CHANNEL_DRAFT_ORDER:
-        if is_create:
-            def _draft_skip_callback():
-                existing = _get_notification_log(
-                    NotificationLog.EVENT_ORDER_CREATED,
-                    NotificationLog.CHANNEL_EMAIL,
-                    str(order.customer_email or "").strip().lower(),
-                    order=order,
-                )
-                if existing is None:
-                    _ensure_email_notification_log(
-                        order,
-                        NotificationLog.EVENT_ORDER_CREATED,
-                        status=NotificationLog.STATUS_SKIPPED_DRAFT_ORDER,
-                        payload={
-                            "event": NotificationLog.EVENT_ORDER_CREATED,
-                            "locale": _order_locale(order),
-                            "order_number": order.order_number,
-                            "skip_reason": "draft_order",
-                        },
-                    )
+_DRAFT_ORDER_PLACED_STATUSES = {
+    Order.STATUS_CONFIRMED,
+    Order.STATUS_PAID,
+    Order.STATUS_PROCESSING,
+}
 
-            transaction.on_commit(_draft_skip_callback)
+_DRAFT_ORDER_PENDING_STATUSES = {
+    Order.STATUS_PENDING,
+    None,
+}
+
+
+def queue_order_notification_events(order, *, is_create=False, previous_status=None):
+    is_draft = getattr(order, "sales_channel", "") == Order.SALES_CHANNEL_DRAFT_ORDER
+
+    if is_draft and is_create:
+        # Draft orders are created internally by admin — skip the creation notification
+        # but log it as skipped so the audit trail is clean.
+        def _draft_skip_callback():
+            existing = _get_notification_log(
+                NotificationLog.EVENT_ORDER_CREATED,
+                NotificationLog.CHANNEL_EMAIL,
+                str(order.customer_email or "").strip().lower(),
+                order=order,
+            )
+            if existing is None:
+                _ensure_email_notification_log(
+                    order,
+                    NotificationLog.EVENT_ORDER_CREATED,
+                    status=NotificationLog.STATUS_SKIPPED_DRAFT_ORDER,
+                    payload={
+                        "event": NotificationLog.EVENT_ORDER_CREATED,
+                        "locale": _order_locale(order),
+                        "order_number": order.order_number,
+                        "skip_reason": "draft_order",
+                    },
+                )
+
+        transaction.on_commit(_draft_skip_callback)
         return
 
-    if is_create:
+    if not is_draft and is_create:
         queue_order_notification_event(order, NotificationLog.EVENT_ORDER_CREATED)
 
     if previous_status == order.status:
         return
+
+    # For draft orders transitioning from pending → confirmed/paid/processing,
+    # send an order-placed confirmation so the customer knows their order is active.
+    if (
+        is_draft
+        and previous_status in _DRAFT_ORDER_PENDING_STATUSES
+        and order.status in _DRAFT_ORDER_PLACED_STATUSES
+    ):
+        queue_order_notification_event(order, NotificationLog.EVENT_ORDER_CREATED)
 
     status_event = ORDER_STATUS_EVENT_MAP.get(order.status)
     if status_event:

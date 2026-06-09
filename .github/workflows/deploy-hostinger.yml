@@ -114,6 +114,10 @@ jobs:
             NEXT_PUBLIC_API_BASE_URL=${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
             NEXT_PUBLIC_APP_URL=${{ secrets.NEXT_PUBLIC_APP_URL || format('https://{0}', secrets.PRODUCTION_DOMAIN || 'enfhantorganic.itwing.cloud') }}
             API_INTERNAL_BASE_URL=http://backend:8000/api
+            # Google Maps JS key for checkout address autocomplete + map pin.
+            # Browser key (public by design; secured via HTTP-referrer restriction).
+            # Set the GitHub secret to rotate; the fallback keeps the map live now.
+            NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || 'AIzaSyAzLn2u7C5Gve-zmLJoj73IH_lfQPBMKY4' }}
             DEFAULT_FROM_EMAIL=${{ secrets.DEFAULT_FROM_EMAIL }}
             EMAIL_BACKEND=${{ secrets.EMAIL_BACKEND || 'django.core.mail.backends.console.EmailBackend' }}
             EMAIL_HOST=${{ secrets.EMAIL_HOST }}

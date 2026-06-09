@@ -26,7 +26,9 @@ function CartDrawerInner() {
     }
 
     void refreshCartPricing(locale, region);
-  }, [cartItems, locale, region]);
+    // Depend on length only — not the full array — so a price update doesn't
+    // re-trigger this and race against the checkout page's own refresh.
+  }, [cartItems.length, locale, region, refreshCartPricing]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -163,6 +165,14 @@ function CartDrawerInner() {
                 >
                   {t.checkout}
                 </Link>
+                <button
+                  type="button"
+                  className="cart-continue-shopping-btn"
+                  onClick={closeCart}
+                >
+                  <Icon name="chevronLeft" size={13} />
+                  {locale === "ar" ? "متابعة التسوق" : "Continue Shopping"}
+                </button>
               </>
             ) : (
               <Link

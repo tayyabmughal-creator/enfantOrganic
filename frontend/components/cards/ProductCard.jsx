@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import Icon from "@/components/icons/Icon";
@@ -31,7 +31,8 @@ function resolveProductCardImage(image) {
 }
 
 export default function ProductCard({ locale, product, region }) {
-  const { addItem, openCart, openQuickView } = useStore();
+  const { addItem, flyToCart, openQuickView } = useStore();
+  const addBtnRef = useRef(null);
   const t = uiText(locale);
   const [wishToast, setWishToast] = useState("");
   const [isWishlisted, setIsWishlisted] = useState(false);
@@ -61,7 +62,7 @@ export default function ProductCard({ locale, product, region }) {
     }
 
     addItem({ ...product, locale }, 1, {});
-    openCart();
+    flyToCart(addBtnRef.current);
   };
 
   useEffect(() => {
@@ -222,7 +223,7 @@ export default function ProductCard({ locale, product, region }) {
         {product.pricing?.unit_price_text ? (
           <span className="unit-price-label">{product.pricing.unit_price_text}</span>
         ) : null}
-        <button type="button" className="product-action-button" onClick={handlePrimaryAction}>
+        <button ref={addBtnRef} type="button" className="product-action-button" onClick={handlePrimaryAction}>
           <Icon name="bag" size={18} />
           {hasOptions ? t.chooseOptions : t.addToCart}
         </button>
