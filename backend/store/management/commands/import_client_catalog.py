@@ -15,6 +15,9 @@ from django.utils.text import slugify
 
 from store.models import Category, Product, ProductPrice, Region, Tag
 
+# Mirrors the DB column width — update here whenever the model changes.
+_PRODUCT_SLUG_MAX_LENGTH = 100
+
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".avif"}
 SECONDARY_IMAGE_HINTS = (
@@ -381,6 +384,21 @@ class Command(BaseCommand):
         if not regions:
             raise CommandError("No regions found in the database. Seed regions before importing the catalog.")
 
+        # Pre-flight: fail fast with a clear message rather than a raw DB error.
+        oversized = [
+            (handle, len(handle))
+            for handle in grouped_rows
+            if len(handle) > _PRODUCT_SLUG_MAX_LENGTH
+        ]
+        if oversized:
+            lines = "\n".join(f"  [{length}] {handle}" for handle, length in sorted(oversized, key=lambda x: -x[1]))
+            raise CommandError(
+                f"Import aborted: {len(oversized)} product handle(s) exceed the "
+                f"slug column limit of {_PRODUCT_SLUG_MAX_LENGTH} characters. "
+                f"Either widen Product.slug (max_length) or shorten the handles "
+                f"in the CSV before re-running.\n{lines}"
+            )
+
         imported_handles = set(grouped_rows)
         category_cache = {}
         tag_cache = {}
@@ -414,12 +432,13 @@ class Command(BaseCommand):
             option_name, option_value = _extract_size_value(first_row, display_name)
             option_groups = [{"name": option_name, "values": [option_value]}] if option_name and option_value else []
 
+            raw_vendor = str(first_row.get("Vendor") or "Enfant Organics").strip() or "Enfant Organics"
             product_defaults = {
-                "name_en": display_name,
+                "name_en": self._safe_str(display_name, 255, handle, "name_en"),
                 "name_ar": "",
                 "brand": DEFAULT_BRAND,
-                "unit": option_value,
-                "vendor_en": str(first_row.get("Vendor") or "Enfant Organics").strip() or "Enfant Organics",
+                "unit": self._safe_str(option_value, 80, handle, "unit"),
+                "vendor_en": self._safe_str(raw_vendor, 120, handle, "vendor_en"),
                 "vendor_ar": DEFAULT_VENDOR_AR,
                 "short_description_en": short_description,
                 "short_description_ar": "",
@@ -433,13 +452,16 @@ class Command(BaseCommand):
                 "ingredients_ar": "",
                 "usage_instructions_en": "",
                 "usage_instructions_ar": "",
-                "origin_source_en": str(first_row.get("Ingredient origin (product.metafields.shopify.ingredient-origin)") or "").strip(),
+                "origin_source_en": self._safe_str(
+                    str(first_row.get("Ingredient origin (product.metafields.shopify.ingredient-origin)") or "").strip(),
+                    255, handle, "origin_source_en",
+                ),
                 "origin_source_ar": "",
                 "dietary_tags": [],
                 "shelf_life": "",
                 "details_en": details,
                 "details_ar": [],
-                "badge_en": _build_badge(display_name),
+                "badge_en": self._safe_str(_build_badge(display_name), 60, handle, "badge_en"),
                 "badge_ar": "",
                 "review_count": self._import_review_count(handle, first_row),
                 "rating": "5.0",
@@ -621,6 +643,24 @@ class Command(BaseCommand):
         for product in obsolete:
             self._cleanup_product_media(product)
             product.delete()
+
+    def _safe_str(self, value, max_length, handle, field_name):
+        """Return value truncated to max_length, logging a warning when truncation occurs.
+
+        Only use for fields where losing trailing text is acceptable (display
+        names, vendor names, etc.). Never use for slug or other unique keys.
+        """
+        text = str(value or "")
+        if len(text) <= max_length:
+            return text
+        truncated = text[:max_length]
+        self.stderr.write(
+            self.style.WARNING(
+                f"[{handle}] Field '{field_name}' truncated from {len(text)} to "
+                f"{max_length} chars: {text[:60]!r}…"
+            )
+        )
+        return truncated
 
     @staticmethod
     def _safe_int(value, default=0):

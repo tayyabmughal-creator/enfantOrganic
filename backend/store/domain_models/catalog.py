@@ -516,7 +516,7 @@ class Tag(OrderedModel):
 
 
 class Product(OrderedModel):
-    slug = models.SlugField(unique=True)
+    slug = models.SlugField(unique=True, max_length=100)
     name_en = models.CharField(max_length=255, default="")
     name_ar = models.CharField(max_length=255, default="")
     brand = models.CharField(max_length=120, default="Enfant")
