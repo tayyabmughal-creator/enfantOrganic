@@ -1,19 +1,35 @@
-name: Deploy to Hostinger
+name: Deploy
 
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: 'Deploy target'
+        required: false
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - personal-vps
+          - client-hostinger
   push:
     branches: [main]
 
-concurrency:
-  group: hostinger-production
-  cancel-in-progress: true
-
 jobs:
-  deploy:
-    name: Deploy Docker stack
+  # ─────────────────────────────────────────────
+  # JOB 1 — Personal VPS  (environment: production)
+  # ─────────────────────────────────────────────
+  deploy-personal:
+    name: Deploy → Personal VPS
     runs-on: ubuntu-latest
     environment: production
+    if: >
+      github.event_name == 'push' ||
+      inputs.target == 'both' ||
+      inputs.target == 'personal-vps'
+    concurrency:
+      group: deploy-personal-${{ github.ref }}
+      cancel-in-progress: true
 
     steps:
       - name: Checkout
@@ -28,26 +44,16 @@ jobs:
           RAW_DEPLOY_PATH: ${{ secrets.HOSTINGER_DEPLOY_PATH }}
         run: |
           set -euo pipefail
-          trim() {
-            printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
-          }
-
+          trim() { printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
           ssh_host="$(trim "$RAW_SSH_HOST")"
           ssh_port="$(trim "$RAW_SSH_PORT")"
           ssh_user="$(trim "$RAW_SSH_USER")"
           deploy_path="$(trim "$RAW_DEPLOY_PATH")"
-
-          [ -n "$ssh_host" ] || { echo "FATAL: HOSTINGER_SSH_HOST is empty after trimming."; exit 1; }
-          [ -n "$ssh_port" ] || { echo "FATAL: HOSTINGER_SSH_PORT is empty after trimming."; exit 1; }
-          [ -n "$ssh_user" ] || { echo "FATAL: HOSTINGER_SSH_USER is empty after trimming."; exit 1; }
-          [ -n "$deploy_path" ] || { echo "FATAL: HOSTINGER_DEPLOY_PATH is empty after trimming."; exit 1; }
-
-          {
-            echo "host=$ssh_host"
-            echo "port=$ssh_port"
-            echo "user=$ssh_user"
-            echo "deploy_path=$deploy_path"
-          } >> "$GITHUB_OUTPUT"
+          [ -n "$ssh_host" ]    || { echo "FATAL: HOSTINGER_SSH_HOST is empty.";    exit 1; }
+          [ -n "$ssh_port" ]    || { echo "FATAL: HOSTINGER_SSH_PORT is empty.";    exit 1; }
+          [ -n "$ssh_user" ]    || { echo "FATAL: HOSTINGER_SSH_USER is empty.";    exit 1; }
+          [ -n "$deploy_path" ] || { echo "FATAL: HOSTINGER_DEPLOY_PATH is empty."; exit 1; }
+          { echo "host=$ssh_host"; echo "port=$ssh_port"; echo "user=$ssh_user"; echo "deploy_path=$deploy_path"; } >> "$GITHUB_OUTPUT"
 
       - name: Preflight SSH connectivity
         env:
@@ -56,15 +62,9 @@ jobs:
         run: |
           set -e
           echo "Checking TCP connectivity to ${SSH_HOST}:${SSH_PORT}"
-          if nc -zvw 15 "$SSH_HOST" "$SSH_PORT"; then
-            echo "SSH port is reachable."
-          else
-            echo "FATAL: cannot reach ${SSH_HOST}:${SSH_PORT} from the GitHub runner."
-            echo "Check the SSH host/IP, port, firewall allowlist, and whether the server is online."
-            exit 1
-          fi
+          nc -zvw 15 "$SSH_HOST" "$SSH_PORT" && echo "SSH port is reachable." || { echo "FATAL: cannot reach ${SSH_HOST}:${SSH_PORT}"; exit 1; }
 
-      - name: Upload project to Hostinger
+      - name: Upload project to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ steps.ssh_target.outputs.host }}
@@ -77,7 +77,7 @@ jobs:
           timeout: 2m
           command_timeout: 45m
 
-      - name: Run deployment on Hostinger
+      - name: Run deployment on server
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ steps.ssh_target.outputs.host }}
@@ -90,7 +90,6 @@ jobs:
           script: |
             cd "${{ steps.ssh_target.outputs.deploy_path }}"
             set -e
-
             cat > .env.production <<'EOF'
             COMPOSE_PROJECT_NAME=enfhantorganic
             HTTP_PORT=${{ secrets.HTTP_PORT }}
@@ -114,9 +113,6 @@ jobs:
             NEXT_PUBLIC_API_BASE_URL=${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
             NEXT_PUBLIC_APP_URL=${{ secrets.NEXT_PUBLIC_APP_URL || format('https://{0}', secrets.PRODUCTION_DOMAIN || 'enfhantorganic.itwing.cloud') }}
             API_INTERNAL_BASE_URL=http://backend:8000/api
-            # Google Maps JS key for checkout address autocomplete + map pin.
-            # Browser key (public by design; secured via HTTP-referrer restriction).
-            # Set the GitHub secret to rotate; the fallback keeps the map live now.
             NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || 'AIzaSyAzLn2u7C5Gve-zmLJoj73IH_lfQPBMKY4' }}
             DEFAULT_FROM_EMAIL=${{ secrets.DEFAULT_FROM_EMAIL }}
             EMAIL_BACKEND=${{ secrets.EMAIL_BACKEND || 'django.core.mail.backends.console.EmailBackend' }}
@@ -125,24 +121,18 @@ jobs:
             EMAIL_HOST_USER=${{ secrets.EMAIL_HOST_USER }}
             EMAIL_HOST_PASSWORD=${{ secrets.EMAIL_HOST_PASSWORD }}
             EMAIL_USE_TLS=${{ secrets.EMAIL_USE_TLS || 'True' }}
-            # Paymob (Oman test integration). Required — see DEPLOYMENT.md for the
-            # GitHub secrets to create. base_url/currency have safe defaults.
             PAYMOB_API_KEY=${{ secrets.PAYMOB_API_KEY }}
             PAYMOB_INTEGRATION_ID=${{ secrets.PAYMOB_INTEGRATION_ID }}
             PAYMOB_IFRAME_ID=${{ secrets.PAYMOB_IFRAME_ID }}
             PAYMOB_HMAC_SECRET=${{ secrets.PAYMOB_HMAC_SECRET }}
             PAYMOB_CURRENCY=${{ secrets.PAYMOB_CURRENCY || 'OMR' }}
             PAYMOB_BASE_URL=${{ secrets.PAYMOB_BASE_URL || 'https://oman.paymob.com/api' }}
-            # Region-scoped Paymob (Saudi / UAE). Leave the secrets unset until a
-            # SAR/AED integration exists — empty values keep Paymob hidden there
-            # rather than routing those orders through the OMR integration.
             PAYMOB_INTEGRATION_ID_SA=${{ secrets.PAYMOB_INTEGRATION_ID_SA }}
             PAYMOB_IFRAME_ID_SA=${{ secrets.PAYMOB_IFRAME_ID_SA }}
             PAYMOB_HMAC_SECRET_SA=${{ secrets.PAYMOB_HMAC_SECRET_SA }}
             PAYMOB_INTEGRATION_ID_AE=${{ secrets.PAYMOB_INTEGRATION_ID_AE }}
             PAYMOB_IFRAME_ID_AE=${{ secrets.PAYMOB_IFRAME_ID_AE }}
             PAYMOB_HMAC_SECRET_AE=${{ secrets.PAYMOB_HMAC_SECRET_AE }}
-            # Thawani (Oman, UAT).
             THAWANI_SECRET_KEY=${{ secrets.THAWANI_SECRET_KEY }}
             THAWANI_PUBLISHABLE_KEY=${{ secrets.THAWANI_PUBLISHABLE_KEY }}
             THAWANI_BASE_URL=${{ secrets.THAWANI_BASE_URL || 'https://uatcheckout.thawani.om' }}
@@ -150,13 +140,8 @@ jobs:
             THAWANI_CREATE_SESSION_PATH=${{ secrets.THAWANI_CREATE_SESSION_PATH || '/api/v1/checkout/session' }}
             EOF
             chmod 600 .env.production
-
-            # Fail the deploy early if the generated env is wrong (typo domain,
-            # missing ALLOWED_HOSTS / Redis / Paymob, etc.) — before touching the
-            # running stack. Prints presence only, never secret values.
             EXPECTED_DOMAIN="${{ secrets.PRODUCTION_DOMAIN || 'enfhantorganic.itwing.cloud' }}" \
               bash scripts/validate-production-env.sh .env.production
-
             docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build --remove-orphans
             docker compose -f docker-compose.prod.yml --env-file .env.production restart nginx
             docker compose -f docker-compose.prod.yml --env-file .env.production ps
@@ -170,8 +155,6 @@ jobs:
             else
               echo "WARN: products_export_1.csv or Images directory missing; skipping catalog import"
             fi
-            # Confirm the public domain actually reached the backend container's
-            # ALLOWED_HOSTS — a wrong/typo domain here breaks all browser API calls.
             domain="${{ secrets.PRODUCTION_DOMAIN || 'enfhantorganic.itwing.cloud' }}"
             docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend printenv DJANGO_ALLOWED_HOSTS | grep -Fq "$domain" \
               || { echo "FATAL: backend DJANGO_ALLOWED_HOSTS is missing $domain"; exit 1; }
@@ -179,27 +162,20 @@ jobs:
             docker compose -f docker-compose.prod.yml --env-file .env.production exec -T nginx wget -S -O /dev/null http://127.0.0.1/
             docker image prune -f
 
-      - name: Verify public site
+      - name: Verify public site (Personal VPS)
         run: |
           set -e
           domain="${{ secrets.PRODUCTION_DOMAIN || 'enfhantorganic.itwing.cloud' }}"
           url="${{ secrets.PRODUCTION_HEALTHCHECK_URL || '' }}"
-          if [ -z "$url" ]; then
-            url="https://${domain}/"
-          fi
-          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
-            if curl --fail --show-error --silent --location --head --max-time 20 "$url"; then
-              break
-            fi
-            echo "Public site not ready yet (attempt ${attempt}/12)."
+          [ -z "$url" ] && url="https://${domain}/"
+          for attempt in $(seq 1 12); do
+            curl --fail --show-error --silent --location --head --max-time 20 "$url" && break
+            echo "Not ready yet (attempt ${attempt}/12)."
             sleep 10
-            if [ "$attempt" = "12" ]; then
-              curl --verbose --location --max-time 20 "$url"
-              exit 1
-            fi
+            [ "$attempt" = "12" ] && { curl --verbose --location --max-time 20 "$url"; exit 1; }
           done
 
-      - name: Verify public API returns JSON (region/currency flow)
+      - name: Verify public API (Personal VPS)
         run: |
           domain="${{ secrets.PRODUCTION_DOMAIN || 'enfhantorganic.itwing.cloud' }}"
           fail=0
@@ -216,4 +192,183 @@ jobs:
           check "https://${domain}/api/products/"
           check "https://${domain}/api/products/?region=sa"
           check "https://${domain}/api/products/?region=ae"
-          [ "$fail" = "0" ] || { echo "Public API smoke tests FAILED — browser/region flow is broken."; exit 1; }
+          [ "$fail" = "0" ] || { echo "API smoke tests FAILED."; exit 1; }
+
+
+  # ─────────────────────────────────────────────
+  # JOB 2 — Client Hostinger  (environment: enfantSecrets)
+  # ─────────────────────────────────────────────
+  deploy-client:
+    name: Deploy → Client Hostinger
+    runs-on: ubuntu-latest
+    environment: enfantSecrets
+    if: >
+      github.event_name == 'push' ||
+      inputs.target == 'both' ||
+      inputs.target == 'client-hostinger'
+    concurrency:
+      group: deploy-client-${{ github.ref }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Normalize SSH deploy inputs
+        id: ssh_target
+        env:
+          RAW_SSH_HOST: ${{ secrets.HOSTINGER_SSH_HOST }}
+          RAW_SSH_PORT: ${{ secrets.HOSTINGER_SSH_PORT || 22 }}
+          RAW_SSH_USER: ${{ secrets.HOSTINGER_SSH_USER }}
+          RAW_DEPLOY_PATH: ${{ secrets.HOSTINGER_DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          trim() { printf '%s' "$1" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
+          ssh_host="$(trim "$RAW_SSH_HOST")"
+          ssh_port="$(trim "$RAW_SSH_PORT")"
+          ssh_user="$(trim "$RAW_SSH_USER")"
+          deploy_path="$(trim "$RAW_DEPLOY_PATH")"
+          [ -n "$ssh_host" ]    || { echo "FATAL: HOSTINGER_SSH_HOST is empty.";    exit 1; }
+          [ -n "$ssh_port" ]    || { echo "FATAL: HOSTINGER_SSH_PORT is empty.";    exit 1; }
+          [ -n "$ssh_user" ]    || { echo "FATAL: HOSTINGER_SSH_USER is empty.";    exit 1; }
+          [ -n "$deploy_path" ] || { echo "FATAL: HOSTINGER_DEPLOY_PATH is empty."; exit 1; }
+          { echo "host=$ssh_host"; echo "port=$ssh_port"; echo "user=$ssh_user"; echo "deploy_path=$deploy_path"; } >> "$GITHUB_OUTPUT"
+
+      - name: Preflight SSH connectivity
+        env:
+          SSH_HOST: ${{ steps.ssh_target.outputs.host }}
+          SSH_PORT: ${{ steps.ssh_target.outputs.port }}
+        run: |
+          set -e
+          echo "Checking TCP connectivity to ${SSH_HOST}:${SSH_PORT}"
+          nc -zvw 15 "$SSH_HOST" "$SSH_PORT" && echo "SSH port is reachable." || { echo "FATAL: cannot reach ${SSH_HOST}:${SSH_PORT}"; exit 1; }
+
+      - name: Upload project to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ steps.ssh_target.outputs.host }}
+          username: ${{ steps.ssh_target.outputs.user }}
+          key: ${{ secrets.HOSTINGER_SSH_KEY }}
+          port: ${{ steps.ssh_target.outputs.port }}
+          source: "backend,frontend,deploy,scripts,Images,products_export_1.csv,docker-compose.prod.yml,.env.production.example"
+          target: ${{ steps.ssh_target.outputs.deploy_path }}
+          overwrite: true
+          timeout: 2m
+          command_timeout: 45m
+
+      - name: Run deployment on server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ steps.ssh_target.outputs.host }}
+          username: ${{ steps.ssh_target.outputs.user }}
+          key: ${{ secrets.HOSTINGER_SSH_KEY }}
+          port: ${{ steps.ssh_target.outputs.port }}
+          timeout: 2m
+          command_timeout: 20m
+          script_stop: false
+          script: |
+            cd "${{ steps.ssh_target.outputs.deploy_path }}"
+            set -e
+            cat > .env.production <<'EOF'
+            COMPOSE_PROJECT_NAME=enfhantorganic
+            HTTP_PORT=${{ secrets.HTTP_PORT }}
+            DJANGO_SECRET_KEY=${{ secrets.DJANGO_SECRET_KEY }}
+            DJANGO_DEBUG=0
+            DJANGO_ALLOWED_HOSTS=${{ secrets.DJANGO_ALLOWED_HOSTS }}
+            DJANGO_CORS_ALLOWED_ORIGINS=${{ secrets.DJANGO_CORS_ALLOWED_ORIGINS }}
+            DJANGO_CSRF_TRUSTED_ORIGINS=${{ secrets.DJANGO_CSRF_TRUSTED_ORIGINS }}
+            DJANGO_SECURE_SSL_REDIRECT=0
+            DJANGO_SESSION_COOKIE_SECURE=1
+            DJANGO_CSRF_COOKIE_SECURE=1
+            DJANGO_SECURE_HSTS_SECONDS=31536000
+            POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+            POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+            POSTGRES_HOST=db
+            POSTGRES_PORT=5432
+            REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
+            REDIS_HOST=redis
+            REDIS_PORT=6379
+            NEXT_PUBLIC_API_BASE_URL=${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
+            NEXT_PUBLIC_APP_URL=${{ secrets.NEXT_PUBLIC_APP_URL || format('https://{0}', secrets.PRODUCTION_DOMAIN || 'app.enfantorganic.com') }}
+            API_INTERNAL_BASE_URL=http://backend:8000/api
+            NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || 'AIzaSyAzLn2u7C5Gve-zmLJoj73IH_lfQPBMKY4' }}
+            DEFAULT_FROM_EMAIL=${{ secrets.DEFAULT_FROM_EMAIL }}
+            EMAIL_BACKEND=${{ secrets.EMAIL_BACKEND || 'django.core.mail.backends.console.EmailBackend' }}
+            EMAIL_HOST=${{ secrets.EMAIL_HOST }}
+            EMAIL_PORT=${{ secrets.EMAIL_PORT || 587 }}
+            EMAIL_HOST_USER=${{ secrets.EMAIL_HOST_USER }}
+            EMAIL_HOST_PASSWORD=${{ secrets.EMAIL_HOST_PASSWORD }}
+            EMAIL_USE_TLS=${{ secrets.EMAIL_USE_TLS || 'True' }}
+            PAYMOB_API_KEY=${{ secrets.PAYMOB_API_KEY }}
+            PAYMOB_INTEGRATION_ID=${{ secrets.PAYMOB_INTEGRATION_ID }}
+            PAYMOB_IFRAME_ID=${{ secrets.PAYMOB_IFRAME_ID }}
+            PAYMOB_HMAC_SECRET=${{ secrets.PAYMOB_HMAC_SECRET }}
+            PAYMOB_CURRENCY=${{ secrets.PAYMOB_CURRENCY || 'OMR' }}
+            PAYMOB_BASE_URL=${{ secrets.PAYMOB_BASE_URL || 'https://oman.paymob.com/api' }}
+            PAYMOB_INTEGRATION_ID_SA=${{ secrets.PAYMOB_INTEGRATION_ID_SA }}
+            PAYMOB_IFRAME_ID_SA=${{ secrets.PAYMOB_IFRAME_ID_SA }}
+            PAYMOB_HMAC_SECRET_SA=${{ secrets.PAYMOB_HMAC_SECRET_SA }}
+            PAYMOB_INTEGRATION_ID_AE=${{ secrets.PAYMOB_INTEGRATION_ID_AE }}
+            PAYMOB_IFRAME_ID_AE=${{ secrets.PAYMOB_IFRAME_ID_AE }}
+            PAYMOB_HMAC_SECRET_AE=${{ secrets.PAYMOB_HMAC_SECRET_AE }}
+            THAWANI_SECRET_KEY=${{ secrets.THAWANI_SECRET_KEY }}
+            THAWANI_PUBLISHABLE_KEY=${{ secrets.THAWANI_PUBLISHABLE_KEY }}
+            THAWANI_BASE_URL=${{ secrets.THAWANI_BASE_URL || 'https://uatcheckout.thawani.om' }}
+            THAWANI_ENABLE_REAL_API=${{ secrets.THAWANI_ENABLE_REAL_API || '0' }}
+            THAWANI_CREATE_SESSION_PATH=${{ secrets.THAWANI_CREATE_SESSION_PATH || '/api/v1/checkout/session' }}
+            EOF
+            chmod 600 .env.production
+            EXPECTED_DOMAIN="${{ secrets.PRODUCTION_DOMAIN || 'app.enfantorganic.com' }}" \
+              bash scripts/validate-production-env.sh .env.production
+            docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build --remove-orphans
+            docker compose -f docker-compose.prod.yml --env-file .env.production restart nginx
+            docker compose -f docker-compose.prod.yml --env-file .env.production ps
+            docker compose -f docker-compose.prod.yml --env-file .env.production logs nginx --tail=100
+            docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend python manage.py check
+            if [ -f products_export_1.csv ] && [ -d Images ]; then
+              docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend \
+                python manage.py import_client_catalog \
+                  --products-csv /import-data/products_export_1.csv \
+                  --images-dir /import-data/Images
+            else
+              echo "WARN: products_export_1.csv or Images directory missing; skipping catalog import"
+            fi
+            domain="${{ secrets.PRODUCTION_DOMAIN || 'app.enfantorganic.com' }}"
+            docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend printenv DJANGO_ALLOWED_HOSTS | grep -Fq "$domain" \
+              || { echo "FATAL: backend DJANGO_ALLOWED_HOSTS is missing $domain"; exit 1; }
+            docker compose -f docker-compose.prod.yml --env-file .env.production exec -T nginx nginx -t
+            docker compose -f docker-compose.prod.yml --env-file .env.production exec -T nginx wget -S -O /dev/null http://127.0.0.1/
+            docker image prune -f
+
+      - name: Verify public site (Client Hostinger)
+        run: |
+          set -e
+          domain="${{ secrets.PRODUCTION_DOMAIN || 'app.enfantorganic.com' }}"
+          url="${{ secrets.PRODUCTION_HEALTHCHECK_URL || '' }}"
+          [ -z "$url" ] && url="https://${domain}/"
+          for attempt in $(seq 1 12); do
+            curl --fail --show-error --silent --location --head --max-time 20 "$url" && break
+            echo "Not ready yet (attempt ${attempt}/12)."
+            sleep 10
+            [ "$attempt" = "12" ] && { curl --verbose --location --max-time 20 "$url"; exit 1; }
+          done
+
+      - name: Verify public API (Client Hostinger)
+        run: |
+          domain="${{ secrets.PRODUCTION_DOMAIN || 'app.enfantorganic.com' }}"
+          fail=0
+          check() {
+            result="$(curl -sS -o /dev/null -w '%{http_code} %{content_type}' --max-time 25 "$1" || echo '000 none')"
+            code="${result%% *}"; ctype="${result#* }"
+            if [ "$code" = "200" ] && printf '%s' "$ctype" | grep -q 'application/json'; then
+              echo "PASS  $1 -> $result"
+            else
+              echo "FAIL  $1 -> $result"; fail=1
+            fi
+          }
+          check "https://${domain}/api/navigation/"
+          check "https://${domain}/api/products/"
+          check "https://${domain}/api/products/?region=sa"
+          check "https://${domain}/api/products/?region=ae"
+          [ "$fail" = "0" ] || { echo "API smoke tests FAILED."; exit 1; }
