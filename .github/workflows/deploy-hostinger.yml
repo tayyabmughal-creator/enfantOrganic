@@ -147,6 +147,8 @@ jobs:
             docker compose -f docker-compose.prod.yml --env-file .env.production ps
             docker compose -f docker-compose.prod.yml --env-file .env.production logs nginx --tail=100
             docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend python manage.py check
+            docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend \
+              python manage.py seed_regions
             if [ -f products_export_1.csv ] && [ -d Images ]; then
               docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend \
                 python manage.py import_client_catalog \
@@ -326,6 +328,8 @@ jobs:
             docker compose -f docker-compose.prod.yml --env-file .env.production ps
             docker compose -f docker-compose.prod.yml --env-file .env.production logs nginx --tail=100
             docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend python manage.py check
+            docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend \
+              python manage.py seed_regions
             if [ -f products_export_1.csv ] && [ -d Images ]; then
               docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend \
                 python manage.py import_client_catalog \
