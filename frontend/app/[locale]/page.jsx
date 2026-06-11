@@ -99,6 +99,12 @@ export default async function LocalizedHomePage({ params, searchParams }) {
   ];
   const heroMainCount = (heroPrimary ? 1 : 0) + (heroSecondary ? 1 : 0);
   const heroShowcaseEmpty = !heroPrimary && !heroSecondary && heroChips.length === 0;
+  // Mobile 2-col: cards after primary. If odd count → last one gets full-width class.
+  const heroRestCount = (heroSecondary ? 1 : 0) + heroChips.length;
+  const heroRestOdd = heroRestCount % 2 === 1;
+  // Which card is the last in the "rest" group?
+  const heroLastIsSecondary = heroRestOdd && heroChips.length === 0 && heroSecondary;
+  const heroLastOddChipIdx = heroRestOdd && heroChips.length > 0 ? heroChips.length - 1 : -1;
   const sectionPathByKey = {
     "new-arrivals": "/new-arrivals",
     "top-choices": "/best-sellers",
@@ -164,7 +170,7 @@ export default async function LocalizedHomePage({ params, searchParams }) {
             {heroSecondary ? (
               <Link
                 href={buildStorePath(locale, heroSecondary.href || "/collections", region)}
-                className="offer-secondary"
+                className={`offer-secondary${heroLastIsSecondary ? " offer-last-odd" : ""}`}
               >
                 <img
                   src={heroSecondary.image}
@@ -189,11 +195,11 @@ export default async function LocalizedHomePage({ params, searchParams }) {
 
           {heroChips.length > 0 ? (
             <div className="offers-grid" data-count={heroChips.length}>
-              {heroChips.map((card) => (
+              {heroChips.map((card, idx) => (
                 <Link
                   key={card.title}
                   href={buildStorePath(locale, card.href || "/collections", region)}
-                  className="offer-tile"
+                  className={`offer-tile${idx === heroLastOddChipIdx ? " offer-last-odd" : ""}`}
                 >
                   <div className="offer-tile-img">
                     <img src={card.image} alt={card.title} loading="lazy" />

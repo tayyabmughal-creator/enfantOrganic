@@ -1771,6 +1771,44 @@
   }
 }
 
+/* ── Mobile hero grid: 2-per-row after the primary card ────────────────── */
+@media (max-width: 639px) {
+  /* Turn the showcase into a 2-col grid; flatten wrapper divs into it */
+  .offers-showcase {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  /* Remove layout boxes — their children become direct showcase grid items */
+  .offers-main,
+  .offers-grid {
+    display: contents;
+  }
+
+  /* Primary always full width */
+  .offer-primary {
+    grid-column: 1 / -1;
+    height: clamp(220px, 56vw, 320px);
+    min-height: unset;
+    border-radius: 20px;
+  }
+
+  /* Secondary and tiles half width, equal height */
+  .offer-secondary,
+  .offer-tile {
+    height: clamp(155px, 42vw, 215px);
+    min-height: unset;
+    border-radius: 16px;
+  }
+
+  /* Odd-count remainder: last card takes full width */
+  .offer-last-odd {
+    grid-column: 1 / -1;
+    height: clamp(175px, 46vw, 230px);
+  }
+}
+
 /* offers-grid mobile-first 1fr baseline covers <640px — no max-width override needed */
 
 @media (max-width: 480px) {
