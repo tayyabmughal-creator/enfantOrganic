@@ -65,7 +65,7 @@ jobs:
           source: "backend,frontend,deploy,scripts,docker-compose.prod.yml,.env.production.example"
           target: ${{ steps.ssh_target.outputs.deploy_path }}
           overwrite: true
-          timeout: 2m
+          timeout: 10m
           command_timeout: 45m
 
       - name: Run deployment on server
@@ -229,7 +229,7 @@ jobs:
           source: "backend,frontend,deploy,scripts,docker-compose.prod.yml,.env.production.example"
           target: ${{ steps.ssh_target.outputs.deploy_path }}
           overwrite: true
-          timeout: 2m
+          timeout: 10m
           command_timeout: 45m
 
       - name: Run deployment on server
