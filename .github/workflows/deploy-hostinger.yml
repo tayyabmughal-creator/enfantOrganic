@@ -55,15 +55,6 @@ jobs:
           [ -n "$deploy_path" ] || { echo "FATAL: HOSTINGER_DEPLOY_PATH is empty."; exit 1; }
           { echo "host=$ssh_host"; echo "port=$ssh_port"; echo "user=$ssh_user"; echo "deploy_path=$deploy_path"; } >> "$GITHUB_OUTPUT"
 
-      - name: Preflight SSH connectivity
-        env:
-          SSH_HOST: ${{ steps.ssh_target.outputs.host }}
-          SSH_PORT: ${{ steps.ssh_target.outputs.port }}
-        run: |
-          set -e
-          echo "Checking TCP connectivity to ${SSH_HOST}:${SSH_PORT}"
-          nc -zvw 15 "$SSH_HOST" "$SSH_PORT" && echo "SSH port is reachable." || { echo "FATAL: cannot reach ${SSH_HOST}:${SSH_PORT}"; exit 1; }
-
       - name: Upload project to server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -227,15 +218,6 @@ jobs:
           [ -n "$ssh_user" ]    || { echo "FATAL: HOSTINGER_SSH_USER is empty.";    exit 1; }
           [ -n "$deploy_path" ] || { echo "FATAL: HOSTINGER_DEPLOY_PATH is empty."; exit 1; }
           { echo "host=$ssh_host"; echo "port=$ssh_port"; echo "user=$ssh_user"; echo "deploy_path=$deploy_path"; } >> "$GITHUB_OUTPUT"
-
-      - name: Preflight SSH connectivity
-        env:
-          SSH_HOST: ${{ steps.ssh_target.outputs.host }}
-          SSH_PORT: ${{ steps.ssh_target.outputs.port }}
-        run: |
-          set -e
-          echo "Checking TCP connectivity to ${SSH_HOST}:${SSH_PORT}"
-          nc -zvw 15 "$SSH_HOST" "$SSH_PORT" && echo "SSH port is reachable." || { echo "FATAL: cannot reach ${SSH_HOST}:${SSH_PORT}"; exit 1; }
 
       - name: Upload project to server
         uses: appleboy/scp-action@v0.1.7
