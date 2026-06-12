@@ -61,6 +61,10 @@ CSRF_TRUSTED_ORIGINS = env_list(
 )
 # Public storefront URL used in transactional emails (password reset, order tracking)
 FRONTEND_PUBLIC_URL = os.getenv("FRONTEND_PUBLIC_URL", "http://127.0.0.1:3000").rstrip("/")
+# Used to build absolute media URLs in API responses. SSR requests arrive via
+# the internal Docker network (Host: backend:8000) so build_absolute_uri()
+# produces the wrong host; NEXT_PUBLIC_APP_URL always holds the real public domain.
+MEDIA_HOST_URL = os.getenv("NEXT_PUBLIC_APP_URL", "").rstrip("/")
 
 INSTALLED_APPS = [
     "corsheaders",

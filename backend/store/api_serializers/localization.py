@@ -6,11 +6,19 @@ def normalize_locale(locale):
 
 
 def get_image_url(obj, request=None, file_field_name="image_file", url_field_name="image"):
+    from django.conf import settings as django_settings
+
     file_field = getattr(obj, file_field_name, None)
 
     if file_field:
         try:
-            url = file_field.url
+            url = file_field.url  # e.g. /media/products/imported/p1-primary.jpeg
+            # SSR requests arrive via the internal Docker network (Host: backend:8000),
+            # so build_absolute_uri() produces the wrong host. Use the configured
+            # public site URL instead when available.
+            media_host = getattr(django_settings, "MEDIA_HOST_URL", "").rstrip("/")
+            if media_host and url.startswith("/"):
+                return f"{media_host}{url}"
             if request:
                 return request.build_absolute_uri(url)
             return url

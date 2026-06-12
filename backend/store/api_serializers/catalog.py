@@ -333,7 +333,11 @@ class ProductDetailSerializer(ProductCardSerializer):
                 continue
             if not value.startswith("/"):
                 value = f"{settings.MEDIA_URL.rstrip('/')}/{value.lstrip('/')}"
-            urls.append(request.build_absolute_uri(value) if request else value)
+            media_host = getattr(settings, "MEDIA_HOST_URL", "").rstrip("/")
+            if media_host:
+                urls.append(f"{media_host}{value}")
+            else:
+                urls.append(request.build_absolute_uri(value) if request else value)
         return urls
 
     def get_certification_file(self, obj):
