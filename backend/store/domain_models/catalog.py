@@ -53,6 +53,16 @@ class Region(OrderedModel):
     name_en = models.CharField(max_length=120)
     name_ar = models.CharField(max_length=120)
     currency_code = models.CharField(max_length=3)
+    fx_rate = models.DecimalField(
+        max_digits=12,
+        decimal_places=6,
+        default=1,
+        help_text=(
+            "Currency conversion rate FROM the base/default region currency. "
+            "The base region itself stays 1. Used by 'Apply conversion rates' to "
+            "recompute this region's product prices from the base price."
+        ),
+    )
     locale_code = models.CharField(max_length=12, default="en")
     shipping_threshold = models.DecimalField(max_digits=8, decimal_places=2)
     contact_phone = models.CharField(max_length=50)

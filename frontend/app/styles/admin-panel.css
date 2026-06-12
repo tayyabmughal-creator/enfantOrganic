@@ -4386,3 +4386,14 @@
 .admin-content--draft-order .admin-draft-side .admin-draft-card:first-child .admin-textarea {
   min-height: 240px;
 }
+
+/* Currency conversion banner (Regions panel) */
+.admin-fx-banner .admin-panel-head { align-items: center; gap: 16px; }
+.admin-fx-msg {
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+.admin-fx-msg.ok { background: #e8f5e9; color: #1b5e20; }
+.admin-fx-msg.err { background: #fdecea; color: #b71c1c; }

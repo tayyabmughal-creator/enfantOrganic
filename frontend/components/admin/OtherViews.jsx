@@ -819,6 +819,13 @@ export function RegionsView({ rows, request, onSaved }) {
   const [savingWhatsapp, setSavingWhatsapp] = useState({});
   const [whatsappError, setWhatsappError] = useState({});
 
+  const [editingFx, setEditingFx] = useState({});
+  const [savingFx, setSavingFx] = useState({});
+  const [fxError, setFxError] = useState({});
+
+  const [applying, setApplying] = useState(false);
+  const [applyMsg, setApplyMsg] = useState(null);
+
   async function saveThreshold(code, value) {
     const num = parseFloat(value);
     if (isNaN(num) || num < 0) {
@@ -864,6 +871,50 @@ export function RegionsView({ rows, request, onSaved }) {
     }
   }
 
+  async function saveFx(code, value) {
+    const num = parseFloat(value);
+    if (isNaN(num) || num <= 0) {
+      setFxError((e) => ({ ...e, [code]: "Enter a rate greater than 0" }));
+      return;
+    }
+    setSavingFx((s) => ({ ...s, [code]: true }));
+    setFxError((e) => ({ ...e, [code]: null }));
+    try {
+      await request(`/admin/regions/${code}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ fx_rate: num }),
+      });
+      setEditingFx((e) => ({ ...e, [code]: undefined }));
+      onSaved?.();
+    } catch {
+      setFxError((e) => ({ ...e, [code]: "Save failed — try again" }));
+    } finally {
+      setSavingFx((s) => ({ ...s, [code]: false }));
+    }
+  }
+
+  async function applyConversion() {
+    setApplying(true);
+    setApplyMsg(null);
+    try {
+      const res = await request(`/admin/pricing/apply-conversion/`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      const updated = res?.updated ?? 0;
+      const created = res?.created ?? 0;
+      setApplyMsg({
+        ok: true,
+        text: `Done — ${updated + created} prices recomputed from ${res?.base_currency || "base"} (${updated} updated, ${created} new).`,
+      });
+      onSaved?.();
+    } catch {
+      setApplyMsg({ ok: false, text: "Apply failed — try again." });
+    } finally {
+      setApplying(false);
+    }
+  }
+
   if (!rows.length) {
     return (
       <section className="admin-panel-card">
@@ -873,6 +924,29 @@ export function RegionsView({ rows, request, onSaved }) {
   }
   return (
     <div className="admin-regions">
+      {request && (
+        <section className="admin-panel-card admin-fx-banner">
+          <div className="admin-panel-head">
+            <div>
+              <h3>Currency conversion</h3>
+              <span>
+                Set each region&apos;s rate vs the base currency, then apply it to recompute
+                all product prices. The base region stays unchanged.
+              </span>
+            </div>
+            <button
+              className="admin-btn admin-btn-primary"
+              disabled={applying}
+              onClick={applyConversion}
+            >
+              {applying ? "Applying…" : "Apply conversion rates"}
+            </button>
+          </div>
+          {applyMsg && (
+            <p className={`admin-fx-msg ${applyMsg.ok ? "ok" : "err"}`}>{applyMsg.text}</p>
+          )}
+        </section>
+      )}
       {rows.map((region) => {
         const code = region.code;
         const isEditing = editingThreshold[code] !== undefined;
@@ -881,6 +955,10 @@ export function RegionsView({ rows, request, onSaved }) {
         const isEditingWa = editingWhatsapp[code] !== undefined;
         const isSavingWa = savingWhatsapp[code];
         const waError = whatsappError[code];
+        const isEditingFx = editingFx[code] !== undefined;
+        const isSavingFx = savingFx[code];
+        const fxErr = fxError[code];
+        const isBase = !!region.is_default;
         return (
           <section key={region.id || code} className="admin-panel-card admin-region-card">
             <div className="admin-panel-head">
@@ -989,6 +1067,59 @@ export function RegionsView({ rows, request, onSaved }) {
                       <button
                         className="admin-btn admin-btn-xs admin-btn-ghost"
                         onClick={() => setEditingWhatsapp((s) => ({ ...s, [code]: true }))}
+                      >
+                        Edit
+                      </button>
+                    )}
+                  </span>
+                )}
+              </div>
+
+              {/* Currency conversion rate — inline editable (base region is fixed at 1) */}
+              <div className="admin-settings-row admin-threshold-row">
+                <strong>Conversion rate</strong>
+                {isBase ? (
+                  <span className="admin-threshold-display">
+                    <span>Base currency · 1.0</span>
+                  </span>
+                ) : isEditingFx ? (
+                  <span className="admin-threshold-edit">
+                    <span className="admin-threshold-currency">1 OMR =</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.0001"
+                      className="admin-threshold-input"
+                      defaultValue={region.fx_rate || "1"}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveFx(code, e.target.value);
+                        if (e.key === "Escape") setEditingFx((s) => ({ ...s, [code]: undefined }));
+                      }}
+                      autoFocus
+                    />
+                    <span className="admin-threshold-currency">{region.currency_code}</span>
+                    <button
+                      className="admin-btn admin-btn-xs admin-btn-primary"
+                      disabled={isSavingFx}
+                      onClick={(e) => saveFx(code, e.target.closest(".admin-threshold-edit").querySelector("input").value)}
+                    >
+                      {isSavingFx ? "Saving…" : "Save"}
+                    </button>
+                    <button
+                      className="admin-btn admin-btn-xs"
+                      onClick={() => setEditingFx((s) => ({ ...s, [code]: undefined }))}
+                    >
+                      Cancel
+                    </button>
+                    {fxErr && <span className="admin-threshold-error">{fxErr}</span>}
+                  </span>
+                ) : (
+                  <span className="admin-threshold-display">
+                    <span>1 OMR = {region.fx_rate || "1"} {region.currency_code}</span>
+                    {request && (
+                      <button
+                        className="admin-btn admin-btn-xs admin-btn-ghost"
+                        onClick={() => setEditingFx((s) => ({ ...s, [code]: true }))}
                       >
                         Edit
                       </button>

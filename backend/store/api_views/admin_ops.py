@@ -132,6 +132,7 @@ from ..services.admin_roles import (
 )
 from ..services.admin_audit import log_admin_action, snapshot_instance
 from ..services.invoice import generate_order_invoice
+from ..services.pricing import apply_fx_conversion
 from ..services.inventory_health import (
     get_inventory_health_threshold,
     inventory_health_queryset,
@@ -2839,6 +2840,37 @@ class AdminRegionDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = AdminRegionSerializer
     queryset = Region.objects.all()
     lookup_field = "code"
+
+
+class AdminApplyConversionView(AdminCapabilityMixin, APIView):
+    """Recompute every non-base region's product prices from the base price × fx_rate."""
+
+    admin_read_capabilities = (CAP_REGIONS_VIEW,)
+    admin_write_capabilities = (CAP_REGIONS_EDIT,)
+
+    def post(self, request):
+        result = apply_fx_conversion(dry_run=bool(request.data.get("dry_run")))
+        if not result.get("ok"):
+            return Response(
+                {"detail": result.get("error", "Conversion failed.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not result.get("dry_run"):
+            log_admin_action(
+                request=request,
+                actor=request.user,
+                action="apply_fx_conversion",
+                resource_type="pricing",
+                resource_id=result.get("base_region", ""),
+                before_snapshot=None,
+                after_snapshot={
+                    "base_currency": result.get("base_currency"),
+                    "updated": result.get("updated"),
+                    "created": result.get("created"),
+                    "unchanged": result.get("unchanged"),
+                },
+            )
+        return Response(result, status=status.HTTP_200_OK)
 
 
 class AdminShippingRuleListCreateView(generics.ListCreateAPIView):

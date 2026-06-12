@@ -1052,23 +1052,29 @@
 .wishlist-toast {
   position: absolute;
   top: calc(100% + 8px);
-  inset-inline-start: 50%;
-  transform: translateX(-50%);
-  white-space: nowrap;
+  inset-inline-start: 0;
+  transform: none;
+  width: max-content;
+  max-width: min(220px, calc(100vw - 48px));
+  white-space: normal;
+  text-wrap: pretty;
+  text-align: start;
   background: var(--text);
   color: white;
   font-size: 0.72rem;
   font-weight: 700;
-  padding: 5px 10px;
-  border-radius: 999px;
+  line-height: 1.35;
+  padding: 8px 10px;
+  border-radius: 12px;
+  box-shadow: 0 14px 30px rgba(25, 24, 23, 0.2);
   pointer-events: none;
   z-index: 10;
   animation: toast-in 0.18s ease;
 }
 
 @keyframes toast-in {
-  from { opacity: 0; transform: translateX(-50%) translateY(-4px); }
-  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .product-card-vendor {
@@ -1887,6 +1893,12 @@
     border: 0;
     background: transparent;
     box-shadow: none;
+  }
+
+  .wishlist-toast {
+    inset-inline-start: auto;
+    inset-inline-end: 0;
+    text-align: start;
   }
 
   .product-card-body {
