@@ -284,9 +284,12 @@ class Command(BaseCommand):
         with transaction.atomic():
             self._sync_catalog(grouped_rows, image_dir_map)
 
+        from store.services.pricing import apply_fx_conversion
+        fx = apply_fx_conversion()
         self.stdout.write(
             self.style.SUCCESS(
-                f"Imported {len(grouped_rows)} products. Matched local image folders for {len(image_dir_map)} products."
+                f"Imported {len(grouped_rows)} products. Matched local image folders for {len(image_dir_map)} products. "
+                f"FX conversion applied (base={fx.get('base_region')}/updated={fx.get('updated')}/created={fx.get('created')})."
             )
         )
         if review_export_summary["supports_reviews"]:
