@@ -271,6 +271,7 @@ class Command(BaseCommand):
         if not images_dir.exists():
             raise CommandError(f"Images directory not found: {images_dir}")
 
+        self.images_dir = images_dir
         grouped_rows = self._load_products(products_csv)
         candidate_dirs = self._scan_image_dirs(images_dir)
         image_dir_map = self._match_image_dirs(grouped_rows, candidate_dirs)
@@ -573,7 +574,7 @@ class Command(BaseCommand):
         product.save(update_fields=["image", "image_file", "hover_image", "hover_image_file", "gallery"])
 
     def _scan_local_images(self, image_dir):
-        root = Path(settings.BASE_DIR).parent / "Images" / image_dir
+        root = self.images_dir / image_dir
         if not root.exists():
             return []
         return sorted(
