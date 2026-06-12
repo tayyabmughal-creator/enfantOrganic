@@ -71,7 +71,7 @@ jobs:
           username: ${{ steps.ssh_target.outputs.user }}
           key: ${{ secrets.HOSTINGER_SSH_KEY }}
           port: ${{ steps.ssh_target.outputs.port }}
-          source: "backend,frontend,deploy,scripts,Images,products_export_1.csv,docker-compose.prod.yml,.env.production.example"
+          source: "backend,frontend,deploy,scripts,docker-compose.prod.yml,.env.production.example"
           target: ${{ steps.ssh_target.outputs.deploy_path }}
           overwrite: true
           timeout: 2m
@@ -149,14 +149,6 @@ jobs:
             docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend python manage.py check
             docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend \
               python manage.py seed_regions
-            if [ -f products_export_1.csv ] && [ -d Images ]; then
-              docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend \
-                python manage.py import_client_catalog \
-                  --products-csv /import-data/products_export_1.csv \
-                  --images-dir /import-data/Images
-            else
-              echo "WARN: products_export_1.csv or Images directory missing; skipping catalog import"
-            fi
             domain="${{ secrets.PRODUCTION_DOMAIN || 'enfhantorganic.itwing.cloud' }}"
             docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend printenv DJANGO_ALLOWED_HOSTS | grep -Fq "$domain" \
               || { echo "FATAL: backend DJANGO_ALLOWED_HOSTS is missing $domain"; exit 1; }
@@ -252,7 +244,7 @@ jobs:
           username: ${{ steps.ssh_target.outputs.user }}
           key: ${{ secrets.HOSTINGER_SSH_KEY }}
           port: ${{ steps.ssh_target.outputs.port }}
-          source: "backend,frontend,deploy,scripts,Images,products_export_1.csv,docker-compose.prod.yml,.env.production.example"
+          source: "backend,frontend,deploy,scripts,docker-compose.prod.yml,.env.production.example"
           target: ${{ steps.ssh_target.outputs.deploy_path }}
           overwrite: true
           timeout: 2m
@@ -330,14 +322,6 @@ jobs:
             docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend python manage.py check
             docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend \
               python manage.py seed_regions
-            if [ -f products_export_1.csv ] && [ -d Images ]; then
-              docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend \
-                python manage.py import_client_catalog \
-                  --products-csv /import-data/products_export_1.csv \
-                  --images-dir /import-data/Images
-            else
-              echo "WARN: products_export_1.csv or Images directory missing; skipping catalog import"
-            fi
             domain="${{ secrets.PRODUCTION_DOMAIN || 'app.enfantorganic.com' }}"
             docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend printenv DJANGO_ALLOWED_HOSTS | grep -Fq "$domain" \
               || { echo "FATAL: backend DJANGO_ALLOWED_HOSTS is missing $domain"; exit 1; }
