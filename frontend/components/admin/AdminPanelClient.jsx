@@ -197,6 +197,7 @@ const SALES_CHANNEL = [["online_store","Online Store"],["draft_order","Draft Ord
 const FIELD_CONFIGS = {
   products: [
     ["slug","Slug","text"],["name_en","Name EN","text"],["name_ar","Name AR","text"],
+    ["base_price","Price (OMR, base)","number"],["base_compare_at_price","Compare-at price (OMR)","number"],
     ["brand","Brand","text"],["unit","Unit / weight","text"],["category","Category ID","number"],
     ["vendor_en","Vendor EN","text"],["vendor_ar","Vendor AR","text"],
     ["short_description_en","Short description EN","textarea"],["short_description_ar","Short description AR","textarea"],

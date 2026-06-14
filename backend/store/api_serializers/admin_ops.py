@@ -60,6 +60,15 @@ class AdminProductPriceSerializer(serializers.ModelSerializer):
 
 class AdminProductSerializer(serializers.ModelSerializer):
     prices = AdminProductPriceSerializer(many=True, read_only=True)
+    # Editable base-region (default region, e.g. Oman/OMR) price. Saved into the
+    # default region's ProductPrice row; other regions are derived from it via the
+    # "Apply conversion rates" action (base_price × Region.fx_rate).
+    base_price = serializers.DecimalField(
+        max_digits=8, decimal_places=2, required=False, allow_null=True, write_only=True
+    )
+    base_compare_at_price = serializers.DecimalField(
+        max_digits=8, decimal_places=2, required=False, allow_null=True, write_only=True
+    )
 
     class Meta:
         model = Product
@@ -69,11 +78,57 @@ class AdminProductSerializer(serializers.ModelSerializer):
             "hover_image_file": {"required": False},
         }
 
+    @staticmethod
+    def _base_region():
+        return (
+            Region.objects.filter(is_default=True).first()
+            or Region.objects.order_by("sort_order", "id").first()
+        )
+
+    def _upsert_base_price(self, product, price, compare_at):
+        if price in (None, ""):
+            return
+        region = self._base_region()
+        if region is None:
+            return
+        defaults = {"price": price}
+        if compare_at not in (None, ""):
+            defaults["compare_at_price"] = compare_at
+        ProductPrice.objects.update_or_create(product=product, region=region, defaults=defaults)
+
+    def create(self, validated_data):
+        base_price = validated_data.pop("base_price", None)
+        base_compare_at = validated_data.pop("base_compare_at_price", None)
+        product = super().create(validated_data)
+        self._upsert_base_price(product, base_price, base_compare_at)
+        return product
+
+    def update(self, instance, validated_data):
+        base_price = validated_data.pop("base_price", serializers.empty)
+        base_compare_at = validated_data.pop("base_compare_at_price", serializers.empty)
+        product = super().update(instance, validated_data)
+        if base_price is not serializers.empty:
+            cmp_val = None if base_compare_at is serializers.empty else base_compare_at
+            self._upsert_base_price(product, base_price, cmp_val)
+        return product
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
         request = self.context.get("request")
         data["image"] = get_image_url(instance, request, "image_file", "image")
         data["hover_image"] = get_image_url(instance, request, "hover_image_file", "hover_image")
+        # Surface the current base-region price so the admin form can show/edit it.
+        region = self._base_region()
+        base_row = None
+        if region is not None:
+            base_row = next(
+                (p for p in instance.prices.all() if p.region_id == region.id),
+                None,
+            )
+        data["base_price"] = str(base_row.price) if base_row else ""
+        data["base_compare_at_price"] = (
+            str(base_row.compare_at_price) if base_row and base_row.compare_at_price is not None else ""
+        )
         return data
 
 
