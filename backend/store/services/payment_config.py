@@ -172,11 +172,18 @@ def get_paymob_config(region_code=""):
     # region is implicitly enabled (env-driven), preserving existing behavior.
     enabled = bool(row.enabled) if row is not None else True
 
+    # Unified Checkout keys are account-level (one Paymob account), so they always
+    # resolve from the global env/DB regardless of region.
+    secret_key = _get(db, "paymob_secret_key", "PAYMOB_SECRET_KEY")
+    public_key = _get(db, "paymob_public_key", "PAYMOB_PUBLIC_KEY")
+
     return {
         "api_key":                   api_key,
         "integration_id":            integration_id,
         "iframe_id":                 iframe_id,
         "hmac_secret":               hmac_secret,
+        "secret_key":                secret_key,
+        "public_key":                public_key,
         "currency":                  currency,
         "base_url":                  base_url,
         "enabled":                   enabled,

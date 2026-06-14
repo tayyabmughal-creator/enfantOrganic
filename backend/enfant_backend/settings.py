@@ -308,6 +308,23 @@ PAYMOB_BASE_URL = os.getenv("PAYMOB_BASE_URL", "https://accept.paymob.com/api")
 PAYMOB_APPLE_PAY_INTEGRATION_ID = os.getenv("PAYMOB_APPLE_PAY_INTEGRATION_ID", "")
 PAYMOB_APPLE_PAY_IFRAME_ID = os.getenv("PAYMOB_APPLE_PAY_IFRAME_ID", "")
 
+# Paymob Unified Checkout (Intention API). Uses account-level secret/public keys
+# (omn_sk_live_… / omn_pk_live_…). When enabled AND both keys are present, the
+# payment flow creates a payment "intention" and redirects the customer to
+# Paymob's hosted Unified Checkout page (works with hosted/MIGS integrations that
+# do NOT support the legacy embeddable iframe). Switch off once an iframe/Accept-
+# compatible card integration is available for an embedded on-site form.
+PAYMOB_SECRET_KEY = os.getenv("PAYMOB_SECRET_KEY", "")
+PAYMOB_PUBLIC_KEY = os.getenv("PAYMOB_PUBLIC_KEY", "")
+PAYMOB_USE_UNIFIED_CHECKOUT = os.getenv("PAYMOB_USE_UNIFIED_CHECKOUT", "1")
+# Public site base URL used to build Paymob notification/redirection callbacks.
+PAYMOB_PUBLIC_BASE_URL = (
+    os.getenv("PAYMOB_PUBLIC_BASE_URL")
+    or os.getenv("NEXT_PUBLIC_APP_URL")
+    or os.getenv("FRONTEND_PUBLIC_URL")
+    or ""
+).rstrip("/")
+
 # Region-scoped Paymob credentials (OM/SA/AE). Mirrors the PayTabs per-region
 # pattern below. The global PAYMOB_* vars above are treated as the Oman/default
 # config; a region's integration_id/iframe_id/hmac_secret MUST be set per region

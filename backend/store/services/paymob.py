@@ -19,6 +19,7 @@ import logging
 from decimal import Decimal, ROUND_HALF_UP
 
 import requests
+from django.conf import settings as dj_settings
 
 from .payment_config import get_paymob_config
 
@@ -221,6 +222,111 @@ def build_billing_data(order) -> dict:
     }
 
 
+def _unified_checkout_enabled(cfg) -> bool:
+    """True when Unified Checkout is switched on AND the account-level secret +
+    public keys are present. Used to route the flow to Paymob's hosted Unified
+    Checkout (redirect) for hosted/MIGS integrations that don't support the
+    legacy embeddable iframe."""
+    flag = str(getattr(dj_settings, "PAYMOB_USE_UNIFIED_CHECKOUT", "") or "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+    return flag and bool(cfg.get("secret_key")) and bool(cfg.get("public_key"))
+
+
+def _unified_payment_method_ids(cfg) -> list:
+    """Integration IDs offered on the Unified Checkout page (card + Apple Pay)."""
+    ids = []
+    for key in ("integration_id", "apple_pay_integration_id"):
+        value = cfg.get(key)
+        if not value:
+            continue
+        try:
+            num = int(value)
+        except (TypeError, ValueError):
+            continue
+        if num not in ids:
+            ids.append(num)
+    return ids
+
+
+def initiate_unified_checkout(order, cfg=None, region_code=None) -> dict:
+    """Create a Paymob payment Intention and return a hosted Unified Checkout URL.
+
+    Works with hosted/MIGS integrations (e.g. live OM card 69050 / Apple Pay
+    69051) that the legacy /acceptance/iframes endpoint cannot render. The amount
+    is converted into the integration's currency (shared-account mode) the same
+    way as the iframe flow. Returns redirect_url for the frontend to navigate to.
+    """
+    if region_code is None:
+        region_code = getattr(getattr(order, "region", None), "code", "")
+    cfg = cfg or get_paymob_config(region_code)
+    if not cfg.get("secret_key") or not cfg.get("public_key"):
+        raise PaymobError(
+            "Paymob Unified Checkout is not configured. Set PAYMOB_SECRET_KEY and PAYMOB_PUBLIC_KEY."
+        )
+    payment_methods = _unified_payment_method_ids(cfg)
+    if not payment_methods:
+        raise PaymobError("Paymob Unified Checkout has no integration IDs configured.")
+
+    amount_cents, currency = _charge_amount_and_currency(order, cfg)
+    billing = build_billing_data(order)
+    special_reference = str(order.order_number)
+    body = {
+        "amount": amount_cents,
+        "currency": currency,
+        "payment_methods": payment_methods,
+        "items": [{
+            "name": special_reference,
+            "amount": amount_cents,
+            "description": f"Order {special_reference}",
+            "quantity": 1,
+        }],
+        "billing_data": billing,
+        "customer": {
+            "first_name": billing["first_name"],
+            "last_name": billing["last_name"],
+            "email": billing["email"],
+        },
+        "special_reference": special_reference,
+    }
+    pub_base = str(getattr(dj_settings, "PAYMOB_PUBLIC_BASE_URL", "") or "").rstrip("/")
+    if pub_base:
+        body["notification_url"] = f"{pub_base}/api/payments/webhook/"
+        body["redirection_url"] = f"{pub_base}/checkout/return"
+
+    base = cfg["base_url"].rstrip("/")
+    root = base[:-4] if base.endswith("/api") else base  # /v1/intention lives on the root host
+
+    try:
+        resp = requests.post(
+            f"{root}/v1/intention/",
+            headers={"Authorization": f"Token {cfg['secret_key']}", "Content-Type": "application/json"},
+            json=body,
+            timeout=30,
+        )
+        resp.raise_for_status()
+    except requests.RequestException as exc:
+        logger.error("Paymob intention request failed: %s", exc)
+        raise PaymobError(f"Paymob Unified Checkout initiation failed: {exc}") from exc
+
+    data = resp.json()
+    client_secret = data.get("client_secret", "")
+    if not client_secret:
+        raise PaymobError("Paymob intention response did not contain a client_secret.")
+
+    redirect_url = f"{root}/unifiedcheckout/?publicKey={cfg['public_key']}&clientSecret={client_secret}"
+    paymob_order_id = str(data.get("intention_order_id") or data.get("id") or "")
+    logger.info(
+        "Paymob Unified Checkout initiated: order=%s intention=%s region=%s",
+        order.order_number, paymob_order_id, region_code or "default",
+    )
+    return {
+        "redirect_url": redirect_url,
+        "iframe_url": redirect_url,
+        "paymob_order_id": paymob_order_id,
+    }
+
+
 def initiate_payment(order) -> dict:
     """
     Full Paymob initiation flow for a given Order.
@@ -231,8 +337,10 @@ def initiate_payment(order) -> dict:
       - paymob_order_id: the Paymob-side order ID (store this for reconciliation)
     """
     region_code = getattr(getattr(order, "region", None), "code", "")
-    _check_config(region_code)
     cfg = get_paymob_config(region_code)
+    if _unified_checkout_enabled(cfg):
+        return initiate_unified_checkout(order, cfg, region_code)
+    _check_config(region_code)
     amount_cents, currency = _charge_amount_and_currency(order, cfg)
 
     auth_token = get_auth_token(cfg)
@@ -267,6 +375,9 @@ def initiate_apple_pay_payment(order) -> dict:
     """
     region_code = getattr(getattr(order, "region", None), "code", "")
     cfg = get_paymob_config(region_code)
+    if _unified_checkout_enabled(cfg):
+        # Unified Checkout presents Apple Pay (and card) on its hosted page.
+        return initiate_unified_checkout(order, cfg, region_code)
     apple_pay_integration_id = cfg["apple_pay_integration_id"]
     apple_pay_iframe_id = cfg["apple_pay_iframe_id"]
 
