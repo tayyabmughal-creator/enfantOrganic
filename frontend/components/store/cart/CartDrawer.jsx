@@ -11,14 +11,132 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { buildStorePath, formatMoney, normalizeRegion, uiText } from "@/lib/storefront";
 import { API_BASE_URL } from "@/lib/config";
 
+function TruckIcon() {
+  return (
+    <svg viewBox="0 0 22 16" fill="none" aria-hidden="true">
+      <rect x="1" y="1.5" width="13" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M14 4.5h4.5L21 8v4h-7V4.5z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      <circle cx="5.5" cy="13.5" r="2" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="17.5" cy="13.5" r="2" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+function PercentIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="4.5" cy="4.5" r="2.5" stroke="currentColor" strokeWidth="1.6" />
+      <circle cx="11.5" cy="11.5" r="2.5" stroke="currentColor" strokeWidth="1.6" />
+      <line x1="12.5" y1="3.5" x2="3.5" y2="12.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <path d="M2.5 7l3.5 3.5 5.5-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function MilestoneBar({ subtotal, milestones, currency, locale }) {
+  if (!milestones.length) return null;
+
+  const sorted = [...milestones].sort((a, b) => Number(a.threshold) - Number(b.threshold));
+  const n = sorted.length;
+
+  // Pins are EVENLY spaced visually regardless of threshold values
+  // e.g. 3 pins → 33.3%, 66.7%, 100%
+  const pinPcts = sorted.map((_, i) => ((i + 1) / n) * 100);
+
+  // Fill interpolates between milestone segments so it always reaches the
+  // correct pin when a milestone is exactly hit
+  const calcFill = () => {
+    for (let i = 0; i < n; i++) {
+      const prevT = i === 0 ? 0 : Number(sorted[i - 1].threshold);
+      const currT = Number(sorted[i].threshold);
+      const prevPct = i === 0 ? 0 : pinPcts[i - 1];
+      const currPct = pinPcts[i];
+      if (subtotal >= currT) {
+        if (i === n - 1) return 100;
+        continue;
+      }
+      const seg = Math.max(0, (subtotal - prevT) / (currT - prevT));
+      return prevPct + seg * (currPct - prevPct);
+    }
+    return 100;
+  };
+
+  const fillPct = calcFill();
+  const isDone = subtotal >= Number(sorted[n - 1].threshold);
+  const next = sorted.find((m) => subtotal < Number(m.threshold));
+
+  const fmt = (val) => {
+    const num = Number(val);
+    const s = num % 1 === 0 ? num.toFixed(0) : parseFloat(num.toFixed(3)).toString();
+    return `${currency} ${s}`;
+  };
+
+  return (
+    <div className="ms-bar">
+      <p className={`ms-msg${isDone ? " ms-done" : ""}`}>
+        {isDone ? (
+          locale === "ar"
+            ? <><span aria-hidden="true">🎉</span> رائع! حصلت على جميع المكافآت!</>
+            : <><span aria-hidden="true">🎉</span> Amazing! You&rsquo;ve unlocked all rewards!</>
+        ) : next ? (
+          locale === "ar"
+            ? <>أضف <strong>{fmt(Number(next.threshold) - subtotal)}</strong> للحصول على <strong>{next.label}</strong></>
+            : <>Add <strong>{fmt(Number(next.threshold) - subtotal)}</strong> more for <strong>{next.label}</strong></>
+        ) : null}
+      </p>
+
+      <div className="ms-track-area">
+        <div className="ms-track">
+          <div
+            className={`ms-fill${isDone ? " ms-done" : ""}`}
+            style={{ width: `${Math.max(fillPct, 1.5)}%` }}
+          />
+        </div>
+
+        {sorted.map((m, i) => {
+          const reached = subtotal >= Number(m.threshold);
+          const isLast = i === n - 1;
+          const isFirst = i === 0;
+          return (
+            <div
+              key={i}
+              className={`ms-pin${reached ? " ms-reached" : ""}${isLast ? " ms-pin-last" : ""}${isFirst ? " ms-pin-first" : ""}`}
+              style={{ left: `${pinPcts[i]}%` }}
+            >
+              <div className="ms-pin-bubble">
+                {reached
+                  ? <CheckIcon />
+                  : m.reward_type === "free_shipping"
+                    ? <TruckIcon />
+                    : <PercentIcon />}
+              </div>
+              <div className="ms-pin-label">
+                <strong>{m.label}</strong>
+                <span>{fmt(m.threshold)}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function CartDrawerInner() {
   const searchParams = useSearchParams();
   const region = normalizeRegion(searchParams.get("region") || "om");
   const { locale } = useLocale();
   const t = uiText(locale);
   const { cartItems, closeCart, drawerOpen, refreshCartPricing, removeItem, subtotal, updateQuantity } = useStore();
-  const [shippingThreshold, setShippingThreshold] = useState(null);
-  const [thresholdCurrency, setThresholdCurrency] = useState(null);
+  const [milestones, setMilestones] = useState([]);
+  const [thresholdCurrency, setThresholdCurrency] = useState("OMR");
 
   useEffect(() => {
     if (!cartItems.length) {
@@ -26,8 +144,6 @@ function CartDrawerInner() {
     }
 
     void refreshCartPricing(locale, region);
-    // Depend on length only — not the full array — so a price update doesn't
-    // re-trigger this and race against the checkout page's own refresh.
   }, [cartItems.length, locale, region, refreshCartPricing]);
 
   useEffect(() => {
@@ -37,11 +153,10 @@ function CartDrawerInner() {
     })
       .then((r) => r.json())
       .then((data) => {
-        const t = Number(data?.current_region?.shipping_threshold);
-        if (t > 0) {
-          setShippingThreshold(t);
-          setThresholdCurrency(data?.current_region?.currency_code || "");
-        }
+        const currency = data?.current_region?.currency_code || "OMR";
+        setThresholdCurrency(currency);
+        const raw = data?.current_region?.cart_milestones || [];
+        setMilestones(raw.map((m) => ({ ...m, label: m.label || m.reward_type })));
       })
       .catch(() => {});
     return () => controller.abort();
@@ -64,37 +179,14 @@ function CartDrawerInner() {
             </button>
           </div>
 
-          {shippingThreshold > 0 && (() => {
-            const progress = Math.min((subtotal / shippingThreshold) * 100, 100);
-            const isUnlocked = subtotal >= shippingThreshold;
-            const remaining = Math.max(shippingThreshold - subtotal, 0);
-            const remainingLabel = `${thresholdCurrency} ${remaining.toFixed(3).replace(/\.?0+$/, (m) => remaining % 1 === 0 ? "" : m)}`;
-            return (
-              <div className="free-shipping-bar">
-                <p className={`free-shipping-msg${isUnlocked ? " is-unlocked" : ""}`}>
-                  {isUnlocked ? (
-                    locale === "ar"
-                      ? <><span aria-hidden="true">🎉</span> لقد حصلت على <strong>شحن مجاني</strong> لطلبك!</>
-                      : <><span aria-hidden="true">🎉</span> You&rsquo;ve unlocked <strong>FREE shipping</strong> on your order!</>
-                  ) : (
-                    locale === "ar"
-                      ? <>أضف <strong>{remainingLabel}</strong> للحصول على <strong>شحن مجاني</strong></>
-                      : <>Add <strong>{remainingLabel}</strong> more for <strong>free shipping</strong></>
-                  )}
-                </p>
-                <div className="free-shipping-track">
-                  <div
-                    className={`free-shipping-fill${isUnlocked ? " is-full" : ""}`}
-                    style={{ width: `${progress}%` }}
-                  >
-                    {progress >= 18 && (
-                      <span className="free-shipping-pct">{Math.round(progress)}%</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
+          {milestones.length > 0 && (
+            <MilestoneBar
+              subtotal={subtotal}
+              milestones={milestones}
+              currency={thresholdCurrency}
+              locale={locale}
+            />
+          )}
 
           <div className="cart-drawer-items">
             {cartItems.length === 0 ? (

@@ -80,6 +80,14 @@ export default function ProductRail({
     rail.scrollBy({ left: (isRtl ? -dir : dir) * cardWidth, behavior: "smooth" });
   }
 
+  function scrollToDot(dotIndex) {
+    const rail = railRef.current;
+    if (!rail) return;
+    const maxScroll = rail.scrollWidth - rail.clientWidth;
+    const target = (dotIndex / (dotCount - 1)) * maxScroll;
+    rail.scrollTo({ left: isRtl ? -target : target, behavior: "smooth" });
+  }
+
   return (
     <div className="product-rail-shell">
       <div className="product-rail-track">
@@ -108,9 +116,15 @@ export default function ProductRail({
         </button>
       </div>
       {dotCount > 1 && (
-        <div className="product-rail-dots" aria-hidden="true">
+        <div className="product-rail-dots">
           {Array.from({ length: dotCount }, (_, i) => (
-            <span key={i} className={`product-rail-dot${i === activeDot ? " is-active" : ""}`} />
+            <button
+              key={i}
+              type="button"
+              aria-label={`Go to item ${i + 1}`}
+              className={`product-rail-dot${i === activeDot ? " is-active" : ""}`}
+              onClick={() => scrollToDot(i)}
+            />
           ))}
         </div>
       )}

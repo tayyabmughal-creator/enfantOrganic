@@ -167,6 +167,40 @@ class Region(OrderedModel):
         return Warehouse.objects.filter(region=self, active=True)
 
 
+class CartMilestone(models.Model):
+    REWARD_FREE_SHIPPING = "free_shipping"
+    REWARD_DISCOUNT_PERCENT = "discount_percent"
+
+    REWARD_CHOICES = [
+        (REWARD_FREE_SHIPPING, "Free Shipping"),
+        (REWARD_DISCOUNT_PERCENT, "Discount (%)"),
+    ]
+
+    region = models.ForeignKey(Region, on_delete=models.CASCADE, related_name="cart_milestones")
+    threshold = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        help_text="Cart subtotal required to unlock this reward (in region currency)",
+    )
+    reward_type = models.CharField(max_length=32, choices=REWARD_CHOICES)
+    discount_value = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        help_text="Discount percentage (e.g. 10 for 10% off). Only used for discount_percent type.",
+    )
+    label_en = models.CharField(max_length=120, blank=True, default="", help_text="Short reward label in English (e.g. 'Free Shipping', '10% Off')")
+    label_ar = models.CharField(max_length=120, blank=True, default="", help_text="Short reward label in Arabic")
+    sort_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["sort_order", "threshold"]
+
+    def __str__(self):
+        return f"{self.label_en or self.reward_type} @ {self.threshold} {self.region.currency_code}"
+
+
 class ShippingRule(models.Model):
     region = models.ForeignKey(Region, on_delete=models.CASCADE, related_name="shipping_rules")
     city = models.CharField(max_length=120, blank=True, default="")

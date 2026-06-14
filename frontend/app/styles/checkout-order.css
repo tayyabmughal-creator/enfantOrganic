@@ -341,63 +341,118 @@
 .checkout-consent {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 10px;
 }
 
 .checkout-consent-card {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
-  border-radius: 12px;
+  padding: 11px 12px;
+  border-radius: 14px;
   border: 1.5px solid var(--line);
-  background: linear-gradient(180deg, #fdfcfa, #f7f8f3);
+  background: #fdfcfa;
   cursor: pointer;
-  transition: border-color 220ms ease, background 220ms ease, box-shadow 220ms ease;
+  transition: border-color 200ms ease, background 200ms ease, box-shadow 200ms ease;
   user-select: none;
-  box-shadow: 0 1px 2px rgba(25, 24, 23, 0.02);
+  box-shadow: 0 1px 3px rgba(25, 24, 23, 0.04);
   touch-action: manipulation;
+  position: relative;
 }
 
 .checkout-consent-card:hover {
-  border-color: rgba(146, 171, 105, 0.45);
-  background: linear-gradient(180deg, #f8faf4, #f1f4ea);
-  box-shadow: 0 2px 6px rgba(146, 171, 105, 0.08);
+  border-color: rgba(146, 171, 105, 0.5);
+  background: #f8faf4;
+  box-shadow: 0 2px 8px rgba(146, 171, 105, 0.1);
 }
 
 .checkout-consent-card.is-checked {
   border-color: var(--brand);
-  background: linear-gradient(135deg, var(--brand-pale), #e8f0d8);
-  box-shadow: 0 0 0 3px rgba(146, 171, 105, 0.1), 0 2px 8px rgba(146, 171, 105, 0.08);
+  background: linear-gradient(135deg, #f2f8ea, #e8f0d8);
+  box-shadow: 0 0 0 3px rgba(146, 171, 105, 0.12), 0 2px 8px rgba(146, 171, 105, 0.1);
 }
 
-.checkout-consent-card-icon {
+/* ── Service icon circle ── */
+.checkout-consent-service-icon {
   flex-shrink: 0;
   display: inline-grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 7px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  transition: background 200ms ease, color 200ms ease;
+}
+
+.checkout-consent-service-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.checkout-consent-service-icon--sms {
+  background: #e8f0fb;
+  color: #2563eb;
+}
+
+.checkout-consent-card.is-checked .checkout-consent-service-icon--sms {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.checkout-consent-service-icon--wa {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.checkout-consent-card.is-checked .checkout-consent-service-icon--wa {
+  background: #bbf7d0;
+  color: #15803d;
+}
+
+/* ── Label + description ── */
+.checkout-consent-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.checkout-consent-card-body strong {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.3;
+}
+
+.checkout-consent-card-body small {
+  display: block;
+  font-size: 0.68rem;
+  color: var(--text-muted, #888);
+  line-height: 1.3;
+  font-weight: 450;
+}
+
+/* ── Checkmark indicator ── */
+.checkout-consent-card-check {
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
   border: 1.5px solid var(--line);
   background: #fff;
-  font-size: 0.68rem;
   color: transparent;
-  transition: border-color 220ms ease, background 220ms ease, color 220ms ease, box-shadow 220ms ease;
+  transition: border-color 200ms ease, background 200ms ease, color 200ms ease;
   box-shadow: 0 1px 2px rgba(25, 24, 23, 0.04);
 }
 
-.checkout-consent-card.is-checked .checkout-consent-card-icon {
+.checkout-consent-card.is-checked .checkout-consent-card-check {
   border-color: var(--brand-dark);
-  background: linear-gradient(175deg, var(--brand-dark), #4e6632);
+  background: linear-gradient(160deg, var(--brand-dark), #4e6632);
   color: #fff;
-  box-shadow: 0 2px 6px rgba(96, 122, 66, 0.25);
-}
-
-.checkout-consent-card-label {
-  color: var(--text);
-  font-size: 0.8rem;
-  font-weight: 650;
-  line-height: 1.35;
+  box-shadow: 0 2px 6px rgba(96, 122, 66, 0.3);
 }
 
 .checkout-consent-card input[type="checkbox"] {
@@ -606,6 +661,21 @@
 
 .subtotal-row > strong.summary-amount--discount {
   color: var(--success);
+}
+
+.milestone-discount-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  margin-bottom: 10px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #eefbf0 0%, #d9f5e0 100%);
+  border: 1.5px solid rgba(34, 139, 69, 0.22);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #1a7a3a;
+  letter-spacing: 0.01em;
 }
 
 .order-grand-total {
@@ -1202,14 +1272,51 @@
   align-items: center;
   justify-content: center;
   padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: var(--surface-soft);
-  color: var(--text);
-  font-size: 0.7rem;
-  font-weight: 700;
-  line-height: 1;
-  box-shadow: 0 1px 2px rgba(25, 24, 23, 0.02);
+  border-radius: 8px;
+  border: 1px solid rgba(25, 24, 23, 0.10);
+  background: #fff;
+  height: 32px;
+  box-shadow: 0 1px 3px rgba(25, 24, 23, 0.07);
+  transition: box-shadow 160ms ease;
+}
+
+.payment-network-badge:hover {
+  box-shadow: 0 2px 6px rgba(25, 24, 23, 0.12);
+}
+
+.payment-network-badge--apple-pay {
+  background: #000;
+  border-color: #000;
+  padding: 3px 8px;
+}
+
+.pbi-svg {
+  display: block;
+}
+
+.pbi-visa {
+  width: 42px;
+  height: 16px;
+}
+
+.pbi-mc {
+  width: 36px;
+  height: 22px;
+}
+
+.pbi-applepay {
+  width: 66px;
+  height: 28px;
+}
+
+.pbi-mada {
+  width: 44px;
+  height: 16px;
+}
+
+.pbi-gpay {
+  width: 50px;
+  height: 18px;
 }
 
 /* ── Online payment note ───────────────────── */

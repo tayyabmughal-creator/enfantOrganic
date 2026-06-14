@@ -1,4 +1,4 @@
-from django.db.models import DecimalField, IntegerField, OuterRef, Q, Subquery, Sum, Value
+from django.db.models import Count, DecimalField, IntegerField, OuterRef, Q, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -91,7 +91,11 @@ class NavigationView(StorefrontContextMixin, APIView):
             "regions": RegionSerializer(Region.objects.filter(is_active=True), many=True, context=ctx).data,
             "settings": serialized_settings,
             "menus": {
-                "product_categories": CategorySerializer(Category.objects.all(), many=True, context=ctx).data,
+                "product_categories": CategorySerializer(
+                    Category.objects.annotate(product_count=Count("products")).order_by("-product_count", "name_en"),
+                    many=True,
+                    context=ctx,
+                ).data,
                 "why_choose_us": serialized_settings["why_choose_links"],
                 "static_links": serialized_settings["static_links"],
             },
@@ -180,7 +184,7 @@ class CatalogPageView(StorefrontContextMixin, APIView):
         payload = {
             "hero": {
                 "title": "All Products" if locale == "en" else "جميع المنتجات",
-                "subtitle": "Browse the Enfant Organic catalog by category, region, and price." if locale == "en" else "تصفح كتالوج إنفانت أورجانيك حسب الفئة والمنطقة والسعر.",
+                "subtitle": "Pure, gentle, organic essentials — thoughtfully crafted for your little one." if locale == "en" else "منتجات عضوية نقية ولطيفة — مصمّمة بعناية لطفلك الصغير.",
             },
             "categories": CategorySerializer(Category.objects.all(), many=True, context=context).data,
             "tags": TagSerializer(Tag.objects.all(), many=True, context=context).data,

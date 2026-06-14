@@ -1,5 +1,6 @@
 from .base import OrderedModel
 from .catalog import (
+    CartMilestone,
     CmsPage,
     BlogPost,
     Category,
@@ -43,6 +44,7 @@ from .commerce import (
 __all__ = [
     "AbandonedCart",
     "AnalyticsEvent",
+    "CartMilestone",
     "CmsPage",
     "BlogPost",
     "AdminAuditLog",

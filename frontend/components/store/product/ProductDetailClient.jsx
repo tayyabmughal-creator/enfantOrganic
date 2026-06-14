@@ -18,6 +18,103 @@ import {
   subscribeWishlist,
 } from "@/lib/wishlist";
 
+const DESC_ICONS = ["leaf", "shield", "check", "sparkle"];
+
+function pickIcon(text, index) {
+  const t = text.toLowerCase();
+  if (t.includes("natural") || t.includes("organic") || t.includes("ingredient") || t.includes("plant") || t.includes("extract")) return "leaf";
+  if (t.includes("safe") || t.includes("protect") || t.includes("dermatol") || t.includes("certif") || t.includes("tested") || t.includes("clinically")) return "shield";
+  if (t.includes("pure") || t.includes("clean") || t.includes("free") || t.includes("paraben") || t.includes("alcohol") || t.includes("dye")) return "check";
+  if (t.includes("hydrat") || t.includes("moistur") || t.includes("nourish") || t.includes("soft") || t.includes("sooth") || t.includes("calm")) return "sparkle";
+  return DESC_ICONS[index % DESC_ICONS.length];
+}
+
+const EMOJI_RE = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F000}-\u{1FFFF}✅🚫✨💗☁️]/u;
+const STRIP_EMOJI_RE = /^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F000}-\u{1FFFF}✅🚫✨💗☁️\s]+/u;
+
+function cleanTitle(raw) {
+  // Remove SEO pipe prefix e.g. "Name | Subtitle Title" → "Subtitle Title"
+  const piped = raw.includes("|") ? raw.split("|").pop().trim() : raw;
+  // Trim to a natural word boundary at ~60 chars
+  return piped.length > 60 ? piped.slice(0, 58).replace(/\s\S*$/, "").trim() : piped.trim();
+}
+
+function buildCard(text, index) {
+  const clean = text.replace(STRIP_EMOJI_RE, "").trim();
+  const colonIdx = clean.indexOf(":");
+  const hasTitle = colonIdx > 0 && colonIdx < 65;
+  const rawTitle = hasTitle ? clean.slice(0, colonIdx) : clean.slice(0, 60).replace(/\s\S*$/, "");
+  const title = cleanTitle(rawTitle);
+  // Full body — no hard slice, let CSS handle display
+  const body = hasTitle ? clean.slice(colonIdx + 1).trim() : clean;
+  return { icon: pickIcon(clean, index), title, body };
+}
+
+function parseDescSections(description) {
+  if (!description) return [];
+
+  // Strategy 1: emoji-based sections
+  const emojiParts = description
+    .split(/(?=[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F000}-\u{1FFFF}✅🚫✨💗☁️])/u)
+    .map(s => s.trim())
+    .filter(s => s.replace(STRIP_EMOJI_RE, "").length > 25);
+
+  // Skip the very first chunk (intro para), use the rest
+  const candidates = emojiParts.length > 1 ? emojiParts.slice(1) : emojiParts;
+
+  if (candidates.length >= 3) {
+    const total = candidates.length;
+    const indices = total <= 4
+      ? [0, 1, 2, 3].slice(0, total)
+      : [0, Math.floor(total / 3), Math.floor((2 * total) / 3), total - 1];
+    return indices.map((idx, i) => buildCard(candidates[idx], i));
+  }
+
+  // Strategy 2: sentence-bucket fallback
+  const sentences = description
+    .split(/(?<=[.!?])\s+/)
+    .map(s => s.trim())
+    .filter(s => s.length > 15);
+
+  if (!sentences.length) return [];
+
+  const bucketSize = Math.ceil(sentences.length / 4);
+  return [0, 1, 2, 3].map(i => {
+    const bucket = sentences.slice(i * bucketSize, (i + 1) * bucketSize);
+    if (!bucket.length) return null;
+    const [first, ...rest] = bucket;
+    const colonIdx = first.indexOf(":");
+    const hasTitle = colonIdx > 0 && colonIdx < 65;
+    const rawTitle = hasTitle ? first.slice(0, colonIdx) : first.slice(0, 60).replace(/\s\S*$/, "");
+    const title = cleanTitle(rawTitle);
+    const body = hasTitle
+      ? [first.slice(colonIdx + 1).trim(), ...rest].join(" ").trim()
+      : rest.join(" ").trim() || first;
+    return { icon: pickIcon(first + " " + body, i), title, body };
+  }).filter(Boolean);
+}
+
+function DescriptionCards({ description }) {
+  const sections = parseDescSections(description);
+  if (!sections.length) return <p>{description}</p>;
+
+  return (
+    <div className="product-desc-layout">
+      <div className="product-desc-grid">
+        {sections.map((s, i) => (
+          <div key={i} className="product-desc-card">
+            <span className="product-desc-icon">
+              <Icon name={s.icon} size={18} />
+            </span>
+            <strong className="product-desc-card-title">{s.title}</strong>
+            <p className="product-desc-card-body">{s.body}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function ProductDetailClient({ locale, product, region }) {
   const { addItem, flyToCart } = useStore();
   const addBtnRef = useRef(null);
@@ -91,9 +188,49 @@ export default function ProductDetailClient({ locale, product, region }) {
       copy: t.securePayment,
     },
   ];
-  const paymentMethods = isAr
-    ? ["Apple Pay", "Visa", "Mastercard", "COD"]
-    : ["Apple Pay", "Visa", "Mastercard", "COD"];
+  const paymentLogos = [
+    {
+      key: "applepay",
+      svg: (
+        <svg viewBox="0 0 72 28" xmlns="http://www.w3.org/2000/svg" style={{height:22,width:"auto"}}>
+          <path d="M13.5 6.3c.7-.9 1.2-2.1 1.1-3.3-1.1.1-2.3.7-3.1 1.6-.7.8-1.3 2-1.1 3.1 1.2.1 2.4-.5 3.1-1.4z" fill="#111"/>
+          <path d="M14.6 8c-1.7-.1-3.1.9-3.9.9-.8 0-2.1-.9-3.4-.8-1.7 0-3.3 1-4.2 2.5-1.8 3.1-.5 7.7 1.3 10.2.8 1.2 1.7 2.5 2.9 2.5 1.1 0 1.6-.7 3-.7s1.8.7 3 .7c1.2 0 2-1.2 2.8-2.4.9-1.4 1.3-2.7 1.3-2.8-.1 0-2.4-.9-2.4-3.6 0-2.3 1.8-3.3 1.9-3.4-1.1-1.6-2.7-2.1-3.3-2.1z" fill="#111"/>
+          <text x="22" y="20" fontFamily="-apple-system,BlinkMacSystemFont,Helvetica Neue,sans-serif" fontSize="14" fontWeight="400" fill="#111">Pay</text>
+        </svg>
+      ),
+    },
+    {
+      key: "visa",
+      svg: (
+        <svg viewBox="0 0 60 24" xmlns="http://www.w3.org/2000/svg" style={{height:20,width:"auto"}}>
+          <text x="4" y="18" fontFamily="Arial,sans-serif" fontSize="18" fontWeight="900" fontStyle="italic" fill="#1A1F71" letterSpacing="-1">VISA</text>
+        </svg>
+      ),
+    },
+    {
+      key: "mastercard",
+      svg: (
+        <svg viewBox="0 0 50 30" xmlns="http://www.w3.org/2000/svg" style={{height:22,width:"auto"}}>
+          <circle cx="18" cy="15" r="12" fill="#EB001B"/>
+          <circle cx="32" cy="15" r="12" fill="#F79E1B"/>
+          <path d="M25 6.8a12 12 0 0 1 0 16.4A12 12 0 0 1 25 6.8Z" fill="#FF5F00"/>
+        </svg>
+      ),
+    },
+    {
+      key: "cod",
+      svg: (
+        <svg viewBox="0 0 72 28" fill="none" xmlns="http://www.w3.org/2000/svg" style={{height:22,width:"auto"}}>
+          {/* banknote */}
+          <rect x="1" y="7" width="26" height="14" rx="2.5" stroke="#4a7c4e" strokeWidth="1.5"/>
+          <circle cx="14" cy="14" r="3.5" stroke="#4a7c4e" strokeWidth="1.3"/>
+          <line x1="1" y1="11" x2="27" y2="11" stroke="#4a7c4e" strokeWidth="1"/>
+          <line x1="1" y1="17" x2="27" y2="17" stroke="#4a7c4e" strokeWidth="1"/>
+          <text x="31" y="19" fontFamily="system-ui,sans-serif" fontSize="11" fontWeight="800" letterSpacing="0.5" fill="#4a7c4e">COD</text>
+        </svg>
+      ),
+    },
+  ];
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -495,8 +632,10 @@ export default function ProductDetailClient({ locale, product, region }) {
           <div className="product-payment-block">
             <p>{isAr ? "خيارات دفع آمنة على موقعنا" : "Safe payment on our website"}</p>
             <div className="product-payment-methods">
-              {paymentMethods.map((method) => (
-                <span key={method} className="product-payment-chip">{method}</span>
+              {paymentLogos.map((method) => (
+                <span key={method.key} className="product-payment-chip">
+                  {method.svg}
+                </span>
               ))}
             </div>
           </div>
@@ -574,7 +713,8 @@ export default function ProductDetailClient({ locale, product, region }) {
         </div>
       </div>
 
-      <div className="detail-tabs">
+      <div className="detail-tabs-row">
+        <div className="detail-tabs">
         <div className="tab-switcher">
           {["description", "details", "reviews"].map((key) => (
             <button
@@ -589,21 +729,7 @@ export default function ProductDetailClient({ locale, product, region }) {
         </div>
         <div className="tab-panel">
           {selectedTab === "description" ? (
-            <div className="product-tab-copy">
-              <p>{product.description}</p>
-              {product.ingredients ? (
-                <div className="product-tab-section">
-                  <strong>{isAr ? "المكونات" : "Ingredients"}</strong>
-                  <p>{product.ingredients}</p>
-                </div>
-              ) : null}
-              {product.usage_instructions ? (
-                <div className="product-tab-section">
-                  <strong>{isAr ? "طريقة الاستخدام" : "How to use"}</strong>
-                  <p>{product.usage_instructions}</p>
-                </div>
-              ) : null}
-            </div>
+            <DescriptionCards description={product.description} isAr={isAr} />
           ) : null}
           {selectedTab === "details" ? (
             <ul>
@@ -649,6 +775,8 @@ export default function ProductDetailClient({ locale, product, region }) {
             </div>
           ) : null}
         </div>
+      </div>
+
       </div>
     </div>
   );

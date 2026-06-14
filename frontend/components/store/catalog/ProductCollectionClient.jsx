@@ -57,6 +57,18 @@ export default function ProductCollectionClient({
     [products],
   );
 
+  // Product count per category (across the full catalog, ignoring current filters)
+  // so each category row can show how many items it holds.
+  const categoryCounts = useMemo(() => {
+    const counts = {};
+    for (const product of products) {
+      const slug = product?.category?.slug;
+      if (!slug) continue;
+      counts[slug] = (counts[slug] || 0) + 1;
+    }
+    return counts;
+  }, [products]);
+
   const basePricing = products.find((product) => product.pricing)?.pricing || {};
   const formatCatalogPrice = (amount) => (
     basePricing.currency_code
@@ -80,6 +92,20 @@ export default function ProductCollectionClient({
     initialSortBy === "best-sellers" && !canUseBestSellerSort ? "featured" : initialSortBy,
   );
   const [maxPrice, setMaxPrice] = useState(absoluteMaxPrice);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [showAllCategories, setShowAllCategories] = useState(false);
+
+  // Categories that actually hold products, sorted by product count (richest
+  // first) so the most useful ones surface at the top of a long catalog.
+  const visibleCategories = useMemo(
+    () =>
+      categories
+        .filter((category) => categoryCounts[category.slug])
+        .sort((a, b) => (categoryCounts[b.slug] || 0) - (categoryCounts[a.slug] || 0)),
+    [categories, categoryCounts],
+  );
+
+  const CATEGORY_PREVIEW_COUNT = 8;
 
   const priceScopedProducts = useMemo(() => {
     return indexedProducts.filter(({ product }) => {
@@ -118,6 +144,19 @@ export default function ProductCollectionClient({
       return Math.min(rangeMaxPrice, Math.max(rangeMinPrice, currentValue));
     });
   }, [absoluteMaxPrice, rangeMaxPrice, rangeMinPrice, scopedPrices.length]);
+
+  // Lock body scroll while the mobile filter drawer is open.
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    if (filtersOpen) {
+      const previous = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = previous;
+      };
+    }
+    return undefined;
+  }, [filtersOpen]);
 
   const sortLabels = isAr
     ? {
@@ -208,7 +247,6 @@ export default function ProductCollectionClient({
         ? (isAr ? "غير متوفر" : "Out of stock")
         : (isAr ? "كل الحالات" : "All availability")
   );
-  const selectionLabel = `${selectedCategoryName} / ${selectedTagName} / ${selectedBrandName}`;
   const resultsLabel = isAr ? `${filteredProducts.length} منتج` : `${filteredProducts.length} products`;
 
   const activeChips = [];
@@ -278,176 +316,182 @@ export default function ProductCollectionClient({
     }
   }, [data?.hero?.title, filteredProducts, locale, region]);
 
-  return (
-    <div className="catalog-layout">
-      <aside className="filters-panel">
-        <div className="filters-panel-header">
-          <div>
-            <span>{t.filters}</span>
-            <strong>{selectionLabel}</strong>
-          </div>
-          <button type="button" className="filter-reset-button" onClick={resetFilters} disabled={!hasActiveFilters}>
+  const totalCount = products.length;
+  const inStockOnly = availability === "in_stock";
+
+  // Price slider fill percentage for the gradient track.
+  const sliderValue = hasPriceRange ? maxPrice : rangeMaxPrice;
+  const sliderPct = hasPriceRange && rangeMaxPrice > rangeMinPrice
+    ? Math.round(((sliderValue - rangeMinPrice) / (rangeMaxPrice - rangeMinPrice)) * 100)
+    : 100;
+
+  const filtersBody = (
+    <>
+      <div className="cat-filter-head">
+        <div>
+          <span className="cat-filter-eyebrow">{t.filters}</span>
+          <strong>{selectedCategoryName}</strong>
+        </div>
+        {hasActiveFilters ? (
+          <button type="button" className="cat-filter-reset" onClick={resetFilters}>
             {t.reset}
           </button>
-        </div>
+        ) : null}
+      </div>
 
-        <div className="filters-group">
-          <div className="filters-group-heading">
-            <h4>{t.categories}</h4>
-            <span>{categories.length}</span>
-          </div>
-          <div className="filter-chip-row">
-            <button type="button" className={`filter-chip ${selectedCategory === "all" ? "is-active" : ""}`} onClick={() => setSelectedCategory("all")}>
-              {t.allProducts}
-            </button>
-            {categories.map((category) => (
+      {/* ── Categories ── */}
+      <div className="cat-filter-section">
+        <h4 className="cat-filter-title">{t.categories}</h4>
+        <div className="cat-category-list">
+          <button
+            type="button"
+            className={`cat-category-item ${selectedCategory === "all" ? "is-active" : ""}`}
+            onClick={() => setSelectedCategory("all")}
+          >
+            <span>{t.allProducts}</span>
+            <span className="cat-category-count">{totalCount}</span>
+          </button>
+          {visibleCategories.map((category, index) => {
+            // Keep the first N + the active one visible; hide the rest until
+            // "Show all" is toggled so the sidebar stays compact.
+            const isHidden =
+              !showAllCategories
+              && index >= CATEGORY_PREVIEW_COUNT
+              && selectedCategory !== category.slug;
+            if (isHidden) return null;
+            return (
               <button
                 key={category.slug}
                 type="button"
-                className={`filter-chip ${selectedCategory === category.slug ? "is-active" : ""}`}
+                className={`cat-category-item ${selectedCategory === category.slug ? "is-active" : ""}`}
                 onClick={() => setSelectedCategory(category.slug)}
               >
-                {category.name}
+                <span>{category.name}</span>
+                <span className="cat-category-count">{categoryCounts[category.slug]}</span>
               </button>
-            ))}
+            );
+          })}
+        </div>
+        {visibleCategories.length > CATEGORY_PREVIEW_COUNT ? (
+          <button
+            type="button"
+            className="cat-category-toggle"
+            onClick={() => setShowAllCategories((value) => !value)}
+          >
+            {showAllCategories
+              ? (isAr ? "عرض أقل" : "Show less")
+              : (isAr ? `عرض الكل (${visibleCategories.length})` : `Show all (${visibleCategories.length})`)}
+            <svg viewBox="0 0 12 12" className={`cat-category-toggle-caret ${showAllCategories ? "is-up" : ""}`} aria-hidden="true">
+              <path d="M2.5 4.5L6 8l3.5-3.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        ) : null}
+      </div>
+
+      {/* ── Price ── */}
+      {hasPriceRange ? (
+        <div className="cat-filter-section">
+          <div className="cat-filter-title-row">
+            <h4 className="cat-filter-title">{t.price}</h4>
+            <span className="cat-price-value">{formatCatalogPrice(sliderValue)}</span>
+          </div>
+          <input
+            type="range"
+            className="cat-price-range"
+            min={rangeMinPrice}
+            max={rangeMaxPrice}
+            step={priceStep}
+            value={sliderValue}
+            onChange={(event) => setMaxPrice(Number(event.target.value))}
+            aria-label={t.price}
+            style={{ "--cat-slider-pct": `${sliderPct}%` }}
+          />
+          <div className="cat-price-labels">
+            <span>{formatCatalogPrice(rangeMinPrice)}</span>
+            <span>{formatCatalogPrice(rangeMaxPrice)}</span>
           </div>
         </div>
+      ) : null}
 
-        <div className="filters-group">
-          <div className="filters-group-heading">
-            <h4>{isAr ? "العلامة التجارية" : "Brand"}</h4>
-            <span>{brands.length}</span>
-          </div>
-          <div className="filter-chip-row">
-            <button type="button" className={`filter-chip ${selectedBrand === "all" ? "is-active" : ""}`} onClick={() => setSelectedBrand("all")}>
-              {isAr ? "كل العلامات" : "All brands"}
-            </button>
-            {brands.map((brand) => (
-              <button
-                key={brand}
-                type="button"
-                className={`filter-chip ${selectedBrand === brand ? "is-active" : ""}`}
-                onClick={() => setSelectedBrand(brand)}
-              >
-                {brand}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="filters-group">
-          <div className="filters-group-heading">
-            <h4>{t.tags}</h4>
-            <span>{tags.length}</span>
-          </div>
-          <div className="filter-chip-row">
-            <button type="button" className={`filter-chip ${selectedTag === "all" ? "is-active" : ""}`} onClick={() => setSelectedTag("all")}>
-              {t.viewAll}
-            </button>
-            {tags.map((tag) => (
-              <button
-                key={tag.slug}
-                type="button"
-                className={`filter-chip ${selectedTag === tag.slug ? "is-active" : ""}`}
-                onClick={() => setSelectedTag(tag.slug)}
-              >
-                {tag.name}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="filters-group">
-          <div className="filters-group-heading">
-            <h4>{isAr ? "التوفر" : "Availability"}</h4>
-            <span>{availability === "all" ? "—" : "1"}</span>
-          </div>
-          <div className="filter-chip-row">
-            <button type="button" className={`filter-chip ${availability === "all" ? "is-active" : ""}`} onClick={() => setAvailability("all")}>
-              {isAr ? "الكل" : "All"}
-            </button>
-            <button type="button" className={`filter-chip ${availability === "in_stock" ? "is-active" : ""}`} onClick={() => setAvailability("in_stock")}>
-              {isAr ? "متوفر" : "In stock"}
-            </button>
-            <button type="button" className={`filter-chip ${availability === "out_of_stock" ? "is-active" : ""}`} onClick={() => setAvailability("out_of_stock")}>
-              {isAr ? "غير متوفر" : "Out of stock"}
-            </button>
-          </div>
-        </div>
-
-        <div className="filters-group">
-          <div className="filters-group-heading">
-            <h4>{isAr ? "الحد الأدنى للتقييم" : "Minimum rating"}</h4>
-            <span>{minRating > 0 ? `${minRating}+` : "Any"}</span>
-          </div>
-          <div className="filter-chip-row">
-            {[0, 3, 4, 4.5].map((value) => (
-              <button
-                key={value}
-                type="button"
-                className={`filter-chip ${minRating === value ? "is-active" : ""}`}
-                onClick={() => setMinRating(value)}
-              >
-                {value === 0 ? (isAr ? "الكل" : "Any") : `${value}+`}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="filters-group">
-          <div className="filters-group-heading">
-            <h4>{t.price}</h4>
-            <span>{hasPriceRange ? formatCatalogPrice(maxPrice) : formatCatalogPrice(rangeMaxPrice)}</span>
-          </div>
-          <div className="catalog-range-control">
+      {/* ── Availability toggle ── */}
+      <div className="cat-filter-section">
+        <label className="cat-toggle-row">
+          <span className="cat-toggle-label">{isAr ? "المتوفر فقط" : "In stock only"}</span>
+          <span className="cat-toggle">
             <input
-              type="range"
-              min={rangeMinPrice}
-              max={rangeMaxPrice}
-              step={priceStep}
-              value={hasPriceRange ? maxPrice : rangeMaxPrice}
-              onChange={(event) => setMaxPrice(Number(event.target.value))}
-              aria-label={t.price}
-              disabled={!hasPriceRange}
+              type="checkbox"
+              checked={inStockOnly}
+              onChange={(event) => setAvailability(event.target.checked ? "in_stock" : "all")}
             />
-            <div className="catalog-range-labels">
-              <span>{formatCatalogPrice(rangeMinPrice)}</span>
-              <span>{formatCatalogPrice(rangeMaxPrice)}</span>
-            </div>
-            {!hasPriceRange && scopedPrices.length ? (
-              <p className="catalog-range-helper">
-                {isAr ? "جميع المنتجات ضمن هذا الاختيار بنفس السعر." : "All products in this selection share the same price."}
-              </p>
-            ) : null}
-          </div>
+            <span className="cat-toggle-track" aria-hidden="true">
+              <span className="cat-toggle-thumb" />
+            </span>
+          </span>
+        </label>
+      </div>
+    </>
+  );
+
+  return (
+    <div className="catalog-layout">
+      {/* ── Desktop sidebar ── */}
+      <aside className="cat-filters-panel">{filtersBody}</aside>
+
+      {/* ── Mobile drawer ── */}
+      {filtersOpen ? (
+        <div className="cat-filters-overlay" onClick={() => setFiltersOpen(false)} aria-hidden="true" />
+      ) : null}
+      <aside className={`cat-filters-drawer ${filtersOpen ? "is-open" : ""}`} role="dialog" aria-modal="true">
+        <div className="cat-filters-drawer-head">
+          <strong>{t.filters}</strong>
+          <button type="button" className="cat-filters-drawer-close" onClick={() => setFiltersOpen(false)} aria-label={isAr ? "إغلاق" : "Close"}>
+            ✕
+          </button>
+        </div>
+        <div className="cat-filters-drawer-body">{filtersBody}</div>
+        <div className="cat-filters-drawer-foot">
+          <button type="button" className="primary-action full-width" onClick={() => setFiltersOpen(false)}>
+            {isAr ? `عرض ${filteredProducts.length} منتج` : `Show ${filteredProducts.length} products`}
+          </button>
         </div>
       </aside>
 
       <div className="catalog-results">
-        <div className="catalog-toolbar">
-          <div className="catalog-toolbar-copy">
-            <span>{t.products}</span>
+        <div className="cat-toolbar">
+          <div className="cat-toolbar-count">
             <strong>{resultsLabel}</strong>
-            <small>{selectionLabel}</small>
+            {selectedCategory !== "all" ? <span>{selectedCategoryName}</span> : null}
           </div>
-          <label className="control-select catalog-sort-select">
-            <span className="catalog-sort-label">{t.sortBy}</span>
-            <strong>{sortLabels[sortBy]}</strong>
-            <select
-              value={sortBy}
-              onChange={(event) => {
-                const next = event.target.value;
-                setSortBy(KNOWN_SORT_KEYS.has(next) ? next : "featured");
-              }}
-            >
-              <option value="featured">{sortLabels.featured}</option>
-              <option value="newest">{sortLabels.newest}</option>
-              <option value="price-asc">{sortLabels["price-asc"]}</option>
-              <option value="price-desc">{sortLabels["price-desc"]}</option>
-              <option value="rating">{sortLabels.rating}</option>
-              {canUseBestSellerSort ? <option value="best-sellers">{sortLabels["best-sellers"]}</option> : null}
-            </select>
-          </label>
+          <div className="cat-toolbar-actions">
+            <button type="button" className="cat-mobile-filter-btn" onClick={() => setFiltersOpen(true)}>
+              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" width="16" height="16">
+                <path d="M3 5h14M6 10h8M9 15h2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+              {t.filters}
+              {activeChips.length ? <span className="cat-mobile-filter-badge">{activeChips.length}</span> : null}
+            </button>
+            <label className="cat-sort">
+              <span className="cat-sort-label">{t.sortBy}</span>
+              <strong>{sortLabels[sortBy]}</strong>
+              <svg viewBox="0 0 12 12" className="cat-sort-caret" aria-hidden="true">
+                <path d="M2.5 4.5L6 8l3.5-3.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <select
+                value={sortBy}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setSortBy(KNOWN_SORT_KEYS.has(next) ? next : "featured");
+                }}
+              >
+                <option value="featured">{sortLabels.featured}</option>
+                <option value="newest">{sortLabels.newest}</option>
+                <option value="price-asc">{sortLabels["price-asc"]}</option>
+                <option value="price-desc">{sortLabels["price-desc"]}</option>
+                <option value="rating">{sortLabels.rating}</option>
+                {canUseBestSellerSort ? <option value="best-sellers">{sortLabels["best-sellers"]}</option> : null}
+              </select>
+            </label>
+          </div>
         </div>
 
         {activeChips.length ? (

@@ -5,6 +5,7 @@ from .models import (
     AdminAuditLog,
     BlogPost,
     BackInStockRequest,
+    CartMilestone,
     Category,
     GiftCard,
     GiftCardRedemption,
@@ -69,6 +70,13 @@ def _product_price_snapshot(product):
     return serialize_for_audit(list(rows))
 
 
+class CartMilestoneInline(admin.TabularInline):
+    model = CartMilestone
+    extra = 1
+    fields = ("threshold", "reward_type", "discount_value", "label_en", "label_ar", "sort_order", "is_active")
+    ordering = ("sort_order", "threshold")
+
+
 @admin.register(Region)
 class RegionAdmin(admin.ModelAdmin):
     list_display = (
@@ -96,6 +104,7 @@ class RegionAdmin(admin.ModelAdmin):
     list_filter = ("is_active", "payment_mode", "carrier_enabled")
     prepopulated_fields = {"code": ("name_en",)}
     readonly_fields = ("payment_config_warnings", "carrier_config_warnings")
+    inlines = [CartMilestoneInline]
 
     @admin.display(description="Payment warnings")
     def payment_config_warnings(self, obj):

@@ -32,7 +32,7 @@ export default function CategoryCarousel({ categories, href, locale = "en" }) {
         onClick={() => scrollByCard(-1)}
         aria-label={isRtl ? "الفئة التالية" : "Previous categories"}
       >
-        {isRtl ? "›" : "‹"}
+        ‹
       </button>
 
       <div className="category-carousel-rail" ref={railRef}>
@@ -52,7 +52,7 @@ export default function CategoryCarousel({ categories, href, locale = "en" }) {
         onClick={() => scrollByCard(1)}
         aria-label={isRtl ? "الفئة السابقة" : "Next categories"}
       >
-        {isRtl ? "‹" : "›"}
+        ›
       </button>
     </div>
   );

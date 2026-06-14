@@ -1,7 +1,10 @@
+from decimal import Decimal, ROUND_HALF_UP
+
 from django.conf import settings
 from rest_framework import serializers
 
 from ..models import (
+    CartMilestone,
     CmsPage,
     BlogPost,
     Category,
@@ -19,6 +22,20 @@ from ..services.carrier_router import get_region_carrier_options, get_region_car
 from ..services.stock import get_region_available_stock, get_region_warehouses
 
 
+class CartMilestoneSerializer(serializers.ModelSerializer):
+    label = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CartMilestone
+        fields = ("threshold", "reward_type", "discount_value", "label")
+
+    def get_label(self, obj):
+        locale = self.context.get("locale", "en")
+        if locale == "ar" and obj.label_ar:
+            return obj.label_ar
+        return obj.label_en or obj.get_reward_type_display()
+
+
 class RegionSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
     address = serializers.SerializerMethodField()
@@ -26,6 +43,7 @@ class RegionSerializer(serializers.ModelSerializer):
     payment_provider_warnings = serializers.SerializerMethodField()
     carrier_options = serializers.SerializerMethodField()
     carrier_warnings = serializers.SerializerMethodField()
+    cart_milestones = serializers.SerializerMethodField()
 
     class Meta:
         model = Region
@@ -55,6 +73,7 @@ class RegionSerializer(serializers.ModelSerializer):
             "contact_phone",
             "address",
             "is_default",
+            "cart_milestones",
         )
 
     def get_name(self, obj):
@@ -74,6 +93,42 @@ class RegionSerializer(serializers.ModelSerializer):
 
     def get_carrier_warnings(self, obj):
         return get_region_carrier_warnings(obj)
+
+    def get_cart_milestones(self, obj):
+        milestones = list(obj.cart_milestones.filter(is_active=True).order_by("sort_order", "threshold"))
+
+        if milestones:
+            return CartMilestoneSerializer(milestones, many=True, context=self.context).data
+
+        # No milestones set for this region — auto-convert from the default (base) region.
+        base_region = Region.objects.filter(is_default=True).exclude(id=obj.id).first()
+        if not base_region:
+            return []
+
+        base_milestones = list(
+            base_region.cart_milestones.filter(is_active=True).order_by("sort_order", "threshold")
+        )
+        if not base_milestones:
+            return []
+
+        base_fx = Decimal(str(base_region.fx_rate or 1))
+        this_fx = Decimal(str(obj.fx_rate or 1))
+        locale = self.context.get("locale", "en")
+
+        result = []
+        for m in base_milestones:
+            # Convert: (base_threshold / base_fx) * this_fx
+            converted = (Decimal(str(m.threshold)) / base_fx * this_fx).quantize(
+                Decimal("0.001"), rounding=ROUND_HALF_UP
+            )
+            label = (m.label_ar if locale == "ar" and m.label_ar else None) or m.label_en or m.get_reward_type_display()
+            result.append({
+                "threshold": str(converted),
+                "reward_type": m.reward_type,
+                "discount_value": str(m.discount_value),
+                "label": label,
+            })
+        return result
 
 
 class HeroPromoCardSerializer(serializers.ModelSerializer):
@@ -104,10 +159,16 @@ class CategorySerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
     description = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
+    product_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Category
-        fields = ("slug", "name", "description", "image")
+        fields = ("slug", "name", "description", "image", "product_count")
+
+    def get_product_count(self, obj):
+        # Populated only when the queryset is annotated (e.g. the nav menu);
+        # elsewhere it stays None and the frontend simply ignores it.
+        return getattr(obj, "product_count", None)
 
     def get_image(self, obj):
         request = self.context.get("request")

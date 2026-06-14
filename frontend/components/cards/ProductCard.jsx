@@ -181,11 +181,9 @@ export default function ProductCard({ locale, product, region }) {
         </button>
       </div>
       <div className="product-card-body">
-        {product.vendor ? <span className="product-card-vendor">{product.vendor}</span> : null}
         <Link href={buildStorePath(locale, `/product/${product.slug}`, region)}>
           <h4>{product.name}</h4>
         </Link>
-        <p className="product-card-description">{product.short_description || ""}</p>
         <div className="product-card-meta">
           {product.review_count > 0 ? (
             <div className="product-reviews">

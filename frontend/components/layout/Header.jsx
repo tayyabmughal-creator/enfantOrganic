@@ -222,22 +222,43 @@ function HeaderInner({ navigation }) {
             </button>
             <div className={`nav-dropdown ${openDropdown === "products" ? "is-visible" : ""}`}>
               <div className="dropdown-grid">
-                {navigation.menus.product_categories.map((category) => (
-                  <Link
-                    key={category.slug}
-                    href={`${buildStorePath(locale, "/collections", region)}&category=${category.slug}`}
-                    className="dropdown-link dropdown-link-media"
-                  >
-                    <span className="dropdown-link-thumb">
-                      <img src={category.image} alt={category.name} loading="lazy" />
-                    </span>
-                    <span className="dropdown-link-copy">
-                      <strong>{category.name}</strong>
-                      <span>{category.description}</span>
-                    </span>
-                  </Link>
-                ))}
+                {navigation.menus.product_categories
+                  .filter((category) => category.product_count === null || category.product_count > 0)
+                  .map((category) => (
+                    <Link
+                      key={category.slug}
+                      href={`${buildStorePath(locale, "/collections", region)}&category=${category.slug}`}
+                      className="dropdown-link dropdown-link-media"
+                      onClick={() => setOpenDropdown(null)}
+                    >
+                      <span className="dropdown-link-thumb">
+                        <img src={category.image} alt={category.name} loading="lazy" />
+                      </span>
+                      <span className="dropdown-link-copy">
+                        <strong>{category.name}</strong>
+                        {category.product_count ? (
+                          <span>
+                            {category.product_count}{" "}
+                            {locale === "ar"
+                              ? "منتج"
+                              : category.product_count === 1
+                                ? "product"
+                                : "products"}
+                          </span>
+                        ) : null}
+                      </span>
+                      <Icon name="chevronRight" size={15} className="dropdown-link-arrow" />
+                    </Link>
+                  ))}
               </div>
+              <Link
+                href={buildStorePath(locale, "/collections", region)}
+                className="dropdown-view-all"
+                onClick={() => setOpenDropdown(null)}
+              >
+                {locale === "ar" ? "عرض كل المنتجات" : "View all products"}
+                <Icon name="chevronRight" size={15} />
+              </Link>
             </div>
           </div>
 

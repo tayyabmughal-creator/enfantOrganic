@@ -245,7 +245,7 @@ export default async function LocalizedHomePage({ params, searchParams }) {
             <div className="trust-icon-wrap"><Icon name="truck" size={22} /></div>
             <div className="trust-text">
               <strong>{t.freeShipping}</strong>
-              <span>{locale === "ar" ? "على جميع الطلبات" : "On all orders"}</span>
+              <span>{locale === "ar" ? "للطلبات فوق 20 ر.ع / 200 د.إ" : "On orders above 20 OMR / 200 AED"}</span>
             </div>
           </div>
           <div className="trust-item">
@@ -391,18 +391,16 @@ export default async function LocalizedHomePage({ params, searchParams }) {
               <a
                 key={`${post.href}-${index}`}
                 href={post.href}
-                className={`instagram-tile${index === 1 ? " instagram-tile-ig" : ""}`}
+                className="instagram-tile"
                 target="_blank"
                 rel="noopener noreferrer"
               >
                 <img src={post.image} alt="Enfant Instagram" loading="lazy" />
-                {index === 1 && (
-                  <div className="instagram-logo-overlay">
-                    <div className="instagram-logo-circle">
-                      <Icon name="instagram" size={42} />
-                    </div>
+                <div className="instagram-logo-overlay">
+                  <div className="instagram-logo-circle">
+                    <Icon name="instagram" size={42} />
                   </div>
-                )}
+                </div>
               </a>
             ))}
           </div>

@@ -14,6 +14,7 @@ PHONE_PATTERN = re.compile(r"^\+?[0-9 ()\-]{8,32}$")
 NAME_PATTERN = re.compile(r"^[\w\s'\.\-؀-ۿ]{2,160}$", re.UNICODE)
 
 from ..models import (
+    CartMilestone,
     Coupon,
     GiftCard,
     GiftCardRedemption,
@@ -266,6 +267,57 @@ def validate_coupon_for_checkout(coupon_code, region, subtotal, prepared_items, 
         discount_total = subtotal
 
     return coupon, quantize_money(discount_total)
+
+
+def _get_effective_milestones(region):
+    """
+    Return active milestones for this region.
+    If the region has none, auto-convert from the default (base) region via fx_rate.
+    """
+    own = list(CartMilestone.objects.filter(region=region, is_active=True))
+    if own:
+        return [(Decimal(str(m.threshold)), m.reward_type, Decimal(str(m.discount_value or 0))) for m in own]
+
+    base_region = Region.objects.filter(is_default=True).exclude(id=region.id).first()
+    if not base_region:
+        return []
+
+    base_milestones = list(CartMilestone.objects.filter(region=base_region, is_active=True))
+    if not base_milestones:
+        return []
+
+    base_fx = Decimal(str(base_region.fx_rate or 1))
+    this_fx = Decimal(str(region.fx_rate or 1))
+
+    return [
+        (
+            (Decimal(str(m.threshold)) / base_fx * this_fx).quantize(Decimal("0.001")),
+            m.reward_type,
+            Decimal(str(m.discount_value or 0)),
+        )
+        for m in base_milestones
+    ]
+
+
+def apply_milestone_rewards(region, subtotal):
+    """Return (discount_amount, free_shipping_override, discount_pct) based on active milestones hit."""
+    sub = quantize_money(subtotal)
+    best_discount_pct = Decimal("0")
+    free_shipping = False
+
+    for threshold, reward_type, discount_value in _get_effective_milestones(region):
+        if sub < threshold:
+            continue
+        if reward_type == CartMilestone.REWARD_FREE_SHIPPING:
+            free_shipping = True
+        elif reward_type == CartMilestone.REWARD_DISCOUNT_PERCENT and discount_value > best_discount_pct:
+            best_discount_pct = discount_value
+
+    discount_amount = Decimal("0.00")
+    if best_discount_pct > 0:
+        discount_amount = quantize_money(sub * best_discount_pct / Decimal("100"))
+
+    return discount_amount, free_shipping, best_discount_pct
 
 
 def validate_gift_card_for_checkout(
@@ -555,13 +607,15 @@ class CouponValidationSerializer(serializers.Serializer):
             region,
             lock_products=False,
         )
-        coupon, discount_total = validate_coupon_for_checkout(
+        coupon, coupon_discount = validate_coupon_for_checkout(
             self.validated_data.get("coupon_code", ""),
             region,
             subtotal,
             prepared_items,
             lock_coupon=False,
         )
+        milestone_discount, milestone_free_shipping, milestone_pct = apply_milestone_rewards(region, subtotal)
+        discount_total = quantize_money(min(coupon_discount + milestone_discount, subtotal))
         shipping_quote = calculate_shipping_quote(
             region,
             subtotal,
@@ -569,6 +623,8 @@ class CouponValidationSerializer(serializers.Serializer):
             city=self.validated_data.get("city", ""),
             area=self.validated_data.get("area", ""),
         )
+        if milestone_free_shipping:
+            shipping_quote["shipping_total"] = Decimal("0.00")
         totals = calculate_checkout_totals(
             region=region,
             subtotal=subtotal,
@@ -597,6 +653,8 @@ class CouponValidationSerializer(serializers.Serializer):
             "gift_card_code": gift_card.code if gift_card else "",
             "gift_card_amount": serialize_money(gift_card_amount),
             "gift_card_balance": serialize_money(gift_card_balance),
+            "milestone_discount_pct": float(milestone_pct),
+            "milestone_free_shipping": milestone_free_shipping,
             "discount_amount": serialize_money(totals["discount_total"]),
             "shipping_amount": serialize_money(totals["shipping_total"]),
             "shipping_fee": serialize_money(shipping_quote["shipping_total"]),
@@ -703,13 +761,16 @@ class CheckoutCreateSerializer(serializers.Serializer):
         )
 
         coupon_code = validated_data.get("coupon_code", "").strip().upper()
-        coupon, discount_total = validate_coupon_for_checkout(
+        coupon, coupon_discount = validate_coupon_for_checkout(
             coupon_code,
             region,
             subtotal,
             prepared_items,
             lock_coupon=True,
         )
+
+        milestone_discount, milestone_free_shipping, _milestone_pct = apply_milestone_rewards(region, subtotal)
+        discount_total = quantize_money(min(coupon_discount + milestone_discount, subtotal))
 
         shipping_quote = calculate_shipping_quote(
             region,
@@ -718,6 +779,9 @@ class CheckoutCreateSerializer(serializers.Serializer):
             city=customer.get("city", ""),
             area=customer.get("area", ""),
         )
+        if milestone_free_shipping:
+            shipping_quote["shipping_total"] = Decimal("0.00")
+
         totals = calculate_checkout_totals(
             region=region,
             subtotal=subtotal,

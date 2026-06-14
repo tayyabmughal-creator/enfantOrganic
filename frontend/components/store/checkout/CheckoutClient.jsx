@@ -247,6 +247,53 @@ function asNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function PaymentBadgeIcon({ name }) {
+  if (name === "Visa") {
+    return (
+      <svg viewBox="0 0 48 16" aria-hidden="true" className="pbi-svg pbi-visa">
+        <text x="2" y="13" fontFamily="Arial, sans-serif" fontStyle="italic" fontWeight="900" fontSize="14" fill="#1434CB" letterSpacing="-0.5">VISA</text>
+      </svg>
+    );
+  }
+  if (name === "Mastercard") {
+    return (
+      <svg viewBox="0 0 38 24" aria-hidden="true" className="pbi-svg pbi-mc">
+        <circle cx="13" cy="12" r="12" fill="#EB001B" />
+        <circle cx="25" cy="12" r="12" fill="#F79E1B" />
+        <path d="M19 4.8a12 12 0 0 1 0 14.4A12 12 0 0 1 19 4.8z" fill="#FF5F00" />
+      </svg>
+    );
+  }
+  if (name === "Apple Pay") {
+    return (
+      <svg viewBox="0 0 72 30" aria-hidden="true" className="pbi-svg pbi-applepay">
+        <rect width="72" height="30" rx="5" fill="#000" />
+        {/* Accurate Apple logo — MDI apple path, scaled to fit */}
+        <g transform="translate(9,4) scale(0.92)">
+          <path fill="#fff" d="M18.71,19.5C17.88,20.74 17,21.95 15.66,21.97C14.32,22 13.89,21.18 12.37,21.18C10.84,21.18 10.37,21.95 9.1,22C7.78,22.05 6.8,20.68 5.96,19.47C4.25,17 2.94,12.45 4.7,9.39C5.57,7.87 7.13,6.91 8.82,6.88C10.1,6.86 11.32,7.75 12.11,7.75C12.89,7.75 14.37,6.68 15.92,6.84C16.57,6.87 18.39,7.1 19.56,8.82C19.47,8.88 17.39,10.1 17.41,12.63C17.44,15.65 20.06,16.66 20.09,16.67C20.06,16.74 19.67,18.11 18.71,19.5M13,3.5C13.73,2.67 14.94,2.04 15.94,2C16.07,3.17 15.6,4.35 14.9,5.19C14.21,6.04 13.07,6.7 11.95,6.61C11.8,5.46 12.36,4.26 13,3.5Z" />
+        </g>
+        <text x="32" y="21" fontFamily="-apple-system, 'Helvetica Neue', sans-serif" fontSize="13" fontWeight="500" fill="#fff" letterSpacing="0.3">Pay</text>
+      </svg>
+    );
+  }
+  if (name === "Mada") {
+    return (
+      <svg viewBox="0 0 48 16" aria-hidden="true" className="pbi-svg pbi-mada">
+        <text x="2" y="13" fontFamily="Arial, sans-serif" fontWeight="900" fontSize="13" fill="#1B2F82">mada</text>
+      </svg>
+    );
+  }
+  if (name === "Google Pay") {
+    return (
+      <svg viewBox="0 0 56 24" aria-hidden="true" className="pbi-svg pbi-gpay">
+        <text x="2" y="17" fontFamily="Arial, sans-serif" fontWeight="500" fontSize="13" fill="#5F6368">G</text>
+        <text x="13" y="17" fontFamily="Arial, sans-serif" fontWeight="500" fontSize="13" fill="#3C4043">Pay</text>
+      </svg>
+    );
+  }
+  return <span>{name}</span>;
+}
+
 export default function CheckoutClient({ locale, region, regionConfig: regionSettingsData = null }) {
   const router = useRouter();
   const t = uiText(locale);
@@ -431,7 +478,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     if (hasFlag("visa", true)) badges.push("Visa");
     if (hasFlag("mastercard", true)) badges.push("Mastercard");
     if (regionKey === "sa" && hasFlag("mada", false)) badges.push("Mada");
-    if (hasFlag("apple_pay", false)) badges.push("Apple Pay");
+    if (hasFlag("apple_pay", true)) badges.push("Apple Pay");
     if (hasFlag("google_pay", false)) badges.push("Google Pay");
     return badges;
   }, [backendRegionConfig, isOnlineProviderEnabled, regionKey]);
@@ -1438,17 +1485,35 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                 <div className="checkout-consent">
                   <label className={`checkout-consent-card ${form.sms_opt_in ? "is-checked" : ""}`}>
                     <input name="sms_opt_in" type="checkbox" checked={Boolean(form.sms_opt_in)} onChange={updateField} />
-                    <span className="checkout-consent-card-icon">
-                      <Icon name="check" size={12} />
+                    <span className="checkout-consent-service-icon checkout-consent-service-icon--sms" aria-hidden="true">
+                      <svg viewBox="0 0 20 20" fill="none">
+                        <path d="M2 4.5A2.5 2.5 0 0 1 4.5 2h11A2.5 2.5 0 0 1 18 4.5v7A2.5 2.5 0 0 1 15.5 14H11l-3.5 3.5V14H4.5A2.5 2.5 0 0 1 2 11.5v-7Z" fill="currentColor" opacity=".15"/>
+                        <path d="M2 4.5A2.5 2.5 0 0 1 4.5 2h11A2.5 2.5 0 0 1 18 4.5v7A2.5 2.5 0 0 1 15.5 14H11l-3.5 3.5V14H4.5A2.5 2.5 0 0 1 2 11.5v-7Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                        <path d="M6 7.5h8M6 10.5h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                      </svg>
                     </span>
-                    <span className="checkout-consent-card-label">{isAr ? "تحديثات SMS" : "SMS updates"}</span>
+                    <span className="checkout-consent-card-body">
+                      <strong>{isAr ? "تحديثات SMS" : "SMS updates"}</strong>
+                      <small>{isAr ? "تأكيدات الطلب" : "Order confirmations"}</small>
+                    </span>
+                    <span className="checkout-consent-card-check" aria-hidden="true">
+                      <Icon name="check" size={11} />
+                    </span>
                   </label>
                   <label className={`checkout-consent-card ${form.whatsapp_opt_in ? "is-checked" : ""}`}>
                     <input name="whatsapp_opt_in" type="checkbox" checked={Boolean(form.whatsapp_opt_in)} onChange={updateField} />
-                    <span className="checkout-consent-card-icon">
-                      <Icon name="check" size={12} />
+                    <span className="checkout-consent-service-icon checkout-consent-service-icon--wa" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none">
+                        <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.978-1.418A9.956 9.956 0 0 0 12 22c5.523 0 10-4.477 10-10S17.523 2 12 2Zm-1.07 13.51-.006-.003c-.634-.372-1.21-.835-1.706-1.372l-.003-.004a7.72 7.72 0 0 1-1.369-2.38c-.158-.47-.1-.985.19-1.404l.523-.748a.6.6 0 0 1 .985-.017l1.09 1.572a.6.6 0 0 1-.03.736l-.388.464a5.23 5.23 0 0 0 .895 1.11 5.23 5.23 0 0 0 1.13.88l.47-.38a.6.6 0 0 1 .74-.018l1.55 1.118a.6.6 0 0 1-.025.988l-.758.5a1.5 1.5 0 0 1-1.408.096 7.744 7.744 0 0 1-.88-.538Z" fill="currentColor"/>
+                      </svg>
                     </span>
-                    <span className="checkout-consent-card-label">{isAr ? "تحديثات واتساب" : "WhatsApp updates"}</span>
+                    <span className="checkout-consent-card-body">
+                      <strong>{isAr ? "تحديثات واتساب" : "WhatsApp updates"}</strong>
+                      <small>{isAr ? "تتبع الطلب" : "Order tracking"}</small>
+                    </span>
+                    <span className="checkout-consent-card-check" aria-hidden="true">
+                      <Icon name="check" size={11} />
+                    </span>
                   </label>
                 </div>
               </div>
@@ -1674,8 +1739,8 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                         {method.value === "online" && paymentBadges.length ? (
                           <span className="payment-badge-row">
                             {paymentBadges.map((badge) => (
-                              <span key={badge} className="payment-network-badge">
-                                {badge}
+                              <span key={badge} className={`payment-network-badge payment-network-badge--${badge.toLowerCase().replace(/\s/g, "-")}`} aria-label={badge} title={badge}>
+                                <PaymentBadgeIcon name={badge} />
                               </span>
                             ))}
                           </span>
@@ -1790,6 +1855,22 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
 
             {couponPreview?.valid ? (
               <>
+                {Number(couponPreview.milestone_discount_pct) > 0 && (
+                  <div className="milestone-discount-badge">
+                    <span aria-hidden="true">🎉</span>
+                    <span>
+                      {isAr
+                        ? `خصم ${Number(couponPreview.milestone_discount_pct).toFixed(0)}% مطبّق`
+                        : `${Number(couponPreview.milestone_discount_pct).toFixed(0)}% discount applied`}
+                    </span>
+                  </div>
+                )}
+                {couponPreview.milestone_free_shipping && Number(couponPreview.milestone_discount_pct || 0) === 0 && (
+                  <div className="milestone-discount-badge">
+                    <span aria-hidden="true">🚚</span>
+                    <span>{isAr ? "شحن مجاني مطبّق" : "Free shipping applied"}</span>
+                  </div>
+                )}
                 <div className="subtotal-row">
                   <span>{isAr ? "الخصم" : "Discount"}</span>
                   <strong className="summary-amount--discount">
@@ -1964,7 +2045,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                 </span>
                 <span className="checkout-trust-item">
                   <Icon name="truck" size={14} className="trust-icon" />
-                  {isAr ? "توصيل سريع في عُمان" : "Fast Oman delivery"}
+                  {isAr ? "توصيل سريع" : "Fast delivery"}
                 </span>
                 <span className="checkout-trust-item">
                   <Icon name="check" size={14} className="trust-icon" />
