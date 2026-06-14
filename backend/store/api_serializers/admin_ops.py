@@ -95,6 +95,12 @@ class AdminProductSerializer(serializers.ModelSerializer):
         if compare_at not in (None, ""):
             defaults["compare_at_price"] = compare_at
         ProductPrice.objects.update_or_create(product=product, region=region, defaults=defaults)
+        # Immediately derive the other regions' prices (AED/SAR) from this base.
+        try:
+            from ..services.pricing import convert_product_prices
+            convert_product_prices(product)
+        except Exception:
+            pass
 
     def create(self, validated_data):
         base_price = validated_data.pop("base_price", None)

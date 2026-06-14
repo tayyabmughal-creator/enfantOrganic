@@ -32,6 +32,34 @@ def _convert(amount, rate):
     return (Decimal(amount) * Decimal(rate)).quantize(CENTS, rounding=ROUND_HALF_UP)
 
 
+def convert_product_prices(product):
+    """Recompute a single product's non-base region prices from its base price.
+
+    Called right after an admin edits the base (OMR) price so AED/SAR update
+    immediately, without needing the bulk "Apply conversion rates" action.
+    """
+    base = get_base_region()
+    if base is None:
+        return
+    bp = ProductPrice.objects.filter(region=base, product=product).first()
+    if bp is None:
+        return
+    for region in Region.objects.exclude(pk=base.pk):
+        rate = Decimal(region.fx_rate or 1)
+        ProductPrice.objects.update_or_create(
+            product=product,
+            region=region,
+            defaults={
+                "price": _convert(bp.price, rate),
+                "compare_at_price": _convert(bp.compare_at_price, rate),
+                "price_prefix_en": bp.price_prefix_en,
+                "price_prefix_ar": bp.price_prefix_ar,
+                "unit_price_text_en": bp.unit_price_text_en,
+                "unit_price_text_ar": bp.unit_price_text_ar,
+            },
+        )
+
+
 @transaction.atomic
 def apply_fx_conversion(dry_run=False):
     """Recompute every non-base region's ProductPrice from the base price × fx_rate.
