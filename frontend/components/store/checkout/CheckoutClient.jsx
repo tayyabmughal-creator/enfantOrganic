@@ -1177,6 +1177,10 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
           ? "يرجى تحديد موقع التوصيل على الخريطة قبل تأكيد الطلب."
           : "Please pin your delivery location on the map before placing the order.",
       );
+      if (typeof document !== "undefined") {
+        const block = document.getElementById("checkout-location");
+        if (block) block.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
       return;
     }
     // Never submit an order whose cart currency doesn't match the selected
@@ -1533,7 +1537,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                   </div>
                 </div>
 
-                <div className={`checkout-location-block ${mapPinRequired && !hasPin ? "is-required-pending" : ""}`}>
+                <div id="checkout-location" className={`checkout-location-block ${mapPinRequired && !hasPin ? "is-required-pending" : ""}`}>
                   <div className="checkout-location-block-head">
                     <strong>{isAr ? "حدد موقع التوصيل" : "Pin your delivery location"}</strong>
                     {mapPinRequired ? (
@@ -1693,7 +1697,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                     <button
                       type="button"
                       className="cart-apple-pay-button cart-apple-pay-button--buy"
-                      disabled={submitting || cartItems.length === 0 || currencyMismatch || (mapPinRequired && !hasPin)}
+                      disabled={submitting || cartItems.length === 0 || currencyMismatch}
                       onClick={() => submitOrder({ applePay: true })}
                       aria-label={isAr ? "ادفع بـ Apple Pay" : "Pay with Apple Pay"}
                     />
@@ -1821,7 +1825,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
               <button
                 type="submit"
                 className="primary-action full-width checkout-form-submit--mobile"
-                disabled={submitting || cartItems.length === 0 || currencyMismatch || (mapPinRequired && !hasPin)}
+                disabled={submitting || cartItems.length === 0 || currencyMismatch}
               >
                 {submitting ? <span className="btn-spinner" /> : null}
                 {submitLabel}
@@ -2036,7 +2040,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
               type="submit"
               form="checkout-form"
               className="primary-action full-width checkout-aside-submit"
-              disabled={submitting || cartItems.length === 0 || currencyMismatch || (mapPinRequired && !hasPin)}
+              disabled={submitting || cartItems.length === 0 || currencyMismatch}
             >
               {submitting ? <span className="btn-spinner" /> : null}
               {submitLabel}
