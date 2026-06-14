@@ -81,6 +81,12 @@ jobs:
           script: |
             cd "${{ steps.ssh_target.outputs.deploy_path }}"
             set -e
+            # Remove any pre-existing .env.production first. A prior manual (root)
+            # deploy can leave it owned by root, which makes the heredoc below fail
+            # with "Permission denied" for the CI deploy user. The deploy user owns
+            # the deploy directory, so it can always unlink the file regardless of
+            # the file's own ownership.
+            rm -f .env.production || true
             cat > .env.production <<'EOF'
             COMPOSE_PROJECT_NAME=enfhantorganic
             HTTP_PORT=${{ secrets.HTTP_PORT }}
@@ -245,6 +251,12 @@ jobs:
           script: |
             cd "${{ steps.ssh_target.outputs.deploy_path }}"
             set -e
+            # Remove any pre-existing .env.production first. A prior manual (root)
+            # deploy can leave it owned by root, which makes the heredoc below fail
+            # with "Permission denied" for the CI deploy user. The deploy user owns
+            # the deploy directory, so it can always unlink the file regardless of
+            # the file's own ownership.
+            rm -f .env.production || true
             cat > .env.production <<'EOF'
             COMPOSE_PROJECT_NAME=enfhantorganic
             HTTP_PORT=${{ secrets.HTTP_PORT }}
