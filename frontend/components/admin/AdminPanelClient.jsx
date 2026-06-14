@@ -611,6 +611,10 @@ function buildPayload(editor, key) {
       if (v === "" || v === null || v === undefined) continue;
       if (k === "password" && !v) continue;
       const type = getFieldType(k, key);
+      // Only submit a file field when a NEW file was chosen. The existing value
+      // comes back as a URL/path string, which the backend FileField rejects
+      // ("The submitted data was not a file").
+      if (type === "file" && !(v instanceof File)) continue;
       if (type === "json") fd.append(k, JSON.stringify(typeof v === "string" ? JSON.parse(v || "null") : v));
       else if (v instanceof File) fd.append(k, v);
       else fd.append(k, v);
@@ -622,6 +626,8 @@ function buildPayload(editor, key) {
     const type = getFieldType(k, key);
     if (v === "" || v === null || v === undefined) continue;
     if (k === "password" && !v) continue;
+    // Never re-submit an existing file path as a string (backend FileField rejects it).
+    if (type === "file" && !(v instanceof File)) continue;
     if (type === "json") payload[k] = typeof v === "string" ? JSON.parse(v || "null") : v;
     else payload[k] = v;
   }
