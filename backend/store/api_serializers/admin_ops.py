@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib.auth import get_user_model
 from django.db.models import Max, Min
 from django.urls import reverse
@@ -28,7 +30,7 @@ from ..models import (
     Review,
     ShippingRule,
     SiteSettings,
-    TaxRule,
+    TaxRate,
     Warehouse,
 )
 from ..services.payment_router import get_region_provider_options, get_region_provider_warnings
@@ -48,6 +50,9 @@ from .orders import (
     ReturnRequestSerializer,
 )
 from .localization import get_image_url
+
+
+logger = logging.getLogger(__name__)
 
 
 class AdminProductPriceSerializer(serializers.ModelSerializer):
@@ -80,10 +85,10 @@ class AdminProductSerializer(serializers.ModelSerializer):
 
     @staticmethod
     def _base_region():
-        return (
-            Region.objects.filter(is_default=True).first()
-            or Region.objects.order_by("sort_order", "id").first()
-        )
+        # Single source of truth shared with pricing.convert_product_prices /
+        # apply_fx_conversion so the admin form and conversion never disagree.
+        from ..services.pricing import get_base_region
+        return get_base_region()
 
     def _upsert_base_price(self, product, price, compare_at):
         if price in (None, ""):
@@ -100,7 +105,7 @@ class AdminProductSerializer(serializers.ModelSerializer):
             from ..services.pricing import convert_product_prices
             convert_product_prices(product)
         except Exception:
-            pass
+            logger.exception("Regional price conversion failed for product %s", product.pk)
 
     def create(self, validated_data):
         base_price = validated_data.pop("base_price", None)
@@ -1154,23 +1159,25 @@ class AdminCmsPageSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
-class AdminTaxRuleSerializer(serializers.ModelSerializer):
+class AdminTaxRateSerializer(serializers.ModelSerializer):
     region_code = serializers.CharField(source="region.code", read_only=True, default="")
     rate_pct = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
-        model = TaxRule
+        model = TaxRate
         fields = (
             "id",
             "region",
             "region_code",
-            "name_en",
-            "name_ar",
+            "country_code",
+            "label",
             "rate",
             "rate_pct",
             "is_inclusive",
+            "applies_to_shipping",
             "is_active",
-            "description",
+            "effective_from",
+            "effective_to",
         )
 
     def get_rate_pct(self, obj):

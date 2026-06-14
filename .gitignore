@@ -81,3 +81,7 @@ Images/**/*.zip
 *-data-export.csv
 *-reviewer-*.csv
 reviewer-data-export.csv
+customers_export.csv
+customers_export*.csv
+*-review-export.csv.xlsx
+*-review-export*.xlsx

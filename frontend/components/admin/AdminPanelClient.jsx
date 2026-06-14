@@ -96,7 +96,7 @@ const NAV_GROUPS = [
       { key: "payments",        label: "Payments",        icon: "creditCard", endpoint: "/admin/payments/",  desc: "Providers and transactions." },
       { key: "payment_setup",   label: "Payment Setup",   icon: "settings",   endpoint: "/admin/settings/",  desc: "Configure payment gateway credentials from the admin panel." },
       { key: "inventory_settings", label: "Inventory Settings", icon: "box", endpoint: "/admin/settings/", desc: "Inventory alert thresholds and restock signals." },
-      { key: "taxes",           label: "Taxes",           icon: "receipt",    endpoint: "/admin/tax-rules/", desc: "Tax zones, VAT rates, and inclusive/exclusive pricing." },
+      { key: "taxes",           label: "Taxes",           icon: "receipt",    endpoint: "/admin/tax-rates/", desc: "Tax zones, VAT rates, and inclusive/exclusive pricing." },
       { key: "staff",           label: "Staff",           icon: "users",      endpoint: "/admin/staff/",     desc: "Team accounts, roles, and permissions." },
       { key: "regions",         label: "Regions",         icon: "globe",      endpoint: "/admin/regions/",   desc: "Active regions, currencies, and locale config." },
     ],
@@ -191,7 +191,7 @@ const ORDER_STATUS    = [["pending","Pending"],["confirmed","Confirmed"],["paid"
 const PAYMENT_STATUS  = [["unpaid","Unpaid"],["review","Needs review"],["paid","Paid"],["refunded","Refunded"]];
 const PAYMENT_METHOD  = [["cod","Cash on delivery"],["whatsapp","WhatsApp"],["bank_transfer","Bank transfer"],["online","Online"]];
 const SHIPMENT_STATUS = [["pending","Pending"],["created","Created"],["in_transit","In transit"],["delivered","Delivered"],["failed","Failed"],["manual","Manual"]];
-const PAYMENT_PROVIDER = [["cod","Cash on delivery"],["whatsapp","WhatsApp"],["bank_transfer","Bank transfer"],["online","Online"],["stripe","Stripe"],["tap","Tap"],["paytabs","PayTabs"],["hyperpay","HyperPay"],["checkout_com","Checkout.com"]];
+const PAYMENT_PROVIDER = [["cod","Cash on delivery"],["whatsapp","WhatsApp"],["bank_transfer","Bank transfer"],["online","Online"],["paymob","Paymob"],["paytabs","PayTabs"],["hyperpay","HyperPay"],["telr","Telr"],["thawani","Thawani"],["omannet","OmanNet"]];
 const SALES_CHANNEL = [["online_store","Online Store"],["draft_order","Draft Orders"]];
 
 const FIELD_CONFIGS = {
@@ -393,13 +393,15 @@ const FIELD_CONFIGS = {
     ["admin_note","Admin note","textarea"],
   ],
   taxes: [
-    ["name_en","Name EN","text"],
-    ["name_ar","Name AR","text"],
-    ["region","Region ID (blank = global)","number"],
+    ["label","Label (e.g. VAT Oman)","text"],
+    ["region","Region ID","number"],
+    ["country_code","Country code (e.g. OM)","text"],
     ["rate","Rate (decimal, e.g. 0.05 for 5%)","number"],
     ["is_inclusive","Tax-inclusive pricing","checkbox"],
+    ["applies_to_shipping","Apply tax to shipping","checkbox"],
     ["is_active","Active","checkbox"],
-    ["description","Description","textarea"],
+    ["effective_from","Effective from","date"],
+    ["effective_to","Effective to (blank = no end)","date"],
   ],
   staff: [
     ["email","Email","email"],
@@ -465,7 +467,7 @@ const CREATE_DEFAULTS = {
   blog:       { slug:"",title_en:"",title_ar:"",excerpt_en:"",excerpt_ar:"",body_en:"",body_ar:"",image:"",category_en:"",category_ar:"",published_at:"",is_published:false,sort_order:0 },
   pages:      { slug:"",region:"",title_en:"",title_ar:"",body_en:"",body_ar:"",seo_title_en:"",seo_title_ar:"",seo_description_en:"",seo_description_ar:"",is_published:true },
   hero_cards: { title_en:"",title_ar:"",subtitle_en:"",subtitle_ar:"",cta_en:"Shop now",cta_ar:"تسوق الآن",href:"/collections",size:"small",accent:"soft",sort_order:0,is_visible:true,image:"" },
-  taxes:      { name_en:"VAT",name_ar:"ضريبة القيمة المضافة",region:"",rate:0.05,is_inclusive:false,is_active:true,description:"" },
+  taxes:      { label:"VAT",region:"",country_code:"",rate:0.05,is_inclusive:false,applies_to_shipping:true,is_active:true,effective_from:"",effective_to:"" },
   staff:      { email:"",username:"",password:"",first_name:"",last_name:"",role:"Manager",is_active:true,is_staff:true },
   warehouses: { code:"",name_en:"",name_ar:"",region:"",fulfillment_regions:"",active:true },
   giftcards:  { code:"",initial_balance:0,remaining_balance:0,currency_code:"OMR",region:"",recipient_name:"",recipient_email:"",recipient_phone:"",sender_name:"",message:"",status:"active",expiry_date:"" },
@@ -516,7 +518,7 @@ function titleFor(item, key) {
   if (SETTINGS_TITLES[key])  return SETTINGS_TITLES[key];
   if (key === "returns")     return `Return — ${item?.order_number || item?.id}`;
   if (key === "regions")     return item?.name || item?.code || `Region ${item?.id}`;
-  if (key === "taxes")       return item?.name_en ? `${item.name_en}${item.rate_pct != null ? ` (${item.rate_pct}%)` : ""}` : `Tax rule ${item?.id}`;
+  if (key === "taxes")       return item?.label ? `${item.label}${item.rate_pct != null ? ` (${item.rate_pct}%)` : ""}` : `Tax rate ${item?.id}`;
   if (key === "staff")       return item?.email || item?.username || `Staff ${item?.id}`;
   if (key === "giftcards")   return item?.code || `Gift card ${item?.id}`;
   if (key === "abandoned")   return item?.customer_email || item?.customer_name || `Abandoned cart ${item?.id}`;
@@ -1060,7 +1062,7 @@ export default function AdminPanelClient() {
     if (key === "pages")      return `/admin/cms-pages/${item.id}/`;
     if (key === "hero_cards") return `/admin/hero-promo-cards/${item.id}/`;
     if (key === "returns")    return `/admin/returns/${item.id}/`;
-    if (key === "taxes")      return `/admin/tax-rules/${item.id}/`;
+    if (key === "taxes")      return `/admin/tax-rates/${item.id}/`;
     if (key === "staff")      return `/admin/staff/${item.id}/`;
     if (key === "giftcards")  return `/admin/gift-cards/${item.id}/`;
     if (key === "abandoned")  return `/admin/abandoned-carts/${item.id}/`;

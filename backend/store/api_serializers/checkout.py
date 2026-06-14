@@ -320,6 +320,26 @@ def apply_milestone_rewards(region, subtotal):
     return discount_amount, free_shipping, best_discount_pct
 
 
+def resolve_milestone_rewards(region, subtotal, *, coupon, gift_card_code):
+    """Cart milestone rewards do NOT stack with a coupon or gift card.
+
+    Agar koi redemption (valid coupon ya non-empty gift card code) apply ho to us
+    order ke liye milestone discount + free-shipping dono suppress ho jate hain.
+    Returns (discount_amount, free_shipping, discount_pct, suppressed).
+
+    ``coupon`` sirf tab truthy hota hai jab woh valid ho (validate_coupon_for_checkout
+    invalid pe raise karta hai). Gift card ki validity baad mein check hoti hai (grand
+    total chahiye), is liye yahan raw non-empty code se gate karte hain — invalid card
+    waise bhi validate_gift_card_for_checkout mein raise ho jayega.
+    """
+    discount, free_shipping, pct = apply_milestone_rewards(region, subtotal)
+    redemption_applied = bool(coupon) or bool(str(gift_card_code or "").strip())
+    suppressed = redemption_applied and (pct > 0 or free_shipping)
+    if redemption_applied:
+        return Decimal("0.00"), False, Decimal("0"), suppressed
+    return discount, free_shipping, pct, suppressed
+
+
 def validate_gift_card_for_checkout(
     gift_card_code,
     region,
@@ -614,7 +634,12 @@ class CouponValidationSerializer(serializers.Serializer):
             prepared_items,
             lock_coupon=False,
         )
-        milestone_discount, milestone_free_shipping, milestone_pct = apply_milestone_rewards(region, subtotal)
+        milestone_discount, milestone_free_shipping, milestone_pct, milestone_suppressed = resolve_milestone_rewards(
+            region,
+            subtotal,
+            coupon=coupon,
+            gift_card_code=self.validated_data.get("gift_card_code", ""),
+        )
         discount_total = quantize_money(min(coupon_discount + milestone_discount, subtotal))
         shipping_quote = calculate_shipping_quote(
             region,
@@ -646,6 +671,8 @@ class CouponValidationSerializer(serializers.Serializer):
             message = "Coupon applied."
         elif gift_card:
             message = "Gift card applied."
+        if milestone_suppressed:
+            message += " Cart reward removed — can't combine with a coupon or gift card."
 
         return {
             "valid": True,
@@ -655,6 +682,7 @@ class CouponValidationSerializer(serializers.Serializer):
             "gift_card_balance": serialize_money(gift_card_balance),
             "milestone_discount_pct": float(milestone_pct),
             "milestone_free_shipping": milestone_free_shipping,
+            "milestone_suppressed": milestone_suppressed,
             "discount_amount": serialize_money(totals["discount_total"]),
             "shipping_amount": serialize_money(totals["shipping_total"]),
             "shipping_fee": serialize_money(shipping_quote["shipping_total"]),
@@ -769,7 +797,12 @@ class CheckoutCreateSerializer(serializers.Serializer):
             lock_coupon=True,
         )
 
-        milestone_discount, milestone_free_shipping, _milestone_pct = apply_milestone_rewards(region, subtotal)
+        milestone_discount, milestone_free_shipping, _milestone_pct, _milestone_suppressed = resolve_milestone_rewards(
+            region,
+            subtotal,
+            coupon=coupon,
+            gift_card_code=validated_data.get("gift_card_code", ""),
+        )
         discount_total = quantize_money(min(coupon_discount + milestone_discount, subtotal))
 
         shipping_quote = calculate_shipping_quote(

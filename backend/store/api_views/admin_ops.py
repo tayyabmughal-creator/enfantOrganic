@@ -46,7 +46,7 @@ from ..models import (
     Review,
     ShippingRule,
     SiteSettings,
-    TaxRule,
+    TaxRate,
     Warehouse,
     CustomerAddress,
 )
@@ -73,7 +73,7 @@ from ..api_serializers.admin_ops import (
     AdminSiteSettingsSerializer,
     AdminProductStockSerializer,
     AdminStaffSerializer,
-    AdminTaxRuleSerializer,
+    AdminTaxRateSerializer,
     AdminWarehouseSerializer,
 )
 from ..notifications import notify_admins_low_stock, notify_admins_paid_order, notify_admins_payment_review
@@ -152,30 +152,42 @@ from ..services.stock import commit_reserved_inventory_for_order, reapply_order_
 logger = logging.getLogger(__name__)
 
 
-# GCC storefront currencies normalized to OMR for cross-market analytics.
-# These can be overridden in the future via settings if needed.
-ANALYTICS_TO_OMR_RATE = {
-    "OMR": Decimal("1.0"),
-    "AED": Decimal("0.1040"),
-    "SAR": Decimal("0.1026"),
-}
+# Cross-market analytics normalizes every storefront currency back to OMR.
+# Single source of truth = Region.fx_rate (OMR -> region rate), so analytics can
+# never drift from the rates used for product pricing / Paymob charging.
+def analytics_to_omr_rates():
+    """Map of {CURRENCY_CODE: rate-to-OMR} derived from each Region.fx_rate.
+
+    Region.fx_rate is the rate FROM the base/OMR currency TO the region, so the
+    rate back to OMR is its inverse. The base region (fx_rate == 1) maps to 1.
+    """
+    rates = {"OMR": Decimal("1.0")}
+    for code, fx_rate in Region.objects.values_list("currency_code", "fx_rate"):
+        currency = str(code or "").upper()
+        fx = Decimal(fx_rate or 0)
+        if not currency or fx <= 0:
+            continue
+        rates[currency] = (Decimal("1") / fx)
+    return rates
 
 
 def _sum_money_in_omr(queryset, amount_field):
     rows = queryset.values("currency_code").annotate(total=Sum(amount_field))
+    rates = analytics_to_omr_rates()
     total = Decimal("0.0")
     for row in rows:
         currency = str(row.get("currency_code") or "OMR").upper()
-        rate = ANALYTICS_TO_OMR_RATE.get(currency, Decimal("1.0"))
+        rate = rates.get(currency, Decimal("1.0"))
         total += Decimal(row.get("total") or 0) * rate
     return float(total)
 
 
 def _analytics_money_total(rows):
+    rates = analytics_to_omr_rates()
     total = Decimal("0.0")
     for row in rows:
         currency = str(row.get("currency_code") or "OMR").upper()
-        rate = ANALYTICS_TO_OMR_RATE.get(currency, Decimal("1.0"))
+        rate = rates.get(currency, Decimal("1.0"))
         total += Decimal(row.get("total") or 0) * rate
     return float(total)
 
@@ -184,9 +196,9 @@ def _analytics_currency_normalization_metadata(*, applied):
     return {
         "applied": bool(applied),
         "base_currency": "OMR",
-        "rates_to_omr": {code: float(rate) for code, rate in ANALYTICS_TO_OMR_RATE.items()},
-        "source": "static_defaults",
-        "configurable": False,
+        "rates_to_omr": {code: float(rate) for code, rate in analytics_to_omr_rates().items()},
+        "source": "region_fx_rate",
+        "configurable": True,
     }
 
 
@@ -1106,12 +1118,13 @@ class AdminDashboardView(APIView):
                 .order_by("month")
             )
             month_map = {}
+            rates = analytics_to_omr_rates()
             for row in by_month_currency:
                 month = row.get("month")
                 if not month:
                     continue
                 currency = str(row.get("currency_code") or "OMR").upper()
-                rate = ANALYTICS_TO_OMR_RATE.get(currency, Decimal("1.0"))
+                rate = rates.get(currency, Decimal("1.0"))
                 converted = Decimal(row.get("total") or 0) * rate
                 month_map[month] = month_map.get(month, Decimal("0.0")) + converted
             revenue_trend = [
@@ -1219,10 +1232,11 @@ class AdminDashboardView(APIView):
                     )
                 )
                 product_map = {}
+                rates = analytics_to_omr_rates()
                 for raw in raw_rows:
                     product_id = raw["id"]
                     currency = str(raw.get("orderitem__order__currency_code") or "OMR").upper()
-                    rate = float(ANALYTICS_TO_OMR_RATE.get(currency, Decimal("1.0")))
+                    rate = float(rates.get(currency, Decimal("1.0")))
                     bucket = product_map.setdefault(
                         product_id,
                         {
@@ -1436,10 +1450,11 @@ class AdminAnalyticsView(APIView):
 
         # Regional revenue split
         regional_revenue = {}
+        rates = analytics_to_omr_rates()
         for region in Region.objects.filter(is_active=True):
             region_orders = paid_orders.filter(region=region)
             region_total = Decimal(region_orders.aggregate(total=Sum("grand_total"))["total"] or 0)
-            rate = ANALYTICS_TO_OMR_RATE.get(str(region.currency_code or "OMR").upper(), Decimal("1.0"))
+            rate = rates.get(str(region.currency_code or "OMR").upper(), Decimal("1.0"))
             regional_revenue[region.code] = {
                 "name": region.name_en or region.code.upper(),
                 "currency_code": region.currency_code,
@@ -1486,7 +1501,7 @@ class AdminAnalyticsView(APIView):
             if not month:
                 continue
             currency = str(row.get("currency_code") or "OMR").upper()
-            rate = ANALYTICS_TO_OMR_RATE.get(currency, Decimal("1.0"))
+            rate = rates.get(currency, Decimal("1.0"))
             converted = Decimal(row.get("total") or 0) * rate
             month_map[month] = month_map.get(month, Decimal("0.0")) + converted
         revenue_trend = [
@@ -1767,18 +1782,18 @@ class AdminStaffDetailView(StaffRetrieveUpdateDestroyView):
         return super().destroy(request, *args, **kwargs)
 
 
-class AdminTaxRuleListCreateView(StaffListCreateView):
+class AdminTaxRateListCreateView(StaffListCreateView):
     admin_read_capabilities = (CAP_REGIONS_VIEW,)
     admin_write_capabilities = (CAP_REGIONS_EDIT,)
-    queryset = TaxRule.objects.select_related("region").all()
-    serializer_class = AdminTaxRuleSerializer
+    queryset = TaxRate.objects.select_related("region").all()
+    serializer_class = AdminTaxRateSerializer
 
 
-class AdminTaxRuleDetailView(StaffRetrieveUpdateDestroyView):
+class AdminTaxRateDetailView(StaffRetrieveUpdateDestroyView):
     admin_read_capabilities = (CAP_REGIONS_VIEW,)
     admin_write_capabilities = (CAP_REGIONS_EDIT,)
-    queryset = TaxRule.objects.select_related("region").all()
-    serializer_class = AdminTaxRuleSerializer
+    queryset = TaxRate.objects.select_related("region").all()
+    serializer_class = AdminTaxRateSerializer
 
 
 class AdminProductListCreateView(StaffListCreateView):

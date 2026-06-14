@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import Icon from "@/components/icons/Icon";
-import { useStore } from "@/components/store/cart/StoreProvider";
+import { useStoreActions } from "@/components/store/cart/StoreProvider";
 import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
 import {
   addWishlistProduct,
@@ -30,8 +30,8 @@ function resolveProductCardImage(image) {
   return PRODUCT_CARD_IMAGE_MAP[image] || image;
 }
 
-export default function ProductCard({ locale, product, region }) {
-  const { addItem, flyToCart, openQuickView } = useStore();
+function ProductCard({ locale, product, region }) {
+  const { addItem, flyToCart, openQuickView } = useStoreActions();
   const addBtnRef = useRef(null);
   const t = uiText(locale);
   const [wishToast, setWishToast] = useState("");
@@ -229,3 +229,5 @@ export default function ProductCard({ locale, product, region }) {
     </article>
   );
 }
+
+export default memo(ProductCard);

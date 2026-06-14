@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import CartDrawer from "@/components/store/cart/CartDrawer";
 import QuickViewModal from "@/components/store/product/QuickViewModal";
@@ -10,13 +10,24 @@ import { trackEvent } from "@/lib/eventTracking";
 
 const CART_STORAGE_KEY = "enfant-organics-cart";
 const API_BASE_URL = CONFIG_API_BASE_URL;
-const StoreContext = createContext(null);
+
+// Split into two contexts: STATE (changes on every cart mutation) and ACTIONS
+// (stable for the lifetime of the provider). Action-only consumers — notably
+// every ProductCard in a grid — subscribe via useStoreActions() and therefore
+// do NOT re-render when the cart changes. Actions read the latest cart through
+// cartItemsRef so they can stay referentially stable without going stale.
+const StoreStateContext = createContext(null);
+const StoreActionsContext = createContext(null);
 
 export default function StoreProvider({ children }) {
   const [cartItems, setCartItems] = useState([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [quickViewProduct, setQuickViewProduct] = useState(null);
   const [hydrated, setHydrated] = useState(false);
+
+  // Always points at the latest cart so stable actions can read current items.
+  const cartItemsRef = useRef(cartItems);
+  cartItemsRef.current = cartItems;
 
   useEffect(() => {
     const stored = window.localStorage.getItem(CART_STORAGE_KEY);
@@ -55,19 +66,10 @@ export default function StoreProvider({ children }) {
     };
   }, [drawerOpen, quickViewProduct]);
 
-  const value = useMemo(() => {
-    const itemCount = cartItems.reduce((total, item) => total + item.quantity, 0);
-    const subtotal = cartItems.reduce(
-      (total, item) => total + item.quantity * (item.pricing?.amount || 0),
-      0,
-    );
-
-    return {
-      cartItems,
-      itemCount,
-      subtotal,
-      drawerOpen,
-      quickViewProduct,
+  // Stable for the provider's lifetime (empty dep array). Setters are stable and
+  // current cart is read via cartItemsRef.current, never a stale closure.
+  const actions = useMemo(
+    () => ({
       openCart: () => setDrawerOpen(true),
       closeCart: () => setDrawerOpen(false),
       flyToCart: (fromEl) => {
@@ -120,7 +122,8 @@ export default function StoreProvider({ children }) {
       openQuickView: (product) => setQuickViewProduct(product),
       closeQuickView: () => setQuickViewProduct(null),
       refreshCartPricing: async (locale, region) => {
-        const needsRefresh = cartItems.some(
+        const items = cartItemsRef.current;
+        const needsRefresh = items.some(
           (item) =>
             item?.slug &&
             (item.pricing?.region_code !== region || item.locale !== locale),
@@ -130,7 +133,7 @@ export default function StoreProvider({ children }) {
           return;
         }
 
-        const uniqueSlugs = [...new Set(cartItems.map((item) => item.slug).filter(Boolean))];
+        const uniqueSlugs = [...new Set(items.map((item) => item.slug).filter(Boolean))];
 
         try {
           const refreshedProducts = await Promise.all(
@@ -247,7 +250,7 @@ export default function StoreProvider({ children }) {
         });
       },
       updateQuantity: (lineId, nextQuantity) => {
-        const existingItem = cartItems.find((item) => item.lineId === lineId);
+        const existingItem = cartItemsRef.current.find((item) => item.lineId === lineId);
         if (existingItem) {
           const delta = Math.abs(Number(nextQuantity) - Number(existingItem.quantity));
           if (delta > 0) {
@@ -286,7 +289,7 @@ export default function StoreProvider({ children }) {
         );
       },
       removeItem: (lineId) => {
-        const existingItem = cartItems.find((item) => item.lineId === lineId);
+        const existingItem = cartItemsRef.current.find((item) => item.lineId === lineId);
         if (existingItem) {
           const eventItem = buildAnalyticsItem({
             ...existingItem,
@@ -313,22 +316,54 @@ export default function StoreProvider({ children }) {
         setCartItems([]);
         window.localStorage.removeItem(CART_STORAGE_KEY);
       },
+    }),
+    [],
+  );
+
+  const state = useMemo(() => {
+    const itemCount = cartItems.reduce((total, item) => total + item.quantity, 0);
+    const subtotal = cartItems.reduce(
+      (total, item) => total + item.quantity * (item.pricing?.amount || 0),
+      0,
+    );
+
+    return {
+      cartItems,
+      itemCount,
+      subtotal,
+      drawerOpen,
+      quickViewProduct,
     };
   }, [cartItems, drawerOpen, quickViewProduct]);
 
   return (
-    <StoreContext.Provider value={value}>
-      {children}
-      <CartDrawer />
-      <QuickViewModal />
-    </StoreContext.Provider>
+    <StoreActionsContext.Provider value={actions}>
+      <StoreStateContext.Provider value={state}>
+        {children}
+        <CartDrawer />
+        <QuickViewModal />
+      </StoreStateContext.Provider>
+    </StoreActionsContext.Provider>
   );
 }
 
+// Full store (state + actions) — for components that need cart data. Re-renders
+// on cart changes (which is expected for these consumers).
 export function useStore() {
-  const store = useContext(StoreContext);
-  if (!store) {
+  const state = useContext(StoreStateContext);
+  const actions = useContext(StoreActionsContext);
+  if (!state || !actions) {
     throw new Error("useStore must be used within StoreProvider");
   }
-  return store;
+  return { ...state, ...actions };
+}
+
+// Actions only — stable identity, so subscribing components do NOT re-render
+// when the cart changes. Use this for add-to-cart buttons, product cards, etc.
+export function useStoreActions() {
+  const actions = useContext(StoreActionsContext);
+  if (!actions) {
+    throw new Error("useStoreActions must be used within StoreProvider");
+  }
+  return actions;
 }

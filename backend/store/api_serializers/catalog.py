@@ -369,7 +369,7 @@ class ProductDetailSerializer(ProductCardSerializer):
         return localized_json(obj, "reviews", self.context.get("locale"))
 
     def get_customer_reviews(self, obj):
-        reviews = Review.objects.filter(product=obj, is_approved=True)[:10]
+        reviews = Review.objects.filter(product=obj, is_approved=True)[:20]
         return [
             {
                 "customer_name": review.customer_name,

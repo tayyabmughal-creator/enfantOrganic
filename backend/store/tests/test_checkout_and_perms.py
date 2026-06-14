@@ -16,6 +16,8 @@ from rest_framework.test import APIClient
 from store.models import (
     AdminAuditLog,
     AnalyticsEvent,
+    CartMilestone,
+    GiftCard,
     Region,
     Category,
     Product,
@@ -708,6 +710,98 @@ class CheckoutAndPermsTestCase(TestCase):
 
         self.coupon.refresh_from_db()
         self.assertEqual(self.coupon.used_count, 0)
+
+    def _setup_milestones(self):
+        # Subtotal in these tests is 5.00 (2 x 2.50); both rewards unlock at 4.00.
+        CartMilestone.objects.create(
+            region=self.region,
+            threshold=Decimal("4.00"),
+            reward_type=CartMilestone.REWARD_DISCOUNT_PERCENT,
+            discount_value=Decimal("10"),
+            is_active=True,
+        )
+        CartMilestone.objects.create(
+            region=self.region,
+            threshold=Decimal("4.00"),
+            reward_type=CartMilestone.REWARD_FREE_SHIPPING,
+            is_active=True,
+        )
+
+    def test_milestone_reward_applies_without_coupon_or_gift_card(self):
+        self._setup_milestones()
+        response = self.api_client.post(
+            "/api/coupons/validate/",
+            self.coupon_validation_payload(coupon_code=""),
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["valid"])
+        self.assertEqual(response.data["milestone_discount_pct"], 10.0)
+        self.assertTrue(response.data["milestone_free_shipping"])
+        self.assertFalse(response.data["milestone_suppressed"])
+        self.assertEqual(response.data["discount_amount"], "0.50")  # 10% of 5.00
+        self.assertEqual(response.data["shipping_amount"], "0.00")  # free shipping
+
+    def test_coupon_suppresses_milestone_reward(self):
+        self._setup_milestones()
+        response = self.api_client.post(
+            "/api/coupons/validate/",
+            self.coupon_validation_payload(coupon_code="DISCOUNT10"),
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["valid"])
+        self.assertTrue(response.data["milestone_suppressed"])
+        self.assertEqual(response.data["milestone_discount_pct"], 0.0)
+        self.assertFalse(response.data["milestone_free_shipping"])
+        # Only the coupon (fixed 1.00) discounts; milestone free-shipping suppressed.
+        self.assertEqual(response.data["discount_amount"], "1.00")
+        self.assertEqual(response.data["shipping_amount"], "2.00")
+
+    def test_gift_card_suppresses_milestone_reward(self):
+        self._setup_milestones()
+        GiftCard.objects.create(
+            code="GIFT50",
+            initial_balance=Decimal("50.00"),
+            remaining_balance=Decimal("50.00"),
+            currency_code="OMR",
+            status=GiftCard.STATUS_ACTIVE,
+        )
+        payload = self.coupon_validation_payload(coupon_code="")
+        payload["gift_card_code"] = "GIFT50"
+        response = self.api_client.post("/api/coupons/validate/", payload, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["valid"])
+        self.assertTrue(response.data["milestone_suppressed"])
+        self.assertEqual(response.data["milestone_discount_pct"], 0.0)
+        self.assertFalse(response.data["milestone_free_shipping"])
+        self.assertEqual(response.data["discount_amount"], "0.00")
+        self.assertEqual(response.data["shipping_amount"], "2.00")
+        self.assertGreater(Decimal(response.data["gift_card_amount"]), Decimal("0.00"))
+
+    def test_create_order_coupon_suppresses_milestone(self):
+        self._setup_milestones()
+        payload = {
+            "region": self.region.code,
+            "locale": "en",
+            "customer": {
+                "name": "Test User",
+                "phone": "12345678",
+                "address_line_1": "Street 1",
+                "city": "Muscat",
+                "country": "Oman",
+            },
+            "payment_method": "cod",
+            "coupon_code": "DISCOUNT10",
+            "items": [{"slug": self.product.slug, "quantity": 2}],
+        }
+        serializer = CheckoutCreateSerializer(data=payload)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        order = serializer.save()
+        # Coupon-only discount (1.00); milestone free-shipping suppressed (shipping stays 2.00).
+        self.assertEqual(order.discount_total, Decimal("1.00"))
+        self.assertEqual(order.shipping_total, Decimal("2.00"))
+        self.assertEqual(order.grand_total, Decimal("6.00"))
 
     def test_coupon_validation_endpoint_invalid_coupon(self):
         response = self.api_client.post(

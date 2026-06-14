@@ -77,6 +77,7 @@ REGIONS = [
         "name_en": "Oman",
         "name_ar": "عُمان",
         "currency_code": "OMR",
+        "fx_rate": "1",
         "locale_code": "en-OM",
         "shipping_threshold": "20.00",
         "contact_phone": "+968 92412764",
@@ -115,6 +116,7 @@ REGIONS = [
         "name_en": "United Arab Emirates",
         "name_ar": "الإمارات العربية المتحدة",
         "currency_code": "AED",
+        "fx_rate": "9.55",
         "locale_code": "en-AE",
         "shipping_threshold": "220.00",
         "contact_phone": "+971 50 121 2269",
@@ -129,7 +131,8 @@ REGIONS = [
         "seller_phone": "+971 50 121 2269",
         "seller_email": "billing-ae@enfantorganics.com",
         "require_map_pin": True,
-        "payment_enabled_providers": ["paymob"],
+        # TEMP: Paymob disabled for UAE — COD only until UAE creds are live.
+        "payment_enabled_providers": [],
         "default_payment_provider": "paymob",
         "payment_mode": "sandbox",
         "payment_supported_methods": {
@@ -153,6 +156,7 @@ REGIONS = [
         "name_en": "Saudi Arabia",
         "name_ar": "المملكة العربية السعودية",
         "currency_code": "SAR",
+        "fx_rate": "9.75",
         "locale_code": "en-SA",
         "shipping_threshold": "220.00",
         "contact_phone": "+966 55 100 2211",
@@ -167,7 +171,8 @@ REGIONS = [
         "seller_phone": "+966 55 100 2211",
         "seller_email": "billing-sa@enfantorganics.com",
         "require_map_pin": True,
-        "payment_enabled_providers": ["paymob"],
+        # TEMP: Paymob disabled for Saudi — COD only until KSA creds are live.
+        "payment_enabled_providers": [],
         "default_payment_provider": "paymob",
         "payment_mode": "sandbox",
         "payment_supported_methods": {

@@ -897,11 +897,17 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
       setCouponPreview(null);
       return;
     }
-    validateCouponCode({
-      silent: true,
-      couponCode: form.coupon_code,
-      giftCardCode: form.gift_card_code,
-    });
+    // Debounce the silent auto-revalidation so typing in any checkout field
+    // (and rapid cart/region changes) doesn't fire a /coupons/validate/ request
+    // per keystroke. The explicit "Apply" button still validates instantly.
+    const handle = setTimeout(() => {
+      validateCouponCode({
+        silent: true,
+        couponCode: form.coupon_code,
+        giftCardCode: form.gift_card_code,
+      });
+    }, 400);
+    return () => clearTimeout(handle);
   }, [cartItems.length, form.coupon_code, form.gift_card_code, locale, region, subtotal, validateCouponCode]);
 
   useEffect(() => {
