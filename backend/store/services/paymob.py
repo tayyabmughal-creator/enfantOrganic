@@ -55,6 +55,16 @@ class PaymobError(Exception):
     """Raised when a Paymob API call fails or is misconfigured."""
 
 
+# Currencies with 3 decimal places (1 unit = 1000 minor units). Paymob expects
+# the amount in the currency's minor unit, so OMR 6.600 must be sent as 6600, not
+# 660. All other currencies here use 2 decimals (×100).
+_THREE_DECIMAL_CURRENCIES = {"OMR", "BHD", "KWD", "JOD", "TND", "LYD", "IQD"}
+
+
+def _minor_unit_factor(currency: str) -> int:
+    return 1000 if str(currency or "").upper() in _THREE_DECIMAL_CURRENCIES else 100
+
+
 def _check_config(region_code=""):
     cfg = get_paymob_config(region_code)
     suffix = (cfg.get("region_code") or "").upper()
@@ -196,7 +206,9 @@ def _charge_amount_and_currency(order, cfg):
         total = (total / rate).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
         currency = integration_currency
 
-    amount_cents = int(total * 100)
+    # Paymob wants the amount in the currency's minor unit: ×1000 for 3-decimal
+    # currencies (OMR/BHD/KWD…), ×100 otherwise.
+    amount_cents = int(total * _minor_unit_factor(currency))
     return amount_cents, currency
 
 
