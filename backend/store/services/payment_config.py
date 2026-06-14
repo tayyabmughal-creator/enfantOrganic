@@ -51,6 +51,16 @@ def _setting(name, default=""):
     return str(getattr(django_settings, name, "") or "").strip() or default
 
 
+def _paymob_shared_account():
+    """True when the merchant runs a single Paymob integration (Oman/OMR) for all
+    regions. Non-default regions then borrow the global Oman credentials when they
+    have none of their own, and the order total is converted to the integration's
+    currency at charge time (see paymob._charge_amount_and_currency)."""
+    return str(getattr(django_settings, "PAYMOB_SHARED_ACCOUNT", "") or "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+
+
 def _paymob_region_row(suffix):
     """Return the PaymobRegionConfig row for a region suffix, or None.
 
@@ -92,12 +102,21 @@ def get_paymob_config(region_code=""):
     """
     db = _site_settings()
     suffix = _paymob_region_suffix(region_code)
-    is_default_region = suffix in ("", "OM")
+    base_is_default = suffix in ("", "OM")
     row_suffix = suffix or "OM"
     row = _paymob_region_row(row_suffix)
 
     def region_env(base):
         return _setting(f"{base}_{suffix}") if suffix else ""
+
+    # Shared-account mode: a non-default region "borrows" the global Oman
+    # integration ONLY when it has no integration of its own (admin/DB row or
+    # per-region env). Regions that DO have their own real credentials keep them.
+    own_integration = bool(
+        _row_value(row, "integration_id") or region_env("PAYMOB_INTEGRATION_ID")
+    )
+    borrow_global = (not base_is_default) and _paymob_shared_account() and (not own_integration)
+    is_default_region = base_is_default or borrow_global
 
     # api_key is account-level (one Paymob account, many per-region
     # integrations), so it may fall back to the global key for any region:
@@ -122,24 +141,32 @@ def get_paymob_config(region_code=""):
 
     # base_url / currency are non-secret and always have a safe default.
     default_currency = PAYMOB_DEFAULT_CURRENCY.get(row_suffix, "OMR")
-    base_url = (
-        _row_value(row, "base_url")
-        or region_env("PAYMOB_BASE_URL")
-        or (
-            _get(db, "", "PAYMOB_BASE_URL", "https://accept.paymob.com/api")
-            if is_default_region
-            else _setting(f"PAYMOB_BASE_URL_{suffix}", "https://accept.paymob.com/api")
+    if borrow_global:
+        # Borrowing the Oman integration: force ITS endpoint + currency and ignore
+        # the per-region uae.paymob.com / AED defaults, which point at the wrong
+        # (non-existent) account. The amount is converted to this currency at
+        # charge time.
+        base_url = _get(db, "", "PAYMOB_BASE_URL", "https://accept.paymob.com/api")
+        currency = _get(db, "paymob_currency", "PAYMOB_CURRENCY", "OMR")
+    else:
+        base_url = (
+            _row_value(row, "base_url")
+            or region_env("PAYMOB_BASE_URL")
+            or (
+                _get(db, "", "PAYMOB_BASE_URL", "https://accept.paymob.com/api")
+                if is_default_region
+                else _setting(f"PAYMOB_BASE_URL_{suffix}", "https://accept.paymob.com/api")
+            )
         )
-    )
-    currency = (
-        _row_value(row, "currency")
-        or region_env("PAYMOB_CURRENCY")
-        or (
-            _get(db, "paymob_currency", "PAYMOB_CURRENCY", default_currency)
-            if is_default_region
-            else _setting(f"PAYMOB_CURRENCY_{suffix}", default_currency)
+        currency = (
+            _row_value(row, "currency")
+            or region_env("PAYMOB_CURRENCY")
+            or (
+                _get(db, "paymob_currency", "PAYMOB_CURRENCY", default_currency)
+                if is_default_region
+                else _setting(f"PAYMOB_CURRENCY_{suffix}", default_currency)
+            )
         )
-    )
 
     # An explicit admin row may switch a region off; absence of a row means the
     # region is implicitly enabled (env-driven), preserving existing behavior.

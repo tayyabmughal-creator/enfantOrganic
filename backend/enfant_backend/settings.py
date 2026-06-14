@@ -336,6 +336,14 @@ PAYMOB_HMAC_SECRET_AE = os.getenv("PAYMOB_HMAC_SECRET_AE", "")
 PAYMOB_BASE_URL_AE = os.getenv("PAYMOB_BASE_URL_AE", "https://uae.paymob.com/api")
 PAYMOB_CURRENCY_AE = os.getenv("PAYMOB_CURRENCY_AE", "AED")
 
+# Shared-account mode: the merchant has a single Paymob integration (Oman / OMR)
+# and wants every region (OM/SA/AE) to charge through it. When enabled, any region
+# without its own Paymob integration credentials borrows the global Oman ones, and
+# the order total is converted into the integration's currency (OMR) at charge
+# time using the region's fx_rate. Set to "0" once real per-region integrations
+# (e.g. a dedicated AED/SAR integration) are configured.
+PAYMOB_SHARED_ACCOUNT = os.getenv("PAYMOB_SHARED_ACCOUNT", "1")
+
 # ── Provider placeholders for GCC payment routing ──────────────────────────
 PAYTABS_PROFILE_ID = os.getenv("PAYTABS_PROFILE_ID", "")
 PAYTABS_SERVER_KEY = os.getenv("PAYTABS_SERVER_KEY", "")

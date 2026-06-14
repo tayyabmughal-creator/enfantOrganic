@@ -124,6 +124,7 @@ jobs:
             PAYMOB_HMAC_SECRET=${{ secrets.PAYMOB_HMAC_SECRET }}
             PAYMOB_CURRENCY=${{ secrets.PAYMOB_CURRENCY || 'OMR' }}
             PAYMOB_BASE_URL=${{ secrets.PAYMOB_BASE_URL || 'https://oman.paymob.com/api' }}
+            PAYMOB_SHARED_ACCOUNT=${{ secrets.PAYMOB_SHARED_ACCOUNT || '1' }}
             PAYMOB_INTEGRATION_ID_SA=${{ secrets.PAYMOB_INTEGRATION_ID_SA }}
             PAYMOB_IFRAME_ID_SA=${{ secrets.PAYMOB_IFRAME_ID_SA }}
             PAYMOB_HMAC_SECRET_SA=${{ secrets.PAYMOB_HMAC_SECRET_SA }}
@@ -294,6 +295,7 @@ jobs:
             PAYMOB_HMAC_SECRET=${{ secrets.PAYMOB_HMAC_SECRET }}
             PAYMOB_CURRENCY=${{ secrets.PAYMOB_CURRENCY || 'OMR' }}
             PAYMOB_BASE_URL=${{ secrets.PAYMOB_BASE_URL || 'https://oman.paymob.com/api' }}
+            PAYMOB_SHARED_ACCOUNT=${{ secrets.PAYMOB_SHARED_ACCOUNT || '1' }}
             PAYMOB_INTEGRATION_ID_SA=${{ secrets.PAYMOB_INTEGRATION_ID_SA }}
             PAYMOB_IFRAME_ID_SA=${{ secrets.PAYMOB_IFRAME_ID_SA }}
             PAYMOB_HMAC_SECRET_SA=${{ secrets.PAYMOB_HMAC_SECRET_SA }}

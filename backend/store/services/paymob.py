@@ -16,6 +16,7 @@ No Paymob credentials are ever exposed to the frontend.
 import hashlib
 import hmac as _hmac
 import logging
+from decimal import Decimal, ROUND_HALF_UP
 
 import requests
 
@@ -168,6 +169,36 @@ def create_payment_key(
         raise PaymobError(f"Paymob payment key creation failed: {exc}") from exc
 
 
+def _charge_amount_and_currency(order, cfg):
+    """Resolve the (amount_cents, currency) to charge through Paymob.
+
+    Normally the order currency equals the integration currency and the amount is
+    sent as-is. In shared-account mode a non-OMR order (e.g. an AED UAE order or a
+    SAR Saudi order) is charged through the Oman OMR integration, so the total is
+    converted into the integration's currency using the order region's fx_rate.
+
+    Region.fx_rate is the rate FROM the base/Oman currency TO the region currency
+    (region_price = base_price * fx_rate), so we divide to convert back.
+    """
+    integration_currency = str(cfg.get("currency") or "").upper()
+    order_currency = str(getattr(order, "currency_code", "") or "").upper()
+    total = Decimal(str(getattr(order, "grand_total", 0) or 0))
+    currency = order_currency or integration_currency
+
+    if integration_currency and order_currency and order_currency != integration_currency:
+        rate = Decimal(str(getattr(getattr(order, "region", None), "fx_rate", 0) or 0))
+        if rate <= 0:
+            raise PaymobError(
+                f"Cannot charge a {order_currency} order through a "
+                f"{integration_currency} Paymob integration: region fx_rate is not set."
+            )
+        total = (total / rate).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
+        currency = integration_currency
+
+    amount_cents = int(total * 100)
+    return amount_cents, currency
+
+
 def build_billing_data(order) -> dict:
     """Extract billing data from a local Order instance for Paymob."""
     name_parts = (order.customer_name or "Customer").split(" ", 1)
@@ -202,8 +233,7 @@ def initiate_payment(order) -> dict:
     region_code = getattr(getattr(order, "region", None), "code", "")
     _check_config(region_code)
     cfg = get_paymob_config(region_code)
-    amount_cents = int(order.grand_total * 100)
-    currency = order.currency_code or cfg["currency"]
+    amount_cents, currency = _charge_amount_and_currency(order, cfg)
 
     auth_token = get_auth_token(cfg)
     paymob_order_id = create_paymob_order(auth_token, amount_cents, currency, order.order_number, cfg=cfg)
@@ -260,8 +290,7 @@ def initiate_apple_pay_payment(order) -> dict:
             f"Paymob is not configured. Missing environment variables: {', '.join(missing)}"
         )
 
-    amount_cents = int(order.grand_total * 100)
-    currency = order.currency_code or cfg["currency"]
+    amount_cents, currency = _charge_amount_and_currency(order, cfg)
 
     auth_token = get_auth_token(cfg)
     paymob_order_id = create_paymob_order(auth_token, amount_cents, currency, order.order_number, cfg=cfg)
