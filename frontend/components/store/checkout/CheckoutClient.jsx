@@ -477,9 +477,14 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     const badges = [];
     if (hasFlag("visa", true)) badges.push("Visa");
     if (hasFlag("mastercard", true)) badges.push("Mastercard");
+    // Mada (a Saudi-only domestic network) is only shown if a real Mada-capable
+    // integration is configured for the region — never via the Oman OMR account.
     if (regionKey === "sa" && hasFlag("mada", false)) badges.push("Mada");
-    if (hasFlag("apple_pay", true)) badges.push("Apple Pay");
-    if (hasFlag("google_pay", false)) badges.push("Google Pay");
+    // Apple Pay only renders when the Paymob Apple Pay integration is actually
+    // configured (build-time env), so we never advertise a method we can't take.
+    if (PAYMOB_APPLE_PAY_INTEGRATION_ID && hasFlag("apple_pay", true)) badges.push("Apple Pay");
+    // Google Pay is intentionally not offered: there is no Google Pay flow wired
+    // up, so it must never appear as an accepted method.
     return badges;
   }, [backendRegionConfig, isOnlineProviderEnabled, regionKey]);
 
