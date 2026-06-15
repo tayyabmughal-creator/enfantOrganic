@@ -399,13 +399,17 @@ def resolve_shipping_rule(region, subtotal, *, city="", area=""):
     city_key = _normalized_location(city)
     area_key = _normalized_location(area)
 
+    # Rule thresholds are stored in OMR base; convert subtotal to OMR for comparison.
+    fx = Decimal(str(getattr(region, "fx_rate", None) or "1")) or Decimal("1")
+    subtotal_omr = quantize_money(subtotal / fx)
+
     rules = (
         ShippingRule.objects.filter(
             region=region,
             active=True,
-            min_order_value__lte=quantize_money(subtotal),
+            min_order_value__lte=subtotal_omr,
         )
-        .filter(Q(max_order_value__isnull=True) | Q(max_order_value__gte=quantize_money(subtotal)))
+        .filter(Q(max_order_value__isnull=True) | Q(max_order_value__gte=subtotal_omr))
         .order_by("-min_order_value", "id")
     )
 
@@ -462,6 +466,9 @@ def calculate_shipping_quote(region, subtotal, coupon=None, *, city="", area="")
                 area,
             )
 
+    # FX rate — same conversion logic as product prices. Fees stored in OMR base.
+    fx = Decimal(str(getattr(region, "fx_rate", None) or "1")) or Decimal("1")
+
     if carrier_quote:
         free_threshold = quantize_money(carrier_quote.get("free_shipping_threshold") or Decimal("0.00"))
         base_shipping_fee = quantize_money(carrier_quote.get("shipping_fee") or Decimal("0.00"))
@@ -478,21 +485,23 @@ def calculate_shipping_quote(region, subtotal, coupon=None, *, city="", area="")
         rule = resolve_shipping_rule(region, subtotal, city=city, area=area)
 
         if rule:
-            free_threshold = quantize_money(rule.free_shipping_threshold or Decimal("0.00"))
-            base_shipping_fee = quantize_money(rule.shipping_fee or Decimal("0.00"))
+            free_threshold = quantize_money((rule.free_shipping_threshold or Decimal("0.00")) * fx)
+            base_shipping_fee = quantize_money((rule.shipping_fee or Decimal("0.00")) * fx)
             shipping_method = Order.SHIPPING_METHOD_RULE
             carrier_name = rule.carrier_name or ""
             eta_min_days = rule.eta_min_days
             eta_max_days = rule.eta_max_days
         else:
             free_threshold = quantize_money(
-                getattr(region, "free_shipping_threshold", Decimal("0.00")) or Decimal("0.00")
+                (getattr(region, "free_shipping_threshold", Decimal("0.00")) or Decimal("0.00")) * fx
             )
             if free_threshold <= 0:
                 free_threshold = quantize_money(
-                    getattr(region, "shipping_threshold", Decimal("0.00")) or Decimal("0.00")
+                    (getattr(region, "shipping_threshold", Decimal("0.00")) or Decimal("0.00")) * fx
                 )
-            base_shipping_fee = quantize_money(getattr(region, "shipping_fee", Decimal("0.00")) or Decimal("0.00"))
+            base_shipping_fee = quantize_money(
+                (getattr(region, "shipping_fee", Decimal("0.00")) or Decimal("0.00")) * fx
+            )
             shipping_method = Order.SHIPPING_METHOD_FLAT
             carrier_name = ""
             eta_min_days = None
