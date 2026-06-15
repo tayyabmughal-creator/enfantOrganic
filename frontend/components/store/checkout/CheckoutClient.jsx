@@ -297,7 +297,7 @@ function PaymentBadgeIcon({ name }) {
 export default function CheckoutClient({ locale, region, regionConfig: regionSettingsData = null }) {
   const router = useRouter();
   const t = uiText(locale);
-  const { cartItems, subtotal, clearCart, refreshCartPricing } = useStore();
+  const { cartItems, subtotal, clearCart, refreshCartPricing, repricingInFlight } = useStore();
   const isAr = locale === "ar";
   const regionKey = useMemo(() => getRegionKey(region), [region]);
   const regionConfig = REGION_SETTINGS[regionKey] || REGION_SETTINGS.om;
@@ -1191,7 +1191,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     }
     // Never submit an order whose cart currency doesn't match the selected
     // region — re-trigger repricing and ask the shopper to retry.
-    if (currencyMismatch) {
+    if (currencyMismatch || repricingInFlight) {
       setError(
         isAr
           ? `يتم تحديث الأسعار إلى عملة ${regionCurrency}. يرجى الانتظار لحظة ثم المحاولة مجدداً.`
@@ -1703,7 +1703,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                     <button
                       type="button"
                       className="cart-apple-pay-button cart-apple-pay-button--buy"
-                      disabled={submitting || cartItems.length === 0 || currencyMismatch}
+                      disabled={submitting || cartItems.length === 0 || currencyMismatch || repricingInFlight}
                       onClick={() => submitOrder({ applePay: true })}
                       aria-label={isAr ? "ادفع بـ Apple Pay" : "Pay with Apple Pay"}
                     />
@@ -1782,7 +1782,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                 ) : null}
               </div>
 
-              {currencyMismatch ? (
+              {currencyMismatch && !repricingInFlight ? (
                 <div className="currency-mismatch-alert">
                   <p className="form-error" style={{ margin: 0 }}>
                     {pricingRefreshing
@@ -1831,7 +1831,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
               <button
                 type="submit"
                 className="primary-action full-width checkout-form-submit--mobile"
-                disabled={submitting || cartItems.length === 0 || currencyMismatch}
+                disabled={submitting || cartItems.length === 0 || currencyMismatch || repricingInFlight}
               >
                 {submitting ? <span className="btn-spinner" /> : null}
                 {submitLabel}
@@ -2046,7 +2046,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
               type="submit"
               form="checkout-form"
               className="primary-action full-width checkout-aside-submit"
-              disabled={submitting || cartItems.length === 0 || currencyMismatch}
+              disabled={submitting || cartItems.length === 0 || currencyMismatch || repricingInFlight}
             >
               {submitting ? <span className="btn-spinner" /> : null}
               {submitLabel}

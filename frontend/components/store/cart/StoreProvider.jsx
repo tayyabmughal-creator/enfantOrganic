@@ -24,10 +24,15 @@ export default function StoreProvider({ children }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [quickViewProduct, setQuickViewProduct] = useState(null);
   const [hydrated, setHydrated] = useState(false);
+  const [repricingInFlight, setRepricingInFlight] = useState(false);
 
   // Always points at the latest cart so stable actions can read current items.
   const cartItemsRef = useRef(cartItems);
   cartItemsRef.current = cartItems;
+
+  // Stable setter refs so actions (frozen in useMemo([])) can update state.
+  const setRepricingInFlightRef = useRef(setRepricingInFlight);
+  setRepricingInFlightRef.current = setRepricingInFlight;
 
   useEffect(() => {
     const stored = window.localStorage.getItem(CART_STORAGE_KEY);
@@ -133,6 +138,8 @@ export default function StoreProvider({ children }) {
           return;
         }
 
+        setRepricingInFlightRef.current(true);
+
         const uniqueSlugs = [...new Set(items.map((item) => item.slug).filter(Boolean))];
 
         try {
@@ -191,7 +198,9 @@ export default function StoreProvider({ children }) {
             }),
           );
         } catch {
-          return;
+          // fall through
+        } finally {
+          setRepricingInFlightRef.current(false);
         }
       },
       addItem: (product, quantity = 1, selectedOptions = {}) => {
@@ -333,8 +342,9 @@ export default function StoreProvider({ children }) {
       subtotal,
       drawerOpen,
       quickViewProduct,
+      repricingInFlight,
     };
-  }, [cartItems, drawerOpen, quickViewProduct]);
+  }, [cartItems, drawerOpen, quickViewProduct, repricingInFlight]);
 
   return (
     <StoreActionsContext.Provider value={actions}>
