@@ -133,20 +133,31 @@ class RegionSerializer(serializers.ModelSerializer):
 
 class HeroPromoCardSerializer(serializers.ModelSerializer):
     title = serializers.SerializerMethodField()
+    eyebrow = serializers.SerializerMethodField()
     subtitle = serializers.SerializerMethodField()
     cta = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
+    image_mobile = serializers.SerializerMethodField()
 
     class Meta:
         model = HeroPromoCard
-        fields = ("title", "subtitle", "cta", "href", "image", "size", "accent")
+        fields = ("title", "eyebrow", "subtitle", "cta", "href", "image", "image_mobile", "size", "accent")
 
     def get_image(self, obj):
         request = self.context.get("request")
         return get_image_url(obj, request, "image_file", "image")
 
+    def get_image_mobile(self, obj):
+        # Empty when no mobile artwork is set — frontend then reuses the desktop image.
+        request = self.context.get("request")
+        return get_image_url(obj, request, "image_file_mobile", "image_mobile")
+
     def get_title(self, obj):
         return localized(obj, "title", self.context.get("locale"))
+
+    def get_eyebrow(self, obj):
+        # Empty when no custom eyebrow is set — frontend then uses the accent preset.
+        return localized(obj, "eyebrow", self.context.get("locale"))
 
     def get_subtitle(self, obj):
         return localized(obj, "subtitle", self.context.get("locale"))

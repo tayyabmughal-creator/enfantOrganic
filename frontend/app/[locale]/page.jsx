@@ -148,16 +148,23 @@ export default async function LocalizedHomePage({ params, searchParams }) {
                 href={buildStorePath(locale, heroPrimary.href || "/collections", region)}
                 className="offer-primary"
               >
-                <img
-                  src={heroPrimary.image}
-                  alt={heroPrimary.title}
-                  className="offer-primary-img"
-                  loading="eager"
-                />
+                <picture>
+                  {heroPrimary.image_mobile ? (
+                    <source media="(max-width: 639px)" srcSet={heroPrimary.image_mobile} />
+                  ) : null}
+                  <img
+                    src={heroPrimary.image}
+                    alt={heroPrimary.title}
+                    className="offer-primary-img"
+                    loading="eager"
+                  />
+                </picture>
                 <div className="offer-copy">
-                  <span className="offer-eyebrow">
-                    {OFFER_LABELS[heroPrimary.accent] || "Featured"}
-                  </span>
+                  {(heroPrimary.eyebrow || OFFER_LABELS[heroPrimary.accent]) ? (
+                    <span className="offer-eyebrow">
+                      {heroPrimary.eyebrow || OFFER_LABELS[heroPrimary.accent]}
+                    </span>
+                  ) : null}
                   <h2>{heroPrimary.title}</h2>
                   <p>{heroPrimary.subtitle}</p>
                   {heroPrimary.cta ? (
@@ -172,16 +179,23 @@ export default async function LocalizedHomePage({ params, searchParams }) {
                 href={buildStorePath(locale, heroSecondary.href || "/collections", region)}
                 className={`offer-secondary${heroLastIsSecondary ? " offer-last-odd" : ""}`}
               >
-                <img
-                  src={heroSecondary.image}
-                  alt={heroSecondary.title}
-                  className="offer-secondary-img"
-                  loading="eager"
-                />
+                <picture>
+                  {heroSecondary.image_mobile ? (
+                    <source media="(max-width: 639px)" srcSet={heroSecondary.image_mobile} />
+                  ) : null}
+                  <img
+                    src={heroSecondary.image}
+                    alt={heroSecondary.title}
+                    className="offer-secondary-img"
+                    loading="eager"
+                  />
+                </picture>
                 <div className="offer-secondary-copy">
-                  <span className="offer-secondary-eyebrow">
-                    {OFFER_LABELS[heroSecondary.accent] || "Featured"}
-                  </span>
+                  {(heroSecondary.eyebrow || OFFER_LABELS[heroSecondary.accent]) ? (
+                    <span className="offer-secondary-eyebrow">
+                      {heroSecondary.eyebrow || OFFER_LABELS[heroSecondary.accent]}
+                    </span>
+                  ) : null}
                   <h3>{heroSecondary.title}</h3>
                   <p>{heroSecondary.subtitle}</p>
                   {heroSecondary.cta ? (
@@ -202,12 +216,19 @@ export default async function LocalizedHomePage({ params, searchParams }) {
                   className={`offer-tile${idx === heroLastOddChipIdx ? " offer-last-odd" : ""}`}
                 >
                   <div className="offer-tile-img">
-                    <img src={card.image} alt={card.title} loading="lazy" />
+                    <picture>
+                      {card.image_mobile ? (
+                        <source media="(max-width: 639px)" srcSet={card.image_mobile} />
+                      ) : null}
+                      <img src={card.image} alt={card.title} loading="lazy" />
+                    </picture>
                   </div>
                   <div className="offer-tile-body">
-                    <span className="offer-tile-eyebrow">
-                      {OFFER_LABELS[card.accent] || ""}
-                    </span>
+                    {(card.eyebrow || OFFER_LABELS[card.accent]) ? (
+                      <span className="offer-tile-eyebrow">
+                        {card.eyebrow || OFFER_LABELS[card.accent]}
+                      </span>
+                    ) : null}
                     <h4>{card.title}</h4>
                     {card.subtitle ? (
                       <p className="offer-tile-sub">{card.subtitle}</p>

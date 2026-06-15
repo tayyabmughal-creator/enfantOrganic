@@ -11,6 +11,7 @@ from ..models import (
     AdminAuditLog,
     AnalyticsEvent,
     BlogPost,
+    CartMilestone,
     CmsPage,
     Category,
     Coupon,
@@ -163,6 +164,7 @@ class AdminInstagramPostSerializer(serializers.ModelSerializer):
 
 class AdminHeroPromoCardSerializer(serializers.ModelSerializer):
     image = serializers.CharField(required=False, allow_blank=True)
+    image_mobile = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = HeroPromoCard
@@ -170,6 +172,8 @@ class AdminHeroPromoCardSerializer(serializers.ModelSerializer):
             "id",
             "title_en",
             "title_ar",
+            "eyebrow_en",
+            "eyebrow_ar",
             "subtitle_en",
             "subtitle_ar",
             "cta_en",
@@ -177,6 +181,8 @@ class AdminHeroPromoCardSerializer(serializers.ModelSerializer):
             "href",
             "image",
             "image_file",
+            "image_mobile",
+            "image_file_mobile",
             "size",
             "accent",
             "sort_order",
@@ -184,6 +190,7 @@ class AdminHeroPromoCardSerializer(serializers.ModelSerializer):
         )
         extra_kwargs = {
             "image_file": {"required": False},
+            "image_file_mobile": {"required": False},
         }
 
     def validate(self, attrs):
@@ -789,6 +796,15 @@ class AdminShippingRuleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ShippingRule
+        fields = "__all__"
+
+
+class AdminCartMilestoneSerializer(serializers.ModelSerializer):
+    region_code = serializers.CharField(source="region.code", read_only=True)
+    region_currency = serializers.CharField(source="region.currency_code", read_only=True)
+
+    class Meta:
+        model = CartMilestone
         fields = "__all__"
 
 

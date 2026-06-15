@@ -1880,7 +1880,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                     </span>
                   </div>
                 )}
-                {couponPreview.milestone_free_shipping && Number(couponPreview.milestone_discount_pct || 0) === 0 && (
+                {couponPreview.milestone_free_shipping && (
                   <div className="milestone-discount-badge">
                     <span aria-hidden="true">🚚</span>
                     <span>{isAr ? "شحن مجاني مطبّق" : "Free shipping applied"}</span>
