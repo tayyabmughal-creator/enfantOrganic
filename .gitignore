@@ -85,3 +85,8 @@ customers_export.csv
 customers_export*.csv
 *-review-export.csv.xlsx
 *-review-export*.xlsx
+
+# Production data dumps — never commit
+prod_data.json
+prod_db.dump
+*.dump
