@@ -26,6 +26,7 @@ from ..models import (
     AdminAuditLog,
     AnalyticsEvent,
     BlogPost,
+    CartMilestone,
     CmsPage,
     Category,
     Coupon,
@@ -55,6 +56,7 @@ from ..api_serializers.admin_ops import (
     AdminAuditLogSerializer,
     AdminBackInStockRequestSerializer,
     AdminBlogPostSerializer,
+    AdminCartMilestoneSerializer,
     AdminCmsPageSerializer,
     AdminCategorySerializer,
     AdminCouponSerializer,
@@ -2902,6 +2904,22 @@ class AdminShippingRuleDetailView(generics.RetrieveUpdateDestroyAPIView):
     admin_write_capabilities = (CAP_SHIPPING_EDIT,)
     serializer_class = AdminShippingRuleSerializer
     queryset = ShippingRule.objects.select_related("region").all()
+
+
+class AdminCartMilestoneListCreateView(generics.ListCreateAPIView):
+    permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
+    admin_read_capabilities = (CAP_SHIPPING_VIEW,)
+    admin_write_capabilities = (CAP_SHIPPING_EDIT,)
+    serializer_class = AdminCartMilestoneSerializer
+    queryset = CartMilestone.objects.select_related("region").all()
+
+
+class AdminCartMilestoneDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
+    admin_read_capabilities = (CAP_SHIPPING_VIEW,)
+    admin_write_capabilities = (CAP_SHIPPING_EDIT,)
+    serializer_class = AdminCartMilestoneSerializer
+    queryset = CartMilestone.objects.select_related("region").all()
 
 
 class AdminWarehouseListCreateView(generics.ListCreateAPIView):

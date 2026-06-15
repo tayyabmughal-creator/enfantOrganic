@@ -4,6 +4,13 @@
   gap: 10px;
 }
 
+/* <picture> wraps hero images so admins can set a separate mobile artwork.
+   display:contents keeps the wrapper layout-transparent — the <img> keeps
+   behaving as a direct child (object-fit/absolute positioning unchanged). */
+.offers-showcase picture {
+  display: contents;
+}
+
 /* Feature row — auto-collapses when only one large card exists so no slot is left empty. */
 .offers-main {
   display: grid;

@@ -1271,7 +1271,7 @@ function HeroCardPreview({ editor }) {
   const subtitle = editor?.subtitle_en || editor?.subtitle_ar || "";
   const cta      = editor?.cta_en || editor?.cta_ar || "";
   const size     = editor?.size || "small";
-  const eyebrow  = ACCENT_LABELS[editor?.accent] || editor?.accent || "";
+  const eyebrow  = editor?.eyebrow_en || editor?.eyebrow_ar || ACCENT_LABELS[editor?.accent] || "";
 
   return (
     <div className="admin-hero-preview">

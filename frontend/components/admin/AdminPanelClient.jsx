@@ -80,6 +80,7 @@ const NAV_GROUPS = [
       { key: "reviews",  label: "Reviews",  icon: "star",         endpoint: "/admin/reviews/",         desc: "Approve and moderate reviews." },
       { key: "returns",  label: "Returns",  icon: "returnArrow",  endpoint: "/admin/returns/",         desc: "Return requests and refunds." },
       { key: "shipping", label: "Shipping", icon: "truck",        endpoint: "/admin/shipping-rules/", desc: "Rules-based rates and delivery ETA." },
+      { key: "cart_milestones", label: "Cart Milestones", icon: "gift", endpoint: "/admin/cart-milestones/", desc: "Free-shipping and discount rewards unlocked by cart total." },
     ],
   },
   {
@@ -140,6 +141,7 @@ const NAV_READ_CAPABILITY = {
   reviews: "reviews.view",
   returns: "returns.view",
   shipping: "shipping.view",
+  cart_milestones: "shipping.view",
   social: "content.view",
   marketing_tools: "content.view",
   apps: "content.view",
@@ -174,6 +176,7 @@ const NAV_WRITE_CAPABILITY = {
   reviews: "reviews.edit",
   returns: "returns.edit",
   shipping: "shipping.edit",
+  cart_milestones: "shipping.edit",
   regions: "regions.edit",
   taxes: "regions.edit",
   payments: "payments.edit",
@@ -271,6 +274,16 @@ const FIELD_CONFIGS = {
     ["carrier_name","Carrier name","text"],
     ["active","Active","checkbox"],
   ],
+  cart_milestones: [
+    ["region","Region ID","number"],
+    ["reward_type","Reward","select",[["free_shipping","Free shipping"],["discount_percent","Discount (%)"]]],
+    ["threshold","Cart total to unlock (in region currency)","number"],
+    ["discount_value","Discount % (only for Discount type, e.g. 10)","number"],
+    ["label_en","Label EN (e.g. Free Shipping, 10% Off)","text"],
+    ["label_ar","Label AR","text"],
+    ["sort_order","Sort order","number"],
+    ["is_active","Active","checkbox"],
+  ],
   blog: [
     ["slug","Slug","text"],["title_en","Title EN","text"],["title_ar","Title AR","text"],
     ["excerpt_en","Excerpt EN","textarea"],["excerpt_ar","Excerpt AR","textarea"],
@@ -291,6 +304,7 @@ const FIELD_CONFIGS = {
   ],
   hero_cards: [
     ["title_en","Title EN","text"],["title_ar","Title AR","text"],
+    ["eyebrow_en","Eyebrow label EN (small text above title)","text"],["eyebrow_ar","Eyebrow label AR","text"],
     ["subtitle_en","Subtitle EN","textarea"],["subtitle_ar","Subtitle AR","textarea"],
     ["cta_en","CTA EN","text"],["cta_ar","CTA AR","text"],
     ["href","Link destination","combobox",[
@@ -327,7 +341,8 @@ const FIELD_CONFIGS = {
       ["/product/sweet-dream-foam-mousse-400ml","Product: Moisture Shampoo 300ml"],
     ]],
     ["size","Card size","select",[["large","Large — main hero (2-col width)"],["small","Small — tile grid card"]]],
-    ["accent","Accent label","select",[
+    ["accent","Preset label (used only if Eyebrow is empty)","select",[
+      ["none","— No eyebrow label —"],
       ["gift","Exclusive Offer"],
       ["soft","Best Seller"],
       ["sets","Curated Sets"],
@@ -339,7 +354,8 @@ const FIELD_CONFIGS = {
     ]],
     ["sort_order","Sort order","number"],
     ["is_visible","Visible on homepage","checkbox"],
-    ["image","Image URL","text"],["image_file","Upload image","file"],
+    ["image","Image URL (desktop / web)","text"],["image_file","Upload image (desktop / web)","file"],
+    ["image_mobile","Mobile image URL (optional)","text"],["image_file_mobile","Upload mobile image (optional)","file"],
   ],
   homepage: [
     ["announcement_en","Announcement EN","text"],["announcement_ar","Announcement AR","text"],
@@ -464,9 +480,10 @@ const CREATE_DEFAULTS = {
   payments:   { order:"",provider:"cod",provider_reference:"",amount:0,currency_code:"OMR",status:"pending",raw_response:{} },
   reviews:    { product:"",order:"",customer_name:"",rating:5,title:"",comment:"",is_verified_purchase:false,is_approved:false },
   shipping:   { region:"",city:"",area:"",min_order_value:0,max_order_value:"",shipping_fee:0,free_shipping_threshold:0,eta_min_days:"",eta_max_days:"",carrier_name:"",active:true },
+  cart_milestones: { region:"",reward_type:"free_shipping",threshold:0,discount_value:0,label_en:"",label_ar:"",sort_order:0,is_active:true },
   blog:       { slug:"",title_en:"",title_ar:"",excerpt_en:"",excerpt_ar:"",body_en:"",body_ar:"",image:"",category_en:"",category_ar:"",published_at:"",is_published:false,sort_order:0 },
   pages:      { slug:"",region:"",title_en:"",title_ar:"",body_en:"",body_ar:"",seo_title_en:"",seo_title_ar:"",seo_description_en:"",seo_description_ar:"",is_published:true },
-  hero_cards: { title_en:"",title_ar:"",subtitle_en:"",subtitle_ar:"",cta_en:"Shop now",cta_ar:"تسوق الآن",href:"/collections",size:"small",accent:"soft",sort_order:0,is_visible:true,image:"" },
+  hero_cards: { title_en:"",title_ar:"",eyebrow_en:"",eyebrow_ar:"",subtitle_en:"",subtitle_ar:"",cta_en:"Shop now",cta_ar:"تسوق الآن",href:"/collections",size:"small",accent:"soft",sort_order:0,is_visible:true,image:"",image_mobile:"" },
   taxes:      { label:"VAT",region:"",country_code:"",rate:0.05,is_inclusive:false,applies_to_shipping:true,is_active:true,effective_from:"",effective_to:"" },
   staff:      { email:"",username:"",password:"",first_name:"",last_name:"",role:"Manager",is_active:true,is_staff:true },
   warehouses: { code:"",name_en:"",name_ar:"",region:"",fulfillment_regions:"",active:true },
@@ -488,8 +505,8 @@ const ORDER_FILTER_DEFAULTS = {
   market: "all",
 };
 const DASHBOARD_REFRESH_INTERVAL_MS = 10000;
-const CRUD_KEYS     = ["products","categories","deals","customers","payments","reviews","shipping","blog","pages","hero_cards","returns","taxes","staff","warehouses","giftcards"];
-const DELETABLE     = ["products","categories","deals","customers","payments","reviews","shipping","blog","pages","hero_cards","taxes","staff","warehouses","giftcards"];
+const CRUD_KEYS     = ["products","categories","deals","customers","payments","reviews","shipping","cart_milestones","blog","pages","hero_cards","returns","taxes","staff","warehouses","giftcards"];
+const DELETABLE     = ["products","categories","deals","customers","payments","reviews","shipping","cart_milestones","blog","pages","hero_cards","taxes","staff","warehouses","giftcards"];
 const REPORT_TYPES  = ["orders","customers","inventory","low-stock","sales","abandoned-carts"];
 
 // ─── Placeholder configs ───────────────────────────────────────────────────────
@@ -523,6 +540,7 @@ function titleFor(item, key) {
   if (key === "giftcards")   return item?.code || `Gift card ${item?.id}`;
   if (key === "abandoned")   return item?.customer_email || item?.customer_name || `Abandoned cart ${item?.id}`;
   if (key === "hero_cards")  return item?.title_en || item?.title_ar || `Hero card ${item?.id}`;
+  if (key === "cart_milestones") return item?.label_en || (item?.reward_type === "discount_percent" ? `${item?.discount_value}% off` : "Free shipping");
   if (key === "pages")       return item?.title_en || item?.title_ar || item?.slug || `Page ${item?.id}`;
   return item?.order_number || item?.name_en || item?.title_en || item?.code || item?.email || item?.username || item?.provider_reference || item?.provider || `${key} item`;
 }
@@ -536,6 +554,7 @@ function metaFor(item, key) {
   if (key === "giftcards") return `${item.currency_code || ""} · ${item.initial_balance} / ${item.remaining_balance} · ${item.status}`;
   if (key === "abandoned") return `${item.currency_code || ""} · ${item.subtotal} · ${item.status}`;
   if (key === "hero_cards") return `${item.size || "small"} · sort ${item.sort_order ?? 0} · ${item.is_visible === false ? "hidden" : "visible"}`;
+  if (key === "cart_milestones") return `@ ${item.threshold} ${item.region_currency || ""} · ${item.region_code || `region ${item.region}`} · ${item.is_active ? "Active" : "Inactive"}`;
   if (key === "pages") return `${item.slug || ""} · ${item.region_code || "Global"} · ${item.is_published ? "Published" : "Draft"}`;
   return item.customer_name || item.brand || item.status || item.payment_status || item.discount_type || item.currency_code || (item.is_approved === false ? "Pending moderation" : item.is_published !== undefined ? (item.is_published ? "Published" : "Draft") : "Ready");
 }
@@ -1058,6 +1077,7 @@ export default function AdminPanelClient() {
     if (key === "customers")  return `/admin/customers/${item.id}/`;
     if (key === "reviews")    return `/admin/reviews/${item.id}/`;
     if (key === "shipping")   return `/admin/shipping-rules/${item.id}/`;
+    if (key === "cart_milestones") return `/admin/cart-milestones/${item.id}/`;
     if (key === "blog")       return `/admin/blog-posts/${item.slug || item.id}/`;
     if (key === "pages")      return `/admin/cms-pages/${item.id}/`;
     if (key === "hero_cards") return `/admin/hero-promo-cards/${item.id}/`;
@@ -1494,7 +1514,7 @@ export default function AdminPanelClient() {
           </div>
           {canCreate && !(activeKey === "draft_orders" && draftComposerOpen) ? (
             <button type="button" className="admin-btn-primary admin-topbar-cta" onClick={startCreate}>
-              + {activeKey === "draft_orders" ? "Create order" : activeKey === "blog" ? "New article" : activeKey === "hero_cards" ? "Add hero card" : activeKey === "deals" ? "Add deal" : activeKey === "shipping" ? "Add rule" : activeKey === "taxes" ? "Add tax rule" : activeKey === "staff" ? "Add staff" : `Add ${activeKey.slice(0, -1)}`}
+              + {activeKey === "draft_orders" ? "Create order" : activeKey === "blog" ? "New article" : activeKey === "hero_cards" ? "Add hero card" : activeKey === "deals" ? "Add deal" : activeKey === "shipping" ? "Add rule" : activeKey === "cart_milestones" ? "Add milestone" : activeKey === "taxes" ? "Add tax rule" : activeKey === "staff" ? "Add staff" : `Add ${activeKey.slice(0, -1)}`}
             </button>
           ) : null}
         </header>

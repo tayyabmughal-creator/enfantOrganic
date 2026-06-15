@@ -522,6 +522,10 @@ class HeroPromoCard(OrderedModel):
 
     title_en = models.CharField(max_length=255, default="")
     title_ar = models.CharField(max_length=255, default="")
+    # Small eyebrow label shown above the title. When blank the storefront falls
+    # back to the preset label derived from `accent`, so existing cards are unchanged.
+    eyebrow_en = models.CharField(max_length=120, blank=True, default="")
+    eyebrow_ar = models.CharField(max_length=120, blank=True, default="")
     subtitle_en = models.TextField(blank=True, default="")
     subtitle_ar = models.TextField(blank=True, default="")
     cta_en = models.CharField(max_length=120, blank=True, default="")
@@ -529,6 +533,10 @@ class HeroPromoCard(OrderedModel):
     href = models.CharField(max_length=255, blank=True)
     image = models.URLField(max_length=500)
     image_file = models.ImageField(upload_to="hero-cards/", blank=True, null=True)
+    # Optional mobile-specific artwork. When blank the desktop image is used on
+    # mobile too, so existing cards keep working unchanged.
+    image_mobile = models.URLField(max_length=500, blank=True, default="")
+    image_file_mobile = models.ImageField(upload_to="hero-cards/", blank=True, null=True)
     size = models.CharField(max_length=12, choices=CARD_SIZE_CHOICES, default=SMALL)
     accent = models.CharField(max_length=40, default="soft")
     is_visible = models.BooleanField(default=True)
