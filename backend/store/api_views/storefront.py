@@ -12,6 +12,7 @@ from ..models import (
     Order,
     OrderItem,
     Region,
+    Review,
     Tag,
     Testimonial,
 )
@@ -32,6 +33,28 @@ from ..serializers import (
 from ..services.search import apply_ranked_product_search
 from ..services.stock import filter_products_fulfillable_for_region
 from .context import StorefrontContextMixin, product_queryset
+
+
+def _homepage_testimonials(locale):
+    """Return Testimonial records; fallback to top customer Reviews when table is empty."""
+    testimonials = Testimonial.objects.all()
+    if testimonials.exists():
+        return TestimonialSerializer(testimonials, many=True, context={"locale": locale}).data
+
+    # Pull top 8 approved reviews ordered by helpful_count desc, then rating desc.
+    reviews = (
+        Review.objects.filter(is_approved=True, comment__regex=r'\S{10}')
+        .order_by("-rating", "-created_at")[:8]
+    )
+    return [
+        {
+            "name": r.customer_name,
+            "location": "",
+            "quote": r.comment,
+            "rating": r.rating,
+        }
+        for r in reviews
+    ]
 
 
 def products_available_for_region(queryset, region):
@@ -153,7 +176,7 @@ class HomePageView(StorefrontContextMixin, APIView):
             "categories": CategorySerializer(Category.objects.all(), many=True, context=context).data,
             "sections": sections,
             "reviews_heading": "ENFANT Reviews" if locale == "en" else "آراء عملاء إنفانت",
-            "testimonials": TestimonialSerializer(Testimonial.objects.all(), many=True, context=context).data,
+            "testimonials": _homepage_testimonials(locale),
             "instagram": {
                 "title": serialized_settings["instagram_title"],
                 "cta": serialized_settings["instagram_cta"],
