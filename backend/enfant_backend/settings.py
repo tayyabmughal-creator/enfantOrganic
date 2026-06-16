@@ -208,6 +208,11 @@ REST_FRAMEWORK = {
         "region_detection": os.getenv("DRF_REGION_DETECTION_RATE", "120/hour"),
         "order_lookup": os.getenv("DRF_ORDER_LOOKUP_RATE", "5/hour"),
         "webhook": os.getenv("DRF_WEBHOOK_RATE", "120/min"),
+        # Storefront analytics ingest fires on every page_view/product_view/
+        # add_to_cart/checkout_initiated. Without this scope rate the view's
+        # throttle_scope="analytics" raised ImproperlyConfigured -> HTTP 500 on
+        # every event, so the admin "Conversion Breakdown" funnel never populated.
+        "analytics": os.getenv("DRF_ANALYTICS_RATE", "1000/min"),
     },
 }
 
@@ -221,6 +226,7 @@ if "test" in sys.argv:
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["payment"] = "10000/hour"
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["region_detection"] = "10000/hour"
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["webhook"] = "10000/min"
+    REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["analytics"] = "100000/min"
     CELERY_TASK_ALWAYS_EAGER = True
     CELERY_TASK_EAGER_PROPAGATES = True
 
