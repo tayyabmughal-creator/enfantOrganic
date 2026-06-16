@@ -18,7 +18,7 @@ import os
 
 from django.core.management.base import BaseCommand
 
-from store.domain_models.catalog import Product, Category
+from store.domain_models.catalog import Product, Category, Tag, HeroPromoCard
 
 DEFAULT_FILE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
@@ -86,5 +86,53 @@ class Command(BaseCommand):
                 obj.save(update_fields=changed)
                 c_ok += 1
 
+        # Tags (name_ar) — shown as filter facets / SEO tags on the storefront.
+        t_ok = t_miss = 0
+        for row in data.get("tags", []):
+            try:
+                obj = Tag.objects.get(slug=row["slug"])
+            except Tag.DoesNotExist:
+                self.stderr.write(f"missing tag: {row['slug']}")
+                t_miss += 1
+                continue
+            if only_empty and obj.name_ar:
+                continue
+            obj.name_ar = row["name_ar"]
+            obj.save(update_fields=["name_ar"])
+            t_ok += 1
+
+        # Product details JSON (details_ar) — spec chips on the PDP.
+        d_ok = d_miss = 0
+        for row in data.get("product_details", []):
+            try:
+                obj = Product.objects.get(slug=row["slug"])
+            except Product.DoesNotExist:
+                self.stderr.write(f"missing product (details): {row['slug']}")
+                d_miss += 1
+                continue
+            if only_empty and obj.details_ar:
+                continue
+            obj.details_ar = row["details_ar"]
+            obj.save(update_fields=["details_ar"])
+            d_ok += 1
+
+        # Misc product fields (ingredients_ar / origin_source_ar).
+        for row in data.get("product_ingredients", []):
+            Product.objects.filter(slug=row["slug"]).update(ingredients_ar=row["ingredients_ar"])
+        for row in data.get("product_origins", []):
+            Product.objects.filter(slug=row["slug"]).update(origin_source_ar=row["origin_source_ar"])
+
+        # Hero promo cards (matched by English title; also corrects EN typos).
+        h_ok = 0
+        for row in data.get("hero_cards", []):
+            for obj in HeroPromoCard.objects.filter(title_en=row["match_title_en"]):
+                obj.title_en = row.get("title_en", obj.title_en)
+                obj.title_ar = row["title_ar"]
+                obj.save(update_fields=["title_en", "title_ar"])
+                h_ok += 1
+
         self.stdout.write(self.style.SUCCESS(f"products updated={p_ok} missing={p_miss}"))
         self.stdout.write(self.style.SUCCESS(f"categories updated={c_ok} missing={c_miss}"))
+        self.stdout.write(self.style.SUCCESS(f"tags updated={t_ok} missing={t_miss}"))
+        self.stdout.write(self.style.SUCCESS(f"product details updated={d_ok} missing={d_miss}"))
+        self.stdout.write(self.style.SUCCESS(f"hero cards updated={h_ok}"))

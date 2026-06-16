@@ -334,5 +334,497 @@
    "name_ar": "المناديل",
    "description_ar": "مناديل للوجه والجسم للأطفال"
   }
+ ],
+ "tags": [
+  {
+   "slug": "baby-set",
+   "name_ar": "طقم أطفال"
+  },
+  {
+   "slug": "newborn-gift-set",
+   "name_ar": "طقم هدية لحديثي الولادة"
+  },
+  {
+   "slug": "organic-baby-set",
+   "name_ar": "طقم أطفال عضوي"
+  },
+  {
+   "slug": "baby-shower-gift-uae",
+   "name_ar": "هدية استقبال مولود – الإمارات"
+  },
+  {
+   "slug": "complete-baby-set",
+   "name_ar": "طقم أطفال كامل"
+  },
+  {
+   "slug": "organic-newborn-kit",
+   "name_ar": "طقم عضوي لحديثي الولادة"
+  },
+  {
+   "slug": "baby-fabric-wash-uae",
+   "name_ar": "غسول ملابس الأطفال – الإمارات"
+  },
+  {
+   "slug": "enfant-organic-uae",
+   "name_ar": "إنفانت أورجانيك – الإمارات"
+  },
+  {
+   "slug": "organic-laundry-detergent-oman",
+   "name_ar": "منظّف غسيل عضوي – عُمان"
+  },
+  {
+   "slug": "fragrance-free-wipes",
+   "name_ar": "مناديل خالية من العطور"
+  },
+  {
+   "slug": "organic-baby-wipes-oman",
+   "name_ar": "مناديل أطفال عضوية – عُمان"
+  },
+  {
+   "slug": "water-wipes-uae",
+   "name_ar": "مناديل مائية – الإمارات"
+  },
+  {
+   "slug": "cavity-protection-oman",
+   "name_ar": "حماية من التسوّس – عُمان"
+  },
+  {
+   "slug": "fluoride-toothpaste-for-kids",
+   "name_ar": "معجون أسنان بالفلورايد للأطفال"
+  },
+  {
+   "slug": "kids-toothpaste-uae",
+   "name_ar": "معجون أسنان للأطفال – الإمارات"
+  },
+  {
+   "slug": "deet-free-baby-spray-oman",
+   "name_ar": "بخاخ أطفال خالٍ من الديت – عُمان"
+  },
+  {
+   "slug": "natural-mosquito-repellent-uae",
+   "name_ar": "طارد بعوض طبيعي – الإمارات"
+  },
+  {
+   "slug": "organic-mozzie-guard",
+   "name_ar": "حماية عضوية من البعوض"
+  },
+  {
+   "slug": "best-diaper-rash-cream-uae",
+   "name_ar": "أفضل كريم لطفح الحفاض – الإمارات"
+  },
+  {
+   "slug": "fragrance-free-baby-lotion",
+   "name_ar": "لوشن أطفال خالٍ من العطور"
+  },
+  {
+   "slug": "organic-nappy-rash-relief-oman",
+   "name_ar": "علاج طفح الحفاض العضوي – عُمان"
+  },
+  {
+   "slug": "best-organic-baby-lotion-uae",
+   "name_ar": "أفضل لوشن أطفال عضوي – الإمارات"
+  },
+  {
+   "slug": "non-greasy-baby-cream",
+   "name_ar": "كريم أطفال غير دهني"
+  },
+  {
+   "slug": "sensitive-skin-moisturizer-oman",
+   "name_ar": "مرطّب للبشرة الحساسة – عُمان"
+  },
+  {
+   "slug": "calming-baby-sleep-products",
+   "name_ar": "منتجات تهدئة نوم الأطفال"
+  },
+  {
+   "slug": "natural-cornstarch-powder-oman",
+   "name_ar": "بودرة نشا الذرة الطبيعية – عُمان"
+  },
+  {
+   "slug": "talc-free-baby-powder-uae",
+   "name_ar": "بودرة أطفال خالية من التلك – الإمارات"
+  },
+  {
+   "slug": "2-in-1-baby-wash",
+   "name_ar": "غسول أطفال 2 في 1"
+  },
+  {
+   "slug": "body-wash",
+   "name_ar": "غسول الجسم"
+  },
+  {
+   "slug": "shampoo",
+   "name_ar": "شامبو"
+  },
+  {
+   "slug": "daily-baby-skincare",
+   "name_ar": "العناية اليومية ببشرة الأطفال"
+  },
+  {
+   "slug": "organic-baby-bundle",
+   "name_ar": "حزمة أطفال عضوية"
+  },
+  {
+   "slug": "soft-trio",
+   "name_ar": "سوفت تريو"
+  },
+  {
+   "slug": "essential-baby-care",
+   "name_ar": "العناية الأساسية بالطفل"
+  },
+  {
+   "slug": "organic-baby-pack",
+   "name_ar": "حزمة أطفال عضوية"
+  },
+  {
+   "slug": "pure-basics-set",
+   "name_ar": "طقم بيور بيسيكس"
+  },
+  {
+   "slug": "baby-glow-kit",
+   "name_ar": "طقم إشراق الأطفال"
+  },
+  {
+   "slug": "newborn-grooming-set",
+   "name_ar": "طقم العناية بحديثي الولادة"
+  },
+  {
+   "slug": "scalp-care-baby",
+   "name_ar": "العناية بفروة رأس الطفل"
+  },
+  {
+   "slug": "6-piece-baby-set",
+   "name_ar": "طقم أطفال من 6 قطع"
+  },
+  {
+   "slug": "organic-bottle-cleaner",
+   "name_ar": "منظّف رضّاعات عضوي"
+  },
+  {
+   "slug": "small-newborn-set",
+   "name_ar": "طقم صغير لحديثي الولادة"
+  },
+  {
+   "slug": "2-year-old-baby-care",
+   "name_ar": "العناية بالأطفال من عمر سنتين"
+  },
+  {
+   "slug": "insect-repellent-baby",
+   "name_ar": "طارد حشرات للأطفال"
+  },
+  {
+   "slug": "toddler-boy-set",
+   "name_ar": "طقم للأولاد الصغار"
+  },
+  {
+   "slug": "baby-hair-conditioner-uae",
+   "name_ar": "بلسم شعر الأطفال – الإمارات"
+  },
+  {
+   "slug": "organic-girl-skincare",
+   "name_ar": "العناية العضوية ببشرة البنات"
+  },
+  {
+   "slug": "toddler-girl-set",
+   "name_ar": "طقم للبنات الصغيرات"
+  },
+  {
+   "slug": "luxury-newborn-gift",
+   "name_ar": "هدية فاخرة لحديثي الولادة"
+  },
+  {
+   "slug": "organic-baby-gift-box",
+   "name_ar": "صندوق هدايا أطفال عضوي"
+  },
+  {
+   "slug": "premium-baby-set",
+   "name_ar": "طقم أطفال فاخر"
+  },
+  {
+   "slug": "baby-conditioner",
+   "name_ar": "بلسم الأطفال"
+  },
+  {
+   "slug": "enfant-organic-plus",
+   "name_ar": "إنفانت أورجانيك بلس"
+  },
+  {
+   "slug": "hair-detangler",
+   "name_ar": "مفكّك تشابك الشعر"
+  },
+  {
+   "slug": "kids-conditioner",
+   "name_ar": "بلسم الأطفال"
+  },
+  {
+   "slug": "organic-hair-care",
+   "name_ar": "العناية العضوية بالشعر"
+  },
+  {
+   "slug": "baby-cotton-buds-uae",
+   "name_ar": "أعواد قطن الأطفال – الإمارات"
+  },
+  {
+   "slug": "organic-cotton-swabs-oman",
+   "name_ar": "أعواد قطن عضوية – عُمان"
+  },
+  {
+   "slug": "spiral-tip-cotton-buds",
+   "name_ar": "أعواد قطن بطرف حلزوني"
+  }
+ ],
+ "product_details": [
+  {
+   "slug": "enfant-organic-the-complete-baby-kit-10-in-1-ultimate-newborn-care-bundle",
+   "details_ar": [
+    "أطقم هدايا الأطفال"
+   ]
+  },
+  {
+   "slug": "enfant-organic-essential-care-set-6-in-1-newborn-starter-bundle",
+   "details_ar": [
+    "أطقم هدايا الأطفال"
+   ]
+  },
+  {
+   "slug": "enfant-organic-lavender-care-set-relaxing-newborn-bedtime-essentials",
+   "details_ar": [
+    "أطقم هدايا الأطفال"
+   ]
+  },
+  {
+   "slug": "enfant-organic-baby-basics-set",
+   "details_ar": [
+    "أطقم هدايا الأطفال"
+   ]
+  },
+  {
+   "slug": "best-newborn-gift-set-uae-relaxing-night-routine",
+   "details_ar": [
+    "أطقم هدايا الأطفال"
+   ]
+  },
+  {
+   "slug": "enfant-ultimate-newborn-essential-kit-uae-and-oman",
+   "details_ar": [
+    "أطقم هدايا الأطفال"
+   ]
+  },
+  {
+   "slug": "enfant-baby-fabric-wash-with-softener",
+   "details_ar": [
+    "منعّمات الأقمشة"
+   ]
+  },
+  {
+   "slug": "enfant-organic-plus-extra-mild-face-body-wipes",
+   "details_ar": [
+    "مناديل أطفال للاستعمال مرة واحدة"
+   ]
+  },
+  {
+   "slug": "enfant-organic-plus-total-care-kids-toothpaste-apple-kiwi-mint-2-years",
+   "details_ar": [
+    "معجون أسنان",
+    "النكهة: تفاح"
+   ]
+  },
+  {
+   "slug": "enfant-natural-mozzie-guard-lotion-6-months",
+   "details_ar": [
+    "طارد حشرات للبشرة",
+    "خالٍ من الكحول،  خالٍ من الأصباغ،  خالٍ من البارابين،  مكوّنات طبيعية،  عضوي",
+    "العطر: حمضيات"
+   ]
+  },
+  {
+   "slug": "enfant-sweet-dreams-natural-baby-powder",
+   "details_ar": [
+    "بودرة الجسم",
+    "خالٍ من الأصباغ،  خالٍ من البارابين،  خالٍ من الفثالات،  عضوي،  نباتي،  مضاد للحساسية،  مكوّنات طبيعية",
+    "مناسب لـ: البشرة الحساسة،  جميع أنواع البشرة",
+    "العطر: لافندر",
+    "منطقة الجسم: الجسم بالكامل",
+    "تأثير العناية بالبشرة: ترطيب،  تهدئة،  مضاد للاحمرار،  مضاد للتهيّج،  مهدّئ،  تنعيم"
+   ]
+  },
+  {
+   "slug": "small-new-born-baby-set-gentle-organic-essentials",
+   "details_ar": [
+    "أطقم هدايا الأطفال"
+   ]
+  },
+  {
+   "slug": "enfant-premium-newborn-set-and-baby-gift-uae",
+   "details_ar": [
+    "أطقم هدايا الأطفال"
+   ]
+  },
+  {
+   "slug": "enfant-organic-plus-moisture-conditioner-for-kids",
+   "details_ar": [
+    "بلسم الشعر",
+    "عضوي،  خالٍ من الكبريتات،  خالٍ من البارابين،  مختبر جلدياً،  للبشرة الحساسة",
+    "مناسب لـ: جميع أنواع الشعر،  الحساس،  الهش،  المعالَج"
+   ]
+  },
+  {
+   "slug": "enfant-organic-double-moisture-lotion-200ml",
+   "details_ar": [
+    "صحة الطفل"
+   ]
+  },
+  {
+   "slug": "enfant-face-body-sunscreen-lotion-70-ml",
+   "details_ar": [
+    "واقي الشمس",
+    "حماية SPF",
+    "سهل التطبيق،  سريع المفعول،  مرطّب،  حماية UVA-UVB،  مقاوم للماء",
+    "مناسب لـ: البشرة الحساسة",
+    "الشكل: لوشن",
+    "تأثير العناية بالبشرة: ترطيب،  تغذية،  حماية،  تهدئة"
+   ]
+  },
+  {
+   "slug": "enfant-best-baby-powder-anti-rash-1",
+   "details_ar": [
+    "بودرة طفح الحفاض",
+    "تهدئة،  ترطيب"
+   ]
+  },
+  {
+   "slug": "enfant-surface-accessory-cleaner-spray",
+   "details_ar": [
+    "ألعاب الأطفال ومعدّات النشاط",
+    "مكوّنات طبيعية بالكامل،  مكوّنات طبيعية"
+   ]
+  },
+  {
+   "slug": "enfant-organic-nipple-bottle-liquid-cleaner",
+   "details_ar": [
+    "فرش ومناديل التنظيف"
+   ]
+  },
+  {
+   "slug": "enfant-relax-moisturizing-lotion-250ml",
+   "details_ar": [
+    "صحة الطفل"
+   ]
+  },
+  {
+   "slug": "enfant-guaze-baby-teeth-cleaner",
+   "details_ar": [
+    "صحة الطفل"
+   ]
+  },
+  {
+   "slug": "enfant-cotton-bud-box-ground-spiral",
+   "details_ar": [
+    "أعواد القطن",
+    "العطر: بدون رائحة"
+   ]
+  },
+  {
+   "slug": "enfant-organic-plus-gentle-first-toothpaste-for-kids-6m",
+   "details_ar": [
+    "معجون أسنان"
+   ]
+  },
+  {
+   "slug": "enfant-organic-plus-gentle-baby-toothpaste-gel-1-year",
+   "details_ar": [
+    "معجون أسنان"
+   ]
+  },
+  {
+   "slug": "enfant-organic-bye-bye-insect-repellent-lotion",
+   "details_ar": [
+    "صحة الطفل"
+   ]
+  },
+  {
+   "slug": "enfant-organic-bye-bye-mosquito-patch-for-baby",
+   "details_ar": [
+    "صحة الطفل"
+   ]
+  },
+  {
+   "slug": "enfant-organic-plus-daily-protection-lotion-no-box",
+   "details_ar": [
+    "صحة الطفل"
+   ]
+  },
+  {
+   "slug": "enfant-organic-plus-daily-sun-protection-lotion",
+   "details_ar": [
+    "صحة الطفل"
+   ]
+  },
+  {
+   "slug": "enfant-organic-body-wash-shampoo-500-ml",
+   "details_ar": [
+    "شامبو"
+   ]
+  },
+  {
+   "slug": "enfant-organic-plus-body-wash-shampoo-foam-mousse",
+   "details_ar": [
+    "شامبو"
+   ]
+  },
+  {
+   "slug": "enfant-organic-plus-baby-powder",
+   "details_ar": [
+    "بودرة الجسم",
+    "خالٍ من الأصباغ،  خالٍ من البارابين،  خالٍ من الفثالات،  عضوي،  مكوّنات طبيعية",
+    "مناسب لـ: البشرة الحساسة،  جميع أنواع البشرة",
+    "تأثير العناية بالبشرة: تهدئة،  ترطيب،  حماية،  مضاد للتهيّج"
+   ]
+  },
+  {
+   "slug": "enfant-organic-plus-baby-nourishing-oil",
+   "details_ar": [
+    "الأطفال والصغار"
+   ]
+  },
+  {
+   "slug": "enfant-shea-butter-nurturing-baby-balm",
+   "details_ar": [
+    "مراهم طفح الحفاض",
+    "عضوي،  مكوّنات طبيعية بالكامل",
+    "ترطيب،  تهدئة،  سهل التطبيق"
+   ]
+  }
+ ],
+ "hero_cards": [
+  {
+   "match_title_en": "BEST SELLLER",
+   "title_en": "BEST SELLER",
+   "title_ar": "الأكثر مبيعاً"
+  }
+ ],
+ "product_ingredients": [
+  {
+   "slug": "enfant-organic-plus-total-care-kids-toothpaste-apple-kiwi-mint-2-years",
+   "ingredients_ar": "البروبوليس"
+  },
+  {
+   "slug": "enfant-best-baby-powder-anti-rash-1",
+   "ingredients_ar": "عطور"
+  },
+  {
+   "slug": "enfant-shea-butter-nurturing-baby-balm",
+   "ingredients_ar": "الألوة فيرا؛ فيتامين E"
+  }
+ ],
+ "product_origins": [
+  {
+   "slug": "enfant-natural-mozzie-guard-lotion-6-months",
+   "origin_source_ar": "طبيعي"
+  },
+  {
+   "slug": "enfant-sweet-dreams-natural-baby-powder",
+   "origin_source_ar": "صناعي"
+  }
  ]
 }
