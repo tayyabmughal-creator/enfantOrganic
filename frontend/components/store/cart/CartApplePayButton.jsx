@@ -100,6 +100,7 @@ function CartApplePayButtonInner() {
           items: cartItems.map((item) => ({
             slug: item.slug,
             quantity: item.quantity,
+            variant_id: item.variantId || "",
             selected_options_text: item.selectedOptionsText || "",
           })),
         };

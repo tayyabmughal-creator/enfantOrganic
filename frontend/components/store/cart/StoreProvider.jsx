@@ -167,6 +167,7 @@ export default function StoreProvider({ children }) {
                   image: data.product.image,
                   name: data.product.name,
                   pricing: data.product.pricing,
+                  variants: data.product.variants || [],
                 },
               ];
             }),
@@ -186,14 +187,21 @@ export default function StoreProvider({ children }) {
                 return item;
               }
 
+              const refreshedVariant = item.variantId
+                ? (refreshed.variants || []).find((variant) => variant.id === item.variantId)
+                : null;
+              const nextPricing = refreshedVariant?.pricing?.amount != null
+                ? refreshedVariant.pricing
+                : refreshed.pricing;
               return {
                 ...item,
-                image: refreshed.image || item.image,
+                image: refreshedVariant?.image || refreshed.image || item.image,
                 locale,
                 name: refreshed.name || item.name,
                 // Stamp region_code so needsRefresh evaluates correctly next
                 // time — API may omit it, causing an infinite reprice loop.
-                pricing: { ...refreshed.pricing, region_code: region },
+                pricing: { ...nextPricing, region_code: region },
+                variantTitle: refreshedVariant?.title || item.variantTitle || "",
               };
             }),
           );
@@ -203,13 +211,14 @@ export default function StoreProvider({ children }) {
           setRepricingInFlightRef.current(false);
         }
       },
-      addItem: (product, quantity = 1, selectedOptions = {}) => {
+      addItem: (product, quantity = 1, selectedOptions = {}, selectedVariant = null) => {
         const nextQuantity = Math.max(Number(quantity) || 1, 1);
         const selectedOptionsText = Object.entries(selectedOptions)
           .map(([name, value]) => `${name}: ${value}`)
           .join(" · ");
 
-        const lineId = `${product.slug}-${selectedOptionsText || "default"}`;
+        const variantId = selectedVariant?.id || "";
+        const lineId = `${product.slug}-${variantId || selectedOptionsText || "default"}`;
 
         setCartItems((current) => {
           const existing = current.find((item) => item.lineId === lineId);
@@ -231,6 +240,8 @@ export default function StoreProvider({ children }) {
               quantity: nextQuantity,
               pricing: product.pricing,
               locale: product.locale || "en",
+              variantId,
+              variantTitle: selectedVariant?.title || "",
               selectedOptionsText,
             },
           ];

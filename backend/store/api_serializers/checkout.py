@@ -29,6 +29,7 @@ from ..models import (
 )
 from ..services import carrier_router
 from ..services.stock import StockError, ensure_region_stock_available, reserve_and_deduct_stock_for_item
+from .catalog import active_product_variants
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,7 @@ def quantize_rate(value):
 class CheckoutItemInputSerializer(serializers.Serializer):
     slug = serializers.SlugField()
     quantity = serializers.IntegerField(min_value=1)
+    variant_id = serializers.CharField(required=False, allow_blank=True)
     selected_options_text = serializers.CharField(required=False, allow_blank=True)
 
 
@@ -146,11 +148,16 @@ def prepare_checkout_items(items_data, region, lock_products=False):
     subtotal = Decimal("0.00")
     prepared_items = []
     requested_quantities = {}
+    requested_variant_quantities = {}
     validated_inventory_slugs = set()
 
     for item_data in items_data:
         slug = item_data["slug"]
+        variant_id = str(item_data.get("variant_id") or "").strip()
         requested_quantities[slug] = requested_quantities.get(slug, 0) + item_data["quantity"]
+        if variant_id:
+            key = (slug, variant_id)
+            requested_variant_quantities[key] = requested_variant_quantities.get(key, 0) + item_data["quantity"]
 
     for item_data in items_data:
         products = Product.objects
@@ -178,6 +185,26 @@ def prepare_checkout_items(items_data, region, lock_products=False):
             )
 
         quantity = item_data["quantity"]
+        variant_id = str(item_data.get("variant_id") or "").strip()
+        variant = None
+        variants = active_product_variants(product, "en", region)
+        if variants:
+            if not variant_id:
+                raise serializers.ValidationError(
+                    {"items": f"Choose a variant for product: {product.slug}"}
+                )
+            variant = next((item for item in variants if item.get("id") == variant_id), None)
+            if not variant:
+                raise serializers.ValidationError(
+                    {"items": f"Selected variant is not available for product: {product.slug}"}
+                )
+            variant_stock = variant.get("stock_quantity")
+            if variant_stock is not None:
+                requested_variant_qty = requested_variant_quantities.get((product.slug, variant_id), quantity)
+                if int(requested_variant_qty) > int(variant_stock):
+                    raise serializers.ValidationError(
+                        {"items": f"Only {variant_stock} item(s) available for {product.name_en} ({variant.get('title')})."}
+                    )
 
         if product.track_inventory and product.slug not in validated_inventory_slugs:
             try:
@@ -190,19 +217,26 @@ def prepare_checkout_items(items_data, region, lock_products=False):
                 raise serializers.ValidationError({"items": str(exc)})
             validated_inventory_slugs.add(product.slug)
 
-        unit_price = price_obj.price
+        variant_price = (variant or {}).get("pricing", {}).get("amount") if variant else None
+        unit_price = quantize_money(variant_price) if variant_price not in (None, "") else price_obj.price
         line_total = quantize_money(unit_price * quantity)
         subtotal += line_total
+        variant_options = (variant or {}).get("options") or {}
+        variant_options_text = " · ".join(
+            f"{name}: {value}" for name, value in variant_options.items() if name and value
+        )
 
         prepared_items.append(
             {
                 "product": product,
                 "product_slug": product.slug,
                 "product_name": product.name_en,
-                "selected_options_text": item_data.get("selected_options_text", ""),
+                "selected_options_text": variant_options_text or item_data.get("selected_options_text", ""),
                 "quantity": quantity,
                 "unit_price": unit_price,
                 "line_total": line_total,
+                "variant": variant,
+                "variant_id": variant_id,
             }
         )
 
@@ -971,6 +1005,12 @@ class CheckoutCreateSerializer(serializers.Serializer):
         for entry in item_entries:
             prepared_item = entry["prepared_item"]
             product = prepared_item["product"]
+            variant_snapshot = prepared_item.get("variant") or None
+            order_item_payload = {
+                key: value
+                for key, value in prepared_item.items()
+                if key not in {"variant", "variant_id"}
+            }
             allocations = []
             if product and product.track_inventory:
                 try:
@@ -1002,9 +1042,11 @@ class CheckoutCreateSerializer(serializers.Serializer):
                     "unit_price": str(prepared_item["unit_price"]),
                     "line_total": str(prepared_item["line_total"]),
                     "currency_code": region.currency_code,
+                    "variant_id": prepared_item.get("variant_id", ""),
+                    "variant": variant_snapshot,
                     "warehouse_allocations": allocations,
                 },
-                **prepared_item,
+                **order_item_payload,
             )
 
         if coupon:

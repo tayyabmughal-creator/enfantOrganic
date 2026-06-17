@@ -213,7 +213,7 @@ const FIELD_CONFIGS = {
     ["review_count","Review count","number"],["rating","Rating","number"],
     ["image","Image URL","text"],["image_file","Image File","file"],
     ["hover_image","Hover image URL","text"],["hover_image_file","Hover Image File","file"],
-    ["gallery","Gallery JSON","json"],["option_groups_en","Options EN JSON","json"],["option_groups_ar","Options AR JSON","json"],
+    ["gallery","Gallery images","gallery"],["variants","Variants","product-variants"],["option_groups_en","Options EN","option-groups"],["option_groups_ar","Options AR","option-groups"],
     ["details_en","Details EN JSON","json"],["details_ar","Details AR JSON","json"],
     ["dietary_tags","Dietary tags JSON","json"],["stock_quantity","Stock","number"],
     ["track_inventory","Track inventory","checkbox"],["show_in_new_arrivals","New arrivals","checkbox"],
@@ -473,7 +473,7 @@ const FIELD_CONFIGS = {
 };
 
 const CREATE_DEFAULTS = {
-  products:   { slug:"",name_en:"",name_ar:"",brand:"Enfant",unit:"",category:"",image:"",hover_image:"",dietary_tags:[],gallery:[],details_en:[],details_ar:[],option_groups_en:[],option_groups_ar:[],stock_quantity:0,rating:5,review_count:0,track_inventory:false,is_published:true,is_featured:false,sort_order:0 },
+  products:   { slug:"",name_en:"",name_ar:"",brand:"Enfant",unit:"",category:"",image:"",hover_image:"",dietary_tags:[],gallery:[],variants:[],details_en:[],details_ar:[],option_groups_en:[],option_groups_ar:[],stock_quantity:0,rating:5,review_count:0,track_inventory:false,is_published:true,is_featured:false,sort_order:0 },
   categories: { slug:"",name_en:"",name_ar:"",description_en:"",description_ar:"",image:"",sort_order:0 },
   deals:      { code:"",description:"",discount_type:"fixed",value:0,minimum_subtotal:0,max_uses:"",starts_at:"",ends_at:"",is_active:true },
   customers:  { username:"",email:"",password:"",first_name:"",last_name:"",is_active:true,is_staff:false },
@@ -574,6 +574,9 @@ function statusTone(value = "") {
 }
 
 function stringify(value, type) {
+  if (type === "gallery") return Array.isArray(value) ? value : [];
+  if (type === "product-variants") return Array.isArray(value) ? value : [];
+  if (type === "option-groups") return Array.isArray(value) ? value : [];
   if (type === "json") return typeof value === "string" ? value : JSON.stringify(value ?? [], null, 2);
   if (type === "datetime-local" && value) return String(value).slice(0, 16);
   if (type === "date" && value) return String(value).slice(0, 10);
@@ -582,6 +585,69 @@ function stringify(value, type) {
 
 function getFieldType(name, key) {
   return (FIELD_CONFIGS[key] || []).find(([n]) => n === name)?.[2];
+}
+
+function cleanOptionGroups(value) {
+  let raw = value;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw || "[]");
+    } catch {
+      raw = [];
+    }
+  }
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((group) => ({
+      name: String(group?.name || "").trim(),
+      values: Array.isArray(group?.values)
+        ? group.values.map((item) => String(item || "").trim()).filter(Boolean)
+        : [],
+    }))
+    .filter((group) => group.name && group.values.length);
+}
+
+function cleanProductVariants(value) {
+  let raw = value;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw || "[]");
+    } catch {
+      raw = [];
+    }
+  }
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((variant, index) => {
+      const options = variant?.options && typeof variant.options === "object" && !Array.isArray(variant.options)
+        ? Object.fromEntries(
+            Object.entries(variant.options)
+              .map(([key, val]) => [String(key || "").trim(), String(val || "").trim()])
+              .filter(([key, val]) => key && val),
+          )
+        : {};
+      const titleEn = String(variant?.title_en || "").trim();
+      const titleAr = String(variant?.title_ar || "").trim();
+      const sku = String(variant?.sku || "").trim();
+      const fallbackId = sku || titleEn || Object.values(options).join("-") || `variant-${index + 1}`;
+      return {
+        id: String(variant?.id || fallbackId)
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "") || `variant-${index + 1}`,
+        sku,
+        title_en: titleEn,
+        title_ar: titleAr,
+        options,
+        price: variant?.price === "" || variant?.price === null || variant?.price === undefined ? "" : String(variant.price),
+        compare_at_price: variant?.compare_at_price === "" || variant?.compare_at_price === null || variant?.compare_at_price === undefined ? "" : String(variant.compare_at_price),
+        image: String(variant?.image || "").trim(),
+        stock_quantity: variant?.stock_quantity === "" || variant?.stock_quantity === null || variant?.stock_quantity === undefined ? "" : Number(variant.stock_quantity),
+        is_active: variant?.is_active !== false,
+      };
+    })
+    .filter((variant) => variant.title_en || Object.keys(variant.options).length || variant.price);
 }
 
 function formatLocalDate(date) {
@@ -624,19 +690,27 @@ function buildOrdersDateFilterParams(filters) {
   return { dateFrom: "", dateTo: "" };
 }
 
-function buildPayload(editor, key) {
+function buildPayload(editor, key, mode) {
+  // On edit we must transmit cleared text fields (empty string) so the admin can
+  // actually blank out a value; on create we omit empties so model defaults apply.
+  const isEdit = mode === "edit";
+  const shouldSkip = (k, v, type) => {
+    if (k === "password" && !v) return true;
+    // Never re-submit an existing file path as a string (backend FileField rejects it).
+    if (type === "file" && !(v instanceof File)) return true;
+    if (v === null || v === undefined) return true;
+    if (v === "" && !isEdit) return true;
+    return false;
+  };
   const hasFile = Object.values(editor).some((v) => v instanceof File);
   if (hasFile) {
     const fd = new FormData();
     for (const [k, v] of Object.entries(editor)) {
-      if (v === "" || v === null || v === undefined) continue;
-      if (k === "password" && !v) continue;
       const type = getFieldType(k, key);
-      // Only submit a file field when a NEW file was chosen. The existing value
-      // comes back as a URL/path string, which the backend FileField rejects
-      // ("The submitted data was not a file").
-      if (type === "file" && !(v instanceof File)) continue;
-      if (type === "json") fd.append(k, JSON.stringify(typeof v === "string" ? JSON.parse(v || "null") : v));
+      if (shouldSkip(k, v, type)) continue;
+      if (type === "product-variants") fd.append(k, JSON.stringify(cleanProductVariants(v)));
+      else if (type === "option-groups") fd.append(k, JSON.stringify(cleanOptionGroups(v)));
+      else if (type === "json" || type === "gallery") fd.append(k, JSON.stringify(typeof v === "string" ? JSON.parse(v || "null") : v));
       else if (v instanceof File) fd.append(k, v);
       else fd.append(k, v);
     }
@@ -645,11 +719,10 @@ function buildPayload(editor, key) {
   const payload = {};
   for (const [k, v] of Object.entries(editor)) {
     const type = getFieldType(k, key);
-    if (v === "" || v === null || v === undefined) continue;
-    if (k === "password" && !v) continue;
-    // Never re-submit an existing file path as a string (backend FileField rejects it).
-    if (type === "file" && !(v instanceof File)) continue;
-    if (type === "json") payload[k] = typeof v === "string" ? JSON.parse(v || "null") : v;
+    if (shouldSkip(k, v, type)) continue;
+    if (type === "product-variants") payload[k] = cleanProductVariants(v);
+    else if (type === "option-groups") payload[k] = cleanOptionGroups(v);
+    else if (type === "json" || type === "gallery") payload[k] = typeof v === "string" ? JSON.parse(v || "null") : v;
     else payload[k] = v;
   }
   return payload;
@@ -1239,6 +1312,13 @@ export default function AdminPanelClient() {
     await loadScreen(active);
   }
 
+  async function uploadGalleryImage(slug, file) {
+    const fd = new FormData();
+    fd.append("files", file);
+    const res = await request(`/admin/products/${slug}/gallery/`, { method: "POST", body: fd });
+    return Array.isArray(res?.urls) ? res.urls : [];
+  }
+
   async function saveRecord() {
     if (!canWriteKey(activeKey)) {
       showToast("You do not have permission to save changes in this section.", "error");
@@ -1248,7 +1328,7 @@ export default function AdminPanelClient() {
     try {
       const path = mode === "create" ? active.endpoint : SETTINGS_KEYS.has(activeKey) ? active.endpoint : detailPath();
       const method = mode === "create" ? "POST" : "PATCH";
-      const payload = buildPayload(editor, activeKey);
+      const payload = buildPayload(editor, activeKey, mode);
       const saved = await request(path, { method, body: payload instanceof FormData ? payload : JSON.stringify(payload) });
       if (saved && typeof saved === "object" && mode === "edit") {
         setSelected(saved);
@@ -1558,6 +1638,7 @@ export default function AdminPanelClient() {
           onRefundOrder={activeKey === "orders" ? handleRefundOrder : undefined}
           onCreateShipment={activeKey === "orders" ? handleCreateShipment : undefined}
           onRollbackOrderStatus={activeKey === "orders" ? handleRollbackOrderStatus : undefined}
+          onGalleryUpload={uploadGalleryImage}
           titleFor={titleFor}
           metaFor={metaFor}
           fields={FIELD_CONFIGS[activeKey]}

@@ -21,6 +21,102 @@ from ..services.payment_router import get_region_provider_options, get_region_pr
 from ..services.carrier_router import get_region_carrier_options, get_region_carrier_warnings
 from ..services.stock import get_region_available_stock, get_region_warehouses
 
+MONEY_QUANTIZER = Decimal("0.01")
+
+
+def _money(value):
+    if value in (None, ""):
+        return None
+    try:
+        return Decimal(str(value)).quantize(MONEY_QUANTIZER, rounding=ROUND_HALF_UP)
+    except Exception:
+        return None
+
+
+def _converted_money(value, region):
+    amount = _money(value)
+    if amount is None:
+        return None
+    fx_rate = Decimal(str(getattr(region, "fx_rate", 1) or 1))
+    return (amount * fx_rate).quantize(MONEY_QUANTIZER, rounding=ROUND_HALF_UP)
+
+
+def _variant_options(raw):
+    options = raw.get("options")
+    if isinstance(options, dict):
+        return {
+            str(key).strip(): str(value).strip()
+            for key, value in options.items()
+            if str(key).strip() and str(value).strip()
+        }
+    return {}
+
+
+def active_product_variants(product, locale="en", region=None):
+    rows = product.variants if isinstance(getattr(product, "variants", None), list) else []
+    variants = []
+    for index, raw in enumerate(rows):
+        if not isinstance(raw, dict) or raw.get("is_active") is False:
+            continue
+
+        options = _variant_options(raw)
+        variant_id = str(raw.get("id") or raw.get("sku") or f"variant-{index + 1}").strip()
+        if not variant_id:
+            variant_id = f"variant-{index + 1}"
+
+        title = str(
+            (raw.get("title_ar") if locale == "ar" else raw.get("title_en"))
+            or raw.get("title_en")
+            or raw.get("title_ar")
+            or " / ".join(options.values())
+            or variant_id
+        ).strip()
+
+        base_price = _money(raw.get("price") or raw.get("base_price"))
+        price = _converted_money(base_price, region) if region else base_price
+        compare = _converted_money(raw.get("compare_at_price") or raw.get("base_compare_at_price"), region) if region else _money(raw.get("compare_at_price") or raw.get("base_compare_at_price"))
+        stock_raw = raw.get("stock_quantity")
+        stock_quantity = None
+        if stock_raw not in (None, ""):
+            try:
+                stock_quantity = max(int(stock_raw), 0)
+            except (TypeError, ValueError):
+                stock_quantity = None
+
+        variants.append({
+            "id": variant_id,
+            "sku": str(raw.get("sku") or "").strip(),
+            "title": title,
+            "title_en": str(raw.get("title_en") or "").strip(),
+            "title_ar": str(raw.get("title_ar") or "").strip(),
+            "options": options,
+            "image": str(raw.get("image") or "").strip(),
+            "pricing": {
+                "amount": float(price) if price is not None else None,
+                "compare_amount": float(compare) if compare is not None else None,
+                "currency_code": getattr(region, "currency_code", "") if region else "",
+                "region_code": getattr(region, "code", "") if region else "",
+                "prefix": "",
+                "unit_price_text": str(raw.get("unit_price_text") or "").strip(),
+            },
+            "stock_quantity": stock_quantity,
+            "is_available": stock_quantity is None or stock_quantity > 0,
+        })
+    return variants
+
+
+def option_groups_from_variants(variants):
+    grouped = {}
+    order = []
+    for variant in variants:
+        for name, value in (variant.get("options") or {}).items():
+            if name not in grouped:
+                grouped[name] = []
+                order.append(name)
+            if value and value not in grouped[name]:
+                grouped[name].append(value)
+    return [{"name": name, "values": grouped[name]} for name in order if grouped[name]]
+
 
 class CartMilestoneSerializer(serializers.ModelSerializer):
     label = serializers.SerializerMethodField()
@@ -212,6 +308,8 @@ class ProductCardSerializer(serializers.ModelSerializer):
     tags = serializers.SerializerMethodField()
     pricing = serializers.SerializerMethodField()
     option_groups = serializers.SerializerMethodField()
+    has_variants = serializers.SerializerMethodField()
+    variants = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
     hover_image = serializers.SerializerMethodField()
     stock_status = serializers.SerializerMethodField()
@@ -234,6 +332,8 @@ class ProductCardSerializer(serializers.ModelSerializer):
             "tags",
             "pricing",
             "option_groups",
+            "has_variants",
+            "variants",
             "stock_status",
         )
 
@@ -289,7 +389,16 @@ class ProductCardSerializer(serializers.ModelSerializer):
         }
 
     def get_option_groups(self, obj):
+        variants = active_product_variants(obj, self.context.get("locale"), self.context.get("region"))
+        if variants:
+            return option_groups_from_variants(variants)
         return localized_json(obj, "option_groups", self.context.get("locale"))
+
+    def get_has_variants(self, obj):
+        return bool(active_product_variants(obj, self.context.get("locale"), self.context.get("region")))
+
+    def get_variants(self, obj):
+        return active_product_variants(obj, self.context.get("locale"), self.context.get("region"))
 
     def _get_region_stocks(self, obj):
         region = self.context.get("region")
@@ -309,6 +418,20 @@ class ProductCardSerializer(serializers.ModelSerializer):
         )
 
     def get_stock_status(self, obj):
+        variants = active_product_variants(obj, self.context.get("locale"), self.context.get("region"))
+        if variants:
+            available = [variant for variant in variants if variant.get("is_available")]
+            quantities = [
+                int(variant["stock_quantity"])
+                for variant in variants
+                if variant.get("stock_quantity") is not None
+            ]
+            return {
+                "track_inventory": bool(quantities) or obj.track_inventory,
+                "is_in_stock": bool(available),
+                "available_quantity": sum(quantities) if quantities else None,
+                "is_low_stock": bool(quantities) and sum(quantities) <= 10,
+            }
         if not obj.track_inventory:
             return {
                 "track_inventory": False,

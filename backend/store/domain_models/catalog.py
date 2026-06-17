@@ -520,8 +520,8 @@ class HeroPromoCard(OrderedModel):
         (SMALL, "Small"),
     )
 
-    title_en = models.CharField(max_length=255, default="")
-    title_ar = models.CharField(max_length=255, default="")
+    title_en = models.CharField(max_length=255, blank=True, default="")
+    title_ar = models.CharField(max_length=255, blank=True, default="")
     # Small eyebrow label shown above the title. When blank the storefront falls
     # back to the preset label derived from `accent`, so existing cards are unchanged.
     eyebrow_en = models.CharField(max_length=120, blank=True, default="")
@@ -551,7 +551,7 @@ class Category(OrderedModel):
     name_ar = models.CharField(max_length=120, default="")
     description_en = models.TextField(blank=True, default="")
     description_ar = models.TextField(blank=True, default="")
-    image = models.URLField(max_length=500)
+    image = models.URLField(max_length=500, blank=True, default="")
     image_file = models.ImageField(upload_to="categories/", blank=True, null=True)
 
     def __str__(self):
@@ -609,6 +609,7 @@ class Product(OrderedModel):
     gallery = models.JSONField(default=list, blank=True)
     option_groups_en = models.JSONField(default=list, blank=True)
     option_groups_ar = models.JSONField(default=list, blank=True)
+    variants = models.JSONField(default=list, blank=True)
     show_in_new_arrivals = models.BooleanField(default=False)
     show_in_baby_sets = models.BooleanField(default=False)
     show_in_top_choices = models.BooleanField(default=False)

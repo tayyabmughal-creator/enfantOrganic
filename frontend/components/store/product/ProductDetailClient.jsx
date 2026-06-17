@@ -115,6 +115,15 @@ function DescriptionCards({ description }) {
   );
 }
 
+function findSelectedVariant(variants, selectedOptions) {
+  if (!Array.isArray(variants) || !variants.length) return null;
+  return variants.find((variant) =>
+    Object.entries(variant.options || {}).every(
+      ([name, value]) => selectedOptions?.[name] === value,
+    ),
+  ) || variants[0] || null;
+}
+
 export default function ProductDetailClient({ locale, product, region }) {
   const { addItem, flyToCart } = useStore();
   const addBtnRef = useRef(null);
@@ -125,6 +134,7 @@ export default function ProductDetailClient({ locale, product, region }) {
     new Set((product.gallery?.length ? product.gallery : [product.image]).filter(Boolean)),
   );
   const optionGroups = Array.isArray(product.option_groups) ? product.option_groups : [];
+  const variants = Array.isArray(product.variants) ? product.variants : [];
   const detailPoints = Array.isArray(product.details) ? product.details : [];
   const editorialReviews = Array.isArray(product.reviews) ? product.reviews : [];
   const customerReviews = Array.isArray(product.customer_reviews) ? product.customer_reviews : [];
@@ -145,11 +155,16 @@ export default function ProductDetailClient({ locale, product, region }) {
   const [selectedOptions, setSelectedOptions] = useState(
     Object.fromEntries(optionGroups.map((group) => [group.name, group.values[0]])),
   );
-  const isOutOfStock = Boolean(product?.stock_status?.track_inventory) && !Boolean(product?.stock_status?.is_in_stock);
+  const selectedVariant = findSelectedVariant(variants, selectedOptions);
+  const selectedPricing = selectedVariant?.pricing?.amount != null ? selectedVariant.pricing : product.pricing;
+  const selectedVariantStock = selectedVariant?.stock_quantity;
+  const isOutOfStock = selectedVariantStock != null
+    ? Number(selectedVariantStock) <= 0
+    : Boolean(product?.stock_status?.track_inventory) && !Boolean(product?.stock_status?.is_in_stock);
   const reviewCount = Number(product.review_count || customerReviews.length || editorialReviews.length || 0);
   const vendorLabel = String(product.vendor || product.brand || "ENFANT ORGANICS").toUpperCase();
-  const compareAmount = Number(product?.pricing?.compare_amount || 0);
-  const showComparePrice = compareAmount > Number(product?.pricing?.amount || 0);
+  const compareAmount = Number(selectedPricing?.compare_amount || 0);
+  const showComparePrice = compareAmount > Number(selectedPricing?.amount || 0);
   const promoCopy = isAr
     ? {
         om: "استمتع بخصم 15٪ على طلبك فوق 25 ر.ع عند الدفع",
@@ -231,6 +246,12 @@ export default function ProductDetailClient({ locale, product, region }) {
       ),
     },
   ];
+
+  useEffect(() => {
+    if (selectedVariant?.image) {
+      setSelectedImage(selectedVariant.image);
+    }
+  }, [selectedVariant?.id, selectedVariant?.image]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -323,12 +344,12 @@ export default function ProductDetailClient({ locale, product, region }) {
   }, [locale, product, region]);
 
   const addCurrentProduct = () => {
-    addItem({ ...product, locale }, quantity, selectedOptions);
+    addItem({ ...product, pricing: selectedPricing, image: selectedVariant?.image || product.image, locale }, quantity, selectedOptions, selectedVariant);
     flyToCart(addBtnRef.current);
   };
 
   const buyCurrentProduct = () => {
-    addItem({ ...product, locale }, quantity, selectedOptions);
+    addItem({ ...product, pricing: selectedPricing, image: selectedVariant?.image || product.image, locale }, quantity, selectedOptions, selectedVariant);
     router.push(buildStorePath(locale, "/checkout", region));
   };
 
@@ -489,11 +510,11 @@ export default function ProductDetailClient({ locale, product, region }) {
             </span>
           </div>
           <div className="product-pricing large">
-            <strong>{formatMoney(product.pricing, locale)}</strong>
+            <strong>{formatMoney(selectedPricing, locale)}</strong>
             {showComparePrice ? (
               <span>
                 {formatMoney(
-                  { ...product.pricing, amount: product.pricing.compare_amount, prefix: "" },
+                  { ...selectedPricing, amount: selectedPricing.compare_amount, prefix: "" },
                   locale,
                 )}
               </span>

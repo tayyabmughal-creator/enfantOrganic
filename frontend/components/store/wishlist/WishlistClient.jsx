@@ -108,7 +108,8 @@ export default function WishlistClient({ locale, region }) {
   function handleAddToCart(product, event) {
     if (!product?.slug || cartingSlug) return;
 
-    const hasOptions = (product.option_groups || []).some(
+    const hasVariants = Boolean(product.has_variants || (product.variants || []).length);
+    const hasOptions = hasVariants || (product.option_groups || []).some(
       (group) => Array.isArray(group?.values) && group.values.length > 1,
     );
 
@@ -117,6 +118,10 @@ export default function WishlistClient({ locale, region }) {
 
     try {
       if (hasOptions) {
+        if (hasVariants && typeof window !== "undefined") {
+          window.location.assign(buildStorePath(locale, `/product/${product.slug}`, normalizedRegion));
+          return;
+        }
         openQuickView({ ...product, locale, region: normalizedRegion });
         return;
       }
@@ -268,7 +273,8 @@ export default function WishlistClient({ locale, region }) {
               const product = item.product;
               if (!product?.slug) return null;
               const productPath = buildStorePath(locale, `/product/${product.slug}`, normalizedRegion);
-              const hasOptions = (product.option_groups || []).some(
+              const hasVariants = Boolean(product.has_variants || (product.variants || []).length);
+              const hasOptions = hasVariants || (product.option_groups || []).some(
                 (group) => Array.isArray(group?.values) && group.values.length > 1,
               );
               const amount = Number(product.pricing?.amount) || 0;
@@ -319,17 +325,19 @@ export default function WishlistClient({ locale, region }) {
                       <h2>{product.name}</h2>
                     </Link>
                     {product.short_description ? <p>{product.short_description}</p> : null}
-                    <div className="wishlist-card-pricing">
-                      <strong>{formatMoney(product.pricing, locale)}</strong>
-                      {hasDiscount ? (
-                        <span>
-                          {formatMoney(
-                            { ...product.pricing, amount: compareAmount, prefix: "" },
-                            locale,
-                          )}
-                        </span>
-                      ) : null}
-                    </div>
+                    {!hasVariants ? (
+                      <div className="wishlist-card-pricing">
+                        <strong>{formatMoney(product.pricing, locale)}</strong>
+                        {hasDiscount ? (
+                          <span>
+                            {formatMoney(
+                              { ...product.pricing, amount: compareAmount, prefix: "" },
+                              locale,
+                            )}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
                     {addedSlug === product.slug ? (
                       <div className="wishlist-card-feedback">
                         <Icon name="bag" size={15} />

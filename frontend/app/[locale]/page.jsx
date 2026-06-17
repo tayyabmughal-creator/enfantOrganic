@@ -160,13 +160,13 @@ export default async function LocalizedHomePage({ params, searchParams }) {
                   />
                 </picture>
                 <div className="offer-copy">
-                  {(heroPrimary.eyebrow || OFFER_LABELS[heroPrimary.accent]) ? (
+                  {heroPrimary.eyebrow ? (
                     <span className="offer-eyebrow">
-                      {heroPrimary.eyebrow || OFFER_LABELS[heroPrimary.accent]}
+                      {heroPrimary.eyebrow}
                     </span>
                   ) : null}
-                  <h2>{heroPrimary.title}</h2>
-                  <p>{heroPrimary.subtitle}</p>
+                  {heroPrimary.title ? <h2>{heroPrimary.title}</h2> : null}
+                  {heroPrimary.subtitle ? <p>{heroPrimary.subtitle}</p> : null}
                   {heroPrimary.cta ? (
                     <span className="offer-cta-pill">{heroPrimary.cta}</span>
                   ) : null}
@@ -191,13 +191,13 @@ export default async function LocalizedHomePage({ params, searchParams }) {
                   />
                 </picture>
                 <div className="offer-secondary-copy">
-                  {(heroSecondary.eyebrow || OFFER_LABELS[heroSecondary.accent]) ? (
+                  {heroSecondary.eyebrow ? (
                     <span className="offer-secondary-eyebrow">
-                      {heroSecondary.eyebrow || OFFER_LABELS[heroSecondary.accent]}
+                      {heroSecondary.eyebrow}
                     </span>
                   ) : null}
-                  <h3>{heroSecondary.title}</h3>
-                  <p>{heroSecondary.subtitle}</p>
+                  {heroSecondary.title ? <h3>{heroSecondary.title}</h3> : null}
+                  {heroSecondary.subtitle ? <p>{heroSecondary.subtitle}</p> : null}
                   {heroSecondary.cta ? (
                     <span className="offer-secondary-cta">{heroSecondary.cta}</span>
                   ) : null}
@@ -224,12 +224,12 @@ export default async function LocalizedHomePage({ params, searchParams }) {
                     </picture>
                   </div>
                   <div className="offer-tile-body">
-                    {(card.eyebrow || OFFER_LABELS[card.accent]) ? (
+                    {card.eyebrow ? (
                       <span className="offer-tile-eyebrow">
-                        {card.eyebrow || OFFER_LABELS[card.accent]}
+                        {card.eyebrow}
                       </span>
                     ) : null}
-                    <h4>{card.title}</h4>
+                    {card.title ? <h4>{card.title}</h4> : null}
                     {card.subtitle ? (
                       <p className="offer-tile-sub">{card.subtitle}</p>
                     ) : null}

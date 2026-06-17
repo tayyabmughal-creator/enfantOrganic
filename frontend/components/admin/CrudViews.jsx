@@ -487,7 +487,7 @@ function shipmentStatusTone(status) {
   return "neutral";
 }
 
-export function CrudFormModal({ activeKey, isSettings, mode, selected, editor, setEditor, canDelete, onClose, onSave, onDelete, onDownloadInvoice, onRefundOrder, onCreateShipment, onRollbackOrderStatus, titleFor, metaFor, fields }) {
+export function CrudFormModal({ activeKey, isSettings, mode, selected, editor, setEditor, canDelete, onClose, onSave, onDelete, onDownloadInvoice, onRefundOrder, onCreateShipment, onRollbackOrderStatus, onGalleryUpload, titleFor, metaFor, fields }) {
   const title  = mode === "create"
     ? `Add ${activeKey === "deals" ? "promotion" : activeKey === "blog" ? "article" : activeKey.replace(/_/g, " ")}`
     : (titleFor ? titleFor(selected, activeKey) : "Edit");
@@ -520,7 +520,7 @@ export function CrudFormModal({ activeKey, isSettings, mode, selected, editor, s
 
         <div className={modalFormClassName}>
           {resolvedFields.map((field) => (
-            <FormField key={field[0]} field={field} value={editor[field[0]]} editor={editor} setEditor={setEditor} />
+            <FormField key={field[0]} field={field} value={editor[field[0]]} editor={editor} setEditor={setEditor} mode={mode} onGalleryUpload={onGalleryUpload} />
           ))}
           <div className="admin-modal-actions">
             <button type="button" className="admin-btn-primary" onClick={onSave}>Save changes</button>
@@ -1113,7 +1113,307 @@ function buildOrderActivityEvents(order) {
   return deduped;
 }
 
-function FormField({ field, value, editor, setEditor }) {
+const GAL_BTN = { padding: "2px 7px", fontSize: 13, lineHeight: 1.2, cursor: "pointer", border: "1px solid #ddd", borderRadius: 4, background: "#fff" };
+const OPT_BTN = { padding: "5px 9px", fontSize: 12, lineHeight: 1.2, cursor: "pointer", border: "1px solid #d9e4cf", borderRadius: 6, background: "#fff" };
+
+function normalizeOptionGroups(value) {
+  let raw = value;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw || "[]");
+    } catch {
+      raw = [];
+    }
+  }
+  if (!Array.isArray(raw)) return [];
+  return raw.map((group) => ({
+    name: String(group?.name || ""),
+    values: Array.isArray(group?.values)
+      ? group.values.map((item) => String(item || ""))
+      : [],
+  }));
+}
+
+function OptionGroupsManager({ field, value, editor, setEditor }) {
+  const name = field[0];
+  const label = field[1];
+  const groups = normalizeOptionGroups(value);
+  const update = (next) => setEditor({ ...editor, [name]: next });
+  const addGroup = () => update([...groups, { name: "", values: [""] }]);
+  const updateGroup = (groupIndex, patch) => update(groups.map((group, i) => (i === groupIndex ? { ...group, ...patch } : group)));
+  const removeGroup = (groupIndex) => update(groups.filter((_, i) => i !== groupIndex));
+  const moveGroup = (groupIndex, dir) => {
+    const nextIndex = groupIndex + dir;
+    if (nextIndex < 0 || nextIndex >= groups.length) return;
+    const next = groups.slice();
+    [next[groupIndex], next[nextIndex]] = [next[nextIndex], next[groupIndex]];
+    update(next);
+  };
+  const updateValue = (groupIndex, valueIndex, nextValue) => {
+    const group = groups[groupIndex];
+    const values = group.values.slice();
+    values[valueIndex] = nextValue;
+    updateGroup(groupIndex, { values });
+  };
+  const addValue = (groupIndex) => {
+    const group = groups[groupIndex];
+    updateGroup(groupIndex, { values: [...group.values, ""] });
+  };
+  const removeValue = (groupIndex, valueIndex) => {
+    const group = groups[groupIndex];
+    updateGroup(groupIndex, { values: group.values.filter((_, i) => i !== valueIndex) });
+  };
+
+  return (
+    <div className="admin-label full-width">
+      <span>{label}</span>
+      <div style={{ display: "grid", gap: 12, marginTop: 8 }}>
+        {groups.map((group, groupIndex) => (
+          <div key={`${name}-${groupIndex}`} style={{ border: "1px solid #dfe9d7", borderRadius: 8, padding: 12, background: "#fbfdf8" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 8, alignItems: "center" }}>
+              <input
+                className="admin-input"
+                value={group.name}
+                placeholder="Option name, e.g. Size"
+                onChange={(event) => updateGroup(groupIndex, { name: event.target.value })}
+              />
+              <div style={{ display: "flex", gap: 4 }}>
+                <button type="button" style={OPT_BTN} disabled={groupIndex === 0} onClick={() => moveGroup(groupIndex, -1)} title="Move up">↑</button>
+                <button type="button" style={OPT_BTN} disabled={groupIndex === groups.length - 1} onClick={() => moveGroup(groupIndex, 1)} title="Move down">↓</button>
+                <button type="button" style={{ ...OPT_BTN, color: "#c0392b" }} onClick={() => removeGroup(groupIndex)} title="Remove option">×</button>
+              </div>
+            </div>
+            <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+              {group.values.map((optionValue, valueIndex) => (
+                <div key={`${name}-${groupIndex}-${valueIndex}`} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 8, alignItems: "center" }}>
+                  <input
+                    className="admin-input"
+                    value={optionValue}
+                    placeholder="Value, e.g. 150 ml"
+                    onChange={(event) => updateValue(groupIndex, valueIndex, event.target.value)}
+                  />
+                  <button type="button" style={{ ...OPT_BTN, color: "#c0392b" }} onClick={() => removeValue(groupIndex, valueIndex)} title="Remove value">×</button>
+                </div>
+              ))}
+              <button type="button" className="admin-btn-sm" onClick={() => addValue(groupIndex)}>+ Add value</button>
+            </div>
+          </div>
+        ))}
+        {groups.length === 0 ? <small className="admin-field-help">No options yet.</small> : null}
+        <button type="button" className="admin-btn-sm" onClick={addGroup}>+ Add option group</button>
+      </div>
+      <small className="admin-field-help">Example: Size → 100 ml, 150 ml, 500 ml. Customers will choose these on product cards/detail pages.</small>
+    </div>
+  );
+}
+
+function normalizeProductVariants(value) {
+  let raw = value;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw || "[]");
+    } catch {
+      raw = [];
+    }
+  }
+  if (!Array.isArray(raw)) return [];
+  return raw.map((variant, index) => ({
+    id: String(variant?.id || `variant-${index + 1}`),
+    sku: String(variant?.sku || ""),
+    title_en: String(variant?.title_en || ""),
+    title_ar: String(variant?.title_ar || ""),
+    options: variant?.options && typeof variant.options === "object" && !Array.isArray(variant.options)
+      ? variant.options
+      : {},
+    price: variant?.price ?? "",
+    compare_at_price: variant?.compare_at_price ?? "",
+    image: String(variant?.image || ""),
+    stock_quantity: variant?.stock_quantity ?? "",
+    is_active: variant?.is_active !== false,
+  }));
+}
+
+function ProductVariantsManager({ field, value, editor, setEditor }) {
+  const name = field[0];
+  const label = field[1];
+  const variants = normalizeProductVariants(value);
+  const update = (next) => setEditor({ ...editor, [name]: next });
+  const patchVariant = (index, patch) => update(variants.map((variant, i) => (i === index ? { ...variant, ...patch } : variant)));
+  const addVariant = () => update([
+    ...variants,
+    {
+      id: `variant-${variants.length + 1}`,
+      sku: "",
+      title_en: "",
+      title_ar: "",
+      options: { Size: "" },
+      price: "",
+      compare_at_price: "",
+      image: "",
+      stock_quantity: "",
+      is_active: true,
+    },
+  ]);
+  const duplicateVariant = (index) => {
+    const source = variants[index] || {};
+    update([
+      ...variants,
+      {
+        ...source,
+        id: `${source.id || "variant"}-copy-${variants.length + 1}`,
+        sku: "",
+        title_en: source.title_en ? `${source.title_en} Copy` : "",
+      },
+    ]);
+  };
+  const removeVariant = (index) => update(variants.filter((_, i) => i !== index));
+  const moveVariant = (index, dir) => {
+    const nextIndex = index + dir;
+    if (nextIndex < 0 || nextIndex >= variants.length) return;
+    const next = variants.slice();
+    [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+    update(next);
+  };
+  const setOptionPair = (variantIndex, optionIndex, key, val) => {
+    const variant = variants[variantIndex];
+    const pairs = Object.entries(variant.options || {});
+    pairs[optionIndex] = key === "name" ? [val, pairs[optionIndex]?.[1] || ""] : [pairs[optionIndex]?.[0] || "", val];
+    const options = {};
+    pairs.forEach(([optionName, optionValue]) => {
+      if (String(optionName || "").trim()) options[optionName] = optionValue;
+    });
+    patchVariant(variantIndex, { options });
+  };
+  const addOptionPair = (variantIndex) => {
+    const variant = variants[variantIndex];
+    patchVariant(variantIndex, { options: { ...(variant.options || {}), Option: "" } });
+  };
+  const removeOptionPair = (variantIndex, optionName) => {
+    const variant = variants[variantIndex];
+    const options = { ...(variant.options || {}) };
+    delete options[optionName];
+    patchVariant(variantIndex, { options });
+  };
+
+  return (
+    <div className="admin-label full-width">
+      <span>{label}</span>
+      <div style={{ display: "grid", gap: 12, marginTop: 8 }}>
+        {variants.map((variant, index) => {
+          const optionPairs = Object.entries(variant.options || {});
+          return (
+            <div key={`${variant.id}-${index}`} style={{ border: "1px solid #dfe9d7", borderRadius: 8, padding: 12, background: "#fbfdf8" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr) auto", gap: 8, alignItems: "center" }}>
+                <input className="admin-input" value={variant.title_en} placeholder="Title EN, e.g. 150 ml" onChange={(event) => patchVariant(index, { title_en: event.target.value })} />
+                <input className="admin-input" value={variant.title_ar} placeholder="Title AR" onChange={(event) => patchVariant(index, { title_ar: event.target.value })} />
+                <div style={{ display: "flex", gap: 4 }}>
+                  <button type="button" style={OPT_BTN} disabled={index === 0} onClick={() => moveVariant(index, -1)} title="Move up">↑</button>
+                  <button type="button" style={OPT_BTN} disabled={index === variants.length - 1} onClick={() => moveVariant(index, 1)} title="Move down">↓</button>
+                  <button type="button" style={OPT_BTN} onClick={() => duplicateVariant(index)} title="Duplicate">Copy</button>
+                  <button type="button" style={{ ...OPT_BTN, color: "#c0392b" }} onClick={() => removeVariant(index)} title="Remove">×</button>
+                </div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8, marginTop: 8 }}>
+                <input className="admin-input" value={variant.sku} placeholder="SKU" onChange={(event) => patchVariant(index, { sku: event.target.value })} />
+                <input className="admin-input" type="number" value={variant.price} placeholder="Price OMR" onChange={(event) => patchVariant(index, { price: event.target.value })} />
+                <input className="admin-input" type="number" value={variant.compare_at_price} placeholder="Compare OMR" onChange={(event) => patchVariant(index, { compare_at_price: event.target.value })} />
+                <input className="admin-input" type="number" value={variant.stock_quantity} placeholder="Stock" onChange={(event) => patchVariant(index, { stock_quantity: event.target.value })} />
+              </div>
+              <input className="admin-input" style={{ marginTop: 8 }} value={variant.image} placeholder="Variant image URL (optional)" onChange={(event) => patchVariant(index, { image: event.target.value })} />
+              <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+                {optionPairs.map(([optionName, optionValue], optionIndex) => (
+                  <div key={`${optionName}-${optionIndex}`} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr) auto", gap: 8 }}>
+                    <input className="admin-input" value={optionName} placeholder="Option name, e.g. Size" onChange={(event) => setOptionPair(index, optionIndex, "name", event.target.value)} />
+                    <input className="admin-input" value={optionValue} placeholder="Value, e.g. 150 ml" onChange={(event) => setOptionPair(index, optionIndex, "value", event.target.value)} />
+                    <button type="button" style={{ ...OPT_BTN, color: "#c0392b" }} onClick={() => removeOptionPair(index, optionName)} title="Remove option">×</button>
+                  </div>
+                ))}
+                <button type="button" className="admin-btn-sm" onClick={() => addOptionPair(index)}>+ Add option value</button>
+              </div>
+              <label className="admin-check-label" style={{ marginTop: 8 }}>
+                <input type="checkbox" className="admin-checkbox" checked={variant.is_active} onChange={(event) => patchVariant(index, { is_active: event.target.checked })} />
+                <span>Active</span>
+              </label>
+            </div>
+          );
+        })}
+        {variants.length === 0 ? <small className="admin-field-help">No variants yet. Add variants when one product has different sizes, prices, SKUs, or images.</small> : null}
+        <button type="button" className="admin-btn-sm" onClick={addVariant}>+ Add variant</button>
+      </div>
+      <small className="admin-field-help">Variant prices are authored in OMR; UAE/Saudi display prices use the existing FX rates.</small>
+    </div>
+  );
+}
+
+function GalleryManager({ field, value, editor, setEditor, mode, onGalleryUpload }) {
+  const name = field[0];
+  const label = field[1];
+  const list = Array.isArray(value) ? value : [];
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const slug = editor?.slug || "";
+  const canUpload = mode === "edit" && Boolean(slug) && typeof onGalleryUpload === "function";
+
+  const update = (next) => setEditor({ ...editor, [name]: next });
+  const removeAt = (i) => update(list.filter((_, idx) => idx !== i));
+  const move = (i, dir) => {
+    const j = i + dir;
+    if (j < 0 || j >= list.length) return;
+    const next = list.slice();
+    [next[i], next[j]] = [next[j], next[i]];
+    update(next);
+  };
+  async function onPick(e) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (!files.length) return;
+    setError("");
+    setUploading(true);
+    try {
+      let next = list.slice();
+      for (const f of files) {
+        const urls = await onGalleryUpload(slug, f);
+        next = next.concat(Array.isArray(urls) ? urls : []);
+      }
+      update(next);
+    } catch (err) {
+      setError(err?.message || "Upload failed.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div className="admin-label full-width">
+      <span>{label}</span>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, margin: "8px 0" }}>
+        {list.map((url, i) => (
+          <div key={`${url}-${i}`} style={{ width: 92 }}>
+            <img src={url} alt={`Gallery ${i + 1}`} style={{ width: 92, height: 92, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e5e5", display: "block" }} />
+            <div style={{ display: "flex", justifyContent: "center", gap: 4, marginTop: 4 }}>
+              <button type="button" onClick={() => move(i, -1)} disabled={i === 0} title="Move left" style={GAL_BTN}>←</button>
+              <button type="button" onClick={() => move(i, 1)} disabled={i === list.length - 1} title="Move right" style={GAL_BTN}>→</button>
+              <button type="button" onClick={() => removeAt(i)} title="Remove" style={{ ...GAL_BTN, color: "#c0392b" }}>×</button>
+            </div>
+          </div>
+        ))}
+        {list.length === 0 ? <small className="admin-field-help">No gallery images yet.</small> : null}
+      </div>
+      {canUpload ? (
+        <label className="admin-input" style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer", width: "fit-content" }}>
+          <input type="file" accept="image/*" multiple disabled={uploading} onChange={onPick} style={{ display: "none" }} />
+          <span>{uploading ? "Uploading…" : "+ Upload images"}</span>
+        </label>
+      ) : (
+        <small className="admin-field-help">Create &amp; save the product first, then reopen it to add gallery images.</small>
+      )}
+      {error ? <small className="admin-field-help" style={{ color: "#c0392b" }}>{error}</small> : null}
+      <small className="admin-field-help">Reorder with ← →, remove with ×. Changes save when you click Save.</small>
+    </div>
+  );
+}
+
+function FormField({ field, value, editor, setEditor, mode, onGalleryUpload }) {
   const [name, label, type, options, config = {}] = field;
   const [objectPreviewUrl, setObjectPreviewUrl] = useState("");
   const disabled = Boolean(config?.disabled);
@@ -1134,6 +1434,15 @@ function FormField({ field, value, editor, setEditor }) {
   const previewUrl = objectPreviewUrl || existingPreviewUrl;
   const showImagePreview = Boolean(previewUrl && name.includes("image"));
 
+  if (type === "gallery") {
+    return <GalleryManager field={field} value={value} editor={editor} setEditor={setEditor} mode={mode} onGalleryUpload={onGalleryUpload} />;
+  }
+  if (type === "option-groups") {
+    return <OptionGroupsManager field={field} value={value} editor={editor} setEditor={setEditor} />;
+  }
+  if (type === "product-variants") {
+    return <ProductVariantsManager field={field} value={value} editor={editor} setEditor={setEditor} />;
+  }
   if (type === "checkbox") {
     return (
       <label className="admin-label admin-check-label">

@@ -2,6 +2,7 @@
 
 import { memo, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import Icon from "@/components/icons/Icon";
 import { useStoreActions } from "@/components/store/cart/StoreProvider";
@@ -32,12 +33,14 @@ function resolveProductCardImage(image) {
 
 function ProductCard({ locale, product, region }) {
   const { addItem, flyToCart, openQuickView } = useStoreActions();
+  const router = useRouter();
   const addBtnRef = useRef(null);
   const t = uiText(locale);
   const [wishToast, setWishToast] = useState("");
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [isWishSubmitting, setIsWishSubmitting] = useState(false);
-  const hasOptions = (product.option_groups || []).some((group) => group.values.length > 1);
+  const hasVariants = Boolean(product.has_variants || (product.variants || []).length);
+  const hasOptions = hasVariants || (product.option_groups || []).some((group) => group.values.length > 1);
   const primaryImage = resolveProductCardImage(product.image);
   const hoverImage = product.hover_image ? resolveProductCardImage(product.hover_image) : "";
   const rating = Number(product.rating || 0);
@@ -56,6 +59,10 @@ function ProductCard({ locale, product, region }) {
   );
 
   const handlePrimaryAction = () => {
+    if (hasVariants) {
+      router.push(buildStorePath(locale, `/product/${product.slug}`, region));
+      return;
+    }
     if (hasOptions) {
       openQuickView({ ...product, locale, region });
       return;
@@ -200,25 +207,27 @@ function ProductCard({ locale, product, region }) {
             </div>
           ) : null}
         </div>
-        <div className="product-price-panel">
-          <div className="product-pricing">
-            <strong>{formatMoney(product.pricing, locale)}</strong>
-            {product.pricing?.compare_amount ? (
-              <span>
-                {formatMoney(
-                  { ...product.pricing, amount: product.pricing.compare_amount, prefix: "" },
-                  locale,
-                )}
+        {!hasVariants ? (
+          <div className="product-price-panel">
+            <div className="product-pricing">
+              <strong>{formatMoney(product.pricing, locale)}</strong>
+              {product.pricing?.compare_amount ? (
+                <span>
+                  {formatMoney(
+                    { ...product.pricing, amount: product.pricing.compare_amount, prefix: "" },
+                    locale,
+                  )}
+                </span>
+              ) : null}
+            </div>
+            {savingsAmount > 0 ? (
+              <span className="product-savings-badge">
+                {saveLabel} {formatMoney({ ...product.pricing, amount: savingsAmount, prefix: "" }, locale)}
               </span>
             ) : null}
           </div>
-          {savingsAmount > 0 ? (
-            <span className="product-savings-badge">
-              {saveLabel} {formatMoney({ ...product.pricing, amount: savingsAmount, prefix: "" }, locale)}
-            </span>
-          ) : null}
-        </div>
-        {product.pricing?.unit_price_text ? (
+        ) : null}
+        {!hasVariants && product.pricing?.unit_price_text ? (
           <span className="unit-price-label">{product.pricing.unit_price_text}</span>
         ) : null}
         <button ref={addBtnRef} type="button" className="product-action-button" onClick={handlePrimaryAction}>

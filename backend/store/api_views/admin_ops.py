@@ -12,8 +12,10 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics, permissions, serializers, status
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.shortcuts import get_object_or_404
 
 from django.db import transaction
 from django.db.models import Count, Sum, Q
@@ -1819,6 +1821,80 @@ class AdminProductDetailView(StaffRetrieveUpdateDestroyView):
     queryset = Product.objects.select_related("category").prefetch_related("tags", "prices__region").all()
     serializer_class = AdminProductSerializer
     lookup_field = "slug"
+
+
+class AdminProductGalleryUploadView(AdminCapabilityMixin, APIView):
+    """Save one or more uploaded gallery images and return their /media URLs.
+
+    The product's ``gallery`` JSON list is still persisted via the normal product
+    PATCH (so add/remove/reorder stay atomic with Save); this endpoint only stores
+    the files and hands back URLs for the admin gallery widget to append.
+    """
+
+    admin_read_capabilities = (CAP_PRODUCTS_EDIT,)
+    admin_write_capabilities = (CAP_PRODUCTS_EDIT,)
+    parser_classes = (MultiPartParser, FormParser)
+
+    def post(self, request, slug):
+        import os
+        import uuid
+        from django.conf import settings as dj_settings
+        from django.core.files.storage import default_storage
+        from django.utils.text import slugify
+        from PIL import Image
+
+        logger.warning(
+            "GALLERY UPLOAD reached backend: slug=%s file_keys=%s content_type=%s",
+            slug, list(request.FILES.keys()), request.content_type,
+        )
+        product = get_object_or_404(Product, slug=slug)
+        files = request.FILES.getlist("files")
+        if not files and "file" in request.FILES:
+            files = [request.FILES["file"]]
+        if not files:
+            return Response({"detail": "No image files were provided."}, status=400)
+
+        allowed_ext = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}
+        urls = []
+        for upload in files:
+            try:
+                Image.open(upload).verify()
+                upload.seek(0)
+            except Exception:
+                return Response(
+                    {"detail": f"'{upload.name}' is not a valid image."},
+                    status=400,
+                )
+            # Store under a clean, unique, URL-safe name — original names may carry
+            # spaces/unicode/length that break filesystem paths or produce fragile URLs.
+            base, ext = os.path.splitext(upload.name or "")
+            ext = ext.lower()
+            if ext not in allowed_ext:
+                ext = ".jpg"
+            safe_base = slugify(base)[:60] or "image"
+            target = f"products/gallery/{safe_base}-{uuid.uuid4().hex[:8]}{ext}"
+            try:
+                stored_path = default_storage.save(target, upload)
+            except Exception:
+                logger.exception("Gallery image save failed (product=%s, file=%s)", product.slug, upload.name)
+                return Response(
+                    {"detail": f"Could not save '{upload.name}'. Please try a different file."},
+                    status=400,
+                )
+            urls.append(f"{dj_settings.MEDIA_URL.rstrip('/')}/{stored_path}")
+
+        try:
+            log_admin_action(
+                request=request,
+                actor=request.user,
+                action="product.gallery.upload",
+                resource_type="product",
+                resource_id=str(product.id),
+                after_snapshot=snapshot_instance(product),
+            )
+        except Exception:
+            logger.exception("Gallery upload audit-log failed (product=%s)", product.slug)
+        return Response({"urls": urls})
 
 
 class AdminCategoryListCreateView(StaffListCreateView):

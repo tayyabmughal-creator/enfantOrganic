@@ -90,3 +90,7 @@ customers_export*.csv
 prod_data.json
 prod_db.dump
 *.dump
+
+# Local handoff/context docs (contain secrets) — never commit
+CODEX_HANDOFF.md
+AUDIT_REPORT.md
