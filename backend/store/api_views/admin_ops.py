@@ -633,6 +633,12 @@ def _replace_draft_order_items(*, order, region, prepared_items, totals):
 
     for entry in item_entries:
         prepared_item = entry["prepared_item"]
+        variant_snapshot = prepared_item.get("variant") or None
+        order_item_payload = {
+            key: value
+            for key, value in prepared_item.items()
+            if key not in {"variant", "variant_id"}
+        }
         OrderItem.objects.create(
             order=order,
             taxable_amount=entry["item_taxable"],
@@ -652,11 +658,13 @@ def _replace_draft_order_items(*, order, region, prepared_items, totals):
                 "unit_price": str(prepared_item["unit_price"]),
                 "line_total": str(prepared_item["line_total"]),
                 "currency_code": region.currency_code,
+                "variant_id": prepared_item.get("variant_id", ""),
+                "variant": variant_snapshot,
                 "warehouse_allocations": [],
                 "inventory_committed": False,
                 "inventory_mode": "draft_unreserved",
             },
-            **prepared_item,
+            **order_item_payload,
         )
 
 

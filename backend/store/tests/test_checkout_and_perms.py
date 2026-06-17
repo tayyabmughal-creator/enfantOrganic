@@ -2683,6 +2683,7 @@ class CheckoutAndPermsTestCase(TestCase):
         PAYMOB_INTEGRATION_ID_SA="",
         PAYMOB_IFRAME_ID_SA="",
         PAYMOB_HMAC_SECRET_SA="",
+        PAYMOB_SHARED_ACCOUNT="",
     )
     def test_paymob_config_oman_uses_global_sa_requires_own_creds(self):
         from store.services.payment_config import get_paymob_config
@@ -2721,6 +2722,7 @@ class CheckoutAndPermsTestCase(TestCase):
         PAYMOB_INTEGRATION_ID_SA="",
         PAYMOB_IFRAME_ID_SA="",
         PAYMOB_HMAC_SECRET_SA="",
+        PAYMOB_SHARED_ACCOUNT="",
     )
     def test_paymob_config_db_row_overrides_env_per_region(self):
         from store.models import PaymobRegionConfig

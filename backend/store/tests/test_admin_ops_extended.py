@@ -58,6 +58,15 @@ class AdminOpsExtendedTestCase(TestCase):
             contact_phone="12345678",
             address_en="Test Address",
         )
+        self.region_ae = Region.objects.create(
+            code="ae",
+            name_en="UAE",
+            currency_code="AED",
+            shipping_fee=Decimal("2.00"),
+            shipping_threshold=Decimal("0.00"),
+            contact_phone="12345678",
+            address_en="Test Address",
+        )
 
     def test_blog_post_crud_and_pagination(self):
         self.api_client.force_authenticate(self.staff_user)
