@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import Icon from "@/components/icons/Icon";
 import { useStoreActions } from "@/components/store/cart/StoreProvider";
@@ -148,12 +149,17 @@ function ProductCard({ locale, product, region }) {
           href={buildStorePath(locale, `/product/${product.slug}`, region)}
           className="product-card-image"
         >
-          <img
-            src={primaryImage}
-            alt={product.name}
-            loading="lazy"
-            className="product-card-image-primary"
-          />
+          {primaryImage ? (
+            <Image
+              src={primaryImage}
+              alt={product.name}
+              width={600}
+              height={600}
+              sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 280px"
+              className="product-card-image-primary"
+              style={{ width: "100%", height: "auto" }}
+            />
+          ) : null}
           {hoverImage ? (
             <img
               src={hoverImage}

@@ -19,6 +19,16 @@ const SECURITY_HEADERS = [
 
 const nextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "app.enfantorganic.com",
+        pathname: "/media/**",
+      },
+    ],
+    formats: ["image/webp", "image/avif"],
+  },
   // Keep dev and production builds isolated so running `next build`
   // while local review is open does not corrupt the dev server runtime.
   distDir: isDev ? ".next-dev" : ".next",
