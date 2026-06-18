@@ -47,6 +47,9 @@ export function saveSelectedRegion(region) {
   }
   try {
     window.localStorage.setItem(SELECTED_REGION_STORAGE_KEY, normalized);
+    // Sync to cookie so the server-side middleware can redirect www → correct subdomain.
+    // domain=.enfantorganic.com is shared across all subdomains; silently ignored on localhost.
+    document.cookie = `enfant-region=${normalized}; path=/; domain=.enfantorganic.com; max-age=${60 * 60 * 24 * 365}; samesite=lax; secure`;
   } catch {
     // Storage can be unavailable in private browsing or embedded contexts.
   }
