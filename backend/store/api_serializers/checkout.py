@@ -285,7 +285,10 @@ def validate_coupon_for_checkout(coupon_code, region, subtotal, prepared_items, 
     if allowed_product_ids or allowed_category_ids:
         has_allowed_item = any(
             prepared_item["product"].id in allowed_product_ids
-            or prepared_item["product"].category_id in allowed_category_ids
+            or bool(
+                allowed_category_ids
+                and prepared_item["product"].categories.filter(id__in=allowed_category_ids).exists()
+            )
             for prepared_item in prepared_items
         )
         if not has_allowed_item:

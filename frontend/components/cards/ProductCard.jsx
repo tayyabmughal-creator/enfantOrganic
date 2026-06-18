@@ -2,8 +2,6 @@
 
 import { memo, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-
 import Icon from "@/components/icons/Icon";
 import { useStoreActions } from "@/components/store/cart/StoreProvider";
 import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
@@ -33,7 +31,6 @@ function resolveProductCardImage(image) {
 
 function ProductCard({ locale, product, region }) {
   const { addItem, flyToCart, openQuickView } = useStoreActions();
-  const router = useRouter();
   const addBtnRef = useRef(null);
   const t = uiText(locale);
   const [wishToast, setWishToast] = useState("");
@@ -59,11 +56,7 @@ function ProductCard({ locale, product, region }) {
   );
 
   const handlePrimaryAction = () => {
-    if (hasVariants) {
-      router.push(buildStorePath(locale, `/product/${product.slug}`, region));
-      return;
-    }
-    if (hasOptions) {
+    if (hasVariants || hasOptions) {
       openQuickView({ ...product, locale, region });
       return;
     }

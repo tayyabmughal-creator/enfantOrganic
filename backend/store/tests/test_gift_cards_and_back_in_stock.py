@@ -73,11 +73,11 @@ class GiftCardCheckoutTests(TestCase):
             short_description_ar="عناية لطيفة",
             description_en="Description",
             description_ar="وصف",
-            category=self.category,
             image="https://example.com/product.jpg",
             is_published=True,
             track_inventory=False,
         )
+        self.product.categories.add(self.category)
         ProductPrice.objects.create(product=self.product, region=self.region, price=Decimal("5.00"))
         self.gift_card = GiftCard.objects.create(
             code="EOG-TEST-0001",
@@ -163,12 +163,12 @@ class BackInStockRequestTests(TestCase):
             short_description_ar="عناية لطيفة",
             description_en="Description",
             description_ar="وصف",
-            category=self.category,
             image="https://example.com/product.jpg",
             is_published=True,
             track_inventory=True,
             stock_quantity=0,
         )
+        self.product.categories.add(self.category)
         ProductPrice.objects.create(product=self.product, region=self.region, price=Decimal("3.00"))
 
     def test_create_and_block_duplicate_back_in_stock_request(self):

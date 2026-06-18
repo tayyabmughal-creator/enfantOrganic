@@ -29,6 +29,5 @@ class StorefrontContextMixin:
 def product_queryset():
     return (
         Product.objects.filter(is_published=True)
-        .select_related("category")
-        .prefetch_related("tags", "prices__region", "warehouse_stocks__warehouse")
+        .prefetch_related("categories", "tags", "prices__region", "warehouse_stocks__warehouse", "gallery_images")
     )

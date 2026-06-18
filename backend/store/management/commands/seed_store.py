@@ -85,11 +85,12 @@ class Command(BaseCommand):
             category_slug = payload_copy.pop("category_slug")
             tag_slugs = payload_copy.pop("tag_slugs")
 
-            product_defaults = {**payload_copy, "category": category_map[category_slug]}
+            product_defaults = {**payload_copy}
             product, _ = Product.objects.update_or_create(
                 slug=payload_copy["slug"],
                 defaults=product_defaults,
             )
+            product.categories.set([category_map[category_slug]])
             product.tags.set([tag_map[slug] for slug in tag_slugs])
 
             for region_code, price_payload in prices.items():

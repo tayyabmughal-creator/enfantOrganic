@@ -21,9 +21,9 @@ SEARCH_FIELDS = (
     "description_ar",
     "brand",
     "slug",
-    "category__name_en",
-    "category__name_ar",
-    "category__slug",
+    "categories__name_en",
+    "categories__name_ar",
+    "categories__slug",
     "tags__name_en",
     "tags__name_ar",
     "tags__slug",
@@ -124,12 +124,12 @@ def _fallback_rank_expression(terms):
             output_field=FloatField(),
         )
         score = score + Case(
-            When(category__name_en__icontains=term, then=Value(7.0)),
+            When(categories__name_en__icontains=term, then=Value(7.0)),
             default=Value(0.0),
             output_field=FloatField(),
         )
         score = score + Case(
-            When(category__name_ar__icontains=term, then=Value(7.0)),
+            When(categories__name_ar__icontains=term, then=Value(7.0)),
             default=Value(0.0),
             output_field=FloatField(),
         )
@@ -192,8 +192,8 @@ def _build_trigram_expression(query):
         + Coalesce(TrigramSimilarity("name_ar", query), Value(0.0))
         + Coalesce(TrigramSimilarity("short_description_en", query), Value(0.0))
         + Coalesce(TrigramSimilarity("short_description_ar", query), Value(0.0))
-        + Coalesce(TrigramSimilarity("category__name_en", query), Value(0.0))
-        + Coalesce(TrigramSimilarity("category__name_ar", query), Value(0.0))
+        + Coalesce(TrigramSimilarity("categories__name_en", query), Value(0.0))
+        + Coalesce(TrigramSimilarity("categories__name_ar", query), Value(0.0))
     )
 
 
@@ -206,8 +206,8 @@ def _apply_postgres_search(queryset, query):
     vector = (
         SearchVector("name_en", weight="A", config="simple")
         + SearchVector("name_ar", weight="A", config="simple")
-        + SearchVector("category__name_en", weight="A", config="simple")
-        + SearchVector("category__name_ar", weight="A", config="simple")
+        + SearchVector("categories__name_en", weight="A", config="simple")
+        + SearchVector("categories__name_ar", weight="A", config="simple")
         + SearchVector("tags__name_en", weight="B", config="simple")
         + SearchVector("tags__name_ar", weight="B", config="simple")
         + SearchVector("short_description_en", weight="C", config="simple")

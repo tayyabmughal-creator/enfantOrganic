@@ -35,8 +35,8 @@ class EnsureRegionalProductPricesCommandTestCase(TestCase):
             slug="extra-mild-moisture-lotion",
             name_en="Existing Product",
             name_ar="منتج موجود",
-            category=self.category,
         )
+        self.product.categories.add(self.category)
         ProductPrice.objects.create(
             product=self.product,
             region=self.om,

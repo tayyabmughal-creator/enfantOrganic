@@ -282,8 +282,8 @@ MEDIA_ROOT = BASE_DIR / "media"
 # Upload caps — reject oversized requests/files at the framework boundary so a
 # single multipart POST can't blow up memory.
 # (Defaults: 2.5 MiB in-memory, no hard request-body cap.)
-DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv("DJANGO_DATA_UPLOAD_MAX_BYTES", str(10 * 1024 * 1024)))  # 10 MB
-FILE_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv("DJANGO_FILE_UPLOAD_MAX_BYTES", str(10 * 1024 * 1024)))  # 10 MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv("DJANGO_DATA_UPLOAD_MAX_BYTES", str(25 * 1024 * 1024)))  # 25 MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv("DJANGO_FILE_UPLOAD_MAX_BYTES", str(25 * 1024 * 1024)))  # 25 MB
 DATA_UPLOAD_MAX_NUMBER_FIELDS = int(os.getenv("DJANGO_DATA_UPLOAD_MAX_FIELDS", "1500"))
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

@@ -115,7 +115,7 @@ class NavigationView(StorefrontContextMixin, APIView):
             "settings": serialized_settings,
             "menus": {
                 "product_categories": CategorySerializer(
-                    Category.objects.annotate(product_count=Count("products")).order_by("-product_count", "name_en"),
+                    Category.objects.annotate(product_count=Count("category_products")).order_by("-product_count", "name_en"),
                     many=True,
                     context=ctx,
                 ).data,
@@ -243,15 +243,17 @@ class ProductDetailView(StorefrontContextMixin, APIView):
         if not product:
             return Response({"detail": "Not found"}, status=404)
 
-        related = products_available_for_region(
-            product_queryset().filter(category=product.category).exclude(pk=product.pk),
-            region,
-        )[:4]
+        primary_category = product.categories.first()
+        related_qs = product_queryset().exclude(pk=product.pk)
+        if primary_category:
+            related_qs = related_qs.filter(categories=primary_category)
+        related = products_available_for_region(related_qs, region)[:4]
 
+        category_name = CategorySerializer(primary_category, context=context).data["name"] if primary_category else ""
         payload = {
             "breadcrumbs": [
                 {"label": "Home" if locale == "en" else "الرئيسية", "href": f"/{locale}"},
-                {"label": CategorySerializer(product.category, context=context).data["name"], "href": f"/{locale}/collections"},
+                {"label": category_name, "href": f"/{locale}/collections"},
                 {"label": ProductDetailSerializer(product, context=context).data["name"], "href": f"/{locale}/product/{product.slug}"},
             ],
             "product": ProductDetailSerializer(product, context=context).data,
@@ -293,7 +295,7 @@ class SearchSuggestionsView(StorefrontContextMixin, APIView):
                     "type": "product",
                     "slug": item["slug"],
                     "name": item["name"],
-                    "category": item["category"]["name"],
+                    "category": (item["category"] or {}).get("name", ""),
                     "image": item.get("image", ""),
                     "currency_code": pricing.get("currency_code"),
                     "price": pricing.get("amount"),
@@ -372,7 +374,7 @@ def apply_catalog_filters(queryset, request, region):
     if search:
         queryset = apply_ranked_product_search(queryset, search)
     if category:
-        queryset = queryset.filter(category__slug=category)
+        queryset = queryset.filter(categories__slug=category)
     if brand:
         queryset = queryset.filter(brand__iexact=brand)
     if tag:

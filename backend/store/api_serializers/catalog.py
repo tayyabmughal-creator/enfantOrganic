@@ -305,6 +305,7 @@ class ProductCardSerializer(serializers.ModelSerializer):
     short_description = serializers.SerializerMethodField()
     badge = serializers.SerializerMethodField()
     category = serializers.SerializerMethodField()
+    categories = serializers.SerializerMethodField()
     tags = serializers.SerializerMethodField()
     pricing = serializers.SerializerMethodField()
     option_groups = serializers.SerializerMethodField()
@@ -329,6 +330,7 @@ class ProductCardSerializer(serializers.ModelSerializer):
             "image",
             "hover_image",
             "category",
+            "categories",
             "tags",
             "pricing",
             "option_groups",
@@ -366,8 +368,15 @@ class ProductCardSerializer(serializers.ModelSerializer):
         value = localized(obj, "badge", self.context.get("locale"))
         return value or None
 
+    def _all_categories(self, obj):
+        return list(obj.categories.all())
+
     def get_category(self, obj):
-        return CategorySerializer(obj.category, context=self.context).data
+        cats = self._all_categories(obj)
+        return CategorySerializer(cats[0], context=self.context).data if cats else None
+
+    def get_categories(self, obj):
+        return CategorySerializer(self._all_categories(obj), many=True, context=self.context).data
 
     def get_tags(self, obj):
         return TagSerializer(obj.tags.all(), many=True, context=self.context).data
@@ -463,6 +472,8 @@ class ProductDetailSerializer(ProductCardSerializer):
     certification_file = serializers.SerializerMethodField()
     gallery = serializers.SerializerMethodField()
     stock_quantity = serializers.SerializerMethodField()
+    seo_title = serializers.SerializerMethodField()
+    seo_description = serializers.SerializerMethodField()
 
     class Meta(ProductCardSerializer.Meta):
         fields = ProductCardSerializer.Meta.fields + (
@@ -482,6 +493,9 @@ class ProductDetailSerializer(ProductCardSerializer):
             "reviews",
             "customer_reviews",
             "gallery",
+            "seo_title",
+            "seo_description",
+            "shopify_meta",
         )
 
     def get_description(self, obj):
@@ -519,6 +533,15 @@ class ProductDetailSerializer(ProductCardSerializer):
     def get_gallery(self, obj):
         request = self.context.get("request")
         urls = []
+
+        for img in obj.gallery_images.all():
+            if img.image_file:
+                url = img.image_file.url
+                media_host = getattr(settings, "MEDIA_HOST_URL", "").rstrip("/")
+                urls.append(f"{media_host}{url}" if media_host else (request.build_absolute_uri(url) if request else url))
+            elif img.image_url:
+                urls.append(img.image_url)
+
         for entry in obj.gallery or []:
             value = str(entry or "").strip()
             if not value:
@@ -534,6 +557,12 @@ class ProductDetailSerializer(ProductCardSerializer):
             else:
                 urls.append(request.build_absolute_uri(value) if request else value)
         return urls
+
+    def get_seo_title(self, obj):
+        return localized(obj, "seo_title", self.context.get("locale"))
+
+    def get_seo_description(self, obj):
+        return localized(obj, "seo_description", self.context.get("locale"))
 
     def get_certification_file(self, obj):
         request = self.context.get("request")

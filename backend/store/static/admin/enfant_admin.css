@@ -1,0 +1,115 @@
+/* ── Fieldset description hints ───────────────────────────────────────── */
+.form-row .help,
+fieldset .description {
+  color: #66705d;
+  font-size: 12px;
+  line-height: 1.5;
+  margin-bottom: 6px;
+}
+
+/* ── Textarea heights ──────────────────────────────────────────────────── */
+/* Short text: 3 lines */
+.field-short_description_en textarea,
+.field-short_description_ar textarea,
+.field-origin_source_en textarea,
+.field-origin_source_ar textarea {
+  min-height: 80px;
+}
+
+/* Medium text: 6 lines */
+.field-description_en textarea,
+.field-description_ar textarea,
+.field-ingredients_en textarea,
+.field-ingredients_ar textarea,
+.field-usage_instructions_en textarea,
+.field-usage_instructions_ar textarea,
+.field-seo_description_en textarea,
+.field-seo_description_ar textarea {
+  min-height: 140px;
+}
+
+/* JSON fields: monospace font + taller box */
+.field-variants textarea,
+.field-option_groups_en textarea,
+.field-option_groups_ar textarea,
+.field-details_en textarea,
+.field-details_ar textarea,
+.field-reviews_en textarea,
+.field-reviews_ar textarea,
+.field-dietary_tags textarea,
+.field-shopify_meta textarea,
+.field-gallery textarea {
+  font-family: "SFMono-Regular", "Consolas", "Liberation Mono", "Menlo", monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  min-height: 160px;
+  background: #f9fbf5;
+  border-color: #c8d6b8;
+}
+
+/* ── Side-by-side EN / AR pairs ────────────────────────────────────────── */
+.field-name_en,
+.field-name_ar,
+.field-seo_title_en,
+.field-seo_title_ar,
+.field-badge_en,
+.field-badge_ar,
+.field-vendor_en,
+.field-vendor_ar {
+  width: 50%;
+  box-sizing: border-box;
+  display: inline-block;
+  vertical-align: top;
+  padding-right: 8px;
+}
+
+/* ── Image upload field descriptions ───────────────────────────────────── */
+.field-image_file .help,
+.field-hover_image_file .help {
+  color: #607a42;
+  font-weight: 600;
+}
+
+/* ── Inline gallery table ───────────────────────────────────────────────── */
+.inline-group[id*="galleryimage"] .tabular td {
+  vertical-align: middle;
+}
+
+.inline-group[id*="galleryimage"] img {
+  max-height: 60px;
+  border-radius: 8px;
+  border: 1px solid #d9e1cf;
+}
+
+/* ── filter_horizontal widget labels ────────────────────────────────────── */
+.selector-available h2,
+.selector-chosen h2 {
+  background: linear-gradient(135deg, #607a42, #7d9658);
+  color: #fff;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 10px 10px 0 0;
+}
+
+/* ── Collapse sections: softer toggle ──────────────────────────────────── */
+fieldset.collapse summary,
+fieldset.collapsed .collapse-toggle {
+  color: #607a42;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+/* ── list_editable published toggle ────────────────────────────────────── */
+#result_list td input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #607a42;
+}
+
+/* ── Required star indicator ────────────────────────────────────────────── */
+.required label::after {
+  content: " *";
+  color: #b45143;
+  font-weight: 800;
+}

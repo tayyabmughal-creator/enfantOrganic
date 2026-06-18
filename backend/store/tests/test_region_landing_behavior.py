@@ -105,7 +105,7 @@ class StorefrontRegionBehaviorTests(TestCase):
         )
 
     def create_product(self, slug, *, show_in_new_arrivals=False):
-        return Product.objects.create(
+        p = Product.objects.create(
             slug=slug,
             name_en=slug.replace("-", " ").title(),
             name_ar=slug,
@@ -113,11 +113,12 @@ class StorefrontRegionBehaviorTests(TestCase):
             short_description_ar="عناية لطيفة",
             description_en="Description",
             description_ar="وصف",
-            category=self.category,
             image="https://example.com/product.jpg",
             is_published=True,
             show_in_new_arrivals=show_in_new_arrivals,
         )
+        p.categories.add(self.category)
+        return p
 
     def create_paid_order_with_item(self, product, *, quantity):
         order = Order.objects.create(

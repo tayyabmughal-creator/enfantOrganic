@@ -548,7 +548,7 @@ class HeroPromoCard(OrderedModel):
 class Category(OrderedModel):
     slug = models.SlugField(unique=True)
     name_en = models.CharField(max_length=120, default="")
-    name_ar = models.CharField(max_length=120, default="")
+    name_ar = models.CharField(max_length=120, blank=True, default="")
     description_en = models.TextField(blank=True, default="")
     description_ar = models.TextField(blank=True, default="")
     image = models.URLField(max_length=500, blank=True, default="")
@@ -561,7 +561,7 @@ class Category(OrderedModel):
 class Tag(OrderedModel):
     slug = models.SlugField(unique=True)
     name_en = models.CharField(max_length=120, default="")
-    name_ar = models.CharField(max_length=120, default="")
+    name_ar = models.CharField(max_length=120, blank=True, default="")
 
     def __str__(self):
         return self.name_en
@@ -570,15 +570,15 @@ class Tag(OrderedModel):
 class Product(OrderedModel):
     slug = models.SlugField(unique=True, max_length=100)
     name_en = models.CharField(max_length=255, default="")
-    name_ar = models.CharField(max_length=255, default="")
-    brand = models.CharField(max_length=120, default="Enfant")
+    name_ar = models.CharField(max_length=255, blank=True, default="")
+    brand = models.CharField(max_length=120, blank=True, default="Enfant")
     unit = models.CharField(max_length=80, blank=True, default="")
-    vendor_en = models.CharField(max_length=120, default="Enfant Organics")
-    vendor_ar = models.CharField(max_length=120, default="إنفانت أورجانيكس")
-    short_description_en = models.TextField(default="")
-    short_description_ar = models.TextField(default="")
-    description_en = models.TextField(default="")
-    description_ar = models.TextField(default="")
+    vendor_en = models.CharField(max_length=120, blank=True, default="Enfant Organics")
+    vendor_ar = models.CharField(max_length=120, blank=True, default="إنفانت أورجانيكس")
+    short_description_en = models.TextField(blank=True, default="")
+    short_description_ar = models.TextField(blank=True, default="")
+    description_en = models.TextField(blank=True, default="")
+    description_ar = models.TextField(blank=True, default="")
     ingredients_en = models.TextField(blank=True, default="")
     ingredients_ar = models.TextField(blank=True, default="")
     usage_instructions_en = models.TextField(blank=True, default="")
@@ -598,13 +598,13 @@ class Product(OrderedModel):
     details_ar = models.JSONField(default=list, blank=True)
     reviews_en = models.JSONField(default=list, blank=True)
     reviews_ar = models.JSONField(default=list, blank=True)
-    badge_en = models.CharField(max_length=60, blank=True)
-    badge_ar = models.CharField(max_length=60, blank=True)
+    badge_en = models.CharField(max_length=60, blank=True, default="")
+    badge_ar = models.CharField(max_length=60, blank=True, default="")
     review_count = models.PositiveIntegerField(default=0)
     rating = models.DecimalField(max_digits=3, decimal_places=1, default=5.0)
-    image = models.URLField(max_length=500, default="")
+    image = models.URLField(max_length=500, blank=True, default="")
     image_file = models.ImageField(upload_to="products/", blank=True, null=True)
-    hover_image = models.URLField(max_length=500, default="")
+    hover_image = models.URLField(max_length=500, blank=True, default="")
     hover_image_file = models.ImageField(upload_to="products/hover/", blank=True, null=True)
     gallery = models.JSONField(default=list, blank=True)
     option_groups_en = models.JSONField(default=list, blank=True)
@@ -617,11 +617,29 @@ class Product(OrderedModel):
     is_published = models.BooleanField(default=True)
     stock_quantity = models.PositiveIntegerField(default=100)
     track_inventory = models.BooleanField(default=False)
-    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="products")
+    categories = models.ManyToManyField(Category, blank=True, related_name="category_products")
     tags = models.ManyToManyField(Tag, related_name="products", blank=True)
+    seo_title_en = models.CharField(max_length=255, blank=True, default="")
+    seo_title_ar = models.CharField(max_length=255, blank=True, default="")
+    seo_description_en = models.TextField(blank=True, default="")
+    seo_description_ar = models.TextField(blank=True, default="")
+    shopify_meta = models.JSONField(default=dict, blank=True)
 
     def __str__(self):
         return self.name_en
+
+
+class ProductGalleryImage(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="gallery_images")
+    image_file = models.ImageField(upload_to="products/gallery/", blank=True, null=True)
+    image_url = models.URLField(max_length=500, blank=True, default="")
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ("sort_order", "id")
+
+    def __str__(self):
+        return f"Gallery #{self.id} – {self.product.slug}"
 
 
 class Warehouse(models.Model):

@@ -243,10 +243,10 @@ class AdminOpsExtendedTestCase(TestCase):
             slug="repeat-product",
             name_en="Repeat Product",
             name_ar="Repeat Product",
-            category=category,
             is_published=True,
             stock_quantity=10,
         )
+        product.categories.add(category)
         common_order_data = {
             "region": self.region,
             "user": customer,
@@ -292,10 +292,14 @@ class AdminOpsExtendedTestCase(TestCase):
             name_ar="Baby Care",
             image="https://example.com/category.jpg",
         )
-        Product.objects.create(slug="out", name_en="Out Product", name_ar="Out Product", category=category, track_inventory=True, stock_quantity=0)
-        Product.objects.create(slug="critical", name_en="Critical Product", name_ar="Critical Product", category=category, track_inventory=True, stock_quantity=3)
-        Product.objects.create(slug="low", name_en="Low Product", name_ar="Low Product", category=category, track_inventory=True, stock_quantity=8)
-        Product.objects.create(slug="healthy", name_en="Healthy Product", name_ar="Healthy Product", category=category, track_inventory=True, stock_quantity=12)
+        p_out = Product.objects.create(slug="out", name_en="Out Product", name_ar="Out Product", track_inventory=True, stock_quantity=0)
+        p_out.categories.add(category)
+        p_crit = Product.objects.create(slug="critical", name_en="Critical Product", name_ar="Critical Product", track_inventory=True, stock_quantity=3)
+        p_crit.categories.add(category)
+        p_low = Product.objects.create(slug="low", name_en="Low Product", name_ar="Low Product", track_inventory=True, stock_quantity=8)
+        p_low.categories.add(category)
+        p_healthy = Product.objects.create(slug="healthy", name_en="Healthy Product", name_ar="Healthy Product", track_inventory=True, stock_quantity=12)
+        p_healthy.categories.add(category)
 
         response = self.api_client.get("/api/admin/dashboard/")
 
@@ -377,11 +381,11 @@ class AdminOpsExtendedTestCase(TestCase):
             slug="rated-product",
             name_en="Rated Product",
             name_ar="Rated Product",
-            category=category,
             is_published=True,
             rating=Decimal("4.9"),
             review_count=25,
         )
+        product.categories.add(category)
         order = Order.objects.create(
             region=self.region,
             customer_name="Rated Customer",

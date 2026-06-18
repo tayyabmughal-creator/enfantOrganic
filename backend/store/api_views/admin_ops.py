@@ -1811,7 +1811,7 @@ class AdminTaxRateDetailView(StaffRetrieveUpdateDestroyView):
 class AdminProductListCreateView(StaffListCreateView):
     admin_read_capabilities = (CAP_PRODUCTS_VIEW,)
     admin_write_capabilities = (CAP_PRODUCTS_EDIT,)
-    queryset = Product.objects.select_related("category").prefetch_related("tags", "prices__region").all()
+    queryset = Product.objects.prefetch_related("categories", "tags", "prices__region", "gallery_images").all()
     serializer_class = AdminProductSerializer
     lookup_field = "slug"
 
@@ -1826,7 +1826,7 @@ class AdminProductListCreateView(StaffListCreateView):
 class AdminProductDetailView(StaffRetrieveUpdateDestroyView):
     admin_read_capabilities = (CAP_PRODUCTS_VIEW,)
     admin_write_capabilities = (CAP_PRODUCTS_EDIT,)
-    queryset = Product.objects.select_related("category").prefetch_related("tags", "prices__region").all()
+    queryset = Product.objects.prefetch_related("categories", "tags", "prices__region", "gallery_images").all()
     serializer_class = AdminProductSerializer
     lookup_field = "slug"
 

@@ -275,7 +275,7 @@ class WishlistView(APIView):
         }
 
     def get(self, request):
-        items = request.user.wishlist_items.select_related("product", "product__category").prefetch_related("product__tags", "product__prices__region")
+        items = request.user.wishlist_items.select_related("product").prefetch_related("product__categories", "product__tags", "product__prices__region", "product__gallery_images")
         return Response(WishlistItemSerializer(items, many=True, context=self.get_serializer_context(request)).data)
 
     def post(self, request):

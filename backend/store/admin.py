@@ -19,6 +19,7 @@ from .models import (
     OrderStatusHistory,
     OrderItem,
     Product,
+    ProductGalleryImage,
     ProductPrice,
     PushDevice,
     Region,
@@ -50,6 +51,13 @@ admin.site.index_title = "Store operations"
 class ProductPriceInline(admin.TabularInline):
     model = ProductPrice
     extra = 1
+
+
+class ProductGalleryImageInline(admin.TabularInline):
+    model = ProductGalleryImage
+    extra = 1
+    fields = ("image_file", "image_url", "sort_order")
+    ordering = ("sort_order", "id")
 
 
 def _product_price_snapshot(product):
@@ -222,13 +230,50 @@ class HeroPromoCardAdmin(admin.ModelAdmin):
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ("name_en", "slug", "sort_order")
+    list_display = ("name_en", "name_ar", "slug", "sort_order")
     prepopulated_fields = {"slug": ("name_en",)}
+    search_fields = ("name_en", "name_ar", "slug")
+    fieldsets = (
+        (
+            None,
+            {
+                "fields": (
+                    "slug",
+                    "name_en",
+                    "name_ar",
+                    "sort_order",
+                )
+            },
+        ),
+        (
+            "Images",
+            {
+                "fields": (
+                    "image_file",
+                    "image",
+                ),
+                "description": "Upload an image file (recommended) or paste an image URL.",
+            },
+        ),
+        (
+            "Description",
+            {
+                "fields": (
+                    "description_en",
+                    "description_ar",
+                ),
+                "classes": ("collapse",),
+            },
+        ),
+    )
+
+    class Media:
+        css = {"all": ("admin/enfant_admin.css",)}
 
 
 @admin.register(Tag)
 class TagAdmin(admin.ModelAdmin):
-    list_display = ("name_en", "slug", "sort_order")
+    list_display = ("name_en", "name_ar", "slug", "sort_order")
     prepopulated_fields = {"slug": ("name_en",)}
 
 
@@ -237,65 +282,114 @@ class ProductAdmin(admin.ModelAdmin):
     list_display = (
         "name_en",
         "slug",
+        "get_categories",
         "brand",
-        "unit",
-        "category",
         "stock_quantity",
         "track_inventory",
-        "is_featured",
-        "show_in_new_arrivals",
-        "show_in_baby_sets",
-        "show_in_top_choices",
         "is_published",
+        "sort_order",
     )
+    list_editable = ("is_published", "sort_order")
     list_filter = (
-        "category",
-        "brand",
-        "track_inventory",
+        "is_published",
+        "categories",
         "is_featured",
         "show_in_new_arrivals",
         "show_in_baby_sets",
         "show_in_top_choices",
-        "is_published",
+        "track_inventory",
+        "brand",
     )
     prepopulated_fields = {"slug": ("name_en",)}
-    search_fields = ("name_en", "name_ar", "brand", "short_description_en")
-    filter_horizontal = ("tags",)
-    inlines = [ProductPriceInline]
+    search_fields = ("name_en", "name_ar", "slug", "brand", "short_description_en")
+    filter_horizontal = ("categories", "tags")
+    inlines = [ProductPriceInline, ProductGalleryImageInline]
+    save_on_top = True
     fieldsets = (
         (
-            "Core",
+            None,
             {
                 "fields": (
-                    "slug",
-                    "name_en",
-                    "name_ar",
-                    "brand",
-                    "unit",
-                    "vendor_en",
-                    "vendor_ar",
-                    "category",
-                    "tags",
-                )
+                    ("slug", "is_published"),
+                    ("name_en", "name_ar"),
+                    ("brand", "unit"),
+                    "sort_order",
+                ),
+                "description": (
+                    "<strong>Required:</strong> Name (EN) and Slug are mandatory. "
+                    "All other fields are optional."
+                ),
             },
         ),
         (
-            "Content",
+            "Categories & Tags",
+            {
+                "fields": (
+                    "categories",
+                    "tags",
+                ),
+            },
+        ),
+        (
+            "Images",
+            {
+                "fields": (
+                    ("image_file", "hover_image_file"),
+                    ("image", "hover_image"),
+                ),
+                "description": (
+                    "Upload image files directly (recommended). "
+                    "URL fields are fallbacks for externally hosted images."
+                ),
+            },
+        ),
+        (
+            "Inventory & Pricing",
+            {
+                "fields": (
+                    ("stock_quantity", "track_inventory"),
+                ),
+                "description": "Set prices via the Price table below. Stock quantity is the fallback when warehouse tracking is off.",
+            },
+        ),
+        (
+            "Short Description",
             {
                 "fields": (
                     "short_description_en",
                     "short_description_ar",
-                    "description_en",
-                    "description_ar",
-                    "details_en",
-                    "details_ar",
-                    "option_groups_en",
-                    "option_groups_ar",
-                )
+                ),
             },
         ),
         (
-            "Organic Product Details",
+            "Full Description",
+            {
+                "fields": (
+                    "description_en",
+                    "description_ar",
+                ),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            "Variants & Options",
+            {
+                "fields": (
+                    "variants",
+                    "option_groups_en",
+                    "option_groups_ar",
+                ),
+                "classes": ("collapse",),
+                "description": (
+                    '<strong>variants</strong>: JSON list of product variants (size/color/etc). '
+                    'Each variant: {"id":"v1","title_en":"Large","options":{"Size":"Large"},'
+                    '"price":5.00,"stock_quantity":10}. '
+                    "Leave empty if product has no variants."
+                ),
+            },
+        ),
+        (
+            "Organic & Product Details",
             {
                 "fields": (
                     "ingredients_en",
@@ -306,50 +400,64 @@ class ProductAdmin(admin.ModelAdmin):
                     "origin_source_ar",
                     "organic_certification_name",
                     "organic_certification_file",
-                    "dietary_tags",
-                    "shelf_life",
-                    "expiry_date",
-                )
+                    ("dietary_tags", "shelf_life", "expiry_date"),
+                ),
+                "classes": ("collapse",),
             },
         ),
         (
-            "Media",
+            "Details & Reviews (JSON)",
             {
                 "fields": (
-                    "image",
-                    "image_file",
-                    "hover_image",
-                    "hover_image_file",
-                    "gallery",
-                )
+                    "details_en",
+                    "details_ar",
+                    "reviews_en",
+                    "reviews_ar",
+                ),
+                "classes": ("collapse",),
+                "description": "Structured details shown on product page. Format: [{\"title\":\"...\",\"body\":\"...\"}]",
             },
         ),
         (
             "Merchandising",
             {
                 "fields": (
-                    "badge_en",
-                    "badge_ar",
-                    "review_count",
-                    "rating",
-                    "is_featured",
-                    "show_in_new_arrivals",
-                    "show_in_baby_sets",
-                    "show_in_top_choices",
-                    "is_published",
-                )
+                    ("badge_en", "badge_ar"),
+                    ("is_featured", "show_in_new_arrivals", "show_in_baby_sets", "show_in_top_choices"),
+                    ("review_count", "rating"),
+                ),
+                "classes": ("collapse",),
             },
         ),
         (
-            "Inventory",
+            "SEO",
             {
                 "fields": (
-                    "stock_quantity",
-                    "track_inventory",
-                )
+                    ("seo_title_en", "seo_title_ar"),
+                    "seo_description_en",
+                    "seo_description_ar",
+                ),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            "Advanced",
+            {
+                "fields": (
+                    ("vendor_en", "vendor_ar"),
+                    "shopify_meta",
+                ),
+                "classes": ("collapse",),
             },
         ),
     )
+
+    class Media:
+        css = {"all": ("admin/enfant_admin.css",)}
+
+    @admin.display(description="Categories")
+    def get_categories(self, obj):
+        return ", ".join(obj.categories.values_list("name_en", flat=True)) or "—"
 
     def save_related(self, request, form, formsets, change):
         before_prices = _product_price_snapshot(form.instance)

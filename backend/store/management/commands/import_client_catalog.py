@@ -479,17 +479,17 @@ class Command(BaseCommand):
                 and str(first_row.get("Status") or "").strip().lower() == "active",
                 "stock_quantity": self._safe_int(first_row.get("Variant Inventory Qty"), default=0),
                 "track_inventory": False,
-                "category": category,
                 "sort_order": sort_index,
             }
 
             product, _created = Product.objects.update_or_create(slug=handle, defaults=product_defaults)
+            product.categories.set([category])
             self._sync_tags(product, first_row, tag_cache)
             self._sync_prices(product, first_row, regions)
             self._sync_media(product, rows, image_dir)
 
         self._remove_obsolete_products(imported_handles)
-        Category.objects.filter(products__isnull=True).delete()
+        Category.objects.filter(category_products__isnull=True).delete()
         Tag.objects.filter(products__isnull=True).delete()
 
     def _import_review_count(self, handle, first_row):

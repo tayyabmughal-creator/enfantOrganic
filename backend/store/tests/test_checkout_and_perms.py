@@ -73,11 +73,11 @@ class CheckoutAndPermsTestCase(TestCase):
         self.product = Product.objects.create(
             slug="apple-puree",
             name_en="Apple Puree",
-            category=self.category,
             track_inventory=True,
             stock_quantity=10,
             is_published=True,
         )
+        self.product.categories.add(self.category)
         self.price = ProductPrice.objects.create(
             product=self.product, region=self.region, price=Decimal("2.50")
         )
@@ -4403,9 +4403,9 @@ class CheckoutAndPermsTestCase(TestCase):
             name_en="Baby Lotion",
             name_ar="لوشن أطفال",
             short_description_en="Gentle lotion for babies",
-            category=self.category,
             is_published=True,
         )
+        exact.categories.add(self.category)
         ProductPrice.objects.create(product=exact, region=self.region, price=Decimal("5.00"))
 
         synonym_match = Product.objects.create(
@@ -4413,9 +4413,9 @@ class CheckoutAndPermsTestCase(TestCase):
             name_en="Infant Cream",
             name_ar="كريم رضيع",
             short_description_en="Comfort cream for infant skin",
-            category=self.category,
             is_published=True,
         )
+        synonym_match.categories.add(self.category)
         ProductPrice.objects.create(product=synonym_match, region=self.region, price=Decimal("6.00"))
 
         response = self.api_client.get(
@@ -4435,9 +4435,9 @@ class CheckoutAndPermsTestCase(TestCase):
             name_en="Arabic Lotion",
             name_ar="لوشن طفل طبيعي",
             short_description_ar="مناسب للبشرة الحساسة",
-            category=self.category,
             is_published=True,
         )
+        arabic_product.categories.add(self.category)
         ProductPrice.objects.create(product=arabic_product, region=self.region, price=Decimal("4.50"))
 
         response = self.api_client.get(
@@ -4455,9 +4455,9 @@ class CheckoutAndPermsTestCase(TestCase):
             name_en="Natural Baby Shampoo",
             name_ar="شامبو أطفال طبيعي",
             short_description_en="Organic wash for babies",
-            category=self.category,
             is_published=True,
         )
+        product.categories.add(self.category)
         ProductPrice.objects.create(product=product, region=self.region, price=Decimal("8.25"))
 
         response = self.api_client.get(
