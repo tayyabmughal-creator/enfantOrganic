@@ -165,17 +165,6 @@ export default function ProductDetailClient({ locale, product, region }) {
   const vendorLabel = String(product.vendor || product.brand || "ENFANT ORGANICS").toUpperCase();
   const compareAmount = Number(selectedPricing?.compare_amount || 0);
   const showComparePrice = compareAmount > Number(selectedPricing?.amount || 0);
-  const promoCopy = isAr
-    ? {
-        om: "استمتع بخصم 15٪ على طلبك فوق 25 ر.ع عند الدفع",
-        ae: "استمتع بخصم 15٪ على طلبك فوق 250 د.إ عند الدفع",
-        sa: "استمتع بخصم 15٪ على طلبك فوق 250 ر.س عند الدفع",
-      }[region] || "استمتع بعرض خاص على الطلبات الكبيرة عند الدفع"
-    : {
-        om: "Enjoy 15% OFF on your order above 25 OMR at checkout",
-        ae: "Enjoy 15% OFF on your order above 250 AED at checkout",
-        sa: "Enjoy 15% OFF on your order above 250 SAR at checkout",
-      }[region] || "Enjoy a special offer on larger orders at checkout";
   const socialProofPills = [
     {
       icon: "heart",
@@ -523,13 +512,6 @@ export default function ProductDetailClient({ locale, product, region }) {
           <p className="product-short-copy">{product.short_description}</p>
         </div>
 
-        <div className="product-promo-banner" role="note">
-          <div className="product-promo-copy">
-            <Icon name="leaf" size={18} />
-            <span>{promoCopy}</span>
-          </div>
-          <Icon name="sparkle" size={16} className="product-promo-sparkle" />
-        </div>
 
         <div className="product-purchase-meta">
           {optionGroups.map((group) => (
