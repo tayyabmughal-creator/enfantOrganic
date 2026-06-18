@@ -1,4 +1,6 @@
 import ipaddress
+import json
+import urllib.request
 
 from django.conf import settings
 
@@ -104,7 +106,20 @@ def detect_country_code(request, client_ip=""):
         country = GeoIP2().country(str(parsed))
         return _clean_country_code(country.get("country_code"))
     except Exception:
-        return ""
+        pass
+
+    # GeoIP2 database not configured — fall back to ip-api.com (free, 45 req/min).
+    try:
+        url = f"http://ip-api.com/json/{parsed}?fields=status,countryCode"
+        req = urllib.request.Request(url, headers={"User-Agent": "enfantorganic/1.0"})
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            data = json.loads(resp.read())
+        if data.get("status") == "success":
+            return _clean_country_code(data.get("countryCode", ""))
+    except Exception:
+        pass
+
+    return ""
 
 
 def get_region_for_country_code(country_code):

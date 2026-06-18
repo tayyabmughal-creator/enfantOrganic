@@ -9,12 +9,30 @@ const REGION_COOKIE = "enfant-region";
 const SUPPORTED_REGIONS = ["om", "ae", "sa"];
 const WWW_HOSTS = new Set(["www.enfantorganic.com", "enfantorganic.com", "app.enfantorganic.com"]);
 
+const IP_COUNTRY_TO_REGION = { OM: "om", AE: "ae", SA: "sa" };
+
 function pickRegion(raw) {
   const v = String(raw || "").toLowerCase().trim();
   return SUPPORTED_REGIONS.includes(v) ? v : "";
 }
 
-export function middleware(request) {
+async function detectRegionFromIp(ip) {
+  if (!ip || ip === "127.0.0.1" || ip === "::1") return "";
+  try {
+    const res = await fetch(
+      `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,countryCode`,
+      { signal: AbortSignal.timeout(1500) },
+    );
+    if (!res.ok) return "";
+    const data = await res.json();
+    if (data?.status !== "success") return "";
+    return IP_COUNTRY_TO_REGION[data?.countryCode] || "";
+  } catch {
+    return "";
+  }
+}
+
+export async function middleware(request) {
   const requestHeaders = new Headers(request.headers);
   const hostname = (request.headers.get("host") || "").split(":")[0];
   const pathname = request.nextUrl.pathname;
@@ -40,7 +58,14 @@ export function middleware(request) {
   const isWww = WWW_HOSTS.has(hostname);
 
   if (isWww && !isAdminPath) {
-    const redirectRegion = urlRegion || cookieRegion || "om";
+    let redirectRegion = urlRegion || cookieRegion;
+    if (!redirectRegion) {
+      const clientIp =
+        request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+        request.headers.get("x-real-ip") ||
+        "";
+      redirectRegion = await detectRegionFromIp(clientIp) || "om";
+    }
     const redirectUrl = new URL(
       `https://${redirectRegion}.enfantorganic.com${pathname}${request.nextUrl.search}`
     );
