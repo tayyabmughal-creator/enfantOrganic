@@ -49,6 +49,18 @@ const nextConfig = {
 };
 
 const pwaRuntimeCaching = [
+  // Never cache HTML pages or RSC payloads — content is region-specific and must always be fresh.
+  {
+    urlPattern: ({ request, sameOrigin }) =>
+      sameOrigin &&
+      (request.mode === "navigate" ||
+        request.headers.get("RSC") === "1" ||
+        request.headers.get("Next-Router-State-Tree") != null),
+    handler: "NetworkOnly",
+    options: {
+      cacheName: "navigation-network-only",
+    },
+  },
   {
     urlPattern: ({ sameOrigin, url }) =>
       sameOrigin &&
