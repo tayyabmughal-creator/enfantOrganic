@@ -94,23 +94,13 @@ function parseDescSections(description) {
   }).filter(Boolean);
 }
 
-function DescriptionCards({ description }) {
-  const sections = parseDescSections(description);
-  if (!sections.length) return <p>{description}</p>;
-
+function DescriptionText({ description }) {
+  if (!description) return null;
   return (
-    <div className="product-desc-layout">
-      <div className="product-desc-grid">
-        {sections.map((s, i) => (
-          <div key={i} className="product-desc-card">
-            <span className="product-desc-icon">
-              <Icon name={s.icon} size={18} />
-            </span>
-            <strong className="product-desc-card-title">{s.title}</strong>
-            <p className="product-desc-card-body">{s.body}</p>
-          </div>
-        ))}
-      </div>
+    <div className="product-desc-text">
+      {description.split(/\n+/).filter(Boolean).map((para, i) => (
+        <p key={i}>{para}</p>
+      ))}
     </div>
   );
 }
@@ -139,7 +129,8 @@ export default function ProductDetailClient({ locale, product, region }) {
   const editorialReviews = Array.isArray(product.reviews) ? product.reviews : [];
   const customerReviews = Array.isArray(product.customer_reviews) ? product.customer_reviews : [];
   const [selectedImage, setSelectedImage] = useState(galleryImages[0] || product.image);
-  const [selectedTab, setSelectedTab] = useState("description");
+  const [openAccordion, setOpenAccordion] = useState("description");
+  const toggleAccordion = (key) => setOpenAccordion(prev => prev === key ? "" : key);
   const [quantity, setQuantity] = useState(1);
   const [copyFeedback, setCopyFeedback] = useState("");
   const [currentUrl, setCurrentUrl] = useState("");
@@ -716,34 +707,64 @@ export default function ProductDetailClient({ locale, product, region }) {
         </div>
       </div>
 
-      <div className="detail-tabs-row">
-        <div className="detail-tabs">
-        <div className="tab-switcher">
-          {["description", "details", "reviews"].map((key) => (
+      <div className="detail-accordion-row">
+          {/* Description */}
+          <div className={`detail-accordion-item${openAccordion === "description" ? " is-open" : ""}`}>
             <button
-              key={key}
               type="button"
-              className={`tab-switcher-button ${selectedTab === key ? "is-active" : ""}`}
-              onClick={() => setSelectedTab(key)}
+              className="detail-accordion-header"
+              onClick={() => toggleAccordion("description")}
+              aria-expanded={openAccordion === "description"}
             >
-              {t[key]}
+              <span>{t.description}</span>
+              <svg className="detail-accordion-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
             </button>
-          ))}
-        </div>
-        <div className="tab-panel">
-          {selectedTab === "description" ? (
-            <DescriptionCards description={product.description} isAr={isAr} />
+            <div className="detail-accordion-body">
+              <div className="detail-accordion-inner">
+                <DescriptionText description={product.description} />
+              </div>
+            </div>
+          </div>
+
+          {/* Details */}
+          {(detailPoints.length > 0 || product.origin_source || product.shelf_life) ? (
+            <div className={`detail-accordion-item${openAccordion === "details" ? " is-open" : ""}`}>
+              <button
+                type="button"
+                className="detail-accordion-header"
+                onClick={() => toggleAccordion("details")}
+                aria-expanded={openAccordion === "details"}
+              >
+                <span>{t.details}</span>
+                <svg className="detail-accordion-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div className="detail-accordion-body">
+                <div className="detail-accordion-inner">
+                  <ul className="detail-accordion-list">
+                    {detailPoints.map((detail) => (
+                      <li key={detail}>{detail}</li>
+                    ))}
+                    {product.origin_source ? <li>{product.origin_source}</li> : null}
+                    {product.shelf_life ? <li>{product.shelf_life}</li> : null}
+                  </ul>
+                </div>
+              </div>
+            </div>
           ) : null}
-          {selectedTab === "details" ? (
-            <ul>
-              {detailPoints.map((detail) => (
-                <li key={detail}>{detail}</li>
-              ))}
-              {product.origin_source ? <li>{product.origin_source}</li> : null}
-              {product.shelf_life ? <li>{product.shelf_life}</li> : null}
-            </ul>
-          ) : null}
-          {selectedTab === "reviews" ? (
+
+          {/* Reviews */}
+          <div className={`detail-accordion-item${openAccordion === "reviews" ? " is-open" : ""}`}>
+            <button
+              type="button"
+              className="detail-accordion-header"
+              onClick={() => toggleAccordion("reviews")}
+              aria-expanded={openAccordion === "reviews"}
+            >
+              <span>{t.reviews}{reviewCount > 0 ? ` (${reviewCount})` : ""}</span>
+              <svg className="detail-accordion-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div className="detail-accordion-body">
+              <div className="detail-accordion-inner">
             <div className="review-list">
               {customerReviews.length
                 ? customerReviews.map((review) => (
@@ -776,9 +797,9 @@ export default function ProductDetailClient({ locale, product, region }) {
                     </article>
                   )}
             </div>
-          ) : null}
-        </div>
-      </div>
+              </div>
+            </div>
+          </div>
 
       </div>
     </div>
