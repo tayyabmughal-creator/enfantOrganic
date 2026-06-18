@@ -201,7 +201,7 @@ const FIELD_CONFIGS = {
   products: [
     ["slug","Slug","text"],["name_en","Name EN","text"],["name_ar","Name AR","text"],
     ["base_price","Price (OMR, base)","number"],["base_compare_at_price","Compare-at price (OMR)","number"],
-    ["brand","Brand","text"],["unit","Unit / weight","text"],["category","Category ID","number"],
+    ["brand","Brand","text"],["unit","Unit / weight","text"],["categories","Categories","categories-select"],
     ["vendor_en","Vendor EN","text"],["vendor_ar","Vendor AR","text"],
     ["short_description_en","Short description EN","textarea"],["short_description_ar","Short description AR","textarea"],
     ["description_en","Description EN","textarea"],["description_ar","Description AR","textarea"],
@@ -473,7 +473,7 @@ const FIELD_CONFIGS = {
 };
 
 const CREATE_DEFAULTS = {
-  products:   { slug:"",name_en:"",name_ar:"",brand:"Enfant",unit:"",category:"",image:"",hover_image:"",dietary_tags:[],gallery:[],variants:[],details_en:[],details_ar:[],option_groups_en:[],option_groups_ar:[],stock_quantity:0,rating:5,review_count:0,track_inventory:false,is_published:true,is_featured:false,sort_order:0 },
+  products:   { slug:"",name_en:"",name_ar:"",brand:"Enfant",unit:"",categories:[],image:"",hover_image:"",dietary_tags:[],gallery:[],variants:[],details_en:[],details_ar:[],option_groups_en:[],option_groups_ar:[],stock_quantity:0,rating:5,review_count:0,track_inventory:false,is_published:true,is_featured:false,sort_order:0 },
   categories: { slug:"",name_en:"",name_ar:"",description_en:"",description_ar:"",image:"",sort_order:0 },
   deals:      { code:"",description:"",discount_type:"fixed",value:0,minimum_subtotal:0,max_uses:"",starts_at:"",ends_at:"",is_active:true },
   customers:  { username:"",email:"",password:"",first_name:"",last_name:"",is_active:true,is_staff:false },
@@ -577,6 +577,7 @@ function stringify(value, type) {
   if (type === "gallery") return Array.isArray(value) ? value : [];
   if (type === "product-variants") return Array.isArray(value) ? value : [];
   if (type === "option-groups") return Array.isArray(value) ? value : [];
+  if (type === "categories-select") return Array.isArray(value) ? value : [];
   if (type === "json") return typeof value === "string" ? value : JSON.stringify(value ?? [], null, 2);
   if (type === "datetime-local" && value) return String(value).slice(0, 16);
   if (type === "date" && value) return String(value).slice(0, 10);
@@ -711,6 +712,7 @@ function buildPayload(editor, key, mode) {
       if (type === "product-variants") fd.append(k, JSON.stringify(cleanProductVariants(v)));
       else if (type === "option-groups") fd.append(k, JSON.stringify(cleanOptionGroups(v)));
       else if (type === "json" || type === "gallery") fd.append(k, JSON.stringify(typeof v === "string" ? JSON.parse(v || "null") : v));
+      else if (type === "categories-select") { const ids = Array.isArray(v) ? v : []; ids.forEach((id) => fd.append(k, id)); if (ids.length === 0) fd.append(k, ""); }
       else if (v instanceof File) fd.append(k, v);
       else fd.append(k, v);
     }
@@ -723,6 +725,7 @@ function buildPayload(editor, key, mode) {
     if (type === "product-variants") payload[k] = cleanProductVariants(v);
     else if (type === "option-groups") payload[k] = cleanOptionGroups(v);
     else if (type === "json" || type === "gallery") payload[k] = typeof v === "string" ? JSON.parse(v || "null") : v;
+    else if (type === "categories-select") payload[k] = Array.isArray(v) ? v : [];
     else payload[k] = v;
   }
   return payload;

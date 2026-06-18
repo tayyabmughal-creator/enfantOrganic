@@ -13,6 +13,8 @@ import { normalizeLocale } from "@/lib/storefront";
 
 const LOCALIZED_STOREFRONT_PATH = /^\/(en|ar)(?=\/|$)/i;
 
+const REGION_SUBDOMAIN = /^(om|ae|sa)\.enfantorganic\.com$/;
+
 function RegionResolverInner() {
   const pathname = usePathname();
   const router = useRouter();
@@ -21,6 +23,20 @@ function RegionResolverInner() {
   useEffect(() => {
     const localeMatch = pathname?.match(LOCALIZED_STOREFRONT_PATH);
     if (!localeMatch) {
+      return undefined;
+    }
+
+    // If on a region subdomain, that always wins — no localStorage fallback needed.
+    const hostname = typeof window !== "undefined" ? window.location.hostname : "";
+    const subdomainMatch = hostname.match(REGION_SUBDOMAIN);
+    if (subdomainMatch) {
+      const subRegion = subdomainMatch[1];
+      saveSelectedRegion(subRegion);
+      const urlRegion = regionFromSearchParams(searchParams);
+      if (urlRegion !== subRegion) {
+        const target = urlWithRegion(pathname, searchParams, subRegion);
+        router.replace(target, { scroll: false });
+      }
       return undefined;
     }
 

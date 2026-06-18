@@ -1233,7 +1233,7 @@ function normalizeProductVariants(value) {
   }));
 }
 
-function ProductVariantsManager({ field, value, editor, setEditor }) {
+function ProductVariantsManager({ field, value, editor, setEditor, onGalleryUpload }) {
   const name = field[0];
   const label = field[1];
   const variants = normalizeProductVariants(value);
@@ -1319,7 +1319,24 @@ function ProductVariantsManager({ field, value, editor, setEditor }) {
                 <input className="admin-input" type="number" value={variant.compare_at_price} placeholder="Compare OMR" onChange={(event) => patchVariant(index, { compare_at_price: event.target.value })} />
                 <input className="admin-input" type="number" value={variant.stock_quantity} placeholder="Stock" onChange={(event) => patchVariant(index, { stock_quantity: event.target.value })} />
               </div>
-              <input className="admin-input" style={{ marginTop: 8 }} value={variant.image} placeholder="Variant image URL (optional)" onChange={(event) => patchVariant(index, { image: event.target.value })} />
+              <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
+                <input className="admin-input" value={variant.image} placeholder="Variant image URL (optional)" onChange={(event) => patchVariant(index, { image: event.target.value })} style={{ flex: 1 }} />
+                {onGalleryUpload && editor?.slug ? (
+                  <label style={{ ...OPT_BTN, cursor: "pointer", whiteSpace: "nowrap", padding: "6px 10px" }} title="Upload variant image">
+                    Upload
+                    <input type="file" accept="image/*" style={{ display: "none" }} onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      try {
+                        const urls = await onGalleryUpload(editor.slug, file);
+                        if (urls?.[0]) patchVariant(index, { image: urls[0] });
+                      } catch {}
+                      e.target.value = "";
+                    }} />
+                  </label>
+                ) : null}
+                {variant.image ? <img src={variant.image} alt="" style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 4, border: "1px solid #dfe9d7", flexShrink: 0 }} /> : null}
+              </div>
               <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
                 {optionPairs.map(([optionName, optionValue], optionIndex) => (
                   <div key={`${optionName}-${optionIndex}`} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr) auto", gap: 8 }}>
@@ -1413,6 +1430,62 @@ function GalleryManager({ field, value, editor, setEditor, mode, onGalleryUpload
   );
 }
 
+function CategoriesSelectField({ field, value, editor, setEditor, disabled }) {
+  const [name, label] = field;
+  const [allCategories, setAllCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const selected = Array.isArray(value) ? value.map(Number) : [];
+
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? window.localStorage.getItem("enfhant-admin-token") : null;
+    fetch("/api/admin/categories/?limit=200", {
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        const results = Array.isArray(data) ? data : (data?.results || []);
+        setAllCategories(results);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const toggle = (id) => {
+    const numId = Number(id);
+    const next = selected.includes(numId) ? selected.filter((x) => x !== numId) : [...selected, numId];
+    setEditor({ ...editor, [name]: next });
+  };
+
+  return (
+    <div className="admin-label full-width">
+      <span style={{ fontWeight: 600, fontSize: 13, display: "block", marginBottom: 8 }}>{label}</span>
+      {loading ? (
+        <small className="admin-field-help">Loading categories…</small>
+      ) : (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 16px" }}>
+          {allCategories.map((cat) => {
+            const id = Number(cat.id);
+            const checked = selected.includes(id);
+            return (
+              <label key={id} style={{ display: "flex", alignItems: "center", gap: 6, cursor: disabled ? "default" : "pointer", fontSize: 13 }}>
+                <input
+                  type="checkbox"
+                  className="admin-checkbox"
+                  checked={checked}
+                  disabled={disabled}
+                  onChange={() => toggle(id)}
+                />
+                {cat.name_en || cat.slug}
+              </label>
+            );
+          })}
+          {allCategories.length === 0 ? <small className="admin-field-help">No categories found.</small> : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FormField({ field, value, editor, setEditor, mode, onGalleryUpload }) {
   const [name, label, type, options, config = {}] = field;
   const [objectPreviewUrl, setObjectPreviewUrl] = useState("");
@@ -1434,6 +1507,9 @@ function FormField({ field, value, editor, setEditor, mode, onGalleryUpload }) {
   const previewUrl = objectPreviewUrl || existingPreviewUrl;
   const showImagePreview = Boolean(previewUrl && name.includes("image"));
 
+  if (type === "categories-select") {
+    return <CategoriesSelectField field={field} value={value} editor={editor} setEditor={setEditor} disabled={disabled} />;
+  }
   if (type === "gallery") {
     return <GalleryManager field={field} value={value} editor={editor} setEditor={setEditor} mode={mode} onGalleryUpload={onGalleryUpload} />;
   }
@@ -1441,7 +1517,7 @@ function FormField({ field, value, editor, setEditor, mode, onGalleryUpload }) {
     return <OptionGroupsManager field={field} value={value} editor={editor} setEditor={setEditor} />;
   }
   if (type === "product-variants") {
-    return <ProductVariantsManager field={field} value={value} editor={editor} setEditor={setEditor} />;
+    return <ProductVariantsManager field={field} value={value} editor={editor} setEditor={setEditor} onGalleryUpload={onGalleryUpload} />;
   }
   if (type === "checkbox") {
     return (

@@ -238,10 +238,12 @@ export default function StoreProvider({ children }) {
               name: product.name,
               image: product.image,
               quantity: nextQuantity,
-              pricing: product.pricing,
+              pricing: selectedVariant?.pricing?.amount != null
+                ? { ...product.pricing, ...selectedVariant.pricing }
+                : product.pricing,
               locale: product.locale || "en",
               variantId,
-              variantTitle: selectedVariant?.title || "",
+              variantTitle: selectedVariant?.title_en || selectedVariant?.title || "",
               selectedOptionsText,
             },
           ];
