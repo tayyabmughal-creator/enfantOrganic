@@ -42,6 +42,6 @@ export function formatMoney(pricing, locale) {
   const normalizedLocale = normalizeLocale(locale);
   const intlLocale = LOCALE_MAP[normalizedLocale]?.[pricing.region_code] || "en-US";
 
-  const formatted = getCurrencyFormatter(intlLocale, pricing.currency_code).format(pricing.amount);
+  const formatted = getCurrencyFormatter(intlLocale, pricing.currency_code || pricing.currency || "USD").format(pricing.amount);
   return pricing.prefix ? `${pricing.prefix} ${formatted}` : formatted;
 }

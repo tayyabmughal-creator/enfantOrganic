@@ -200,26 +200,32 @@ function ProductCard({ locale, product, region }) {
             </div>
           ) : null}
         </div>
-        {!hasVariants ? (
-          <div className="product-price-panel">
+        <div className="product-price-panel">
+          {hasVariants ? (
             <div className="product-pricing">
-              <strong>{formatMoney(product.pricing, locale)}</strong>
-              {product.pricing?.compare_amount ? (
-                <span>
-                  {formatMoney(
-                    { ...product.pricing, amount: product.pricing.compare_amount, prefix: "" },
-                    locale,
-                  )}
+              <strong>{locale === "ar" ? "يبدأ من " : "From "}{formatMoney(product.pricing, locale)}</strong>
+            </div>
+          ) : (
+            <>
+              <div className="product-pricing">
+                <strong>{formatMoney(product.pricing, locale)}</strong>
+                {product.pricing?.compare_amount ? (
+                  <span>
+                    {formatMoney(
+                      { ...product.pricing, amount: product.pricing.compare_amount, prefix: "" },
+                      locale,
+                    )}
+                  </span>
+                ) : null}
+              </div>
+              {savingsAmount > 0 ? (
+                <span className="product-savings-badge">
+                  {saveLabel} {formatMoney({ ...product.pricing, amount: savingsAmount, prefix: "" }, locale)}
                 </span>
               ) : null}
-            </div>
-            {savingsAmount > 0 ? (
-              <span className="product-savings-badge">
-                {saveLabel} {formatMoney({ ...product.pricing, amount: savingsAmount, prefix: "" }, locale)}
-              </span>
-            ) : null}
-          </div>
-        ) : null}
+            </>
+          )}
+        </div>
         {!hasVariants && product.pricing?.unit_price_text ? (
           <span className="unit-price-label">{product.pricing.unit_price_text}</span>
         ) : null}

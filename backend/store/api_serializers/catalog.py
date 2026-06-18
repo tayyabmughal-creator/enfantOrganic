@@ -72,9 +72,13 @@ def active_product_variants(product, locale="en", region=None):
             or variant_id
         ).strip()
 
-        base_price = _money(raw.get("price") or raw.get("base_price"))
+        nested = raw.get("pricing") or {}
+        base_price = _money(raw.get("price") or raw.get("base_price") or nested.get("amount"))
         price = _converted_money(base_price, region) if region else base_price
-        compare = _converted_money(raw.get("compare_at_price") or raw.get("base_compare_at_price"), region) if region else _money(raw.get("compare_at_price") or raw.get("base_compare_at_price"))
+        compare = _converted_money(
+            raw.get("compare_at_price") or raw.get("base_compare_at_price") or nested.get("compare_amount"),
+            region,
+        ) if region else _money(raw.get("compare_at_price") or raw.get("base_compare_at_price") or nested.get("compare_amount"))
         stock_raw = raw.get("stock_quantity")
         stock_quantity = None
         if stock_raw not in (None, ""):

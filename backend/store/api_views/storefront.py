@@ -1,5 +1,7 @@
 from django.db.models import Count, DecimalField, IntegerField, OuterRef, Q, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -96,6 +98,7 @@ def apply_best_seller_ranking(queryset):
     )
 
 
+@method_decorator(cache_page(60 * 3), name="dispatch")
 class NavigationView(StorefrontContextMixin, APIView):
     serializer_class = RegionSerializer
 
@@ -130,6 +133,7 @@ class NavigationView(StorefrontContextMixin, APIView):
         return Response(payload)
 
 
+@method_decorator(cache_page(60 * 3), name="dispatch")
 class HomePageView(StorefrontContextMixin, APIView):
     serializer_class = ProductCardSerializer
 

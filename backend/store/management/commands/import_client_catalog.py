@@ -577,7 +577,8 @@ class Command(BaseCommand):
                 "pricing": {
                     "amount": price_f,
                     "compare_amount": compare_f,
-                    "currency": "OMR",
+                    "currency_code": "OMR",
+                    "prefix": "OMR",
                 },
                 "stock_quantity": stock_i,
                 "is_available": True,
