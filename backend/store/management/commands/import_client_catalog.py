@@ -433,15 +433,16 @@ class Command(BaseCommand):
             body_text = _html_to_text(first_row.get("Body (HTML)"))
             short_description = _first_sentence(body_text)
             details = _build_details(first_row, category_name)
-            option_name, option_value = _extract_size_value(first_row, display_name)
-            option_groups = [{"name": option_name, "values": [option_value]}] if option_name and option_value else []
+            variants_json, option_groups, price_row = self._build_variants(rows, display_name)
+            _, single_option_value = _extract_size_value(first_row, display_name)
+            unit_value = "" if variants_json else single_option_value
 
             raw_vendor = str(first_row.get("Vendor") or "Enfant Organics").strip() or "Enfant Organics"
             product_defaults = {
                 "name_en": self._safe_str(display_name, 255, handle, "name_en"),
                 "name_ar": "",
                 "brand": DEFAULT_BRAND,
-                "unit": self._safe_str(option_value, 80, handle, "unit"),
+                "unit": self._safe_str(unit_value, 80, handle, "unit"),
                 "vendor_en": self._safe_str(raw_vendor, 120, handle, "vendor_en"),
                 "vendor_ar": DEFAULT_VENDOR_AR,
                 "short_description_en": short_description,
@@ -469,6 +470,7 @@ class Command(BaseCommand):
                 "badge_ar": "",
                 "review_count": self._import_review_count(handle, first_row),
                 "rating": "5.0",
+                "variants": variants_json,
                 "option_groups_en": option_groups,
                 "option_groups_ar": [],
                 "show_in_new_arrivals": True,
@@ -485,7 +487,7 @@ class Command(BaseCommand):
             product, _created = Product.objects.update_or_create(slug=handle, defaults=product_defaults)
             product.categories.set([category])
             self._sync_tags(product, first_row, tag_cache)
-            self._sync_prices(product, first_row, regions)
+            self._sync_prices(product, price_row, regions)
             self._sync_media(product, rows, image_dir)
 
         self._remove_obsolete_products(imported_handles)
@@ -519,6 +521,72 @@ class Command(BaseCommand):
             seen.add(url)
             result.append(url)
         return result
+
+    def _build_variants(self, rows, display_name):
+        """Return (variants_json, option_groups_en, price_row) from all CSV rows for a product."""
+        real_rows = [
+            r for r in rows
+            if str(r.get("Option1 Value") or "").strip()
+            and str(r.get("Option1 Value") or "").strip().lower() != "default title"
+        ]
+
+        if len(real_rows) <= 1:
+            # No multi-variant product — no QuickView selector needed
+            return [], [], rows[0]
+
+        opt_name_raw = str(real_rows[0].get("Option1 Name") or "").strip()
+        lower = opt_name_raw.lower()
+        if "size" in lower:
+            norm_name = "Size"
+        elif "pack" in lower:
+            norm_name = "Pack"
+        elif "variant" in lower or "varient" in lower:
+            norm_name = "Variant"
+        elif opt_name_raw:
+            norm_name = opt_name_raw
+        else:
+            norm_name = "Variant"
+
+        seen = set()
+        variants = []
+        for row in real_rows:
+            val = str(row.get("Option1 Value") or "").strip()
+            if not val or val in seen:
+                continue
+            seen.add(val)
+            price_str = str(row.get("Variant Price") or "").strip()
+            compare_str = str(row.get("Variant Compare At Price") or "").strip()
+            stock_str = str(row.get("Variant Inventory Qty") or "").strip()
+            try:
+                price_f = float(price_str) if price_str else 0.0
+            except ValueError:
+                price_f = 0.0
+            try:
+                compare_f = float(compare_str) if compare_str else None
+            except ValueError:
+                compare_f = None
+            try:
+                stock_i = max(int(float(stock_str)), 0) if stock_str else 100
+            except ValueError:
+                stock_i = 100
+
+            variants.append({
+                "id": f"v{len(variants) + 1}",
+                "title_en": val,
+                "options": {norm_name: val},
+                "pricing": {
+                    "amount": price_f,
+                    "compare_amount": compare_f,
+                    "currency": "OMR",
+                },
+                "stock_quantity": stock_i,
+                "is_available": True,
+            })
+
+        option_groups = [{"name": norm_name, "values": [v["title_en"] for v in variants]}]
+        # Use the lowest-priced variant row as the base ProductPrice
+        base_row = min(real_rows, key=lambda r: float(r.get("Variant Price") or 0))
+        return variants, option_groups, base_row
 
     def _sync_tags(self, product, first_row, tag_cache):
         tags_value = str(first_row.get("Tags") or "").strip()
