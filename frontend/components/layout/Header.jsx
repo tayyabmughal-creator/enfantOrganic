@@ -149,15 +149,24 @@ function HeaderInner({ navigation }) {
     const normalizedRegion = normalizeRegion(nextRegion);
     if (normalizedRegion === region) return;
 
-    const updated = new URLSearchParams(params.toString());
-    updated.set("region", normalizedRegion);
     saveSelectedRegion(normalizedRegion);
     setOptimisticRegion(normalizedRegion);
     void refreshCartPricing(locale, normalizedRegion);
-    startRegionTransition(() => {
-      router.replace(`${pathname}?${updated.toString()}`, { scroll: false });
-      router.refresh();
-    });
+
+    // On production subdomains, navigate to the correct regional subdomain.
+    // On local dev (localhost), fall back to query param.
+    const currentHost = typeof window !== "undefined" ? window.location.hostname : "";
+    const isProductionDomain = currentHost.endsWith(".enfantorganic.com") || currentHost === "enfantorganic.com";
+    if (isProductionDomain) {
+      window.location.href = `https://${normalizedRegion}.enfantorganic.com${pathname}`;
+    } else {
+      const updated = new URLSearchParams(params.toString());
+      updated.set("region", normalizedRegion);
+      startRegionTransition(() => {
+        router.replace(`${pathname}?${updated.toString()}`, { scroll: false });
+        router.refresh();
+      });
+    }
   };
 
   const changeLocale = (nextLocale) => {
