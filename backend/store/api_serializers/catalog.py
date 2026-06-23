@@ -119,7 +119,8 @@ def option_groups_from_variants(variants):
                 order.append(name)
             if value and value not in grouped[name]:
                 grouped[name].append(value)
-    return [{"name": name, "values": grouped[name]} for name in order if grouped[name]]
+    # Only include groups with >1 unique value; single-value groups aren't real choices
+    return [{"name": name, "values": grouped[name]} for name in order if len(grouped[name]) > 1]
 
 
 class CartMilestoneSerializer(serializers.ModelSerializer):
@@ -521,7 +522,7 @@ class ProductDetailSerializer(ProductCardSerializer):
         return localized_json(obj, "reviews", self.context.get("locale"))
 
     def get_customer_reviews(self, obj):
-        reviews = Review.objects.filter(product=obj, is_approved=True)[:20]
+        reviews = Review.objects.filter(product=obj, is_approved=True).order_by("-created_at")
         return [
             {
                 "customer_name": review.customer_name,

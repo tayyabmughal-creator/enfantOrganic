@@ -694,7 +694,7 @@ class CouponValidationSerializer(serializers.Serializer):
             city=self.validated_data.get("city", ""),
             area=self.validated_data.get("area", ""),
         )
-        if milestone_free_shipping:
+        if milestone_free_shipping and not milestone_suppressed:
             shipping_quote["shipping_total"] = Decimal("0.00")
         totals = calculate_checkout_totals(
             region=region,
@@ -858,7 +858,7 @@ class CheckoutCreateSerializer(serializers.Serializer):
             city=customer.get("city", ""),
             area=customer.get("area", ""),
         )
-        if milestone_free_shipping:
+        if milestone_free_shipping and not _milestone_suppressed:
             shipping_quote["shipping_total"] = Decimal("0.00")
 
         totals = calculate_checkout_totals(

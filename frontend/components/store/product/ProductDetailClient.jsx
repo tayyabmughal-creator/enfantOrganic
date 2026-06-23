@@ -101,11 +101,12 @@ function DescriptionText({ description }) {
 
 function findSelectedVariant(variants, selectedOptions) {
   if (!Array.isArray(variants) || !variants.length) return null;
-  return variants.find((variant) =>
-    Object.entries(variant.options || {}).every(
-      ([name, value]) => selectedOptions?.[name] === value,
-    ),
-  ) || variants[0] || null;
+  const selectedEntries = Object.entries(selectedOptions || {});
+  return (
+    variants.find((variant) =>
+      selectedEntries.every(([name, value]) => variant.options?.[name] === value),
+    ) || variants[0] || null
+  );
 }
 
 function StarRating({ rating = 5, size = 16 }) {
