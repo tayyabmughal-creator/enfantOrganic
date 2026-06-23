@@ -208,11 +208,27 @@ class CatalogPageView(StorefrontContextMixin, APIView):
         locale = self.get_locale()
         context = self.get_serializer_context()
         products = apply_catalog_filters(product_queryset(), request, context["region"])
+
+        category_slug = request.query_params.get("category", "").strip()
+        hero_title = "All Products" if locale == "en" else "جميع المنتجات"
+        hero_subtitle = (
+            "Pure, gentle, organic essentials — thoughtfully crafted for your little one."
+            if locale == "en"
+            else "منتجات عضوية نقية ولطيفة — مصمّمة بعناية لطفلك الصغير."
+        )
+        if category_slug:
+            try:
+                cat = Category.objects.get(slug=category_slug)
+                hero_title = cat.name_ar if locale == "ar" and cat.name_ar else cat.name_en
+                if locale == "en" and cat.description_en:
+                    hero_subtitle = cat.description_en
+                elif locale == "ar" and cat.description_ar:
+                    hero_subtitle = cat.description_ar
+            except Category.DoesNotExist:
+                pass
+
         payload = {
-            "hero": {
-                "title": "All Products" if locale == "en" else "جميع المنتجات",
-                "subtitle": "Pure, gentle, organic essentials — thoughtfully crafted for your little one." if locale == "en" else "منتجات عضوية نقية ولطيفة — مصمّمة بعناية لطفلك الصغير.",
-            },
+            "hero": {"title": hero_title, "subtitle": hero_subtitle},
             "categories": CategorySerializer(Category.objects.all(), many=True, context=context).data,
             "tags": TagSerializer(Tag.objects.all(), many=True, context=context).data,
             "products": ProductDetailSerializer(products, many=True, context=context).data,
