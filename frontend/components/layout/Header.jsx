@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
+import SiteImage from "@/components/ui/SiteImage";
 import Icon from "@/components/icons/Icon";
 import { useStore } from "@/components/store/cart/StoreProvider";
 import { useLocale } from "@/contexts/LocaleContext";
@@ -208,7 +209,7 @@ function HeaderInner({ navigation }) {
 
       <div className="container header-main">
         <Link href={buildStorePath(locale, "", region)} className="brand-mark">
-          <img src={navigation?.settings?.logo_url || DEFAULT_LOGO_SRC} alt={navigation?.settings?.brand_name || "Enfant Organics"} className="brand-logo" />
+          <SiteImage src={navigation?.settings?.logo_url || DEFAULT_LOGO_SRC} alt={navigation?.settings?.brand_name || "Enfant Organics"} width={96} height={66} loading="eager" className="brand-logo" />
           <span className="brand-copy">
             <strong>ENFANT ORGANICS</strong>
             <small>{locale === "en" ? "Pure • Gentle • Safe" : "نقي • لطيف • آمن"}</small>
@@ -241,7 +242,7 @@ function HeaderInner({ navigation }) {
                       onClick={() => setOpenDropdown(null)}
                     >
                       <span className="dropdown-link-thumb">
-                        <img src={category.image} alt={category.name} loading="lazy" />
+                        <SiteImage src={category.image} alt={category.name} width={56} height={56} loading="lazy" />
                       </span>
                       <span className="dropdown-link-copy">
                         <strong>{category.name}</strong>
@@ -337,7 +338,7 @@ function HeaderInner({ navigation }) {
               aria-label={locale === "ar" ? "Switch to English" : "التبديل إلى العربية"}
             >
               <Icon name="globe" size={15} className="lang-toggle-icon" />
-              <span>{locale === "ar" ? "EN" : "AR"}</span>
+              <span>{locale === "ar" ? "EN" : "العربية"}</span>
             </button>
             <label className="control-select region-select">
               <span className="visually-hidden">{t.region}</span>
@@ -363,7 +364,7 @@ function HeaderInner({ navigation }) {
             aria-label={locale === "ar" ? "Switch to English" : "التبديل إلى العربية"}
           >
             <Icon name="globe" size={14} className="lang-toggle-icon" />
-            <span>{locale === "ar" ? "EN" : "AR"}</span>
+            <span>{locale === "ar" ? "EN" : "العربية"}</span>
           </button>
           <label className="control-select region-select mobile-region-select">
             <span className="visually-hidden">{t.region}</span>

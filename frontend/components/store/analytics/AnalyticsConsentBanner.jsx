@@ -46,9 +46,9 @@ export default function AnalyticsConsentBanner({ locale = "en" }) {
   const text = isAr ? COPY.ar : COPY.en;
 
   return (
-    <div className="consent-banner" dir={isAr ? "rtl" : "ltr"} role="dialog" aria-live="polite">
+    <div className="consent-banner" dir={isAr ? "rtl" : "ltr"} role="dialog" aria-modal="true" aria-labelledby="consent-banner-title" aria-live="polite">
       <div className="consent-banner-content">
-        <strong>{text.title}</strong>
+        <strong id="consent-banner-title">{text.title}</strong>
         <p>{text.body}</p>
       </div>
       <div className="consent-banner-actions">

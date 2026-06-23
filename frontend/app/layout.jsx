@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import { DM_Sans, Playfair_Display, Noto_Sans_Arabic } from "next/font/google";
 import LocaleHtmlAttributes from "@/components/seo/LocaleHtmlAttributes";
 import ChunkLoadRecovery from "@/components/system/ChunkLoadRecovery";
 import LocalServiceWorkerReset from "@/components/system/LocalServiceWorkerReset";
@@ -11,6 +12,27 @@ import { getBaseUrl, getLocaleDir } from "@/lib/seo";
 import { normalizeLocale } from "@/lib/storefront";
 
 import "./globals.css";
+
+const dmSans = DM_Sans({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+  weight: ["400", "500", "700", "800", "900"],
+});
+
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  variable: "--font-serif",
+  display: "swap",
+  weight: ["400", "700"],
+});
+
+const notoArabic = Noto_Sans_Arabic({
+  subsets: ["arabic"],
+  variable: "--font-arabic",
+  display: "swap",
+  weight: ["400", "700"],
+});
 
 export const metadata = {
   title: "Enfant Organics",
@@ -65,7 +87,7 @@ export default async function RootLayout({ children }) {
   const dir = getLocaleDir(locale);
 
   return (
-    <html lang={locale} dir={dir}>
+    <html lang={locale} dir={dir} className={`${dmSans.variable} ${playfair.variable} ${notoArabic.variable}`}>
       <body>
         <GtmScript />
         <ChunkLoadRecovery />

@@ -2,6 +2,7 @@
 
 import { memo, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import SiteImage from "@/components/ui/SiteImage";
 import Icon from "@/components/icons/Icon";
 import { useStoreActions } from "@/components/store/cart/StoreProvider";
 import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
@@ -148,11 +149,14 @@ function ProductCard({ locale, product, region }) {
           href={buildStorePath(locale, `/product/${product.slug}`, region)}
           className="product-card-image"
         >
-          <img
+          <SiteImage
             src={primaryImage}
             alt={product.name}
+            width={600}
+            height={600}
             loading="lazy"
             className="product-card-image-primary"
+            sizes="(max-width: 639px) 50vw, (max-width: 1023px) 33vw, 25vw"
           />
           {hoverImage ? (
             <img

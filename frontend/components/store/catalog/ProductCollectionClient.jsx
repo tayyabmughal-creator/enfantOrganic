@@ -441,7 +441,7 @@ export default function ProductCollectionClient({
       {filtersOpen ? (
         <div className="cat-filters-overlay" onClick={() => setFiltersOpen(false)} aria-hidden="true" />
       ) : null}
-      <aside className={`cat-filters-drawer ${filtersOpen ? "is-open" : ""}`} role="dialog" aria-modal="true">
+      <aside className={`cat-filters-drawer ${filtersOpen ? "is-open" : ""}`} role="dialog" aria-modal="true" aria-label={isAr ? "فلاتر المنتجات" : "Product filters"}>
         <div className="cat-filters-drawer-head">
           <strong>{t.filters}</strong>
           <button type="button" className="cat-filters-drawer-close" onClick={() => setFiltersOpen(false)} aria-label={isAr ? "إغلاق" : "Close"}>

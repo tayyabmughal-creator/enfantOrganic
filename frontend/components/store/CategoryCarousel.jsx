@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import Link from "next/link";
+import SiteImage from "@/components/ui/SiteImage";
 
 export default function CategoryCarousel({ categories, href, locale = "en" }) {
   const railRef = useRef(null);
@@ -39,7 +40,7 @@ export default function CategoryCarousel({ categories, href, locale = "en" }) {
         {categories.map((category) => (
           <Link key={category.slug} href={categoryHref(category)} className="category-round-card">
             <span className="category-round-image">
-              <img src={category.image} alt={category.name} loading="lazy" />
+              <SiteImage src={category.image} alt={category.name} fill sizes="120px" />
             </span>
             <span className="category-round-title">{category.name}</span>
           </Link>

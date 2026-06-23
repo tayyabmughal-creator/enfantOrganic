@@ -1,4 +1,5 @@
 import Link from "next/link";
+import SiteImage from "@/components/ui/SiteImage";
 
 export default function MegaMenu({ categories, collections, open }) {
   return (
@@ -20,7 +21,7 @@ export default function MegaMenu({ categories, collections, open }) {
               }}
             >
               <div className="image-frame" style={{ borderRadius: 20, aspectRatio: "1 / 1" }}>
-                <img src={category.image} alt={category.name} loading="lazy" />
+                <SiteImage src={category.image} alt={category.name} width={120} height={120} loading="lazy" />
               </div>
               <div style={{ display: "grid", gap: 8 }}>
                 <strong>{category.name}</strong>
@@ -34,7 +35,7 @@ export default function MegaMenu({ categories, collections, open }) {
           <span className="label">Curated Collections</span>
           {collections.map((collection) => (
             <Link key={collection.slug} href="/collections" className="mega-card">
-              <img src={collection.image} alt={collection.name} loading="lazy" />
+              <SiteImage src={collection.image} alt={collection.name} width={400} height={200} loading="lazy" />
               <div className="mega-card-content">
                 <span className="label">{collection.eyebrow}</span>
                 <strong style={{ fontSize: "1.5rem" }}>{collection.name}</strong>

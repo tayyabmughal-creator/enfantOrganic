@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 export const revalidate = 86400; // 24 hours
 
+import SiteImage from "@/components/ui/SiteImage";
 import TestimonialCard from "@/components/cards/TestimonialCard";
 import Icon from "@/components/icons/Icon";
 import JsonLd from "@/components/seo/JsonLd";
@@ -136,6 +137,7 @@ export default async function LocalizedHomePage({ params, searchParams }) {
 
   return (
     <StorefrontShell locale={locale} navigation={navigation}>
+      <h1 className="visually-hidden">{isAr ? "متجر إنفانت أورجانيك" : "Enfant Organic Store"}</h1>
       <JsonLd data={organizationJsonLd} />
       {heroShowcaseEmpty ? null : (
       <section className="section container">
@@ -157,6 +159,7 @@ export default async function LocalizedHomePage({ params, searchParams }) {
                     alt={heroPrimary.title}
                     className="offer-primary-img"
                     loading="eager"
+                    fetchPriority="high"
                   />
                 </picture>
                 <div className="offer-copy">
@@ -416,7 +419,7 @@ export default async function LocalizedHomePage({ params, searchParams }) {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <img src={post.image} alt="Enfant Instagram" loading="lazy" />
+                <SiteImage src={post.image} alt="Enfant Instagram" fill sizes="(max-width: 639px) 50vw, (max-width: 1023px) 33vw, 25vw" />
                 <div className="instagram-logo-overlay">
                   <div className="instagram-logo-circle">
                     <Icon name="instagram" size={42} />
@@ -451,7 +454,7 @@ export default async function LocalizedHomePage({ params, searchParams }) {
             {blogPosts.map((post) => (
               <Link key={post.slug} href={buildStorePath(locale, `/blog/${post.slug}`, region)} className="blog-card">
                 <div className="blog-card-image">
-                  <img src={post.image} alt={post.title} loading="lazy" />
+                  <SiteImage src={post.image} alt={post.title} fill sizes="(max-width: 639px) 100vw, (max-width: 1023px) 50vw, 33vw" />
                 </div>
                 <div className="blog-card-body">
                   <span className="blog-date">{post.published_at}</span>

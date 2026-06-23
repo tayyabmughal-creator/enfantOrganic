@@ -33,9 +33,7 @@ const EMOJI_RE = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F000
 const STRIP_EMOJI_RE = /^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F000}-\u{1FFFF}✅🚫✨💗☁️\s]+/u;
 
 function cleanTitle(raw) {
-  // Remove SEO pipe prefix e.g. "Name | Subtitle Title" → "Subtitle Title"
   const piped = raw.includes("|") ? raw.split("|").pop().trim() : raw;
-  // Trim to a natural word boundary at ~60 chars
   return piped.length > 60 ? piped.slice(0, 58).replace(/\s\S*$/, "").trim() : piped.trim();
 }
 
@@ -45,7 +43,6 @@ function buildCard(text, index) {
   const hasTitle = colonIdx > 0 && colonIdx < 65;
   const rawTitle = hasTitle ? clean.slice(0, colonIdx) : clean.slice(0, 60).replace(/\s\S*$/, "");
   const title = cleanTitle(rawTitle);
-  // Full body — no hard slice, let CSS handle display
   const body = hasTitle ? clean.slice(colonIdx + 1).trim() : clean;
   return { icon: pickIcon(clean, index), title, body };
 }
@@ -53,13 +50,11 @@ function buildCard(text, index) {
 function parseDescSections(description) {
   if (!description) return [];
 
-  // Strategy 1: emoji-based sections
   const emojiParts = description
     .split(/(?=[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F000}-\u{1FFFF}✅🚫✨💗☁️])/u)
     .map(s => s.trim())
     .filter(s => s.replace(STRIP_EMOJI_RE, "").length > 25);
 
-  // Skip the very first chunk (intro para), use the rest
   const candidates = emojiParts.length > 1 ? emojiParts.slice(1) : emojiParts;
 
   if (candidates.length >= 3) {
@@ -70,7 +65,6 @@ function parseDescSections(description) {
     return indices.map((idx, i) => buildCard(candidates[idx], i));
   }
 
-  // Strategy 2: sentence-bucket fallback
   const sentences = description
     .split(/(?<=[.!?])\s+/)
     .map(s => s.trim())
@@ -112,6 +106,28 @@ function findSelectedVariant(variants, selectedOptions) {
       ([name, value]) => selectedOptions?.[name] === value,
     ),
   ) || variants[0] || null;
+}
+
+function StarRating({ rating = 5, size = 16 }) {
+  const fullStars = Math.max(0, Math.min(5, Math.floor(Number(rating || 5))));
+  return (
+    <span className="star-rating" aria-hidden="true">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <svg
+          key={i}
+          width={size}
+          height={size}
+          viewBox="0 0 24 24"
+          fill={i < fullStars ? "currentColor" : "none"}
+          stroke="currentColor"
+          strokeWidth="1.4"
+          className={`star ${i < fullStars ? "is-filled" : ""}`}
+        >
+          <path d="m12 3 2.8 5.8 6.4.9-4.6 4.5 1.1 6.4L12 17.6 6.3 20.6l1.1-6.4L2.8 9.7l6.4-.9L12 3Z" />
+        </svg>
+      ))}
+    </span>
+  );
 }
 
 export default function ProductDetailClient({ locale, product, region }) {
@@ -156,40 +172,28 @@ export default function ProductDetailClient({ locale, product, region }) {
   const vendorLabel = String(product.vendor || product.brand || "ENFANT ORGANICS").toUpperCase();
   const compareAmount = Number(selectedPricing?.compare_amount || 0);
   const showComparePrice = compareAmount > Number(selectedPricing?.amount || 0);
+
+  const [showMobileBar, setShowMobileBar] = useState(false);
+  const actionsRef = useRef(null);
+
   const socialProofPills = [
-    {
-      icon: "heart",
-      label: isAr ? "محبوب من عائلات إنفانت" : "Loved by Enfant families",
-    },
-    {
-      icon: "check",
-      label: product.organic_certification_name || (isAr ? "عناية موثوقة يوميًا" : "Trusted everyday care"),
-    },
+    { icon: "heart", label: isAr ? "محبوب من عائلات إنفانت" : "Loved by Enfant families" },
+    { icon: "check", label: product.organic_certification_name || (isAr ? "عناية موثوقة يوميًا" : "Trusted everyday care") },
   ];
+
   const trustFeatures = [
-    {
-      icon: "truck",
-      title: isAr ? "شحن سريع" : "Fast shipping",
-      copy: t.freeShipping,
-    },
-    {
-      icon: "check",
-      title: isAr ? "منتج أصلي" : "Original product",
-      copy: t.originalProducts,
-    },
-    {
-      icon: "shield",
-      title: isAr ? "دفع آمن" : "Secure payment",
-      copy: t.securePayment,
-    },
+    { icon: "truck", title: isAr ? "شحن سريع" : "Fast shipping", copy: t.freeShipping },
+    { icon: "check", title: isAr ? "منتج أصلي" : "Original product", copy: t.originalProducts },
+    { icon: "shield", title: isAr ? "دفع آمن" : "Secure payment", copy: t.securePayment },
   ];
+
   const paymentLogos = [
     {
       key: "applepay",
       svg: (
-        <svg viewBox="0 0 72 28" xmlns="http://www.w3.org/2000/svg" style={{height:22,width:"auto"}}>
-          <path d="M13.5 6.3c.7-.9 1.2-2.1 1.1-3.3-1.1.1-2.3.7-3.1 1.6-.7.8-1.3 2-1.1 3.1 1.2.1 2.4-.5 3.1-1.4z" fill="#111"/>
-          <path d="M14.6 8c-1.7-.1-3.1.9-3.9.9-.8 0-2.1-.9-3.4-.8-1.7 0-3.3 1-4.2 2.5-1.8 3.1-.5 7.7 1.3 10.2.8 1.2 1.7 2.5 2.9 2.5 1.1 0 1.6-.7 3-.7s1.8.7 3 .7c1.2 0 2-1.2 2.8-2.4.9-1.4 1.3-2.7 1.3-2.8-.1 0-2.4-.9-2.4-3.6 0-2.3 1.8-3.3 1.9-3.4-1.1-1.6-2.7-2.1-3.3-2.1z" fill="#111"/>
+        <svg viewBox="0 0 72 28" xmlns="http://www.w3.org/2000/svg" style={{ height: 20, width: "auto" }}>
+          <path d="M13.5 6.3c.7-.9 1.2-2.1 1.1-3.3-1.1.1-2.3.7-3.1 1.6-.7.8-1.3 2-1.1 3.1 1.2.1 2.4-.5 3.1-1.4z" fill="#111" />
+          <path d="M14.6 8c-1.7-.1-3.1.9-3.9.9-.8 0-2.1-.9-3.4-.8-1.7 0-3.3 1-4.2 2.5-1.8 3.1-.5 7.7 1.3 10.2.8 1.2 1.7 2.5 2.9 2.5 1.1 0 1.6-.7 3-.7s1.8.7 3 .7c1.2 0 2-1.2 2.8-2.4.9-1.4 1.3-2.7 1.3-2.8-.1 0-2.4-.9-2.4-3.6 0-2.3 1.8-3.3 1.9-3.4-1.1-1.6-2.7-2.1-3.3-2.1z" fill="#111" />
           <text x="22" y="20" fontFamily="-apple-system,BlinkMacSystemFont,Helvetica Neue,sans-serif" fontSize="14" fontWeight="400" fill="#111">Pay</text>
         </svg>
       ),
@@ -197,7 +201,7 @@ export default function ProductDetailClient({ locale, product, region }) {
     {
       key: "visa",
       svg: (
-        <svg viewBox="0 0 60 24" xmlns="http://www.w3.org/2000/svg" style={{height:20,width:"auto"}}>
+        <svg viewBox="0 0 60 24" xmlns="http://www.w3.org/2000/svg" style={{ height: 18, width: "auto" }}>
           <text x="4" y="18" fontFamily="Arial,sans-serif" fontSize="18" fontWeight="900" fontStyle="italic" fill="#1A1F71" letterSpacing="-1">VISA</text>
         </svg>
       ),
@@ -205,22 +209,21 @@ export default function ProductDetailClient({ locale, product, region }) {
     {
       key: "mastercard",
       svg: (
-        <svg viewBox="0 0 50 30" xmlns="http://www.w3.org/2000/svg" style={{height:22,width:"auto"}}>
-          <circle cx="18" cy="15" r="12" fill="#EB001B"/>
-          <circle cx="32" cy="15" r="12" fill="#F79E1B"/>
-          <path d="M25 6.8a12 12 0 0 1 0 16.4A12 12 0 0 1 25 6.8Z" fill="#FF5F00"/>
+        <svg viewBox="0 0 50 30" xmlns="http://www.w3.org/2000/svg" style={{ height: 20, width: "auto" }}>
+          <circle cx="18" cy="15" r="12" fill="#EB001B" />
+          <circle cx="32" cy="15" r="12" fill="#F79E1B" />
+          <path d="M25 6.8a12 12 0 0 1 0 16.4A12 12 0 0 1 25 6.8Z" fill="#FF5F00" />
         </svg>
       ),
     },
     {
       key: "cod",
       svg: (
-        <svg viewBox="0 0 72 28" fill="none" xmlns="http://www.w3.org/2000/svg" style={{height:22,width:"auto"}}>
-          {/* banknote */}
-          <rect x="1" y="7" width="26" height="14" rx="2.5" stroke="#4a7c4e" strokeWidth="1.5"/>
-          <circle cx="14" cy="14" r="3.5" stroke="#4a7c4e" strokeWidth="1.3"/>
-          <line x1="1" y1="11" x2="27" y2="11" stroke="#4a7c4e" strokeWidth="1"/>
-          <line x1="1" y1="17" x2="27" y2="17" stroke="#4a7c4e" strokeWidth="1"/>
+        <svg viewBox="0 0 72 28" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ height: 20, width: "auto" }}>
+          <rect x="1" y="7" width="26" height="14" rx="2.5" stroke="#4a7c4e" strokeWidth="1.5" />
+          <circle cx="14" cy="14" r="3.5" stroke="#4a7c4e" strokeWidth="1.3" />
+          <line x1="1" y1="11" x2="27" y2="11" stroke="#4a7c4e" strokeWidth="1" />
+          <line x1="1" y1="17" x2="27" y2="17" stroke="#4a7c4e" strokeWidth="1" />
           <text x="31" y="19" fontFamily="system-ui,sans-serif" fontSize="11" fontWeight="800" letterSpacing="0.5" fill="#4a7c4e">COD</text>
         </svg>
       ),
@@ -319,9 +322,20 @@ export default function ProductDetailClient({ locale, product, region }) {
     if (didPush) {
       lastTrackedViewItemRef.current = key;
     }
-    // Record a real product_view event for admin funnel analytics.
     trackEvent("product_view", { productSlug: product.slug, regionCode: region });
   }, [locale, product, region]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setShowMobileBar(!entry.isIntersecting);
+      },
+      { threshold: 0, rootMargin: "0px 0px -60px 0px" }
+    );
+    if (actionsRef.current) observer.observe(actionsRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   const addCurrentProduct = () => {
     addItem({ ...product, pricing: selectedPricing, image: selectedVariant?.image || product.image, locale }, quantity, selectedOptions, selectedVariant);
@@ -444,7 +458,7 @@ export default function ProductDetailClient({ locale, product, region }) {
         return;
       }
       setNotifySuccess(
-        data?.detail || (isAr ? "تم تسجيل طلبك. سنبلغك فور توفر المنتج." : "You're on the list. We’ll notify you when this product is back."),
+        data?.detail || (isAr ? "تم تسجيل طلبك. سنبلغك فور توفر المنتج." : "You're on the list. We'll notify you when this product is back."),
       );
     } catch {
       setNotifyError(isAr ? "تعذر حفظ طلب التنبيه الآن." : "Unable to save your notify request right now.");
@@ -454,260 +468,287 @@ export default function ProductDetailClient({ locale, product, region }) {
   };
 
   return (
-    <div className="product-layout">
-      <div className={`gallery-layout ${galleryImages.length === 1 ? "is-single" : ""}`}>
-        <div className="main-product-image-shell">
-          <div className={`main-product-image ${galleryImages.length === 1 ? "is-single" : ""}`}>
-            <img src={selectedImage} alt={product.name} />
-          </div>
-        </div>
-        {galleryImages.length > 1 ? (
-          <div className="thumb-list" aria-label={isAr ? "صور المنتج" : "Product gallery"}>
-            {galleryImages.map((image) => (
-              <button
-                key={image}
-                type="button"
-                className={`thumb-button ${selectedImage === image ? "is-active" : ""}`}
-                onClick={() => setSelectedImage(image)}
-              >
-                <img src={image} alt={product.name} loading="lazy" />
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="product-summary">
-        <div className="summary-block product-summary-header">
-          <span className="summary-eyebrow">{vendorLabel}</span>
-          <span className="summary-badge">{product.badge || product.category?.name}</span>
-          <h1>{product.name}</h1>
-          <div className="product-reviews product-reviews-inline">
-            <span className="review-stars small" aria-hidden="true">★★★★★</span>
-            <span>{reviewCount}</span>
-            <span className="product-review-caption">
-              {isAr ? "مراجعات" : "reviews"}
-            </span>
-          </div>
-          <div className="product-pricing large">
-            <strong>{formatMoney(selectedPricing, locale)}</strong>
-            {showComparePrice ? (
-              <span>
-                {formatMoney(
-                  { ...selectedPricing, amount: selectedPricing.compare_amount, prefix: "" },
-                  locale,
-                )}
-              </span>
-            ) : null}
-          </div>
-          <p className="product-short-copy">{product.short_description}</p>
-        </div>
-
-
-        <div className="product-purchase-meta">
-          {optionGroups.map((group) => (
-            <div key={group.name} className="summary-block product-option-block">
-              <h4>{group.name}</h4>
-              <div className="option-pills">
-                {group.values.map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    className={`option-pill ${selectedOptions[group.name] === value ? "is-active" : ""}`}
-                    onClick={() =>
-                      setSelectedOptions((current) => ({
-                        ...current,
-                        [group.name]: value,
-                      }))
-                    }
-                  >
-                    {value}
-                  </button>
-                ))}
-              </div>
+    <>
+      <div className="product-layout">
+        {/* ── Gallery ─────────────────────────────────────────── */}
+        <div className={`gallery-layout ${galleryImages.length === 1 ? "is-single" : ""}`}>
+          <div className="main-product-image-shell">
+            <div className={`main-product-image ${galleryImages.length === 1 ? "is-single" : ""}`}>
+              <img src={selectedImage} alt={product.name} />
             </div>
-          ))}
+            <div className="image-zoom-hint">
+              <Icon name="search" size={14} />
+              <span>{isAr ? "تكبير" : "Hover to zoom"}</span>
+            </div>
+          </div>
+          {galleryImages.length > 1 ? (
+            <div className="thumb-list" aria-label={isAr ? "صور المنتج" : "Product gallery"}>
+              {galleryImages.map((image) => (
+                <button
+                  key={image}
+                  type="button"
+                  className={`thumb-button ${selectedImage === image ? "is-active" : ""}`}
+                  onClick={() => setSelectedImage(image)}
+                >
+                  <img src={image} alt={product.name} loading="lazy" />
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
 
-          <div className="summary-block product-quantity-block">
-            <div className="summary-label-row">
-              <h4>{t.quantity}</h4>
-              {product?.stock_status?.is_low_stock ? (
-                <span className="summary-helper-pill">
-                  {isAr ? "كمية محدودة" : "Limited stock"}
+        {/* ── Product Summary ─────────────────────────────────── */}
+        <div className="product-summary">
+          {/* Header */}
+          <div className="summary-block product-summary-header">
+            <div className="product-meta-row">
+              <span className="summary-eyebrow">{vendorLabel}</span>
+              <span className="summary-badge">{product.badge || product.category?.name}</span>
+            </div>
+
+            <h1>{product.name}</h1>
+
+            <div className="product-reviews product-reviews-inline product-reviews--premium">
+              <StarRating rating={product.rating || 5} size={18} />
+              <span className="review-count">{reviewCount}</span>
+              <span className="product-review-caption">
+                {isAr ? "تقييم" : "reviews"}
+              </span>
+            </div>
+
+            <div className="product-pricing large product-pricing--premium">
+              <strong>{formatMoney(selectedPricing, locale)}</strong>
+              {showComparePrice ? (
+                <span className="compare-price">
+                  {formatMoney(
+                    { ...selectedPricing, amount: selectedPricing.compare_amount, prefix: "" },
+                    locale,
+                  )}
+                </span>
+              ) : null}
+              {showComparePrice ? (
+                <span className="save-badge">
+                  {isAr ? "وفر" : "Save"} {Math.round((1 - Number(selectedPricing?.amount || 0) / compareAmount) * 100)}%
                 </span>
               ) : null}
             </div>
-            <div className="quantity-control">
-              <button type="button" onClick={() => setQuantity((value) => Math.max(1, value - 1))}>
-                <Icon name="minus" size={16} />
-              </button>
-              <span>{quantity}</span>
-              <button type="button" onClick={() => setQuantity((value) => value + 1)}>
-                <Icon name="plus" size={16} />
-              </button>
-            </div>
+
+            {product.short_description ? (
+              <p className="product-short-copy">{product.short_description}</p>
+            ) : null}
           </div>
-        </div>
 
-        <div className="summary-actions">
-          {isOutOfStock ? (
-            <div className="product-stock-notify-card">
-              <p className="product-stock-notify-title">
-                {isAr ? "المنتج غير متوفر حالياً" : "This product is currently out of stock"}
-              </p>
-              <p className="product-stock-notify-copy">
-                {isAr
-                  ? "أضف بريدك الإلكتروني وسنخبرك فور توفره."
-                  : "Leave your email and we’ll notify you as soon as it’s available."}
-              </p>
-              <form className="product-stock-notify-form" onSubmit={submitBackInStockRequest}>
-                <input
-                  type="email"
-                  value={notifyEmail}
-                  onChange={(event) => setNotifyEmail(event.target.value)}
-                  placeholder={isAr ? "البريد الإلكتروني" : "Email address"}
-                  autoComplete="email"
-                  required
-                />
-                <input
-                  type="tel"
-                  value={notifyPhone}
-                  onChange={(event) => setNotifyPhone(event.target.value)}
-                  placeholder={isAr ? "رقم الهاتف (اختياري)" : "Phone (optional)"}
-                  autoComplete="tel"
-                />
-                <button type="submit" className="primary-action" disabled={notifySubmitting}>
-                  {notifySubmitting
-                    ? (isAr ? "جارٍ الحفظ..." : "Saving...")
-                    : (isAr ? "أخبرني عند التوفر" : "Notify me when available")}
+          {/* Purchase Meta */}
+          <div className="product-purchase-meta">
+            {optionGroups.map((group) => (
+              <div key={group.name} className="summary-block product-option-block">
+                <h4>{group.name}</h4>
+                <div className="option-pills">
+                  {group.values.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={`option-pill ${selectedOptions[group.name] === value ? "is-active" : ""}`}
+                      onClick={() =>
+                        setSelectedOptions((current) => ({
+                          ...current,
+                          [group.name]: value,
+                        }))
+                      }
+                    >
+                      {value}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            <div className="summary-block product-quantity-block">
+              <div className="summary-label-row">
+                <h4>{t.quantity}</h4>
+                {product?.stock_status?.is_low_stock ? (
+                  <span className="summary-helper-pill summary-helper-pill--urgent">
+                    {isAr ? "كمية محدودة" : "Only a few left"}
+                  </span>
+                ) : null}
+              </div>
+              <div className="quantity-control">
+                <button type="button" onClick={() => setQuantity((value) => Math.max(1, value - 1))}>
+                  <Icon name="minus" size={16} />
                 </button>
-              </form>
-              {notifySuccess ? <p className="product-stock-notify-success">{notifySuccess}</p> : null}
-              {notifyError ? <p className="product-stock-notify-error">{notifyError}</p> : null}
-            </div>
-          ) : (
-            <div className="product-cta-stack">
-              <button ref={addBtnRef} type="button" className="secondary-action product-cart-action" onClick={() => addCurrentProduct()}>
-                <Icon name="bag" size={18} />
-                <span>{t.addToCart}</span>
-              </button>
-              <button type="button" className="primary-action product-buy-action" onClick={buyCurrentProduct}>
-                <Icon name="sparkle" size={17} />
-                <span>{isAr ? "اشتر الآن" : "Buy it now"}</span>
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className="product-trust-grid">
-          {trustFeatures.map((feature) => (
-            <div key={feature.title} className="product-trust-item">
-              <span className="product-trust-icon">
-                <Icon name={feature.icon} size={18} />
-              </span>
-              <div>
-                <strong>{feature.title}</strong>
-                <span>{feature.copy}</span>
+                <span>{quantity}</span>
+                <button type="button" onClick={() => setQuantity((value) => value + 1)}>
+                  <Icon name="plus" size={16} />
+                </button>
               </div>
             </div>
-          ))}
-        </div>
+          </div>
 
-        <div className="product-proof-row">
-          {socialProofPills.map((pill) => (
-            <span key={pill.label} className="product-proof-pill">
-              <Icon name={pill.icon} size={14} />
-              {pill.label}
-            </span>
-          ))}
-        </div>
+          {/* Actions — Desktop */}
+          <div className="summary-actions desktop-product-actions" ref={actionsRef}>
+            {isOutOfStock ? (
+              <div className="product-stock-notify-card">
+                <p className="product-stock-notify-title">
+                  {isAr ? "المنتج غير متوفر حالياً" : "This product is currently out of stock"}
+                </p>
+                <p className="product-stock-notify-copy">
+                  {isAr
+                    ? "أضف بريدك الإلكتروني وسنخبرك فور توفره."
+                    : "Leave your email and we'll notify you as soon as it's available."}
+                </p>
+                <form className="product-stock-notify-form" onSubmit={submitBackInStockRequest}>
+                  <input
+                    type="email"
+                    value={notifyEmail}
+                    onChange={(event) => setNotifyEmail(event.target.value)}
+                    placeholder={isAr ? "البريد الإلكتروني" : "Email address"}
+                    autoComplete="email"
+                    required
+                  />
+                  <input
+                    type="tel"
+                    value={notifyPhone}
+                    onChange={(event) => setNotifyPhone(event.target.value)}
+                    placeholder={isAr ? "رقم الهاتف (اختياري)" : "Phone (optional)"}
+                    autoComplete="tel"
+                  />
+                  <button type="submit" className="primary-action" disabled={notifySubmitting}>
+                    {notifySubmitting
+                      ? (isAr ? "جارٍ الحفظ..." : "Saving...")
+                      : (isAr ? "أخبرني عند التوفر" : "Notify me when available")}
+                  </button>
+                </form>
+                {notifySuccess ? <p className="product-stock-notify-success">{notifySuccess}</p> : null}
+                {notifyError ? <p className="product-stock-notify-error">{notifyError}</p> : null}
+              </div>
+            ) : (
+              <div className="product-cta-stack">
+                <button ref={addBtnRef} type="button" className="secondary-action product-cart-action" onClick={() => addCurrentProduct()}>
+                  <Icon name="bag" size={18} />
+                  <span>{t.addToCart}</span>
+                </button>
+                <button type="button" className="primary-action product-buy-action" onClick={buyCurrentProduct}>
+                  <Icon name="sparkle" size={17} />
+                  <span>{isAr ? "اشترِ الآن" : "Buy it now"}</span>
+                </button>
+              </div>
+            )}
+          </div>
 
-        <div className="product-summary-footer">
-          <div className="product-payment-block">
-            <p>{isAr ? "خيارات دفع آمنة على موقعنا" : "Safe payment on our website"}</p>
-            <div className="product-payment-methods">
-              {paymentLogos.map((method) => (
-                <span key={method.key} className="product-payment-chip">
-                  {method.svg}
+          {/* Trust Grid */}
+          <div className="product-trust-grid">
+            {trustFeatures.map((feature) => (
+              <div key={feature.title} className="product-trust-item">
+                <span className="product-trust-icon">
+                  <Icon name={feature.icon} size={18} />
                 </span>
-              ))}
+                <div>
+                  <strong>{feature.title}</strong>
+                  <span>{feature.copy}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Social Proof */}
+          <div className="product-proof-row">
+            {socialProofPills.map((pill) => (
+              <span key={pill.label} className="product-proof-pill">
+                <Icon name={pill.icon} size={14} />
+                {pill.label}
+              </span>
+            ))}
+          </div>
+
+          {/* Footer: Payment + Wishlist */}
+          <div className="product-summary-footer">
+            <div className="product-payment-block">
+              <p>{isAr ? "خيارات دفع آمنة" : "Secure checkout"}</p>
+              <div className="product-payment-methods">
+                {paymentLogos.map((method) => (
+                  <span key={method.key} className="product-payment-chip">
+                    {method.svg}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="product-summary-side-actions">
+              <div className="product-utility-row">
+                <button
+                  type="button"
+                  className={`product-wishlist-button${isWishlisted ? " is-active" : ""}`}
+                  onClick={handleWishlistToggle}
+                  disabled={isWishSubmitting}
+                >
+                  <Icon name="heart" size={18} />
+                  <span>{isAr ? "المفضلة" : "Wishlist"}</span>
+                </button>
+                <Link className="product-continue-link" href={buildStorePath(locale, "/collections", region)}>
+                  {t.continueShopping}
+                </Link>
+              </div>
+              {wishFeedback ? <p className="product-wishlist-feedback">{wishFeedback}</p> : null}
             </div>
           </div>
 
-          <div className="product-summary-side-actions">
-            <div className="product-utility-row">
+          {/* Share */}
+          <div className="summary-block product-share-block">
+            <div className="product-share-header">
+              <h4>{isAr ? "شاركي المنتج" : "Share this product"}</h4>
+              <span className="product-share-label">
+                <Icon name="link" size={14} />
+                {isAr ? "مشاركة سريعة" : "Quick share"}
+              </span>
+            </div>
+            <div className="product-share-actions">
               <button
                 type="button"
-                className={`product-wishlist-button${isWishlisted ? " is-active" : ""}`}
-                onClick={handleWishlistToggle}
-                disabled={isWishSubmitting}
+                className="product-share-button"
+                onClick={() => {
+                  const url = encodeURIComponent(getShareUrl());
+                  const text = encodeURIComponent(shareTitle);
+                  openShareLink(`https://wa.me/?text=${text}%20${url}`);
+                }}
               >
-                <Icon name="heart" size={18} />
-                <span>{isAr ? "أضف إلى المفضلة" : "Add to wishlist"}</span>
+                WhatsApp
               </button>
-              <Link className="product-continue-link" href={buildStorePath(locale, "/collections", region)}>
-                {t.continueShopping}
-              </Link>
+              <button
+                type="button"
+                className="product-share-button"
+                onClick={() => {
+                  const url = encodeURIComponent(getShareUrl());
+                  openShareLink(`https://www.facebook.com/sharer/sharer.php?u=${url}`);
+                }}
+              >
+                Facebook
+              </button>
+              <button
+                type="button"
+                className="product-share-button"
+                onClick={() => {
+                  const url = encodeURIComponent(getShareUrl());
+                  const text = encodeURIComponent(shareTitle);
+                  openShareLink(`https://twitter.com/intent/tweet?text=${text}&url=${url}`);
+                }}
+              >
+                X
+              </button>
+              <button
+                type="button"
+                className="product-share-button"
+                onClick={copyProductLink}
+              >
+                <Icon name="link" size={14} />
+                <span>{isAr ? "نسخ الرابط" : "Copy link"}</span>
+              </button>
             </div>
-            {wishFeedback ? <p className="product-wishlist-feedback">{wishFeedback}</p> : null}
+            {copyFeedback ? <p className="product-share-feedback">{copyFeedback}</p> : null}
           </div>
         </div>
 
-        <div className="summary-block product-share-block">
-          <div className="product-share-header">
-            <h4>{isAr ? "مشاركة المنتج" : "Share this product"}</h4>
-            <span className="product-share-label">
-              <Icon name="link" size={14} />
-              {isAr ? "مشاركة سريعة" : "Quick share"}
-            </span>
-          </div>
-          <div className="product-share-actions">
-            <button
-              type="button"
-              className="product-share-button"
-              onClick={() => {
-                const url = encodeURIComponent(getShareUrl());
-                const text = encodeURIComponent(shareTitle);
-                openShareLink(`https://wa.me/?text=${text}%20${url}`);
-              }}
-            >
-              WhatsApp
-            </button>
-            <button
-              type="button"
-              className="product-share-button"
-              onClick={() => {
-                const url = encodeURIComponent(getShareUrl());
-                openShareLink(`https://www.facebook.com/sharer/sharer.php?u=${url}`);
-              }}
-            >
-              Facebook
-            </button>
-            <button
-              type="button"
-              className="product-share-button"
-              onClick={() => {
-                const url = encodeURIComponent(getShareUrl());
-                const text = encodeURIComponent(shareTitle);
-                openShareLink(`https://twitter.com/intent/tweet?text=${text}&url=${url}`);
-              }}
-            >
-              X
-            </button>
-            <button
-              type="button"
-              className="product-share-button"
-              onClick={copyProductLink}
-            >
-              <Icon name="link" size={14} />
-              <span>{isAr ? "نسخ الرابط" : "Copy link"}</span>
-            </button>
-          </div>
-          {copyFeedback ? <p className="product-share-feedback">{copyFeedback}</p> : null}
-        </div>
-      </div>
-
-      <div className="detail-accordion-row">
+        {/* ── Accordion ───────────────────────────────────────── */}
+        <div className="detail-accordion-row">
           {/* Description */}
           <div className={`detail-accordion-item${openAccordion === "description" ? " is-open" : ""}`}>
             <button
@@ -765,43 +806,61 @@ export default function ProductDetailClient({ locale, product, region }) {
             </button>
             <div className="detail-accordion-body">
               <div className="detail-accordion-inner">
-            <div className="review-list">
-              {customerReviews.length
-                ? customerReviews.map((review) => (
-                    <article key={`${review.customer_name}-${review.created_at}`} className="product-review-item">
-                      <div className="product-review-head">
-                        <strong>{review.customer_name}</strong>
-                        <span className="product-review-rating">
-                          {"★".repeat(Math.max(1, Math.min(5, Number(review.rating || 5))))}
-                        </span>
-                      </div>
-                      {review.title ? <h5>{review.title}</h5> : null}
-                      <p>{review.comment}</p>
-                    </article>
-                  ))
-                : editorialReviews.length
-                  ? editorialReviews.map((review) => (
-                      <article key={`${review.name}-${review.copy}`} className="product-review-item">
-                        <strong>{review.name}</strong>
-                        <p>{review.copy}</p>
-                      </article>
-                    ))
-                  : (
-                    <article className="product-review-item">
-                      <strong>{isAr ? "لا توجد مراجعات بعد" : "No reviews yet"}</strong>
-                      <p>
-                        {isAr
-                          ? "كوني أول من يشارك تجربته مع هذا المنتج."
-                          : "Be the first to share feedback on this product."}
-                      </p>
-                    </article>
-                  )}
-            </div>
+                <div className="review-list">
+                  {customerReviews.length
+                    ? customerReviews.map((review) => (
+                        <article key={`${review.customer_name}-${review.created_at}`} className="product-review-item">
+                          <div className="product-review-head">
+                            <strong>{review.customer_name}</strong>
+                            <span className="product-review-rating">
+                              {"★".repeat(Math.max(1, Math.min(5, Number(review.rating || 5))))}
+                            </span>
+                          </div>
+                          {review.title ? <h5>{review.title}</h5> : null}
+                          <p>{review.comment}</p>
+                        </article>
+                      ))
+                    : editorialReviews.length
+                      ? editorialReviews.map((review) => (
+                          <article key={`${review.name}-${review.copy}`} className="product-review-item">
+                            <strong>{review.name}</strong>
+                            <p>{review.copy}</p>
+                          </article>
+                        ))
+                      : (
+                        <article className="product-review-item">
+                          <strong>{isAr ? "لا توجد مراجعات بعد" : "No reviews yet"}</strong>
+                          <p>
+                            {isAr
+                              ? "كوني أول من يشارك تجربته مع هذا المنتج."
+                              : "Be the first to share feedback on this product."}
+                          </p>
+                        </article>
+                      )}
+                </div>
               </div>
             </div>
           </div>
-
+        </div>
       </div>
-    </div>
+
+      {/* ── Mobile Sticky Bar ───────────────────────────────── */}
+      {!isOutOfStock && (
+        <div className={`mobile-product-sticky-bar ${showMobileBar ? "is-visible" : ""}`}>
+          <div className="mobile-sticky-price">
+            <strong>{formatMoney(selectedPricing, locale)}</strong>
+            {showComparePrice && (
+              <span>{formatMoney({ ...selectedPricing, amount: compareAmount, prefix: "" }, locale)}</span>
+            )}
+          </div>
+          <button type="button" className="secondary-action product-cart-action" onClick={() => addCurrentProduct()}>
+            <Icon name="bag" size={18} />
+          </button>
+          <button type="button" className="primary-action product-buy-action" onClick={buyCurrentProduct}>
+            <span>{isAr ? "اشترِ الآن" : "Buy Now"}</span>
+          </button>
+        </div>
+      )}
+    </>
   );
 }

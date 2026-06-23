@@ -37,7 +37,7 @@
   display: block;
   text-decoration: none;
   color: inherit;
-  transition: transform 240ms ease, box-shadow 240ms ease;
+  transition: transform 240ms ease;
 }
 
 .offer-primary::before {
@@ -164,7 +164,7 @@
   display: block;
   text-decoration: none;
   color: inherit;
-  transition: transform 240ms ease, box-shadow 240ms ease;
+  transition: transform 240ms ease;
 }
 
 .offer-secondary::before {
@@ -257,7 +257,6 @@
   border-bottom: 1.5px solid currentColor;
   width: fit-content;
   padding-bottom: 1px;
-  transition: gap 160ms ease;
 }
 
 .offer-secondary:hover .offer-secondary-cta { gap: 10px; }
@@ -339,7 +338,7 @@
   color: inherit;
   display: flex;
   flex-direction: column;
-  transition: transform 220ms ease, box-shadow 220ms ease;
+  transition: transform 220ms ease;
 }
 
 .offer-tile::after {
@@ -641,7 +640,7 @@
   border: 1px solid var(--line);
   background: white;
   box-shadow: var(--shadow);
-  transition: transform 220ms ease, box-shadow 220ms ease;
+  transition: transform 220ms ease;
 }
 
 .category-card-image {
@@ -1503,6 +1502,7 @@
 }
 
 .blog-card-image {
+  position: relative;
   aspect-ratio: 16 / 9;
   overflow: hidden;
   flex-shrink: 0;

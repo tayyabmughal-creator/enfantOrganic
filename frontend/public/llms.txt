@@ -1,0 +1,26 @@
+# Enfant Organic
+> Premium organic and natural baby care products — Oman, UAE, Saudi Arabia
+
+Enfant Organic is a regional e-commerce brand offering safe, gentle, and natural baby care essentials. The store serves customers across Oman (OMR), United Arab Emirates (AED), and Saudi Arabia (SAR), with full Arabic and English support.
+
+## Store
+- [Shop All Products](https://www.enfantorganic.com/en/collections)
+- [Track Your Order](https://www.enfantorganic.com/en/track-order)
+- [Oman Store](https://om.enfantorganic.com/en)
+- [UAE Store](https://ae.enfantorganic.com/en)
+- [Saudi Arabia Store](https://sa.enfantorganic.com/en)
+
+## Products
+Products include: baby lotions, sunscreen, shampoo, wipes, insect repellent, and moisturising creams. All products are dermatologist-tested and free from harmful chemicals.
+
+## Company
+- Brand: Enfant Organic
+- Regions: Oman, UAE, Saudi Arabia
+- Languages: English, Arabic
+- Contact: Available through the store's contact page
+- Instagram: https://www.instagram.com/enfant_middle_east/
+
+## Technical
+- Built with Next.js (frontend) and Django (backend)
+- Sitemap: https://www.enfantorganic.com/sitemap.xml
+- Robots: https://www.enfantorganic.com/robots.txt

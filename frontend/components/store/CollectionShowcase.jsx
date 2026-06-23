@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 
+import SiteImage from "@/components/ui/SiteImage";
 import Button from "@/components/ui/Button";
 
 export default function CollectionShowcase({ collections }) {
@@ -38,7 +39,7 @@ export default function CollectionShowcase({ collections }) {
       <div className="scroll-strip" ref={railRef}>
         {collections.map((collection) => (
           <article key={collection.slug} className="showcase-card soft-card">
-            <img src={collection.image} alt={collection.name} loading="lazy" />
+            <SiteImage src={collection.image} alt={collection.name} width={400} height={300} loading="lazy" />
             <div className="showcase-card-copy">
               <span className="label">{collection.eyebrow}</span>
               <h3 className="card-title" style={{ fontSize: "2rem" }}>{collection.name}</h3>
