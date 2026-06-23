@@ -796,8 +796,10 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         const data = await readJson(response, { isAr });
         if (!response.ok) throw new Error(data.detail || JSON.stringify(data));
         if (!data.valid) {
-          setCouponPreview(null);
+          // In silent mode (auto-revalidation while typing), keep the existing
+          // couponPreview so shipping/totals don't flash to "—" mid-keystroke.
           if (!silent) {
+            setCouponPreview(null);
             setCouponMessage(data.error || data.message || (isAr ? "الكوبون غير صالح." : "Coupon is not valid."));
           }
           return false;
@@ -812,9 +814,9 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         }
         return true;
       } catch (err) {
-        if (silent) {
+        // Silent network errors: don't wipe pricing display, just fail quietly.
+        if (!silent) {
           setCouponPreview(null);
-        } else {
           setCouponMessage(err.message || (isAr ? "تعذر التحقق من الكوبون." : "Unable to validate coupon."));
         }
         return false;
