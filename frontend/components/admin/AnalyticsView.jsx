@@ -209,6 +209,43 @@ function LiveVisitorsPanel() {
   );
 }
 
+const SOURCE_ICONS = {
+  Direct:    "🔗",
+  Instagram: "📸",
+  Facebook:  "👤",
+  TikTok:    "🎵",
+  Snapchat:  "👻",
+  Google:    "🔍",
+  WhatsApp:  "💬",
+};
+
+function TrafficSourcesPanel({ sources = [] }) {
+  if (!sources.length) return null;
+  const total = sources.reduce((s, r) => s + r.sessions, 0);
+  return (
+    <section className="admin-chart-card admin-traffic-card">
+      <h3>Traffic Sources</h3>
+      <div className="admin-traffic-list">
+        {sources.map(({ source, sessions }) => {
+          const pct = total > 0 ? Math.round((sessions / total) * 100) : 0;
+          const icon = SOURCE_ICONS[source] || "🌐";
+          return (
+            <div key={source} className="admin-traffic-row">
+              <span className="admin-traffic-icon">{icon}</span>
+              <span className="admin-traffic-name">{source}</span>
+              <div className="admin-traffic-bar-track">
+                <div className="admin-traffic-bar-fill" style={{ width: `${pct}%` }} />
+              </div>
+              <span className="admin-traffic-pct">{pct}%</span>
+              <span className="admin-traffic-count">{sessions}</span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function fmtMoney(value, currency = "") {
   const number = Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
   return currency ? `${currency} ${number}` : number;
@@ -251,6 +288,9 @@ export default function AnalyticsView({ data }) {
     <div className="admin-analytics">
       {/* Live visitors panel — self-polling */}
       <LiveVisitorsPanel />
+
+      {/* Traffic sources */}
+      <TrafficSourcesPanel sources={data?.traffic_sources || []} />
 
       <div className="admin-chart-row">
         <section className="admin-chart-card span-2">

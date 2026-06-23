@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useStore } from "@/components/store/cart/StoreProvider";
 import Icon from "@/components/icons/Icon";
 import { buildAnalyticsItems, pushDataLayerEvent } from "@/lib/analytics";
-import { getAttributionSnapshot, trackEvent } from "@/lib/eventTracking";
+import { getAttributionSnapshot, getOrCreateSessionKey, trackEvent } from "@/lib/eventTracking";
 import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
 import { API_BASE_URL as CONFIG_API_BASE_URL, CUSTOMER_TOKEN_KEY, safeRedirectUrl } from "@/lib/config";
 import { readJson } from "@/lib/http";
@@ -717,7 +717,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          session_token: lastBeginCheckoutSignatureRef.current || `anon-${Date.now()}`,
+          session_token: getOrCreateSessionKey() || `anon-${Date.now()}`,
           customer_email: email,
           customer_name: form.name || "",
           customer_phone: form.phone || "",
@@ -1314,7 +1314,15 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         body: JSON.stringify(payload),
       });
       const data = await readJson(response, { isAr });
-      if (!response.ok) throw new Error(data.detail || JSON.stringify(data));
+      if (!response.ok) {
+        // DRF validation errors are dicts like {"coupon_code": ["..."]} or {"detail": "..."}
+        let msg = data.detail;
+        if (!msg && data && typeof data === "object") {
+          const firstVal = Object.values(data)[0];
+          msg = Array.isArray(firstVal) ? firstVal[0] : firstVal;
+        }
+        throw new Error(String(msg || (isAr ? "حدث خطأ. حاول مرة أخرى." : "Something went wrong. Please try again.")));
+      }
       saveOrderLookupToken(data.order_number, data.lookup_token);
       createdOrderContext = {
         orderNumber: data.order_number,

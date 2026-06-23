@@ -1,3 +1,4 @@
+from django.db import transaction
 from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -26,6 +27,7 @@ class CheckoutView(APIView):
     serializer_class = CheckoutCreateSerializer
     throttle_scope = "checkout"
 
+    @transaction.atomic
     def post(self, request):
         serializer = CheckoutCreateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)

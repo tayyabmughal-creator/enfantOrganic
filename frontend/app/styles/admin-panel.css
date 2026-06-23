@@ -4429,3 +4429,14 @@
 .admin-live-country-ct { font-size: 0.78rem; font-weight: 700; color: var(--brand-dark); background: #e6f2db; padding: 2px 9px; border-radius: 10px; }
 .admin-live-bar-track { height: 4px; background: #eaf1e2; border-radius: 2px; overflow: hidden; }
 .admin-live-bar-fill { height: 100%; background: linear-gradient(90deg, #92ab69, #607a42); border-radius: 2px; transition: width 0.7s ease; }
+
+/* Traffic sources panel */
+.admin-traffic-card { margin-bottom: 20px; }
+.admin-traffic-list { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+.admin-traffic-row { display: flex; align-items: center; gap: 10px; }
+.admin-traffic-icon { font-size: 1.1rem; width: 22px; text-align: center; flex-shrink: 0; }
+.admin-traffic-name { font-size: 0.83rem; font-weight: 500; color: var(--text); min-width: 90px; }
+.admin-traffic-bar-track { flex: 1; height: 6px; background: #eaf1e2; border-radius: 3px; overflow: hidden; }
+.admin-traffic-bar-fill { height: 100%; background: linear-gradient(90deg, #92ab69, #607a42); border-radius: 3px; transition: width 0.7s ease; }
+.admin-traffic-pct { font-size: 0.75rem; color: var(--text-soft); min-width: 32px; text-align: right; }
+.admin-traffic-count { font-size: 0.78rem; font-weight: 700; color: var(--brand-dark); background: #e6f2db; padding: 2px 8px; border-radius: 10px; min-width: 28px; text-align: center; }

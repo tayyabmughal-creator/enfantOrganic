@@ -1490,11 +1490,32 @@ class AdminAnalyticsView(APIView):
             funnel_checkouts = all_events.filter(
                 event_type=AnalyticsEvent.EVENT_CHECKOUT_INITIATED
             ).values("session_key").distinct().count()
+
+            # Traffic sources — read `source` key from metadata of page_view events
+            # Uses one session per source (first-touch attribution per session)
+            page_view_events = (
+                all_events.filter(event_type=AnalyticsEvent.EVENT_PAGE_VIEW)
+                .values("session_key", "metadata")
+            )
+            source_sessions = {}
+            for ev in page_view_events:
+                sk = ev["session_key"]
+                if sk not in source_sessions:
+                    src = (ev.get("metadata") or {}).get("source") or "Direct"
+                    source_sessions[sk] = src
+            source_counts: dict[str, int] = {}
+            for src in source_sessions.values():
+                source_counts[src] = source_counts.get(src, 0) + 1
+            traffic_sources = sorted(
+                [{"source": k, "sessions": v} for k, v in source_counts.items()],
+                key=lambda x: -x["sessions"],
+            )
         except (OperationalError, ProgrammingError):
             funnel_visitors = 0
             funnel_product_views = 0
             funnel_cart_adds = 0
             funnel_checkouts = 0
+            traffic_sources = []
 
         total_orders_count = orders.count()
         paid_orders_count = paid_orders.count()
@@ -1542,6 +1563,7 @@ class AdminAnalyticsView(APIView):
             "region_sa": regional_revenue.get("sa", {}),
             "regional_revenue": regional_revenue,
             "revenue_trend": revenue_trend,
+            "traffic_sources": traffic_sources,
             "status_mix": list(orders.values("status").annotate(count=Count("id")).order_by("status")),
             "top_products": list(
                 Product.objects.filter(is_published=True)

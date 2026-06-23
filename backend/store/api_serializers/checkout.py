@@ -14,6 +14,7 @@ PHONE_PATTERN = re.compile(r"^\+?[0-9 ()\-]{8,32}$")
 NAME_PATTERN = re.compile(r"^[\w\s'\.\-؀-ۿ]{2,160}$", re.UNICODE)
 
 from ..models import (
+    AbandonedCart,
     CartMilestone,
     Coupon,
     GiftCard,
@@ -1055,6 +1056,16 @@ class CheckoutCreateSerializer(serializers.Serializer):
         if coupon:
             coupon.used_count += 1
             coupon.save(update_fields=["used_count"])
+
+        # Mark matching abandoned cart as recovered (matched by analytics session UUID)
+        if conversion_session_key:
+            AbandonedCart.objects.filter(
+                session_token=conversion_session_key,
+                status=AbandonedCart.STATUS_ABANDONED,
+            ).update(
+                status=AbandonedCart.STATUS_RECOVERED,
+                recovered_at=timezone.now(),
+            )
 
         if gift_card:
             if order.payment_method == Order.PAYMENT_ONLINE:
