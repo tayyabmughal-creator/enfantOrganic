@@ -557,11 +557,11 @@
 }
 
 .category-carousel-button:first-of-type {
-  inset-inline-start: 0;
+  inset-inline-start: -24px;
 }
 
 .category-carousel-button:last-of-type {
-  inset-inline-end: 0;
+  inset-inline-end: -24px;
 }
 
 .category-carousel-button:hover {
@@ -706,6 +706,7 @@
   position: relative;
   display: block;
   min-width: 0;
+  overflow: visible;
 }
 
 .product-rail-track > .product-rail {
@@ -734,11 +735,11 @@
 }
 
 .product-rail-btn:first-of-type {
-  inset-inline-start: 0;
+  inset-inline-start: -24px;
 }
 
 .product-rail-btn:last-of-type {
-  inset-inline-end: 0;
+  inset-inline-end: -24px;
 }
 
 .product-rail-btn:hover:not(:disabled) {

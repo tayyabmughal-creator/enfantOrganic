@@ -109,6 +109,7 @@ export default async function LocalizedHomePage({ params, searchParams }) {
   const sectionPathByKey = {
     "new-arrivals": "/new-arrivals",
     "top-choices": "/best-sellers",
+    "baby-sets": "/collections?category=Baby-Sets",
   };
   const sectionEmptyCopy = {
     "new-arrivals": {

@@ -91,6 +91,21 @@ export default function ProductCollectionClient({
   const [sortBy, setSortBy] = useState(
     initialSortBy === "best-sellers" && !canUseBestSellerSort ? "featured" : initialSortBy,
   );
+
+  // Sync filter state when URL params change (e.g. navigating from header dropdown)
+  useEffect(() => {
+    setSelectedCategory(String(initialFilters?.category || "all") || "all");
+    setSelectedTag(String(initialFilters?.tag || "all") || "all");
+    setSelectedBrand(String(initialFilters?.brand || "all") || "all");
+    setAvailability(String(initialFilters?.availability || "all") || "all");
+    setMinRating(Math.max(0, Math.min(5, Number(initialFilters?.rating_min || 0))));
+  }, [
+    initialFilters?.category,
+    initialFilters?.tag,
+    initialFilters?.brand,
+    initialFilters?.availability,
+    initialFilters?.rating_min,
+  ]);
   const [maxPrice, setMaxPrice] = useState(absoluteMaxPrice);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [showAllCategories, setShowAllCategories] = useState(false);

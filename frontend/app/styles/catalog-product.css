@@ -777,6 +777,8 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  row-gap: 4px;
 }
 
 .product-review-caption {
@@ -1389,8 +1391,16 @@
 }
 
 .product-review-rating {
-  color: #f1b94d;
-  letter-spacing: 0.12em;
+  color: #f59e0b;
+  letter-spacing: 0.08em;
+  font-size: 1.25rem;
+}
+
+.star-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: #f59e0b;
 }
 
 @media (min-width: 1181px) {

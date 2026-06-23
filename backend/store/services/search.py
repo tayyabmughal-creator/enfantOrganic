@@ -173,7 +173,7 @@ def _apply_fallback_search(queryset, query):
 
     search_filter = build_search_filter(terms)
     rank_expression = _fallback_rank_expression(terms)
-    return queryset.filter(search_filter).annotate(search_rank=rank_expression).order_by(
+    return queryset.filter(search_filter).distinct().annotate(search_rank=rank_expression).order_by(
         "-search_rank", "sort_order", "id"
     )
 
@@ -229,7 +229,7 @@ def _apply_postgres_search(queryset, query):
             ),
         ).filter(
             Q(fts_rank__gt=0.0) | Q(trigram_rank__gte=0.12) | search_filter
-        ).order_by("-search_rank", "-fts_rank", "-trigram_rank", "sort_order", "id")
+        ).distinct().order_by("-search_rank", "-fts_rank", "-trigram_rank", "sort_order", "id")
         return queryset
 
     queryset = queryset.annotate(
@@ -237,7 +237,7 @@ def _apply_postgres_search(queryset, query):
             Coalesce(SearchRank(vector, search_query), Value(0.0)),
             output_field=FloatField(),
         )
-    ).filter(Q(fts_rank__gt=0.0) | search_filter).order_by(
+    ).filter(Q(fts_rank__gt=0.0) | search_filter).distinct().order_by(
         "-search_rank", "-fts_rank", "sort_order", "id"
     )
     return queryset
