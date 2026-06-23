@@ -700,37 +700,59 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     setForm((current) => ({ ...current, payment_method: value }));
   }, []);
 
-  const handleEmailBlur = useCallback(
-    (event) => {
-      const email = (event.target.value || "").trim();
-      if (!email || abandonedCartSentRef.current) return;
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+  // Keep a ref of the latest cart/form snapshot so the debounce closure always
+  // reads fresh data without needing to be recreated on every keystroke.
+  const abandonedCartTimerRef = useRef(null);
+  const abandonedCartSnapRef = useRef({});
+  useEffect(() => {
+    abandonedCartSnapRef.current = {
+      email: form.email,
+      phone: form.phone,
+      name: form.name,
+      items: cartItems,
+      subtotal,
+      currency: (regionCurrency || cartCurrency || "OMR").toUpperCase(),
+      region: region || "om",
+      locale: locale || "en",
+    };
+  }, [form.email, form.phone, form.name, cartItems, subtotal, regionCurrency, cartCurrency, region, locale]);
+
+  // Debounced capture: fires 1 s after user stops typing in email OR phone.
+  useEffect(() => {
+    if (abandonedCartSentRef.current) return;
+    if (!form.email && !form.phone) return;
+    if (abandonedCartTimerRef.current) clearTimeout(abandonedCartTimerRef.current);
+    abandonedCartTimerRef.current = setTimeout(() => {
+      if (abandonedCartSentRef.current) return;
+      const { email, phone, name, items, subtotal: sub, currency, region: reg, locale: loc } = abandonedCartSnapRef.current;
+      const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((email || "").trim());
+      const validPhone = (phone || "").replace(/\D/g, "").length >= 8;
+      if (!validEmail && !validPhone) return;
       abandonedCartSentRef.current = true;
-      const items = (cartItems || []).map((item) => ({
-        product_slug: item.slug || "",
-        product_name: item.name || "",
-        quantity: item.quantity || 1,
-        unit_price: String(item.price || "0"),
-      }));
-      const currency = (regionCurrency || cartCurrency || "OMR").toUpperCase();
       fetch(`${API_BASE_URL}/abandoned-carts/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           session_token: getOrCreateSessionKey() || `anon-${Date.now()}`,
-          customer_email: email,
-          customer_name: form.name || "",
-          customer_phone: form.phone || "",
-          cart_items: items,
-          subtotal: String(subtotal || "0"),
+          customer_email: (email || "").trim(),
+          customer_name: name || "",
+          customer_phone: (phone || "").trim(),
+          cart_items: (items || []).map((item) => ({
+            product_slug: item.slug || "",
+            product_name: item.name || "",
+            quantity: item.quantity || 1,
+            unit_price: String(item.price || "0"),
+          })),
+          subtotal: String(sub || "0"),
           currency_code: currency,
-          region: region || "om",
-          locale: locale || "en",
+          region: reg,
+          locale: loc,
         }),
       }).catch(() => {});
-    },
-    [cartItems, regionCurrency, cartCurrency, form.name, form.phone, subtotal, region, locale],
-  );
+    }, 1000);
+    return () => { if (abandonedCartTimerRef.current) clearTimeout(abandonedCartTimerRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.email, form.phone]);
 
   const checkoutItemsPayload = useCallback(
     () =>
@@ -1533,7 +1555,6 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                       type="email"
                       value={form.email}
                       onChange={updateField}
-                      onBlur={handleEmailBlur}
                       autoComplete="email"
                       className="field-ltr"
                       maxLength={254}
