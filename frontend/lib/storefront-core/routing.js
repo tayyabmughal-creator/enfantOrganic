@@ -18,7 +18,9 @@ export function buildStorePath(locale, path = "", region = "om") {
   const normalizedRegion = normalizeRegion(region);
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
 
-  return `/${normalizedLocale}${cleanPath === "/" ? "" : cleanPath}?region=${normalizedRegion}`;
+  const basePath = cleanPath === "/" ? "" : cleanPath;
+  const sep = basePath.includes("?") ? "&" : "?";
+  return `/${normalizedLocale}${basePath}${sep}region=${normalizedRegion}`;
 }
 
 export function replaceLocaleInPath(pathname, nextLocale) {
