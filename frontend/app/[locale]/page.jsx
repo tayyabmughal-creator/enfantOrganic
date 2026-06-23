@@ -269,7 +269,7 @@ export default async function LocalizedHomePage({ params, searchParams }) {
             <div className="trust-icon-wrap"><Icon name="truck" size={22} /></div>
             <div className="trust-text">
               <strong>{t.freeShipping}</strong>
-              <span>{locale === "ar" ? "للطلبات فوق 20 ر.ع / 200 د.إ" : "On orders above 20 OMR / 200 AED"}</span>
+              <span>{locale === "ar" ? "للطلبات فوق 30 ر.ع / 300 د.إ" : "On orders above 30 OMR / 300 AED"}</span>
             </div>
           </div>
           <div className="trust-item">
