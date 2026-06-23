@@ -11,6 +11,7 @@ import {
   markPurchaseEventFired,
   pushDataLayerEvent,
 } from "@/lib/analytics";
+import { fbqTrack } from "@/components/store/analytics/AnalyticsScripts";
 
 function asNumber(value) {
   const parsed = Number(value);
@@ -52,20 +53,22 @@ export default function PurchaseEventTracker({ order, locale, region }) {
     if (!order?.order_number || !payload) {
       return;
     }
-    if (consentState !== CONSENT_STATES.GRANTED) {
-      return;
-    }
     if (hasPurchaseEventFired(order.order_number)) {
       return;
     }
-    const didPush = pushDataLayerEvent("purchase", {
-      ecommerce: payload,
-      locale,
-      region,
+    // fbq Purchase fires unconditionally (no consent gate for GCC markets).
+    fbqTrack("Purchase", {
+      value: payload.value,
+      currency: payload.currency,
+      content_ids: (payload.items || []).map((i) => i.item_id),
+      content_type: "product",
+      num_items: (payload.items || []).reduce((s, i) => s + (i.quantity || 1), 0),
     });
-    if (didPush) {
-      markPurchaseEventFired(order.order_number);
+    // GA4/GTM purchase requires consent.
+    if (consentState === CONSENT_STATES.GRANTED) {
+      pushDataLayerEvent("purchase", { ecommerce: payload, locale, region });
     }
+    markPurchaseEventFired(order.order_number);
   }, [consentState, locale, order?.order_number, payload, region]);
 
   return null;

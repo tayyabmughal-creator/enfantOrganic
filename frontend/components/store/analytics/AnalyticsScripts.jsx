@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 
 import {
   ANALYTICS_CONSENT_EVENT,
@@ -68,12 +69,7 @@ function loadMetaPixel(pixelId) {
   if (document.getElementById(META_SCRIPT_ID)) {
     return;
   }
-  const script = document.createElement("script");
-  script.id = META_SCRIPT_ID;
-  script.async = true;
-  script.src = "https://connect.facebook.net/en_US/fbevents.js";
-  document.head.appendChild(script);
-
+  // Set up fbq stub BEFORE the script loads so queued calls aren't lost.
   window.fbq =
     window.fbq ||
     function fbqProxy() {
@@ -93,10 +89,27 @@ function loadMetaPixel(pixelId) {
   window.fbq.queue = window.fbq.queue || [];
   window.fbq("init", pixelId);
   window.fbq("track", "PageView");
+
+  const script = document.createElement("script");
+  script.id = META_SCRIPT_ID;
+  script.async = true;
+  script.src = "https://connect.facebook.net/en_US/fbevents.js";
+  document.head.appendChild(script);
+}
+
+export function fbqTrack(event, params) {
+  if (typeof window !== "undefined" && typeof window.fbq === "function") {
+    if (params) {
+      window.fbq("track", event, params);
+    } else {
+      window.fbq("track", event);
+    }
+  }
 }
 
 export default function AnalyticsScripts() {
   const [consentState, setConsentState] = useState(CONSENT_STATES.UNSET);
+  const pathname = usePathname();
 
   useEffect(() => {
     ensureDataLayer();
@@ -119,6 +132,13 @@ export default function AnalyticsScripts() {
     }
   }, []);
 
+  // Fire PageView on every Next.js client-side navigation.
+  useEffect(() => {
+    if (META_PIXEL_ID && typeof window !== "undefined" && typeof window.fbq === "function") {
+      window.fbq("track", "PageView");
+    }
+  }, [pathname]);
+
   useEffect(() => {
     if (consentState !== CONSENT_STATES.GRANTED) {
       return;
@@ -134,4 +154,3 @@ export default function AnalyticsScripts() {
 
   return null;
 }
-

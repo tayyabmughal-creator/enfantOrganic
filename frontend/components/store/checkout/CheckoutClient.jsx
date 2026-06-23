@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useStore } from "@/components/store/cart/StoreProvider";
 import Icon from "@/components/icons/Icon";
 import { buildAnalyticsItems, pushDataLayerEvent } from "@/lib/analytics";
+import { fbqTrack } from "@/components/store/analytics/AnalyticsScripts";
 import { getAttributionSnapshot, getOrCreateSessionKey, trackEvent } from "@/lib/eventTracking";
 import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
 import { API_BASE_URL as CONFIG_API_BASE_URL, CUSTOMER_TOKEN_KEY, safeRedirectUrl } from "@/lib/config";
@@ -1202,18 +1203,26 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     if (signature === lastBeginCheckoutSignatureRef.current) {
       return;
     }
+    const checkoutCurrency = couponPreview?.currency_code || summaryPricing?.currency_code || "";
+    const checkoutValue = asNumber(couponPreview?.final_total ?? subtotal);
     const didPush = pushDataLayerEvent("begin_checkout", {
       locale,
       region,
       ecommerce: {
-        currency: couponPreview?.currency_code || summaryPricing?.currency_code || "",
-        value: asNumber(couponPreview?.final_total ?? subtotal),
+        currency: checkoutCurrency,
+        value: checkoutValue,
         coupon: form.coupon_code || undefined,
         items: analyticsItems,
       },
     });
     if (didPush) {
       lastBeginCheckoutSignatureRef.current = signature;
+      fbqTrack("InitiateCheckout", {
+        content_ids: analyticsItems.map((i) => i.item_id),
+        num_items: analyticsItems.reduce((s, i) => s + (i.quantity || 1), 0),
+        value: checkoutValue,
+        currency: checkoutCurrency,
+      });
     }
   }, [
     analyticsItems,
