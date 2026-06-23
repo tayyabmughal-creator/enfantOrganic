@@ -1101,9 +1101,9 @@ class AdminDashboardView(APIView):
 
         avg_order_value = round(total_revenue / scoped_paid_orders_count, 2) if scoped_paid_orders_count else 0
 
-        # Payment success rate: paid orders / total orders.
+        # Payment success rate: paid orders / all non-failed orders.
         # Keep the legacy conversion_rate key for compatibility.
-        payment_success_rate = round((scoped_paid_orders.count() / total_orders) * 100, 1) if total_orders else 0
+        payment_success_rate = round((scoped_paid_orders_count / total_orders) * 100, 1) if total_orders else 0
         conversion_rate = payment_success_rate
         delta_label = "All-time snapshot" if top_date_range == "all_time" else "Selected period vs previous period"
 
@@ -1112,15 +1112,30 @@ class AdminDashboardView(APIView):
         repeat_customers, total_customers_with_orders = _repeat_customer_stats(scoped_orders)
         repeat_rate = round((repeat_customers / total_customers_with_orders) * 100, 1) if total_customers_with_orders else 0
 
-        # Real cart abandonment rate: abandoned carts / (abandoned carts + paid orders in scope)
-        # Uses the same date + market scope as the rest of the dashboard.
-        scoped_abandoned_carts_count = current_period_carts.count()
-        scoped_paid_count = scoped_paid_orders.count()
+        # Checkout abandonment rate: sessions that reached checkout but didn't complete.
+        # Uses AnalyticsEvent funnel data — more accurate than AbandonedCart model
+        # which only has records when customers enter email on checkout page.
         abandonment_rate = (
-            round(scoped_abandoned_carts_count / (scoped_abandoned_carts_count + scoped_paid_count) * 100, 1)
-            if (scoped_abandoned_carts_count + scoped_paid_count)
+            round((current_checkout - current_completed) / current_checkout * 100, 1)
+            if current_checkout > 0
             else 0
         )
+
+        # Delta calculations for KPI cards that previously always showed "—".
+        prev_paid_count = previous_period_paid.count()
+        prev_avg = (
+            float(previous_period_paid.aggregate(total=Sum("grand_total"))["total"] or 0) / prev_paid_count
+            if prev_paid_count else 0
+        )
+        avg_order_value_delta = pct_change(avg_order_value, prev_avg)
+
+        prev_total_orders = previous_period_orders.count()
+        prev_payment_rate = round((prev_paid_count / prev_total_orders) * 100, 1) if prev_total_orders else 0
+        payment_success_delta = pct_change(payment_success_rate, prev_payment_rate)
+
+        prev_repeat_customers, prev_total_with_orders = _repeat_customer_stats(previous_period_orders)
+        prev_repeat_rate = round((prev_repeat_customers / prev_total_with_orders) * 100, 1) if prev_total_with_orders else 0
+        repeat_delta = pct_change(repeat_rate, prev_repeat_rate)
 
         if top_market == "all":
             by_month_currency = (
@@ -1346,7 +1361,7 @@ class AdminDashboardView(APIView):
                 ),
                 "revenue_delta": pct_change(monthly_revenue, prev_revenue),
                 "monthly_revenue": monthly_revenue,
-                "orders": total_orders,
+                "orders": scoped_paid_orders_count,
                 "orders_delta": pct_change(monthly_orders, prev_orders),
                 "pending_orders": pending_orders,
                 "paid_orders": scoped_paid_orders_count,
@@ -1354,12 +1369,15 @@ class AdminDashboardView(APIView):
                 "customers_delta": pct_change(monthly_customers, prev_customers),
                 "products": total_products,
                 "avg_order_value": avg_order_value,
+                "avg_order_value_delta": avg_order_value_delta,
                 "payment_success_rate": payment_success_rate,
+                "payment_success_delta": payment_success_delta,
                 "conversion_rate": conversion_rate,
                 "conversion_metric_label": "payment_success_rate",
                 "delta_label": delta_label,
                 "abandonment_rate": abandonment_rate,
                 "repeat_rate": repeat_rate,
+                "repeat_delta": repeat_delta,
                 "conversion_breakdown": {
                     "overall_rate": current_overall_conversion,
                     "overall_delta": pct_change(current_overall_conversion, previous_overall_conversion),
@@ -1442,7 +1460,8 @@ class AdminDashboardView(APIView):
                             .distinct()
                         )
                     )
-                    .order_by("-date_joined")
+                    .order_by("-orders__created_at")
+                    .distinct()
                     .values("id", "username", "email", "first_name", "last_name", "date_joined")[:10]
                 ),
             }
