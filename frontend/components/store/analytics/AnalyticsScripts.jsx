@@ -112,6 +112,13 @@ export default function AnalyticsScripts() {
     };
   }, []);
 
+  // Meta Pixel loads unconditionally — GCC markets have no GDPR requirement.
+  useEffect(() => {
+    if (META_PIXEL_ID) {
+      loadMetaPixel(META_PIXEL_ID);
+    }
+  }, []);
+
   useEffect(() => {
     if (consentState !== CONSENT_STATES.GRANTED) {
       return;
@@ -122,9 +129,6 @@ export default function AnalyticsScripts() {
     }
     if (GA4_ID) {
       loadGa4(GA4_ID);
-    }
-    if (META_PIXEL_ID) {
-      loadMetaPixel(META_PIXEL_ID);
     }
   }, [consentState]);
 
