@@ -59,69 +59,105 @@ function LiveVisitorsPanel() {
   const countryEntries = Object.entries(countries).sort((a, b) => b[1] - a[1]);
   const totalLive = liveData?.live_sessions ?? 0;
   const windowMin = liveData?.window_minutes ?? 5;
+  const maxCount = countryEntries[0]?.[1] ?? 1;
 
   const activeDots = countryEntries
     .filter(([code]) => COUNTRY_META[code])
     .map(([code, count]) => {
       const meta = COUNTRY_META[code];
-      const { x, y } = toXY(meta.lon, meta.lat);
-      const r = Math.min(12, 5 + count * 2);
-      return { code, count, x, y, r, ...meta };
+      const pos = toXY(meta.lon, meta.lat);
+      const r = Math.min(9, 4 + count * 2);
+      return { code, count, ...pos, r };
     });
 
   return (
-    <section className="admin-chart-card admin-live-visitors-card">
+    <section className="admin-live-card">
       <div className="admin-live-header">
-        <h3>Live Visitors</h3>
-        <span className="admin-live-badge">
+        <div className="admin-live-title-group">
           <span className="admin-live-pulse-dot" />
-          {loading ? "—" : totalLive} online · last {windowMin} min
-        </span>
+          <h3 className="admin-live-title">Live Visitors</h3>
+        </div>
+        <div className="admin-live-stats">
+          <span className="admin-live-count">{loading ? "—" : totalLive}</span>
+          <span className="admin-live-meta">online · last {windowMin} min</span>
+        </div>
       </div>
 
-      <div className="admin-live-map-wrap">
-        <svg
-          viewBox={`0 0 ${MAP_W} ${MAP_H}`}
-          className="admin-live-map"
-          aria-label="World map showing visitor locations"
-        >
-          {/* Ocean */}
-          <rect width={MAP_W} height={MAP_H} fill="#dceef5" rx="10" />
-          {/* Rough continent silhouettes */}
-          {/* North America */}
-          <ellipse cx="125" cy="105" rx="110" ry="72" fill="#c8dba0" opacity="0.7" />
-          {/* South America */}
-          <ellipse cx="168" cy="218" rx="52" ry="60" fill="#c8dba0" opacity="0.7" />
-          {/* Europe */}
-          <ellipse cx="300" cy="82" rx="34" ry="38" fill="#c8dba0" opacity="0.7" />
-          {/* Africa */}
-          <ellipse cx="305" cy="188" rx="52" ry="68" fill="#c8dba0" opacity="0.7" />
-          {/* Asia */}
-          <ellipse cx="455" cy="96" rx="130" ry="76" fill="#c8dba0" opacity="0.7" />
-          {/* Australia */}
-          <ellipse cx="516" cy="218" rx="34" ry="28" fill="#c8dba0" opacity="0.7" />
+      <div className="admin-live-map-outer">
+        <svg viewBox={`0 0 ${MAP_W} ${MAP_H}`} className="admin-live-map" aria-label="Live visitor world map">
+          <defs>
+            <radialGradient id="ocean-g" cx="50%" cy="40%" r="65%">
+              <stop offset="0%" stopColor="#162035" />
+              <stop offset="100%" stopColor="#090e1a" />
+            </radialGradient>
+            <pattern id="map-grid" x="0" y="0" width="14" height="14" patternUnits="userSpaceOnUse">
+              <circle cx="7" cy="7" r="0.65" fill="rgba(255,255,255,0.07)" />
+            </pattern>
+            <filter id="dot-glow" x="-100%" y="-100%" width="300%" height="300%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
+              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+            <filter id="dot-glow-sm" x="-80%" y="-80%" width="260%" height="260%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur" />
+              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+          </defs>
 
-          {/* Dim dots for all known countries */}
+          {/* Dark ocean */}
+          <rect width={MAP_W} height={MAP_H} fill="url(#ocean-g)" rx="12" />
+          {/* Subtle dot grid */}
+          <rect width={MAP_W} height={MAP_H} fill="url(#map-grid)" rx="12" />
+
+          {/* Latitude / longitude grid lines */}
+          {[-60, -30, 0, 30, 60].map((lat) => {
+            const y = ((90 - lat) / 180) * MAP_H;
+            return <line key={`lat${lat}`} x1={0} y1={y} x2={MAP_W} y2={y} stroke="rgba(255,255,255,0.05)" strokeWidth="0.6" />;
+          })}
+          {[-120, -60, 0, 60, 120].map((lon) => {
+            const x = ((lon + 180) / 360) * MAP_W;
+            return <line key={`lon${lon}`} x1={x} y1={0} x2={x} y2={MAP_H} stroke="rgba(255,255,255,0.05)" strokeWidth="0.6" />;
+          })}
+
+          {/* Continent land masses — blue-steel silhouettes */}
+          <ellipse cx="138" cy="82" rx="102" ry="52" fill="#1d3461" opacity="0.95" />   {/* North America */}
+          <ellipse cx="207" cy="190" rx="40"  ry="60" fill="#1d3461" opacity="0.95" />  {/* South America */}
+          <ellipse cx="295" cy="72" rx="42"   ry="30" fill="#1d3461" opacity="0.95" />  {/* Europe */}
+          <ellipse cx="310" cy="168" rx="55"  ry="70" fill="#1d3461" opacity="0.95" />  {/* Africa */}
+          <ellipse cx="468" cy="82" rx="130"  ry="72" fill="#1d3461" opacity="0.95" />  {/* Asia */}
+          <ellipse cx="543" cy="204" rx="34"  ry="26" fill="#1d3461" opacity="0.95" />  {/* Australia */}
+          {/* Minor landmasses */}
+          <ellipse cx="78"  cy="28"  rx="22" ry="13" fill="#1d3461" opacity="0.9" />   {/* Greenland */}
+          <ellipse cx="310" cy="55"  rx="10" ry="8"  fill="#1d3461" opacity="0.9" />   {/* British Isles */}
+          <ellipse cx="550" cy="92"  rx="13" ry="18" fill="#1d3461" opacity="0.9" />   {/* Japan */}
+          <ellipse cx="516" cy="150" rx="32" ry="13" fill="#1d3461" opacity="0.9" />   {/* Indonesia */}
+
+          {/* Dim markers for known countries with no current visitors */}
           {Object.entries(COUNTRY_META)
             .filter(([code]) => !countries[code])
             .map(([code, meta]) => {
               const { x, y } = toXY(meta.lon, meta.lat);
-              return <circle key={code} cx={x} cy={y} r="3" fill="rgba(96,122,66,0.35)" />;
+              return <circle key={code} cx={x} cy={y} r="2.5" fill="rgba(146,171,105,0.38)" />;
             })}
 
-          {/* Active country dots with pulse */}
+          {/* Active country dots — glowing green with SMIL pulse rings */}
           {activeDots.map(({ code, x, y, r }) => (
             <g key={code}>
-              <circle cx={x} cy={y} r={r + 6} fill="rgba(146,171,105,0.22)" className="live-map-ring" />
-              <circle cx={x} cy={y} r={r} fill="var(--brand)" opacity="0.9" />
-              <text
-                x={x}
-                y={y + r + 11}
-                textAnchor="middle"
-                fontSize="8"
-                fill="#2d4a28"
-                fontWeight="700"
-              >
+              {/* Outer ring 1 */}
+              <circle cx={x} cy={y} fill="none" stroke="rgba(52,211,153,0.55)" strokeWidth="1.5" r={r + 3}>
+                <animate attributeName="r"       from={r + 3} to={r + 22} dur="2s" begin="0s"    repeatCount="indefinite" />
+                <animate attributeName="opacity" from="0.8"   to="0"      dur="2s" begin="0s"    repeatCount="indefinite" />
+              </circle>
+              {/* Outer ring 2 (staggered) */}
+              <circle cx={x} cy={y} fill="none" stroke="rgba(52,211,153,0.3)" strokeWidth="1" r={r + 3}>
+                <animate attributeName="r"       from={r + 3} to={r + 32} dur="2s" begin="0.8s" repeatCount="indefinite" />
+                <animate attributeName="opacity" from="0.5"   to="0"      dur="2s" begin="0.8s" repeatCount="indefinite" />
+              </circle>
+              {/* Soft glow halo */}
+              <circle cx={x} cy={y} r={r + 5} fill="rgba(52,211,153,0.18)" filter="url(#dot-glow)" />
+              {/* Core dot */}
+              <circle cx={x} cy={y} r={r} fill="#34d399" filter="url(#dot-glow-sm)" />
+              {/* Country label */}
+              <text x={x} y={y + r + 12} textAnchor="middle" fontSize="7" fill="rgba(255,255,255,0.75)" fontWeight="700" letterSpacing="0.5">
                 {code}
               </text>
             </g>
@@ -130,30 +166,43 @@ function LiveVisitorsPanel() {
       </div>
 
       {countryEntries.length > 0 ? (
-        <div className="admin-live-countries">
+        <div className="admin-live-countries-list">
           {countryEntries.map(([code, count]) => {
             const meta = COUNTRY_META[code] || { flag: "🌍", name: code };
+            const pct = Math.round((count / maxCount) * 100);
             return (
-              <div key={code} className="admin-live-country-row">
-                <span className="admin-live-flag">{meta.flag}</span>
-                <span className="admin-live-country-name">{meta.name}</span>
-                <span className="admin-live-country-count">{count}</span>
+              <div key={code} className="admin-live-country-item">
+                <span className="admin-live-country-flag">{meta.flag}</span>
+                <div className="admin-live-country-info">
+                  <div className="admin-live-country-top">
+                    <span className="admin-live-country-nm">{meta.name}</span>
+                    <span className="admin-live-country-ct">{count}</span>
+                  </div>
+                  <div className="admin-live-bar-track">
+                    <div className="admin-live-bar-fill" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
               </div>
             );
           })}
           {(liveData?.unknown ?? 0) > 0 && (
-            <div className="admin-live-country-row">
-              <span className="admin-live-flag">🌐</span>
-              <span className="admin-live-country-name">Unknown</span>
-              <span className="admin-live-country-count">{liveData.unknown}</span>
+            <div className="admin-live-country-item">
+              <span className="admin-live-country-flag">🌐</span>
+              <div className="admin-live-country-info">
+                <div className="admin-live-country-top">
+                  <span className="admin-live-country-nm">Unknown</span>
+                  <span className="admin-live-country-ct">{liveData.unknown}</span>
+                </div>
+                <div className="admin-live-bar-track">
+                  <div className="admin-live-bar-fill" style={{ width: `${Math.round((liveData.unknown / maxCount) * 100)}%` }} />
+                </div>
+              </div>
             </div>
           )}
         </div>
       ) : (
         !loading && (
-          <p className="admin-chart-notice">
-            No active visitors in the last {windowMin} minutes.
-          </p>
+          <p className="admin-chart-notice">No active visitors in the last {windowMin} minutes.</p>
         )
       )}
     </section>
