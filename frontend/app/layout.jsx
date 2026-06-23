@@ -1,5 +1,5 @@
 import { headers } from "next/headers";
-import { DM_Sans, Playfair_Display, Noto_Sans_Arabic } from "next/font/google";
+import { Inter, Dosis, Noto_Sans_Arabic } from "next/font/google";
 import LocaleHtmlAttributes from "@/components/seo/LocaleHtmlAttributes";
 import ChunkLoadRecovery from "@/components/system/ChunkLoadRecovery";
 import LocalServiceWorkerReset from "@/components/system/LocalServiceWorkerReset";
@@ -13,18 +13,18 @@ import { normalizeLocale } from "@/lib/storefront";
 
 import "./globals.css";
 
-const dmSans = DM_Sans({
+const inter = Inter({
   subsets: ["latin"],
   variable: "--font-sans",
   display: "swap",
-  weight: ["400", "500", "700", "800", "900"],
+  weight: ["400", "500", "600", "700"],
 });
 
-const playfair = Playfair_Display({
+const dosis = Dosis({
   subsets: ["latin"],
   variable: "--font-serif",
   display: "swap",
-  weight: ["400", "700"],
+  weight: ["400", "500", "600", "700", "800"],
 });
 
 const notoArabic = Noto_Sans_Arabic({
@@ -87,7 +87,7 @@ export default async function RootLayout({ children }) {
   const dir = getLocaleDir(locale);
 
   return (
-    <html lang={locale} dir={dir} className={`${dmSans.variable} ${playfair.variable} ${notoArabic.variable}`}>
+    <html lang={locale} dir={dir} className={`${inter.variable} ${dosis.variable} ${notoArabic.variable}`}>
       <head>
         <meta name="facebook-domain-verification" content="sgzszmn3obmyyaaksxq0a70vd6ssvd" />
       </head>

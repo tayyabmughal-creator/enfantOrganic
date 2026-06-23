@@ -3389,6 +3389,11 @@ class AnalyticsEventCreateView(APIView):
         region = Region.objects.filter(code=region_code, is_active=True).only("id").first() if region_code else None
         user = request.user if request.user and request.user.is_authenticated else None
 
+        forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
+        client_ip = (forwarded.split(",")[0].strip() if forwarded else request.META.get("REMOTE_ADDR", ""))[:45]
+        if client_ip:
+            safe_metadata["_ip"] = client_ip
+
         AnalyticsEvent.objects.create(
             event_type=event_type,
             session_key=session_key,
@@ -3398,6 +3403,76 @@ class AnalyticsEventCreateView(APIView):
             metadata=safe_metadata,
         )
         return Response({"status": "ok"}, status=status.HTTP_201_CREATED)
+
+
+_IP_COUNTRY_CACHE = {}
+
+
+def _lookup_countries_batch(ips):
+    """Return {ip: country_code} dict using ip-api.com batch endpoint (free, no key needed)."""
+    uncached = [ip for ip in ips if ip not in _IP_COUNTRY_CACHE]
+    if uncached:
+        try:
+            import requests as req
+            resp = req.post(
+                "http://ip-api.com/batch?fields=query,countryCode",
+                json=[{"query": ip} for ip in uncached[:100]],
+                timeout=3,
+            )
+            if resp.status_code == 200:
+                for row in resp.json():
+                    ip = row.get("query", "")
+                    code = row.get("countryCode", "")
+                    if ip:
+                        _IP_COUNTRY_CACHE[ip] = code
+        except Exception:
+            pass
+    return {ip: _IP_COUNTRY_CACHE.get(ip, "") for ip in ips}
+
+
+class AdminLiveVisitorsView(APIView):
+    permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
+    admin_read_capabilities = ("analytics.view",)
+
+    @extend_schema(responses=dict)
+    def get(self, request):
+        minutes = int(request.query_params.get("minutes", 5))
+        minutes = max(1, min(60, minutes))
+        cutoff = timezone.now() - timedelta(minutes=minutes)
+
+        events = (
+            AnalyticsEvent.objects.filter(
+                event_type=AnalyticsEvent.EVENT_PAGE_VIEW,
+                created_at__gte=cutoff,
+            )
+            .values("session_key", "metadata")
+        )
+
+        sessions = {}
+        for ev in events:
+            sk = ev["session_key"]
+            if sk not in sessions:
+                sessions[sk] = ev.get("metadata") or {}
+
+        all_ips = list({m.get("_ip", "") for m in sessions.values() if m.get("_ip")})
+        ip_country = _lookup_countries_batch(all_ips) if all_ips else {}
+
+        country_counts = {}
+        for meta in sessions.values():
+            ip = meta.get("_ip", "")
+            code = ip_country.get(ip, "") if ip else ""
+            if not code:
+                code = "??"
+            country_counts[code] = country_counts.get(code, 0) + 1
+
+        unknown = country_counts.pop("??", 0)
+
+        return Response({
+            "live_sessions": len(sessions),
+            "window_minutes": minutes,
+            "countries": country_counts,
+            "unknown": unknown,
+        })
 
 
 class AbandonedCartCreateView(APIView):

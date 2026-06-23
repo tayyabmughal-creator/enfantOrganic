@@ -21,8 +21,8 @@
   --radius-2xl: 32px;
   --container: min(100% - 80px, 1360px);
   --focus-ring: 0 0 0 4px rgba(146, 171, 105, 0.18);
-  --font-sans: "DM Sans", "Helvetica Neue", Arial, sans-serif;
-  --font-serif: "Playfair Display", Georgia, "Times New Roman", serif;
+  --font-sans: "Inter", "Helvetica Neue", Arial, sans-serif;
+  --font-serif: "Dosis", "Helvetica Neue", Arial, sans-serif;
   --font-arabic: "Noto Sans Arabic", "Segoe UI", Arial, sans-serif;
 }
 
