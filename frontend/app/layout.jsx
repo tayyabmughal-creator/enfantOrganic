@@ -39,6 +39,9 @@ export const metadata = {
   description: "Regional bilingual baby-care storefront built with Next.js and Django.",
   metadataBase: new URL(getBaseUrl()),
   manifest: "/manifest.webmanifest",
+  other: {
+    "facebook-domain-verification": "sgzszmn3obmyyaaksxq0a70vd6ssvd",
+  },
   icons: {
     icon: [
       { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
