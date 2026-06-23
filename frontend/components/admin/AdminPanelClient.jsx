@@ -204,7 +204,7 @@ const FIELD_CONFIGS = {
     ["brand","Brand","text"],["unit","Unit / weight","text"],["categories","Categories","categories-select"],
     ["vendor_en","Vendor EN","text"],["vendor_ar","Vendor AR","text"],
     ["short_description_en","Short description EN","textarea"],["short_description_ar","Short description AR","textarea"],
-    ["description_en","Description EN","textarea"],["description_ar","Description AR","textarea"],
+    ["description_en","Description EN","richtext"],["description_ar","Description AR","richtext"],
     ["ingredients_en","Ingredients EN","textarea"],["ingredients_ar","Ingredients AR","textarea"],
     ["usage_instructions_en","Usage EN","textarea"],["usage_instructions_ar","Usage AR","textarea"],
     ["origin_source_en","Origin EN","text"],["origin_source_ar","Origin AR","text"],

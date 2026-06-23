@@ -883,7 +883,7 @@ class AdminDashboardView(APIView):
         last_month_start = (this_month_start - timedelta(days=1)).replace(day=1)
 
         User = get_user_model()
-        base_orders = Order.objects.all()
+        base_orders = Order.objects.exclude(status=Order.STATUS_FAILED)
         if top_market != "all":
             base_orders = base_orders.filter(region__code=top_market)
 

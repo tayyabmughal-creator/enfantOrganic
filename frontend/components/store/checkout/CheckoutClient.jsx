@@ -318,6 +318,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
   const placeListenerRef = useRef(null);
   const hasAutoAddressPrefillRef = useRef(false);
   const lastBeginCheckoutSignatureRef = useRef("");
+  const abandonedCartSentRef = useRef(false);
 
   const [form, setForm] = useState({
     name: "",
@@ -698,6 +699,38 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
   const setPaymentMethod = useCallback((value) => {
     setForm((current) => ({ ...current, payment_method: value }));
   }, []);
+
+  const handleEmailBlur = useCallback(
+    (event) => {
+      const email = (event.target.value || "").trim();
+      if (!email || abandonedCartSentRef.current) return;
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+      abandonedCartSentRef.current = true;
+      const items = (cartItems || []).map((item) => ({
+        product_slug: item.slug || "",
+        product_name: item.name || "",
+        quantity: item.quantity || 1,
+        unit_price: String(item.price || "0"),
+      }));
+      const currency = (regionCurrency || cartCurrency || "OMR").toUpperCase();
+      fetch(`${API_BASE_URL}/abandoned-carts/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_token: lastBeginCheckoutSignatureRef.current || `anon-${Date.now()}`,
+          customer_email: email,
+          customer_name: form.name || "",
+          customer_phone: form.phone || "",
+          cart_items: items,
+          subtotal: String(subtotal || "0"),
+          currency_code: currency,
+          region: region || "om",
+          locale: locale || "en",
+        }),
+      }).catch(() => {});
+    },
+    [cartItems, regionCurrency, cartCurrency, form.name, form.phone, subtotal, region, locale],
+  );
 
   const checkoutItemsPayload = useCallback(
     () =>
@@ -1490,6 +1523,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                       type="email"
                       value={form.email}
                       onChange={updateField}
+                      onBlur={handleEmailBlur}
                       autoComplete="email"
                       className="field-ltr"
                       maxLength={254}

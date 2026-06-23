@@ -1486,6 +1486,57 @@ function CategoriesSelectField({ field, value, editor, setEditor, disabled }) {
   );
 }
 
+function RichTextEditor({ value, onChange, disabled }) {
+  const ref = useRef(null);
+  const initializedRef = useRef(false);
+
+  useEffect(() => {
+    if (ref.current && !initializedRef.current) {
+      ref.current.innerHTML = value || "";
+      initializedRef.current = true;
+    }
+  }, [value]);
+
+  const exec = (cmd, arg = null) => {
+    if (disabled) return;
+    document.execCommand(cmd, false, arg);
+    ref.current?.focus();
+    onChange(ref.current?.innerHTML || "");
+  };
+
+  return (
+    <div className="richtext-wrapper">
+      <div className="richtext-toolbar">
+        <button type="button" className="richtext-btn" title="Bold" onMouseDown={(e) => { e.preventDefault(); exec("bold"); }}><strong>B</strong></button>
+        <button type="button" className="richtext-btn" title="Italic" onMouseDown={(e) => { e.preventDefault(); exec("italic"); }}><em>I</em></button>
+        <button type="button" className="richtext-btn" title="Underline" onMouseDown={(e) => { e.preventDefault(); exec("underline"); }}><u>U</u></button>
+        <button type="button" className="richtext-btn" title="Unordered list" onMouseDown={(e) => { e.preventDefault(); exec("insertUnorderedList"); }}>• List</button>
+        <select
+          className="richtext-size-select"
+          title="Font size"
+          defaultValue=""
+          onMouseDown={(e) => e.stopPropagation()}
+          onChange={(e) => { exec("fontSize", e.target.value); e.target.value = ""; }}
+        >
+          <option value="" disabled>Size</option>
+          <option value="2">Small</option>
+          <option value="3">Normal</option>
+          <option value="4">Large</option>
+          <option value="5">X-Large</option>
+        </select>
+        <button type="button" className="richtext-btn" title="Clear formatting" onMouseDown={(e) => { e.preventDefault(); exec("removeFormat"); }}>Clear</button>
+      </div>
+      <div
+        ref={ref}
+        contentEditable={!disabled}
+        className="richtext-content"
+        onInput={() => onChange(ref.current?.innerHTML || "")}
+        suppressContentEditableWarning={true}
+      />
+    </div>
+  );
+}
+
 function FormField({ field, value, editor, setEditor, mode, onGalleryUpload }) {
   const [name, label, type, options, config = {}] = field;
   const [objectPreviewUrl, setObjectPreviewUrl] = useState("");
@@ -1537,6 +1588,15 @@ function FormField({ field, value, editor, setEditor, mode, onGalleryUpload }) {
         </select>
         {helpText ? <small className="admin-field-help">{helpText}</small> : null}
       </label>
+    );
+  }
+  if (type === "richtext") {
+    return (
+      <div className="admin-label full-width">
+        <span className="admin-label-text">{label}</span>
+        <RichTextEditor value={value || ""} disabled={disabled} onChange={(html) => setEditor({ ...editor, [name]: html })} />
+        {helpText ? <small className="admin-field-help">{helpText}</small> : null}
+      </div>
     );
   }
   if (type === "textarea" || type === "json") {

@@ -90,6 +90,9 @@ function parseDescSections(description) {
 
 function DescriptionText({ description }) {
   if (!description) return null;
+  if (/<[a-z][\s\S]*>/i.test(description)) {
+    return <div className="product-desc-text" dangerouslySetInnerHTML={{ __html: description }} />;
+  }
   return (
     <div className="product-desc-text">
       {description.split(/\n+/).filter(Boolean).map((para, i) => (
