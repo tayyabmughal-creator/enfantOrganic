@@ -945,6 +945,7 @@ class CheckoutCreateSerializer(serializers.Serializer):
             tax_breakdown=build_tax_breakdown(totals),
             grand_total=payable_total,
             currency_code=region.currency_code,
+            fx_rate_snapshot=region.fx_rate,
             sales_channel=Order.SALES_CHANNEL_ONLINE_STORE,
             payment_method=validated_data.get("payment_method", Order.PAYMENT_COD),
         )

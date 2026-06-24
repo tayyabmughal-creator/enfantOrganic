@@ -17,6 +17,7 @@ export function CrudPanel({
   onEdit,
   onDelete,
   onDownloadInvoice,
+  onBulkStatusChange,
   titleFor,
   metaFor,
   labelFor,
@@ -116,7 +117,7 @@ export function CrudPanel({
       <div className="admin-record-list">
         {rows.length ? (
           isOrderView ? (
-            <OrdersTable rows={rows} canEdit={canEdit} onEdit={onEdit} onDownloadInvoice={onDownloadInvoice} />
+            <OrdersTable rows={rows} canEdit={canEdit} onEdit={onEdit} onDownloadInvoice={onDownloadInvoice} onBulkStatusChange={onBulkStatusChange} />
           ) : isAbandonedView ? (
             <AbandonedCheckoutsTable rows={rows} canEdit={canEdit} onEdit={onEdit} />
           ) : (
@@ -220,8 +221,17 @@ const MARKET_LABELS = {
   sa: "KSA",
 };
 
-function OrdersTable({ rows, canEdit, onEdit, onDownloadInvoice }) {
+const BULK_STATUS_OPTIONS = [
+  { value: "confirmed", label: "Mark Confirmed" },
+  { value: "processing", label: "Mark Processing" },
+  { value: "shipped", label: "Mark Shipped" },
+  { value: "delivered", label: "Mark Delivered" },
+  { value: "cancelled", label: "Mark Cancelled" },
+];
+
+function OrdersTable({ rows, canEdit, onEdit, onDownloadInvoice, onBulkStatusChange }) {
   const [selectedOrders, setSelectedOrders] = useState(new Set());
+  const [bulkWorking, setBulkWorking] = useState(false);
   const allOrderNumbers = rows.map((item) => item.order_number).filter(Boolean);
   const allSelected = allOrderNumbers.length > 0 && allOrderNumbers.every((orderNumber) => selectedOrders.has(orderNumber));
   const hasPartialSelection = selectedOrders.size > 0 && !allSelected;
@@ -257,8 +267,66 @@ function OrdersTable({ rows, canEdit, onEdit, onDownloadInvoice }) {
     });
   }
 
+  function exportSelectedCsv() {
+    const selected = rows.filter((o) => selectedOrders.has(o.order_number));
+    const header = "order_number,date,customer,email,phone,market,channel,total,currency,payment_status,fulfillment_status";
+    const lines = selected.map((o) => [
+      o.order_number,
+      o.created_at ? new Date(o.created_at).toISOString().slice(0, 10) : "",
+      o.customer_name || "",
+      o.customer_email || "",
+      o.customer_phone || "",
+      o.region_code || "",
+      o.sales_channel || "",
+      o.grand_total || "",
+      o.currency_code || "",
+      o.payment_status || "",
+      o.shipment_status || "",
+    ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
+    const blob = new Blob([header + "\n" + lines.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `orders-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleBulkStatus(newStatus) {
+    if (!newStatus || !selectedOrders.size) return;
+    const label = BULK_STATUS_OPTIONS.find((o) => o.value === newStatus)?.label || newStatus;
+    if (!window.confirm(`${label} for ${selectedOrders.size} order(s)?`)) return;
+    setBulkWorking(true);
+    try {
+      await onBulkStatusChange?.(Array.from(selectedOrders), newStatus);
+      setSelectedOrders(new Set());
+    } finally {
+      setBulkWorking(false);
+    }
+  }
+
   return (
     <div className="admin-orders-table-wrap">
+      {selectedOrders.size > 0 && (
+        <div className="admin-bulk-bar">
+          <span>{selectedOrders.size} selected</span>
+          <select
+            className="admin-select-sm"
+            defaultValue=""
+            disabled={bulkWorking}
+            onChange={(e) => { if (e.target.value) handleBulkStatus(e.target.value); e.target.value = ""; }}
+          >
+            <option value="" disabled>Change status…</option>
+            {BULK_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <button type="button" className="admin-btn-sm" disabled={bulkWorking} onClick={exportSelectedCsv}>
+            Export CSV
+          </button>
+          <button type="button" className="admin-btn-sm" onClick={() => setSelectedOrders(new Set())}>
+            Clear
+          </button>
+        </div>
+      )}
       <table className="admin-orders-table">
         <thead>
           <tr>

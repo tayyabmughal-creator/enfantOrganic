@@ -187,11 +187,22 @@ def _sum_money_in_omr(queryset, amount_field):
 
 
 def _analytics_money_total(rows):
-    rates = analytics_to_omr_rates()
+    """Convert multi-currency order totals to OMR.
+
+    Uses fx_rate_snapshot (captured at order creation) when available so that
+    historic revenue figures don't shift when Region.fx_rate is updated later.
+    Falls back to the current live rate for orders that pre-date the snapshot field.
+    """
+    live_rates = analytics_to_omr_rates()
     total = Decimal("0.0")
     for row in rows:
         currency = str(row.get("currency_code") or "OMR").upper()
-        rate = rates.get(currency, Decimal("1.0"))
+        snapshot = row.get("fx_rate_snapshot")
+        if snapshot is not None:
+            fx = Decimal(snapshot)
+            rate = (Decimal("1.0") / fx) if fx else live_rates.get(currency, Decimal("1.0"))
+        else:
+            rate = live_rates.get(currency, Decimal("1.0"))
         total += Decimal(row.get("total") or 0) * rate
     return float(total)
 
@@ -297,7 +308,7 @@ def _build_sales_channel_summary(current_orders, previous_orders, *, currency_co
     def totals_for(queryset, channel):
         channel_qs = queryset.filter(sales_channel=channel)
         if convert_to_omr:
-            rows = channel_qs.values("currency_code").annotate(total=Sum("grand_total"))
+            rows = channel_qs.values("currency_code", "fx_rate_snapshot").annotate(total=Sum("grand_total"))
             total = _analytics_money_total(rows)
         else:
             total = float(channel_qs.aggregate(total=Sum("grand_total"))["total"] or 0)
@@ -770,6 +781,8 @@ def _upsert_draft_order(*, request, payload, order=None):
     order.tax_breakdown = build_tax_breakdown(totals)
     order.grand_total = totals["grand_total"]
     order.currency_code = region.currency_code
+    if order.fx_rate_snapshot is None:
+        order.fx_rate_snapshot = region.fx_rate
     order.sales_channel = Order.SALES_CHANNEL_DRAFT_ORDER
     order.payment_method = payload.get("payment_method") or order.payment_method or Order.PAYMENT_COD
     order.save()
@@ -1140,18 +1153,23 @@ class AdminDashboardView(APIView):
         if top_market == "all":
             by_month_currency = (
                 scoped_paid_orders.annotate(month=TruncMonth("created_at"))
-                .values("month", "currency_code")
+                .values("month", "currency_code", "fx_rate_snapshot")
                 .annotate(total=Sum("grand_total"))
                 .order_by("month")
             )
             month_map = {}
-            rates = analytics_to_omr_rates()
+            live_rates = analytics_to_omr_rates()
             for row in by_month_currency:
                 month = row.get("month")
                 if not month:
                     continue
                 currency = str(row.get("currency_code") or "OMR").upper()
-                rate = rates.get(currency, Decimal("1.0"))
+                snapshot = row.get("fx_rate_snapshot")
+                if snapshot is not None:
+                    fx = Decimal(snapshot)
+                    rate = (Decimal("1.0") / fx) if fx else live_rates.get(currency, Decimal("1.0"))
+                else:
+                    rate = live_rates.get(currency, Decimal("1.0"))
                 converted = Decimal(row.get("total") or 0) * rate
                 month_map[month] = month_map.get(month, Decimal("0.0")) + converted
             revenue_trend = [
@@ -1189,14 +1207,18 @@ class AdminDashboardView(APIView):
 
         # Status mix follows the active dashboard scope (date + market).
         status_mix = list(scoped_orders.values("status").annotate(count=Count("id")).order_by("status"))
-        sales_channel_orders = scoped_orders.exclude(
+        sales_channel_orders = scoped_orders.filter(
+            payment_status=Order.PAYMENT_PAID,
+        ).exclude(
             status__in=[
                 Order.STATUS_CANCELLED,
                 Order.STATUS_FAILED,
                 Order.STATUS_REFUNDED,
             ]
         )
-        previous_sales_channel_orders = previous_period_orders.exclude(
+        previous_sales_channel_orders = previous_period_orders.filter(
+            payment_status=Order.PAYMENT_PAID,
+        ).exclude(
             status__in=[
                 Order.STATUS_CANCELLED,
                 Order.STATUS_FAILED,
@@ -2951,18 +2973,16 @@ class AdminCustomerDetailView(generics.RetrieveUpdateDestroyAPIView):
         instance.delete()
 
 
-class AdminPaymentListView(generics.ListCreateAPIView):
+class AdminPaymentListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
     admin_read_capabilities = (CAP_PAYMENTS_VIEW,)
-    admin_write_capabilities = (CAP_PAYMENTS_EDIT,)
     serializer_class = AdminPaymentTransactionSerializer
     queryset = PaymentTransaction.objects.select_related("order").all()
 
 
-class AdminPaymentDetailView(generics.RetrieveUpdateDestroyAPIView):
+class AdminPaymentDetailView(generics.RetrieveAPIView):
     permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
     admin_read_capabilities = (CAP_PAYMENTS_VIEW,)
-    admin_write_capabilities = (CAP_PAYMENTS_EDIT,)
     serializer_class = AdminPaymentTransactionSerializer
     queryset = PaymentTransaction.objects.select_related("order").all()
 

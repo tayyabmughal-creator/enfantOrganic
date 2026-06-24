@@ -1308,9 +1308,31 @@ class AdminAuditLogSerializer(serializers.ModelSerializer):
 
 
 class AdminGiftCardSerializer(serializers.ModelSerializer):
+    remaining_balance = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    initial_balance = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+
     class Meta:
         model = GiftCard
-        fields = "__all__"
+        fields = (
+            "id",
+            "code",
+            "initial_balance",
+            "remaining_balance",
+            "currency_code",
+            "region",
+            "recipient_name",
+            "recipient_email",
+            "recipient_phone",
+            "sender_name",
+            "message",
+            "status",
+            "expiry_date",
+            "redeemed_at",
+            "redeemed_by",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "code", "redeemed_at", "redeemed_by", "created_at", "updated_at")
 
 
 class AdminBackInStockRequestSerializer(serializers.ModelSerializer):

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { AdminEmpty } from "./SharedUI";
 
 const REPORT_TYPES = ["orders", "customers", "inventory", "sales", "abandoned-carts"];
@@ -231,7 +231,9 @@ export function Reports({ data, onDownload }) {
   );
 }
 
-export function AuditLogsPanel({ rows }) {
+export function AuditLogsPanel({ rows, filters = {}, onFiltersChange }) {
+  const [openId, setOpenId] = useState(null);
+
   const formatAction = (value = "") => value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
   const formatWhen = (value) => {
     if (!value) return "—";
@@ -240,30 +242,99 @@ export function AuditLogsPanel({ rows }) {
     return dt.toLocaleString();
   };
 
+  function renderDiff(before = {}, after = {}) {
+    const allKeys = [...new Set([...Object.keys(before), ...Object.keys(after)])];
+    const changed = allKeys.filter((k) => JSON.stringify(before[k]) !== JSON.stringify(after[k]));
+    if (!changed.length) return <p style={{ color: "var(--muted)", fontSize: "0.85rem" }}>No field changes recorded.</p>;
+    return (
+      <table style={{ width: "100%", fontSize: "0.82rem", borderCollapse: "collapse" }}>
+        <thead>
+          <tr>
+            <th style={{ textAlign: "left", padding: "4px 8px", borderBottom: "1px solid var(--border)" }}>Field</th>
+            <th style={{ textAlign: "left", padding: "4px 8px", borderBottom: "1px solid var(--border)", color: "var(--danger)" }}>Before</th>
+            <th style={{ textAlign: "left", padding: "4px 8px", borderBottom: "1px solid var(--border)", color: "var(--success)" }}>After</th>
+          </tr>
+        </thead>
+        <tbody>
+          {changed.map((k) => (
+            <tr key={k}>
+              <td style={{ padding: "3px 8px", fontWeight: 600 }}>{k}</td>
+              <td style={{ padding: "3px 8px", color: "var(--danger)" }}>{JSON.stringify(before[k]) ?? "—"}</td>
+              <td style={{ padding: "3px 8px", color: "var(--success)" }}>{JSON.stringify(after[k]) ?? "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
+
+  const actionFilter = filters.action || "";
+  const resourceFilter = filters.resource_type || "";
+
+  const uniqueActions = [...new Set(rows.map((r) => r.action).filter(Boolean))].sort();
+  const uniqueResources = [...new Set(rows.map((r) => r.resource_type).filter(Boolean))].sort();
+
+  const filtered = rows.filter((r) => {
+    if (actionFilter && r.action !== actionFilter) return false;
+    if (resourceFilter && r.resource_type !== resourceFilter) return false;
+    return true;
+  });
+
   return (
     <section className="admin-panel-card">
       <div className="admin-panel-head">
         <div>
           <h3>Audit Logs</h3>
-          <span>{rows.length} event{rows.length === 1 ? "" : "s"} tracked.</span>
+          <span>{filtered.length} of {rows.length} event{rows.length === 1 ? "" : "s"}</span>
+        </div>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <select
+            className="admin-select-sm"
+            value={actionFilter}
+            onChange={(e) => onFiltersChange?.({ action: e.target.value })}
+          >
+            <option value="">All actions</option>
+            {uniqueActions.map((a) => <option key={a} value={a}>{formatAction(a)}</option>)}
+          </select>
+          <select
+            className="admin-select-sm"
+            value={resourceFilter}
+            onChange={(e) => onFiltersChange?.({ resource_type: e.target.value })}
+          >
+            <option value="">All resources</option>
+            {uniqueResources.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+          {(actionFilter || resourceFilter) && (
+            <button type="button" className="admin-btn-sm" onClick={() => onFiltersChange?.({ action: "", resource_type: "" })}>
+              Clear
+            </button>
+          )}
         </div>
       </div>
       <div className="admin-record-list">
-        {rows.length ? (
+        {filtered.length ? (
           <>
-            <div className="admin-list-head"><span>Action</span><span>Actor</span><span>When</span></div>
-            {rows.map((entry) => (
-              <div key={entry.id} className="admin-record-row">
-                <div className="admin-record-info">
-                  <strong>{formatAction(entry.action || "")}</strong>
-                  <span>
-                    {entry.resource_type || "resource"}
-                    {entry.resource_id ? ` · ${entry.resource_id}` : ""}
-                    {entry.ip_address ? ` · ${entry.ip_address}` : ""}
-                  </span>
+            <div className="admin-list-head"><span>Action</span><span>Actor</span><span>When</span><span /></div>
+            {filtered.map((entry) => (
+              <div key={entry.id}>
+                <div className="admin-record-row" style={{ cursor: "pointer" }} onClick={() => setOpenId(openId === entry.id ? null : entry.id)}>
+                  <div className="admin-record-info">
+                    <strong>{formatAction(entry.action || "")}</strong>
+                    <span>
+                      {entry.resource_type || "resource"}
+                      {entry.resource_id ? ` · ${entry.resource_id}` : ""}
+                      {entry.ip_address ? ` · ${entry.ip_address}` : ""}
+                    </span>
+                  </div>
+                  <span className="admin-badge neutral">{entry.actor_name || "System"}</span>
+                  <span className="admin-badge">{formatWhen(entry.timestamp)}</span>
+                  <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>{openId === entry.id ? "▲" : "▼"}</span>
                 </div>
-                <span className="admin-badge neutral">{entry.actor_name || "System"}</span>
-                <span className="admin-badge">{formatWhen(entry.timestamp)}</span>
+                {openId === entry.id && (
+                  <div style={{ padding: "12px 16px", background: "var(--surface-alt, #f9f9f9)", borderTop: "1px solid var(--border)" }}>
+                    {renderDiff(entry.before_snapshot || {}, entry.after_snapshot || {})}
+                  </div>
+                )}
               </div>
             ))}
           </>
@@ -692,7 +763,14 @@ function inventoryHealthStatus(product, threshold = 10) {
   return { label: "In Stock", tone: "success", priority: 3 };
 }
 
-export function InventoryView({ rows, threshold = 10, focusProductSlug = "" }) {
+const INV_TABS = [
+  { key: "stock", label: "Stock Levels" },
+  { key: "warehouse", label: "Warehouse View" },
+  { key: "demand", label: "Demand Alerts" },
+];
+
+export function InventoryView({ rows, threshold = 10, focusProductSlug = "", warehouseStocks = [], demandAlerts = [] }) {
+  const [activeTab, setActiveTab] = useState("stock");
   const numericThreshold = Number(threshold || 10);
   const sorted = [...rows].sort((a, b) => {
     const aStatus = inventoryHealthStatus(a, numericThreshold);
@@ -715,6 +793,12 @@ export function InventoryView({ rows, threshold = 10, focusProductSlug = "" }) {
     if (target) target.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [focusProductSlug, sorted.length]);
 
+  const demandStatusTone = (status) => {
+    if (status === "notified") return "success";
+    if (status === "pending") return "warning";
+    return "neutral";
+  };
+
   return (
     <div className="admin-inventory">
       <div className="admin-kpi-grid four-col">
@@ -724,33 +808,109 @@ export function InventoryView({ rows, threshold = 10, focusProductSlug = "" }) {
         <article className="admin-kpi-card kpi-danger"><span className="admin-kpi-label">Critical / Out</span><strong className="admin-kpi-value">{critical.length + out.length}</strong></article>
       </div>
 
-      <section className="admin-panel-card">
-        <div className="admin-panel-head">
-          <h3>Stock Levels</h3>
-          <span>{rows.length} products · threshold {numericThreshold} units</span>
-        </div>
-        <div className="admin-inv-table">
-          <div className="admin-inv-head">
-            <span>Product</span><span>SKU</span><span>Qty</span><span>Status</span>
+      <div className="admin-inv-tabs">
+        {INV_TABS.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            className={`admin-inv-tab ${activeTab === tab.key ? "active" : ""}`}
+            onClick={() => setActiveTab(tab.key)}
+          >
+            {tab.label}
+            {tab.key === "demand" && demandAlerts.length > 0 && (
+              <span className="admin-inv-tab-badge">{demandAlerts.length}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "stock" && (
+        <section className="admin-panel-card">
+          <div className="admin-panel-head">
+            <h3>Stock Levels</h3>
+            <span>{rows.length} products · threshold {numericThreshold} units</span>
           </div>
-          {sorted.map((p, index) => {
-            const status = inventoryHealthStatus(p, numericThreshold);
-            const rowKey = p.id ?? p.slug ?? `${p.name_en || "product"}-${index}`;
-            const isFocused = focusProductSlug && p.slug === focusProductSlug;
-            return (
-              <div key={rowKey} className={`admin-inv-row ${isFocused ? "is-focused" : ""}`} data-product-slug={p.slug || ""}>
-                <div className="admin-inv-product">
-                  {p.image ? <img className="admin-inv-thumb" src={p.image} alt="" /> : <div className="admin-inv-thumb-ph" />}
-                  <strong>{p.name_en}</strong>
+          <div className="admin-inv-table">
+            <div className="admin-inv-head">
+              <span>Product</span><span>SKU</span><span>Qty</span><span>Status</span>
+            </div>
+            {sorted.map((p, index) => {
+              const status = inventoryHealthStatus(p, numericThreshold);
+              const rowKey = p.id ?? p.slug ?? `${p.name_en || "product"}-${index}`;
+              const isFocused = focusProductSlug && p.slug === focusProductSlug;
+              return (
+                <div key={rowKey} className={`admin-inv-row ${isFocused ? "is-focused" : ""}`} data-product-slug={p.slug || ""}>
+                  <div className="admin-inv-product">
+                    {p.image ? <img className="admin-inv-thumb" src={p.image} alt="" /> : <div className="admin-inv-thumb-ph" />}
+                    <strong>{p.name_en}</strong>
+                  </div>
+                  <span className="admin-inv-sku">{p.slug}</span>
+                  <span className="admin-inv-qty">{p.stock_quantity}</span>
+                  <span className={`admin-badge ${status.tone}`}>{status.label}</span>
                 </div>
-                <span className="admin-inv-sku">{p.slug}</span>
-                <span className="admin-inv-qty">{p.stock_quantity}</span>
-                <span className={`admin-badge ${status.tone}`}>{status.label}</span>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {activeTab === "warehouse" && (
+        <section className="admin-panel-card">
+          <div className="admin-panel-head">
+            <h3>Warehouse Stock</h3>
+            <span>{warehouseStocks.length} stock entries</span>
+          </div>
+          {warehouseStocks.length ? (
+            <div className="admin-inv-table">
+              <div className="admin-inv-head" style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr" }}>
+                <span>Product</span><span>Warehouse</span><span>Region</span><span>Total</span><span>Reserved</span><span>Available</span>
               </div>
-            );
-          })}
-        </div>
-      </section>
+              {warehouseStocks.map((s) => (
+                <div key={s.id} className="admin-inv-row" style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr" }}>
+                  <strong>{s.product_slug || s.product}</strong>
+                  <span>{s.warehouse_code || s.warehouse}</span>
+                  <span>{s.warehouse_region_code || "—"}</span>
+                  <span className="admin-inv-qty">{s.quantity}</span>
+                  <span style={{ color: "var(--warning)" }}>{s.reserved_quantity}</span>
+                  <span style={{ color: s.available_quantity > 0 ? "var(--success)" : "var(--danger)" }}>{s.available_quantity}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <AdminEmpty label="warehouse stock entries" />
+          )}
+        </section>
+      )}
+
+      {activeTab === "demand" && (
+        <section className="admin-panel-card">
+          <div className="admin-panel-head">
+            <h3>Demand Alerts</h3>
+            <span>{demandAlerts.length} back-in-stock request{demandAlerts.length === 1 ? "" : "s"}</span>
+          </div>
+          {demandAlerts.length ? (
+            <div className="admin-record-list">
+              <div className="admin-list-head"><span>Product</span><span>Customer</span><span>Region</span><span>Status</span><span>Requested</span></div>
+              {demandAlerts.map((req) => (
+                <div key={req.id} className="admin-record-row">
+                  <div className="admin-record-info">
+                    <strong>{req.product_name || req.product_slug || req.product}</strong>
+                    <span>{req.product_slug}</span>
+                  </div>
+                  <span>{req.user_email || "Guest"}</span>
+                  <span>{req.region_code ? req.region_code.toUpperCase() : "—"}</span>
+                  <span className={`admin-badge ${demandStatusTone(req.status)}`}>{req.status || "pending"}</span>
+                  <span style={{ fontSize: "0.82rem", color: "var(--muted)" }}>
+                    {req.created_at ? new Date(req.created_at).toLocaleDateString() : "—"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <AdminEmpty label="demand alerts" />
+          )}
+        </section>
+      )}
     </div>
   );
 }
@@ -785,22 +945,47 @@ export function InsightsView({ rows }) {
 }
 
 export function NewsletterPanel({ data }) {
+  const rows = Array.isArray(data) ? data : [];
+  const activeCount = rows.filter((s) => s.is_active !== false).length;
+
+  function exportCsv() {
+    const header = "email,region,locale,is_active,subscribed_at";
+    const lines = rows.map((s) =>
+      [s.email, s.region || "", s.locale || "", s.is_active !== false ? "true" : "false", s.subscribed_at || ""].join(",")
+    );
+    const blob = new Blob([header + "\n" + lines.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `newsletter-subscribers-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="admin-newsletter">
       <section className="admin-panel-card">
         <div className="admin-panel-head">
-          <h3>Newsletter Subscribers</h3>
-          <span>{Array.isArray(data) ? data.length : 0} active subscribers.</span>
+          <div>
+            <h3>Newsletter Subscribers</h3>
+            <span>{rows.length} total · {activeCount} active</span>
+          </div>
+          <button type="button" className="admin-btn-sm" onClick={exportCsv}>Export CSV</button>
         </div>
         <div className="admin-record-list">
-          {Array.isArray(data) && data.length ? (
-            data.map((sub, i) => (
+          {rows.length ? (
+            rows.map((sub, i) => (
               <div key={sub.email || i} className="admin-record-row">
                 <div className="admin-record-info">
                   <strong>{sub.email}</strong>
-                  <span>Subscribed: {new Date(sub.subscribed_at).toLocaleDateString()}</span>
+                  <span>
+                    {sub.region ? `${sub.region.toUpperCase()} · ` : ""}
+                    Subscribed: {sub.subscribed_at ? new Date(sub.subscribed_at).toLocaleDateString() : "—"}
+                  </span>
                 </div>
-                <span className="admin-badge success">Active</span>
+                <span className={`admin-badge ${sub.is_active !== false ? "success" : "neutral"}`}>
+                  {sub.is_active !== false ? "Active" : "Inactive"}
+                </span>
               </div>
             ))
           ) : <AdminEmpty label="subscribers" />}
@@ -1140,23 +1325,35 @@ export function RegionsView({ rows, request, onSaved }) {
 export function InstagramPostsPanel({ rows = [], request, onSaved }) {
   const [posts, setPosts] = useState(rows);
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ image: "", href: "" });
+  const [form, setForm] = useState({ file: null, preview: "", href: "" });
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState("");
+  const fileInputRef = useRef(null);
 
   useEffect(() => { setPosts(rows); }, [rows]);
 
+  function handleFilePick(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const preview = URL.createObjectURL(file);
+    setForm((f) => ({ ...f, file, preview }));
+  }
+
   async function handleAdd(e) {
     e.preventDefault();
-    if (!form.image.trim()) { setError("Image URL is required."); return; }
+    if (!form.file) { setError("Please select an image to upload."); return; }
     setSaving(true); setError("");
     try {
-      await request("/admin/instagram-posts/", { method: "POST", body: JSON.stringify({ image: form.image.trim(), href: form.href.trim() }) });
-      setForm({ image: "", href: "" });
+      const fd = new FormData();
+      fd.append("image_file", form.file);
+      if (form.href.trim()) fd.append("href", form.href.trim());
+      await request("/admin/instagram-posts/", { method: "POST", body: fd });
+      if (form.preview) URL.revokeObjectURL(form.preview);
+      setForm({ file: null, preview: "", href: "" });
       setAdding(false);
       onSaved?.();
-    } catch { setError("Failed to save. Check the URL and try again."); }
+    } catch { setError("Upload failed. Please try again."); }
     finally { setSaving(false); }
   }
 
@@ -1167,6 +1364,13 @@ export function InstagramPostsPanel({ rows = [], request, onSaved }) {
       onSaved?.();
     } catch { setError("Delete failed."); }
     finally { setDeletingId(null); }
+  }
+
+  function handleCancel() {
+    if (form.preview) URL.revokeObjectURL(form.preview);
+    setForm({ file: null, preview: "", href: "" });
+    setAdding(false);
+    setError("");
   }
 
   return (
@@ -1187,14 +1391,27 @@ export function InstagramPostsPanel({ rows = [], request, onSaved }) {
         <form className="ig-post-add-form" onSubmit={handleAdd}>
           <div className="ig-post-add-fields">
             <label>
-              <span>Image URL</span>
+              <span>Photo <span style={{color:"#c0392b"}}>*</span></span>
               <input
-                type="url"
-                placeholder="https://cdn.example.com/photo.jpg"
-                value={form.image}
-                onChange={(e) => setForm((f) => ({ ...f, image: e.target.value }))}
-                required
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={handleFilePick}
               />
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <button
+                  type="button"
+                  className="admin-btn-ghost"
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{ whiteSpace: "nowrap" }}
+                >
+                  {form.file ? "Change photo" : "📁 Choose photo"}
+                </button>
+                {form.file && (
+                  <span style={{ fontSize: 13, color: "#5a7a4a" }}>✓ {form.file.name}</span>
+                )}
+              </div>
             </label>
             <label>
               <span>Instagram post link (optional)</span>
@@ -1206,15 +1423,15 @@ export function InstagramPostsPanel({ rows = [], request, onSaved }) {
               />
             </label>
           </div>
-          {form.image && (
+          {form.preview && (
             <div className="ig-post-preview-thumb">
-              <img src={form.image} alt="preview" onError={(e) => { e.target.style.display = "none"; }} />
+              <img src={form.preview} alt="preview" />
             </div>
           )}
           {error && <p className="admin-threshold-error">{error}</p>}
           <div className="ig-post-add-actions">
-            <button type="submit" className="admin-btn-primary" disabled={saving}>{saving ? "Saving…" : "Save"}</button>
-            <button type="button" className="admin-btn-ghost" onClick={() => { setAdding(false); setError(""); }}>Cancel</button>
+            <button type="submit" className="admin-btn-primary" disabled={saving}>{saving ? "Uploading…" : "Save"}</button>
+            <button type="button" className="admin-btn-ghost" onClick={handleCancel}>Cancel</button>
           </div>
         </form>
       )}
@@ -1225,9 +1442,9 @@ export function InstagramPostsPanel({ rows = [], request, onSaved }) {
         <div className="ig-admin-grid">
           {posts.map((post) => (
             <div key={post.id} className="ig-admin-tile">
-              <img src={post.image} alt="" onError={(e) => { e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%23e8f0e0'/%3E%3C/svg%3E"; }} />
+              <img src={post.image_file || post.image} alt="" onError={(e) => { e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%23e8f0e0'/%3E%3C/svg%3E"; }} />
               <div className="ig-admin-tile-overlay">
-                <a href={post.href} target="_blank" rel="noopener noreferrer" className="ig-admin-tile-link" title="Open post">↗</a>
+                {post.href && <a href={post.href} target="_blank" rel="noopener noreferrer" className="ig-admin-tile-link" title="Open post">↗</a>}
                 <button
                   type="button"
                   className="ig-admin-tile-del"

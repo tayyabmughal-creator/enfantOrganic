@@ -253,7 +253,7 @@ export default function DashboardView({ data, filters, onFiltersChange, onRefres
     {
       key: "abandonment",
       icon: "cartX",
-      label: "Order Cancellation Rate",
+      label: "Checkout Abandonment Rate",
       value: fmtPct(abandonment),
       delta: { ...abnDelta, up: abnDelta.up === null ? null : !abnDelta.up },
       spark: [],

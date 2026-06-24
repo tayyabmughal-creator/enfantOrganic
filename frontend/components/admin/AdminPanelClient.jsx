@@ -20,86 +20,70 @@ const INVENTORY_PAGE_SIZE = 100;
 
 const NAV_GROUPS = [
   {
-    label: "Store",
+    label: "Overview",
     items: [
-      { key: "dashboard",  label: "Dashboard",   icon: "dashboard", endpoint: "/admin/dashboard/",  desc: "Live store signals and KPIs." },
-      { key: "orders",     label: "Orders",       icon: "clipboard", endpoint: "/admin/orders/",      desc: "Manage orders, draft orders, and abandoned checkouts." },
-      { key: "draft_orders", label: "Draft Orders", icon: "clipboard", endpoint: "/admin/orders/", showInSidebar: false, desc: "Create and manage admin-created draft orders." },
-      { key: "customers",  label: "Customers",    icon: "user",      endpoint: "/admin/customers/",   desc: "Customer accounts and history." },
+      { key: "dashboard",  label: "Dashboard",   icon: "dashboard",  endpoint: "/admin/dashboard/",    desc: "Live store signals and KPIs." },
+      { key: "analytics",  label: "Analytics",   icon: "chartLine",  endpoint: "/admin/analytics/",    desc: "Revenue, funnels, and trends." },
+      { key: "audit_logs", label: "Audit Logs",  icon: "activity",   endpoint: "/admin/audit-logs/",   desc: "Sensitive action timeline and traceability." },
     ],
   },
   {
-    label: "Catalog",
+    label: "Orders & Customers",
     items: [
-      { key: "products",   label: "Products",    icon: "tag",      endpoint: "/admin/products/",    desc: "Create and manage product listings." },
-      { key: "categories", label: "Categories",  icon: "folder",   endpoint: "/admin/categories/",  desc: "Organise products into categories." },
-      { key: "inventory",  label: "Inventory",   icon: "box",      endpoint: "/admin/products/",    desc: "Stock levels and reorder alerts." },
-      { key: "warehouses", label: "Warehouses",  icon: "building", endpoint: "/admin/warehouses/",  desc: "Fulfilment centres and regions." },
+      { key: "orders",       label: "Orders",               icon: "clipboard",   endpoint: "/admin/orders/",         desc: "Manage orders, draft orders, and abandoned checkouts." },
+      { key: "draft_orders", label: "Draft Orders",         icon: "clipboard",   endpoint: "/admin/orders/",         showInSidebar: false, desc: "Create and manage admin-created draft orders." },
+      { key: "abandoned",    label: "Abandoned Checkouts",  icon: "cartX",       endpoint: "/admin/abandoned-carts/",showInSidebar: false, desc: "Recover abandoned checkouts." },
+      { key: "returns",      label: "Returns",              icon: "returnArrow", endpoint: "/admin/returns/",        desc: "Return requests and refunds." },
+      { key: "customers",    label: "Customers",            icon: "user",        endpoint: "/admin/customers/",      desc: "Customer accounts, history, and lifetime value." },
     ],
   },
   {
-    label: "Content",
+    label: "Catalog & Inventory",
     items: [
-      { key: "blog",             label: "Blog",           icon: "edit",      endpoint: "/admin/blog-posts/",       desc: "Articles, guides, and brand stories." },
-      { key: "pages",            label: "Pages",          icon: "edit",      endpoint: "/admin/cms-pages/",        desc: "CMS-managed policy and static content pages." },
-      { key: "hero_cards",       label: "Hero Cards",     icon: "image",     endpoint: "/admin/hero-promo-cards/",  desc: "Homepage hero promo cards and visuals." },
-      { key: "instagram_posts",  label: "Instagram Grid", icon: "instagram", endpoint: "/admin/instagram-posts/",   desc: "Instagram feed photos shown on the homepage." },
-      { key: "homepage",         label: "Content",        icon: "home",      endpoint: "/admin/settings/",          desc: "Announcements, newsletter, and homepage sections." },
+      { key: "products",   label: "Products",   icon: "tag",      endpoint: "/admin/products/",   desc: "Create and manage product listings." },
+      { key: "categories", label: "Categories", icon: "folder",   endpoint: "/admin/categories/", desc: "Organise products into categories." },
+      { key: "inventory",  label: "Inventory",  icon: "box",      endpoint: "/admin/products/",   desc: "Stock levels, warehouse breakdown, and demand alerts." },
+      { key: "warehouses", label: "Warehouses", icon: "building", endpoint: "/admin/warehouses/", desc: "Fulfilment centres and regions." },
     ],
   },
   {
-    label: "Store Setup",
+    label: "Marketing & Content",
     items: [
-      { key: "branding",      label: "Branding",       icon: "palette", endpoint: "/admin/settings/", desc: "Logo, colors, tagline, and store identity." },
-      { key: "nav_settings",  label: "Navigation",     icon: "menu",    endpoint: "/admin/settings/", desc: "Header nav links and utility menu." },
-      { key: "footer_social", label: "Footer & Social",icon: "link",    endpoint: "/admin/settings/", desc: "Footer content, social media, and contact info." },
-      { key: "seo_legal",     label: "SEO & Legal",    icon: "search",  endpoint: "/admin/settings/", desc: "Meta tags, Open Graph, return policy, privacy." },
+      { key: "deals",           label: "Promotions",     icon: "percent",   endpoint: "/admin/promotions/",              desc: "Coupons, codes, and deals." },
+      { key: "giftcards",       label: "Gift Cards",     icon: "gift",      endpoint: "/admin/gift-cards/",              desc: "Issue and track gift cards." },
+      { key: "newsletter",      label: "Newsletter",     icon: "mail",      endpoint: "/admin/newsletter-subscribers/",  desc: "Subscribers and campaigns." },
+      { key: "blog",            label: "Blog",           icon: "edit",      endpoint: "/admin/blog-posts/",              desc: "Articles, guides, and brand stories." },
+      { key: "pages",           label: "Pages",          icon: "edit",      endpoint: "/admin/cms-pages/",               desc: "CMS-managed policy and static content pages." },
+      { key: "hero_cards",      label: "Hero Cards",     icon: "image",     endpoint: "/admin/hero-promo-cards/",        desc: "Homepage hero promo cards and visuals." },
+      { key: "instagram_posts", label: "Instagram Grid", icon: "instagram", endpoint: "/admin/instagram-posts/",        desc: "Instagram feed photos shown on the homepage." },
+      { key: "homepage",        label: "Content",        icon: "home",      endpoint: "/admin/settings/",               desc: "Announcements, newsletter, and homepage sections." },
     ],
   },
   {
-    label: "Marketing",
+    label: "Finance",
     items: [
-      { key: "deals",      label: "Promotions",     icon: "percent", endpoint: "/admin/promotions/",           desc: "Coupons, codes, and deals." },
-      { key: "giftcards",  label: "Gift Cards",     icon: "gift",    endpoint: "/admin/gift-cards/",           desc: "Issue and track gift cards." },
-      { key: "abandoned",  label: "Abandoned Checkouts", icon: "cartX",   endpoint: "/admin/abandoned-carts/", showInSidebar: false, desc: "Recover abandoned checkouts." },
-      { key: "newsletter", label: "Newsletter",     icon: "mail",    endpoint: "/admin/newsletter-subscribers/", desc: "Subscribers and campaigns." },
+      { key: "payments", label: "Payments", icon: "creditCard", endpoint: "/admin/payments/",  desc: "Payment transactions — read-only audit view." },
+      { key: "reports",  label: "Reports",  icon: "download",   endpoint: "/admin/moderation/", desc: "CSV exports: orders, customers, inventory, sales." },
     ],
   },
   {
-    label: "Analytics",
+    label: "Settings & Integrations",
     items: [
-      { key: "analytics",  label: "Analytics",  icon: "chartLine", endpoint: "/admin/analytics/",  desc: "Revenue, funnels, and trends." },
-      { key: "insights",   label: "Insights",   icon: "chartPie",  endpoint: "/admin/customers/",  desc: "Segments, LTV, and cohorts." },
-      { key: "reports",    label: "Reports",    icon: "download",  endpoint: "/admin/moderation/", desc: "CSV exports and health checks." },
-      { key: "audit_logs", label: "Audit Logs", icon: "activity",  endpoint: "/admin/audit-logs/", desc: "Sensitive action timeline and traceability." },
-    ],
-  },
-  {
-    label: "Operations",
-    items: [
-      { key: "reviews",  label: "Reviews",  icon: "star",         endpoint: "/admin/reviews/",         desc: "Approve and moderate reviews." },
-      { key: "returns",  label: "Returns",  icon: "returnArrow",  endpoint: "/admin/returns/",         desc: "Return requests and refunds." },
-      { key: "shipping", label: "Shipping", icon: "truck",        endpoint: "/admin/shipping-rules/", desc: "Rules-based rates and delivery ETA." },
-      { key: "cart_milestones", label: "Cart Milestones", icon: "gift", endpoint: "/admin/cart-milestones/", desc: "Free-shipping and discount rewards unlocked by cart total." },
-    ],
-  },
-  {
-    label: "Integrations",
-    items: [
-      { key: "social",          label: "Social Media",    icon: "share",      endpoint: "/admin/settings/", desc: "Facebook, TikTok, Snapchat, and Pinterest pixels." },
-      { key: "marketing_tools", label: "Marketing Tools", icon: "megaphone",  endpoint: "/admin/settings/", desc: "GA4, Google Ads, GTM, Klaviyo, and Mailchimp." },
-      { key: "apps",            label: "App Store",       icon: "apps",       endpoint: "/admin/settings/", desc: "Push notifications, search, and fulfilment apps." },
-    ],
-  },
-  {
-    label: "Settings",
-    items: [
-      { key: "payments",        label: "Payments",        icon: "creditCard", endpoint: "/admin/payments/",  desc: "Providers and transactions." },
-      { key: "payment_setup",   label: "Payment Setup",   icon: "settings",   endpoint: "/admin/settings/",  desc: "Configure payment gateway credentials from the admin panel." },
-      { key: "inventory_settings", label: "Inventory Settings", icon: "box", endpoint: "/admin/settings/", desc: "Inventory alert thresholds and restock signals." },
-      { key: "taxes",           label: "Taxes",           icon: "receipt",    endpoint: "/admin/tax-rates/", desc: "Tax zones, VAT rates, and inclusive/exclusive pricing." },
-      { key: "staff",           label: "Staff",           icon: "users",      endpoint: "/admin/staff/",     desc: "Team accounts, roles, and permissions." },
-      { key: "regions",         label: "Regions",         icon: "globe",      endpoint: "/admin/regions/",   desc: "Active regions, currencies, and locale config." },
+      { key: "regions",             label: "Regions",           icon: "globe",     endpoint: "/admin/regions/",   desc: "Active regions, currencies, and locale config." },
+      { key: "taxes",               label: "Taxes",             icon: "receipt",   endpoint: "/admin/tax-rates/", desc: "Tax zones, VAT rates, and inclusive/exclusive pricing." },
+      { key: "shipping",            label: "Shipping",          icon: "truck",     endpoint: "/admin/shipping-rules/", desc: "Rules-based rates and delivery ETA." },
+      { key: "cart_milestones",     label: "Cart Milestones",   icon: "gift",      endpoint: "/admin/cart-milestones/", desc: "Free-shipping and discount rewards unlocked by cart total." },
+      { key: "staff",               label: "Staff",             icon: "users",     endpoint: "/admin/staff/",     desc: "Team accounts, roles, and permissions." },
+      { key: "reviews",             label: "Reviews",           icon: "star",      endpoint: "/admin/reviews/",   desc: "Approve and moderate reviews." },
+      { key: "branding",            label: "Branding",          icon: "palette",   endpoint: "/admin/settings/",  desc: "Logo, colors, tagline, and store identity." },
+      { key: "nav_settings",        label: "Navigation",        icon: "menu",      endpoint: "/admin/settings/",  desc: "Header nav links and utility menu." },
+      { key: "footer_social",       label: "Footer & Social",   icon: "link",      endpoint: "/admin/settings/",  desc: "Footer content, social media, and contact info." },
+      { key: "seo_legal",           label: "SEO & Legal",       icon: "search",    endpoint: "/admin/settings/",  desc: "Meta tags, Open Graph, return policy, privacy." },
+      { key: "payment_setup",       label: "Payment Setup",     icon: "settings",  endpoint: "/admin/settings/",  desc: "Configure payment gateway credentials." },
+      { key: "inventory_settings",  label: "Inventory Settings",icon: "box",       endpoint: "/admin/settings/",  desc: "Inventory alert thresholds and restock signals." },
+      { key: "social",              label: "Social Media",      icon: "share",     endpoint: "/admin/settings/",  desc: "Facebook, TikTok, Snapchat, and Pinterest pixels." },
+      { key: "marketing_tools",     label: "Marketing Tools",   icon: "megaphone", endpoint: "/admin/settings/",  desc: "GA4, Google Ads, GTM, Klaviyo, and Mailchimp." },
+      { key: "apps",                label: "App Store",         icon: "apps",      endpoint: "/admin/settings/",  desc: "Push notifications, search, and fulfilment apps." },
     ],
   },
 ];
@@ -135,7 +119,7 @@ const NAV_READ_CAPABILITY = {
   abandoned: "abandoned.view",
   newsletter: "moderation.view",
   analytics: "dashboard.view",
-  insights: "customers.view",
+  insights: "customers.view", // legacy key kept for backward compat
   reports: "reports.view",
   audit_logs: "audit.view",
   reviews: "reviews.view",
@@ -505,7 +489,7 @@ const ORDER_FILTER_DEFAULTS = {
   market: "all",
 };
 const DASHBOARD_REFRESH_INTERVAL_MS = 10000;
-const CRUD_KEYS     = ["products","categories","deals","customers","payments","reviews","shipping","cart_milestones","blog","pages","hero_cards","returns","taxes","staff","warehouses","giftcards"];
+const CRUD_KEYS     = ["products","categories","deals","customers","payments","reviews","shipping","cart_milestones","blog","pages","hero_cards","taxes","staff","warehouses","giftcards"];
 const DELETABLE     = ["products","categories","deals","customers","payments","reviews","shipping","cart_milestones","blog","pages","hero_cards","taxes","staff","warehouses","giftcards"];
 const REPORT_TYPES  = ["orders","customers","inventory","low-stock","sales","abandoned-carts"];
 
@@ -758,6 +742,10 @@ export default function AdminPanelClient() {
   const [orderFilters, setOrderFilters] = useState(ORDER_FILTER_DEFAULTS);
   const [inventoryThreshold, setInventoryThreshold] = useState(10);
   const [inventoryFocusSlug, setInventoryFocusSlug] = useState("");
+  const [warehouseStocks, setWarehouseStocks] = useState([]);
+  const [demandAlerts, setDemandAlerts] = useState([]);
+  const [auditFilters, setAuditFilters] = useState({ action: "", resource_type: "" });
+  const [customersTab, setCustomersTab] = useState("list");
 
   const capabilitySet = useMemo(() => new Set(adminMe?.capabilities || []), [adminMe]);
 
@@ -1024,8 +1012,14 @@ export default function AdminPanelClient() {
         setInventoryThreshold(Number(raw.inventory_health_threshold || 10));
       }
       if (screenKey === "inventory") {
-        const settingsPayload = await request("/admin/settings/");
+        const [settingsPayload, warehousePayload, demandPayload] = await Promise.all([
+          request("/admin/settings/"),
+          request("/admin/product-stocks/?page_size=500"),
+          request("/admin/back-in-stock-requests/?page_size=500"),
+        ]);
         setInventoryThreshold(Number(settingsPayload?.inventory_low_stock_threshold || 10));
+        setWarehouseStocks(Array.isArray(warehousePayload?.results) ? warehousePayload.results : []);
+        setDemandAlerts(Array.isArray(demandPayload?.results) ? demandPayload.results : []);
       }
       if (raw && typeof raw === "object" && Array.isArray(raw.results)) {
         setData(raw.results);
@@ -1676,11 +1670,34 @@ export default function AdminPanelClient() {
         />
       );
     if (activeKey === "analytics")              return <AnalyticsView data={data} />;
-    if (activeKey === "inventory")              return <InventoryView rows={Array.isArray(data) ? data : []} threshold={inventoryThreshold} focusProductSlug={inventoryFocusSlug} />;
-    if (activeKey === "insights")               return <InsightsView rows={Array.isArray(data) ? data : []} />;
+    if (activeKey === "inventory")              return <InventoryView rows={Array.isArray(data) ? data : []} threshold={inventoryThreshold} focusProductSlug={inventoryFocusSlug} warehouseStocks={warehouseStocks} demandAlerts={demandAlerts} />;
+    if (activeKey === "customers") return (
+      <div>
+        <div className="admin-orders-section-tabs" style={{ marginBottom: 0 }}>
+          {[{ key: "list", label: "Customers" }, { key: "ltv", label: "Top Customers (LTV)" }].map((tab) => (
+            <button key={tab.key} type="button"
+              className={`admin-orders-section-tab ${customersTab === tab.key ? "active" : ""}`}
+              onClick={() => setCustomersTab(tab.key)}
+            >{tab.label}</button>
+          ))}
+        </div>
+        {customersTab === "ltv"
+          ? <InsightsView rows={Array.isArray(data) ? data : []} />
+          : <CrudPanel
+              rows={Array.isArray(data) ? data : []} activeKey="customers"
+              canCreate={canCreate} canEdit={canEdit} canDelete={canDelete}
+              onCreate={startCreate} onEdit={openDetail} onDelete={deleteRecord}
+              onDownloadInvoice={downloadOrderInvoice}
+              titleFor={titleFor} metaFor={metaFor} labelFor={labelFor}
+              searchQuery={searchQuery} onSearchChange={(q) => { setSearchQuery(q); setPage(1); }}
+              page={page} totalPages={totalPages} onPageChange={(p) => { setPage(p); }}
+            />
+        }
+      </div>
+    );
     if (activeKey === "newsletter")             return <NewsletterPanel data={data} />;
     if (activeKey === "reports")               return <Reports data={data} onDownload={downloadReport} />;
-    if (activeKey === "audit_logs")            return <AuditLogsPanel rows={Array.isArray(data) ? data : []} />;
+    if (activeKey === "audit_logs")            return <AuditLogsPanel rows={Array.isArray(data) ? data : []} filters={auditFilters} onFiltersChange={(patch) => setAuditFilters((prev) => ({ ...prev, ...patch }))} />;
     if (activeKey === "regions")               return <RegionsView rows={Array.isArray(data) ? data : []} request={request} onSaved={() => loadScreen()} />;
     if (activeKey === "instagram_posts")       return <InstagramPostsPanel rows={Array.isArray(data) ? data : []} request={request} onSaved={() => loadScreen()} />;
     if (activeKey === "draft_orders" && draftComposerOpen) {
@@ -1705,6 +1722,14 @@ export default function AdminPanelClient() {
         onEdit={activeKey === "draft_orders" ? openDraftOrderEditor : openDetail}
         onDelete={deleteRecord}
         onDownloadInvoice={downloadOrderInvoice}
+        onBulkStatusChange={activeKey === "orders" ? async (orderNumbers, newStatus) => {
+          await Promise.all(
+            orderNumbers.map((num) =>
+              request(`/admin/orders/${num}/`, { method: "PATCH", body: JSON.stringify({ status: newStatus }) })
+            )
+          );
+          void loadScreen(active);
+        } : undefined}
         titleFor={titleFor}
         metaFor={metaFor}
         labelFor={labelFor}

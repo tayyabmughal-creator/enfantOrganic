@@ -224,6 +224,10 @@ class Order(models.Model):
     tax_breakdown = models.JSONField(default=dict, blank=True)
     grand_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     currency_code = models.CharField(max_length=3)
+    fx_rate_snapshot = models.DecimalField(
+        max_digits=18, decimal_places=8, null=True, blank=True,
+        help_text="Region fx_rate at the time this order was placed (OMR→region). Preserved for historic OMR conversion."
+    )
 
     status = models.CharField(max_length=32, choices=STATUS_CHOICES, default=STATUS_PENDING)
     payment_method = models.CharField(max_length=32, choices=PAYMENT_METHOD_CHOICES, default=PAYMENT_COD)

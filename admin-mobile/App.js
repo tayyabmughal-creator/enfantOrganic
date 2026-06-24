@@ -6,30 +6,32 @@ import { StatusBar } from "expo-status-bar";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api";
 
-/** Maps mobile tabs to `modules` keys from GET /api/admin/me/ */
+/** On-call companion: alerts, orders, customers only. Full CRUD lives in the web admin. */
 const SCREEN_MODULE_KEYS = {
   Dashboard: null,
   Orders: "orders",
-  Products: "products",
-  Categories: "categories",
   Customers: "customers",
-  Promotions: "promotions",
-  Reviews: "reviews",
-  Reports: "reports",
-  Settings: "content",
 };
 
 const allScreens = Object.keys(SCREEN_MODULE_KEYS);
 
 const screenEndpoints = {
   Orders: "/admin/orders/",
-  Products: "/admin/products/",
-  Categories: "/admin/categories/",
   Customers: "/admin/customers/",
-  Promotions: "/admin/promotions/",
-  Reviews: "/admin/reviews/",
-  Reports: "/admin/moderation/",
-  Settings: "/admin/settings/",
+};
+
+/** Valid next statuses for a given order status. */
+const VALID_NEXT_STATUSES = {
+  pending:    ["confirmed", "cancelled"],
+  confirmed:  ["processing", "cancelled"],
+  processing: ["shipped", "cancelled"],
+  shipped:    ["delivered", "failed"],
+  delivered:  ["returned", "refunded"],
+  paid:       ["processing", "cancelled"],
+  cancelled:  [],
+  returned:   ["refunded"],
+  refunded:   [],
+  failed:     ["confirmed"],
 };
 
 function canViewScreen(screen, adminMe) {
@@ -97,6 +99,9 @@ export default function App() {
       const refreshData = await refreshResponse.json();
       token = refreshData.access;
       await AsyncStorage.setItem("accessToken", token);
+      if (refreshData.refresh) {
+        await AsyncStorage.setItem("refreshToken", refreshData.refresh);
+      }
       setAccessToken(token);
 
       return fetch(url, {
@@ -255,16 +260,20 @@ export default function App() {
         <View style={styles.rowCard} key={item.id || item.slug || item.order_number || index}>
           <Text style={styles.rowTitle}>{title}</Text>
           <Text style={styles.rowMeta}>Status: {status}</Text>
-          {activeScreen === "Orders" && canEditOrders && item.order_number ? (
-            <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
-              <Pressable style={styles.actionBtn} onPress={() => updateOrderStatus(item.order_number, "processing")}>
-                <Text style={styles.actionBtnText}>Processing</Text>
-              </Pressable>
-              <Pressable style={styles.actionBtn} onPress={() => updateOrderStatus(item.order_number, "shipped")}>
-                <Text style={styles.actionBtnText}>Shipped</Text>
-              </Pressable>
-            </View>
-          ) : null}
+          {activeScreen === "Orders" && canEditOrders && item.order_number ? (() => {
+            const currentStatus = String(item.status || "").toLowerCase();
+            const nextStatuses = VALID_NEXT_STATUSES[currentStatus] || [];
+            if (!nextStatuses.length) return null;
+            return (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+                {nextStatuses.map((next) => (
+                  <Pressable key={next} style={styles.actionBtn} onPress={() => updateOrderStatus(item.order_number, next)}>
+                    <Text style={styles.actionBtnText}>{next.charAt(0).toUpperCase() + next.slice(1)}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            );
+          })() : null}
         </View>
       );
     });
