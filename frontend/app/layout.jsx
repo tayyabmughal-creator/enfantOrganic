@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import Script from "next/script";
-import { Inter, Dosis, Noto_Sans_Arabic } from "next/font/google";
+import { Noto_Sans_Arabic } from "next/font/google";
 import LocaleHtmlAttributes from "@/components/seo/LocaleHtmlAttributes";
 import ChunkLoadRecovery from "@/components/system/ChunkLoadRecovery";
 import LocalServiceWorkerReset from "@/components/system/LocalServiceWorkerReset";
@@ -15,20 +15,6 @@ import { normalizeLocale } from "@/lib/storefront";
 const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID || "";
 
 import "./globals.css";
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-sans",
-  display: "swap",
-  weight: ["400", "500", "600", "700"],
-});
-
-const dosis = Dosis({
-  subsets: ["latin"],
-  variable: "--font-serif",
-  display: "swap",
-  weight: ["400", "500", "600", "700", "800"],
-});
 
 const notoArabic = Noto_Sans_Arabic({
   subsets: ["arabic"],
@@ -90,7 +76,7 @@ export default async function RootLayout({ children }) {
   const dir = getLocaleDir(locale);
 
   return (
-    <html lang={locale} dir={dir} className={`${inter.variable} ${dosis.variable} ${notoArabic.variable}`}>
+    <html lang={locale} dir={dir} className={`${notoArabic.variable}`}>
       <head>
         <meta name="facebook-domain-verification" content="sgzszmn3obmyyaaksxq0a70vd6ssvd" />
       </head>
