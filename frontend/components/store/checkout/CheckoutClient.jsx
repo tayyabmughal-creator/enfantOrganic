@@ -1697,10 +1697,19 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                           <input
                             ref={placeInputRef}
                             name="place-search"
-                            placeholder={isAr ? "ابحث عن عنوانك..." : "Search for your address..."}
+                            placeholder={isAr ? "اكتب أي عنوان أو ابحث..." : "Type any address or search..."}
                             autoComplete="off"
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setForm((f) => ({ ...f, address_line_1: val }));
+                            }}
                           />
                         </label>
+                        <p className="map-custom-address-hint">
+                          {isAr
+                            ? "يمكنك كتابة أي عنوان مخصص — سيُعبَّأ حقل العنوان تلقائياً. أو اختر من النتائج لتحديد الموقع على الخريطة."
+                            : "Type any custom address and it fills the Street field below — or pick from suggestions to also pin on the map."}
+                        </p>
                       </div>
 
                       <div ref={mapContainerRef} className="checkout-map-canvas" />

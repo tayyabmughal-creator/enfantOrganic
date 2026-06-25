@@ -1131,6 +1131,13 @@
   cursor: progress;
 }
 
+.map-custom-address-hint {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--text-soft);
+  line-height: 1.45;
+}
+
 .map-inline-error {
   margin: 0;
   font-size: 0.8rem;
