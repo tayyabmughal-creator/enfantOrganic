@@ -2289,11 +2289,9 @@ class AdminOrderDetailView(generics.RetrieveUpdateAPIView):
         "return_requests__reviewed_by",
     )
 
-    @transaction.atomic
     def delete(self, request, order_number):
         order = (
-            Order.objects.select_for_update()
-            .filter(order_number=order_number)
+            Order.objects.filter(order_number=order_number)
             .select_related("region", "user")
             .prefetch_related("items__product")
             .first()
@@ -2307,26 +2305,37 @@ class AdminOrderDetailView(generics.RetrieveUpdateAPIView):
             "grand_total": str(order.grand_total),
             "customer_name": order.customer_name,
         }
+
+        # Each cleanup runs in its own savepoint so a DB error inside can't
+        # corrupt the outer connection state.
         if not order.inventory_released:
             try:
-                release_pending_gift_card_redemption(order, reason="deleted")
+                with transaction.atomic():
+                    release_pending_gift_card_redemption(order, reason="deleted")
             except Exception:
                 logger.exception("Gift card release failed on order delete %s", order.order_number)
             try:
-                order.restore_inventory()
+                with transaction.atomic():
+                    order.restore_inventory()
             except Exception:
                 logger.exception("Inventory restore failed on order delete %s", order.order_number)
 
-        log_admin_action(
-            request=request,
-            actor=request.user,
-            action=AdminAuditLog.ACTION_ORDER_STATUS_CHANGED,
-            resource_type="order",
-            resource_id=order.order_number,
-            before_snapshot=snapshot,
-            after_snapshot={"action": "order_deleted"},
-        )
-        order.delete()
+        try:
+            with transaction.atomic():
+                log_admin_action(
+                    request=request,
+                    actor=request.user,
+                    action=AdminAuditLog.ACTION_ORDER_STATUS_CHANGED,
+                    resource_type="order",
+                    resource_id=order.order_number,
+                    before_snapshot=snapshot,
+                    after_snapshot={"action": "order_deleted"},
+                )
+                order.delete()
+        except Exception:
+            logger.exception("Order delete failed for %s", order.order_number)
+            return Response({"detail": "Failed to delete order."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def perform_update(self, serializer):
