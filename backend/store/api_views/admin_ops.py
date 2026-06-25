@@ -930,8 +930,11 @@ class AdminDashboardView(APIView):
             }[top_date_range]
             scoped_orders = scoped_orders.filter(created_at__gte=now - timedelta(days=day_window))
 
-        scoped_paid_orders = scoped_orders.filter(payment_status=Order.PAYMENT_PAID)
-        scoped_paid_orders_count = scoped_paid_orders.count()
+        # Include ALL placed orders (paid, COD, unpaid) — exclude only cancelled/failed/refunded
+        _excluded_statuses = [Order.STATUS_CANCELLED, Order.STATUS_FAILED, Order.STATUS_REFUNDED]
+        scoped_active_orders = scoped_orders.exclude(status__in=_excluded_statuses)
+        scoped_paid_orders = scoped_active_orders  # keep alias for downstream compat
+        scoped_paid_orders_count = scoped_active_orders.count()
 
         if top_date_range == "all_time":
             current_period_orders = base_orders
@@ -958,8 +961,8 @@ class AdminDashboardView(APIView):
             current_period_orders = base_orders.filter(created_at__gte=this_month_start)
             previous_period_orders = base_orders.filter(created_at__gte=last_month_start, created_at__lt=this_month_start)
 
-        current_period_paid = current_period_orders.filter(payment_status=Order.PAYMENT_PAID)
-        previous_period_paid = previous_period_orders.filter(payment_status=Order.PAYMENT_PAID)
+        current_period_paid = current_period_orders.exclude(status__in=_excluded_statuses)
+        previous_period_paid = previous_period_orders.exclude(status__in=_excluded_statuses)
 
         base_abandoned_carts = AbandonedCart.objects.all()
         if top_market != "all":
@@ -1207,24 +1210,8 @@ class AdminDashboardView(APIView):
 
         # Status mix follows the active dashboard scope (date + market).
         status_mix = list(scoped_orders.values("status").annotate(count=Count("id")).order_by("status"))
-        sales_channel_orders = scoped_orders.filter(
-            payment_status=Order.PAYMENT_PAID,
-        ).exclude(
-            status__in=[
-                Order.STATUS_CANCELLED,
-                Order.STATUS_FAILED,
-                Order.STATUS_REFUNDED,
-            ]
-        )
-        previous_sales_channel_orders = previous_period_orders.filter(
-            payment_status=Order.PAYMENT_PAID,
-        ).exclude(
-            status__in=[
-                Order.STATUS_CANCELLED,
-                Order.STATUS_FAILED,
-                Order.STATUS_REFUNDED,
-            ]
-        )
+        sales_channel_orders = scoped_orders.exclude(status__in=_excluded_statuses)
+        previous_sales_channel_orders = previous_period_orders.exclude(status__in=_excluded_statuses)
         sales_by_channel = _build_sales_channel_summary(
             sales_channel_orders,
             previous_sales_channel_orders,
@@ -1499,7 +1486,8 @@ class AdminAnalyticsView(APIView):
         now = timezone.now()
         this_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         orders = Order.objects.all()
-        paid_orders = orders.filter(payment_status=Order.PAYMENT_PAID)
+        # Count all placed orders (paid, COD, unpaid) — exclude only cancelled/failed/refunded
+        paid_orders = orders.exclude(status__in=[Order.STATUS_CANCELLED, Order.STATUS_FAILED, Order.STATUS_REFUNDED])
 
         # Regional revenue split
         regional_revenue = {}
