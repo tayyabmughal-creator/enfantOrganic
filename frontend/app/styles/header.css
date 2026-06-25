@@ -504,21 +504,32 @@
     display: flex;
   }
 
+  /*
+   * backdrop-filter on .site-header creates a containing block for
+   * position:fixed children (Chrome behaviour), which traps the nav
+   * drawer inside the ~93px header instead of covering the full viewport.
+   * Removing it on mobile restores normal fixed positioning.
+   */
+  .site-header {
+    backdrop-filter: none;
+    background: rgba(248, 249, 244, 0.98);
+  }
+
   /* Collapse nav into full-screen drawer */
   .header-nav {
     display: none;
     position: fixed;
     inset: 0;
-    top: 72px;
+    top: 0;
+    padding-top: calc(100px + 16px); /* clear the ~94px header + content gap */
     background: rgba(248, 249, 244, 0.98);
-    backdrop-filter: blur(18px);
     flex-direction: column;
     align-items: flex-start;
     gap: 0;
-    padding: 16px 20px 32px;
+    padding-inline: 20px;
+    padding-bottom: 32px;
     overflow-y: auto;
     z-index: 34;
-    border-top: 1px solid var(--line);
   }
 
   .header-nav.is-open {
