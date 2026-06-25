@@ -217,7 +217,7 @@ export default function DashboardView({ data, filters, onFiltersChange, onRefres
     {
       key: "orders",
       icon: "bag",
-      label: "Paid Orders",
+      label: "Total Orders",
       value: orders.toLocaleString(),
       delta: ordDelta,
       spark: ordersSeries,
