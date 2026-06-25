@@ -1246,11 +1246,11 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
       setError(isAr ? "سلة التسوق فارغة." : "Your cart is empty.");
       return;
     }
-    if (mapPinRequired && !hasPin) {
+    if (mapPinRequired && !locationProvided) {
       setError(
         isAr
-          ? "يرجى تحديد موقع التوصيل على الخريطة قبل تأكيد الطلب."
-          : "Please pin your delivery location on the map before placing the order.",
+          ? "يرجى تحديد موقع التوصيل أو كتابة العنوان قبل تأكيد الطلب."
+          : "Please pin your location on the map or type your delivery address before placing the order.",
       );
       if (typeof document !== "undefined") {
         const block = document.getElementById("checkout-location");
