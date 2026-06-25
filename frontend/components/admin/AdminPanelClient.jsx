@@ -1639,6 +1639,8 @@ export default function AdminPanelClient() {
           titleFor={titleFor}
           metaFor={metaFor}
           fields={FIELD_CONFIGS[activeKey]}
+          request={activeKey === "orders" ? request : undefined}
+          onOrderRefreshed={activeKey === "orders" ? (updated) => { setSelected(updated); setEditor(makeEditor(updated, activeKey)); } : undefined}
         />
       ) : null}
     </div>

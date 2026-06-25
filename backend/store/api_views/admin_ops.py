@@ -2623,6 +2623,150 @@ class AdminOrderInvoiceDownloadView(APIView):
         return FileResponse(order.invoice_pdf, as_attachment=True, filename=filename)
 
 
+def _recalculate_order_totals(order):
+    items = list(order.items.all())
+    subtotal = sum(item.line_total for item in items)
+    base_total = subtotal - order.discount_total + order.shipping_total
+    if order.tax_inclusive:
+        grand_total = base_total
+    else:
+        grand_total = base_total + order.tax_total
+    order.subtotal = quantize_money(subtotal)
+    order.grand_total = quantize_money(max(grand_total, Decimal("0.00")))
+    order.save(update_fields=["subtotal", "grand_total"])
+
+
+def _fetch_order_for_items_edit(order_number):
+    return (
+        Order.objects.filter(order_number=order_number)
+        .select_related("region", "user")
+        .prefetch_related("items__product", "transactions", "status_history__actor", "return_requests__reviewed_by")
+        .first()
+    )
+
+
+class AdminOrderItemsView(APIView):
+    """Add a new item to an existing order."""
+    permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
+    admin_read_capabilities = (CAP_ORDERS_VIEW,)
+    admin_write_capabilities = (CAP_ORDERS_EDIT,)
+
+    @transaction.atomic
+    def post(self, request, order_number):
+        order = _fetch_order_for_items_edit(order_number)
+        if not order:
+            return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        product_slug = str(request.data.get("product_slug", "")).strip()
+        if not product_slug:
+            return Response({"detail": "product_slug is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        product = Product.objects.filter(slug=product_slug).first()
+        if not product:
+            return Response({"detail": "Product not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            quantity = max(1, int(request.data.get("quantity", 1)))
+        except (TypeError, ValueError):
+            quantity = 1
+
+        raw_price = request.data.get("unit_price")
+        if raw_price not in (None, ""):
+            try:
+                unit_price = quantize_money(Decimal(str(raw_price)))
+            except Exception:
+                return Response({"detail": "Invalid unit_price."}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            price_obj = product.prices.filter(region=order.region).first()
+            if not price_obj:
+                price_obj = product.prices.first()
+            unit_price = quantize_money(price_obj.price) if price_obj else Decimal("0.00")
+
+        line_total = quantize_money(unit_price * quantity)
+        existing = order.items.filter(product_slug=product_slug).first()
+        if existing:
+            existing.quantity += quantity
+            existing.line_total = quantize_money(existing.unit_price * existing.quantity)
+            existing.save(update_fields=["quantity", "line_total"])
+        else:
+            OrderItem.objects.create(
+                order=order,
+                product=product,
+                product_slug=product_slug,
+                product_name=product.name_en or product_slug,
+                quantity=quantity,
+                unit_price=unit_price,
+                line_total=line_total,
+                selected_options_text="",
+                taxable_amount=Decimal("0.00"),
+                tax_rate=Decimal("0.00"),
+                tax_total=Decimal("0.00"),
+            )
+
+        _recalculate_order_totals(order)
+        log_admin_action(
+            request=request,
+            actor=request.user,
+            action=AdminAuditLog.ACTION_ORDER_STATUS_CHANGED,
+            resource_type="order",
+            resource_id=order.order_number,
+            before_snapshot={"action": "item_added", "product_slug": product_slug, "quantity": quantity},
+            after_snapshot={"subtotal": str(order.subtotal), "grand_total": str(order.grand_total)},
+        )
+        order.refresh_from_db()
+        order = _fetch_order_for_items_edit(order_number)
+        return Response(AdminOrderSerializer(order, context={"request": request}).data)
+
+
+class AdminOrderItemDetailView(APIView):
+    """Update quantity or remove a single item from an order."""
+    permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
+    admin_read_capabilities = (CAP_ORDERS_VIEW,)
+    admin_write_capabilities = (CAP_ORDERS_EDIT,)
+
+    def _get_item(self, order_number, pk):
+        order = _fetch_order_for_items_edit(order_number)
+        if not order:
+            return None, None
+        item = order.items.filter(pk=pk).first()
+        return order, item
+
+    @transaction.atomic
+    def patch(self, request, order_number, pk):
+        order, item = self._get_item(order_number, pk)
+        if not order:
+            return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+        if not item:
+            return Response({"detail": "Item not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            quantity = max(1, int(request.data.get("quantity", item.quantity)))
+        except (TypeError, ValueError):
+            return Response({"detail": "Invalid quantity."}, status=status.HTTP_400_BAD_REQUEST)
+
+        item.quantity = quantity
+        item.line_total = quantize_money(item.unit_price * quantity)
+        item.save(update_fields=["quantity", "line_total"])
+        _recalculate_order_totals(order)
+        order = _fetch_order_for_items_edit(order_number)
+        return Response(AdminOrderSerializer(order, context={"request": request}).data)
+
+    @transaction.atomic
+    def delete(self, request, order_number, pk):
+        order, item = self._get_item(order_number, pk)
+        if not order:
+            return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+        if not item:
+            return Response({"detail": "Item not found."}, status=status.HTTP_404_NOT_FOUND)
+        if order.items.count() <= 1:
+            return Response({"detail": "Cannot remove the last item from an order."}, status=status.HTTP_400_BAD_REQUEST)
+
+        item.delete()
+        _recalculate_order_totals(order)
+        order = _fetch_order_for_items_edit(order_number)
+        return Response(AdminOrderSerializer(order, context={"request": request}).data)
+
+
 class AdminOrderRefundView(APIView):
     permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
     admin_read_capabilities = (CAP_REFUNDS_VIEW,)

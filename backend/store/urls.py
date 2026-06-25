@@ -49,6 +49,8 @@ from .views import (
     AdminMeView,
     AdminModerationSummaryView,
     AdminOrderDetailView,
+    AdminOrderItemsView,
+    AdminOrderItemDetailView,
     AdminOrderRefundView,
     AdminOrderInvoiceDownloadView,
     AdminOrderListView,
@@ -175,6 +177,8 @@ urlpatterns = [
         name="admin-draft-order-detail",
     ),
     path("admin/orders/<str:order_number>/", AdminOrderDetailView.as_view(), name="admin-order-detail"),
+    path("admin/orders/<str:order_number>/items/", AdminOrderItemsView.as_view(), name="admin-order-items"),
+    path("admin/orders/<str:order_number>/items/<int:pk>/", AdminOrderItemDetailView.as_view(), name="admin-order-item-detail"),
     path(
         "admin/orders/<str:order_number>/status-rollback/",
         AdminOrderStatusRollbackView.as_view(),

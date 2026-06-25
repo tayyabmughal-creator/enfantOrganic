@@ -555,7 +555,7 @@ function shipmentStatusTone(status) {
   return "neutral";
 }
 
-export function CrudFormModal({ activeKey, isSettings, mode, selected, editor, setEditor, canDelete, onClose, onSave, onDelete, onDownloadInvoice, onRefundOrder, onCreateShipment, onRollbackOrderStatus, onGalleryUpload, titleFor, metaFor, fields }) {
+export function CrudFormModal({ activeKey, isSettings, mode, selected, editor, setEditor, canDelete, onClose, onSave, onDelete, onDownloadInvoice, onRefundOrder, onCreateShipment, onRollbackOrderStatus, onGalleryUpload, titleFor, metaFor, fields, request, onOrderRefreshed }) {
   const title  = mode === "create"
     ? `Add ${activeKey === "deals" ? "promotion" : activeKey === "blog" ? "article" : activeKey.replace(/_/g, " ")}`
     : (titleFor ? titleFor(selected, activeKey) : "Edit");
@@ -583,7 +583,7 @@ export function CrudFormModal({ activeKey, isSettings, mode, selected, editor, s
           <button type="button" className="admin-modal-close" onClick={onClose} aria-label="Close">✕</button>
         </div>
 
-        {(activeKey === "orders" || activeKey === "draft_orders") && selected ? <OrderDetailLayout order={selected} onDownloadInvoice={onDownloadInvoice} onRefundOrder={onRefundOrder} onCreateShipment={onCreateShipment} onRollbackOrderStatus={onRollbackOrderStatus} /> : null}
+        {(activeKey === "orders" || activeKey === "draft_orders") && selected ? <OrderDetailLayout order={selected} onDownloadInvoice={onDownloadInvoice} onRefundOrder={onRefundOrder} onCreateShipment={onCreateShipment} onRollbackOrderStatus={onRollbackOrderStatus} request={request} onOrderRefreshed={onOrderRefreshed} /> : null}
         {activeKey === "hero_cards" ? <HeroCardPreview editor={editor} /> : null}
 
         <div className={modalFormClassName}>
@@ -618,7 +618,7 @@ function resolveFields(activeKey, fields, selected) {
   });
 }
 
-function OrderDetailLayout({ order, onDownloadInvoice, onRefundOrder, onCreateShipment, onRollbackOrderStatus }) {
+function OrderDetailLayout({ order, onDownloadInvoice, onRefundOrder, onCreateShipment, onRollbackOrderStatus, request, onOrderRefreshed }) {
   const items = Array.isArray(order.items) ? order.items : [];
   const activityEvents = buildOrderActivityEvents(order);
   const shippingAddressLines = buildShippingAddressLines(order);
@@ -636,14 +636,109 @@ function OrderDetailLayout({ order, onDownloadInvoice, onRefundOrder, onCreateSh
   const revertStatusLabel = order?.revert_status_label || (previousStatusLabel ? `Revert to ${previousStatusLabel}` : "Revert to previous status");
   const revertStatusHelper = order?.revert_status_helper || "";
 
+  const [editingItems, setEditingItems] = useState(false);
+  const [itemsError, setItemsError] = useState("");
+  const [itemsSaving, setItemsSaving] = useState(false);
+  const [productSearch, setProductSearch] = useState("");
+  const [productRows, setProductRows] = useState([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [showProductPicker, setShowProductPicker] = useState(false);
+  const searchRef = useRef(null);
+
+  useEffect(() => {
+    if (!showProductPicker || !request) return;
+    let cancelled = false;
+    setProductsLoading(true);
+    request("/admin/products/?page_size=200").then((payload) => {
+      if (cancelled) return;
+      const rows = Array.isArray(payload?.results) ? payload.results : Array.isArray(payload) ? payload : [];
+      setProductRows(rows.sort((a, b) => String(a.name_en || a.name || "").localeCompare(String(b.name_en || b.name || ""))));
+      setProductsLoading(false);
+    }).catch(() => { if (!cancelled) setProductsLoading(false); });
+    return () => { cancelled = true; };
+  }, [showProductPicker, request]);
+
+  const filteredProducts = productRows.filter((p) => {
+    const q = productSearch.toLowerCase();
+    if (!q) return true;
+    return String(p.name_en || p.name || "").toLowerCase().includes(q) || String(p.slug || "").toLowerCase().includes(q);
+  });
+
+  async function handleAddItem(product) {
+    if (!request || !onOrderRefreshed) return;
+    setShowProductPicker(false);
+    setProductSearch("");
+    setItemsError("");
+    setItemsSaving(true);
+    try {
+      const updated = await request(`/admin/orders/${order.order_number}/items/`, {
+        method: "POST",
+        body: JSON.stringify({ product_slug: product.slug, quantity: 1 }),
+      });
+      if (updated) onOrderRefreshed(updated);
+    } catch (err) {
+      setItemsError(err.message || "Failed to add item.");
+    } finally {
+      setItemsSaving(false);
+    }
+  }
+
+  async function handleQtyChange(item, delta) {
+    if (!request || !onOrderRefreshed) return;
+    const newQty = Math.max(1, Number(item.quantity) + delta);
+    if (newQty === Number(item.quantity)) return;
+    setItemsError("");
+    setItemsSaving(true);
+    try {
+      const updated = await request(`/admin/orders/${order.order_number}/items/${item.id}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ quantity: newQty }),
+      });
+      if (updated) onOrderRefreshed(updated);
+    } catch (err) {
+      setItemsError(err.message || "Failed to update quantity.");
+    } finally {
+      setItemsSaving(false);
+    }
+  }
+
+  async function handleRemoveItem(item) {
+    if (!request || !onOrderRefreshed) return;
+    setItemsError("");
+    setItemsSaving(true);
+    try {
+      const updated = await request(`/admin/orders/${order.order_number}/items/${item.id}/`, {
+        method: "DELETE",
+      });
+      if (updated) onOrderRefreshed(updated);
+    } catch (err) {
+      setItemsError(err.message || "Failed to remove item.");
+    } finally {
+      setItemsSaving(false);
+    }
+  }
+
   return (
     <div className="admin-order-detail-grid">
       <section className="admin-order-detail-col">
         <article className="admin-order-card">
           <div className="admin-order-card-head">
             <h3>Order Items</h3>
-            <span>{items.length} line{items.length === 1 ? "" : "s"}</span>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <span>{items.length} line{items.length === 1 ? "" : "s"}</span>
+              {request && onOrderRefreshed ? (
+                <button
+                  type="button"
+                  className={`admin-btn-sm${editingItems ? " active" : ""}`}
+                  onClick={() => { setEditingItems((v) => !v); setShowProductPicker(false); setItemsError(""); }}
+                  style={{ fontSize: "0.72rem" }}
+                >
+                  {editingItems ? "Done" : "Edit Items"}
+                </button>
+              ) : null}
+            </div>
           </div>
+          {itemsError ? <p style={{ color: "var(--danger)", fontSize: "0.8rem", margin: "4px 16px 0" }}>{itemsError}</p> : null}
           {items.length ? (
             <div className="admin-order-items-list">
               {items.map((item, index) => (
@@ -665,7 +760,16 @@ function OrderDetailLayout({ order, onDownloadInvoice, onRefundOrder, onCreateSh
                     </div>
                   </div>
                   <div className="admin-order-item-pricing">
-                    <span>{formatMoney(item.unit_price, currencyCode)} × {Number(item.quantity || 0)}</span>
+                    {editingItems ? (
+                      <div className="admin-order-item-qty-controls">
+                        <button type="button" className="admin-order-qty-btn" onClick={() => handleQtyChange(item, -1)} disabled={itemsSaving || Number(item.quantity) <= 1} aria-label="Decrease">−</button>
+                        <span className="admin-order-qty-val">{Number(item.quantity)}</span>
+                        <button type="button" className="admin-order-qty-btn" onClick={() => handleQtyChange(item, 1)} disabled={itemsSaving} aria-label="Increase">+</button>
+                        <button type="button" className="admin-order-qty-btn admin-order-qty-btn--remove" onClick={() => handleRemoveItem(item)} disabled={itemsSaving || items.length <= 1} aria-label="Remove item" title={items.length <= 1 ? "Cannot remove last item" : "Remove"}>✕</button>
+                      </div>
+                    ) : (
+                      <span>{formatMoney(item.unit_price, currencyCode)} × {Number(item.quantity || 0)}</span>
+                    )}
                     <strong>{formatMoney(item.line_total, currencyCode)}</strong>
                   </div>
                 </div>
@@ -674,6 +778,46 @@ function OrderDetailLayout({ order, onDownloadInvoice, onRefundOrder, onCreateSh
           ) : (
             <p className="admin-order-empty">No order items are available for this record.</p>
           )}
+          {editingItems ? (
+            <div className="admin-order-add-item">
+              {showProductPicker ? (
+                <div className="admin-order-product-picker">
+                  <input
+                    ref={searchRef}
+                    type="text"
+                    className="admin-input"
+                    placeholder="Search products..."
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    autoFocus
+                  />
+                  <div className="admin-order-product-list">
+                    {productsLoading ? (
+                      <p className="admin-order-product-hint">Loading products…</p>
+                    ) : filteredProducts.length === 0 ? (
+                      <p className="admin-order-product-hint">No products found.</p>
+                    ) : filteredProducts.slice(0, 30).map((p) => (
+                      <button
+                        key={p.slug}
+                        type="button"
+                        className="admin-order-product-row"
+                        onClick={() => handleAddItem(p)}
+                        disabled={itemsSaving}
+                      >
+                        <span className="admin-order-product-name">{p.name_en || p.name || p.slug}</span>
+                        <span className="admin-order-product-slug">{p.slug}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <button type="button" className="admin-btn-sm" style={{ marginTop: 6 }} onClick={() => { setShowProductPicker(false); setProductSearch(""); }}>Cancel</button>
+                </div>
+              ) : (
+                <button type="button" className="admin-btn-sm" onClick={() => setShowProductPicker(true)} disabled={itemsSaving}>
+                  + Add Item
+                </button>
+              )}
+            </div>
+          ) : null}
         </article>
 
         <article className="admin-order-card">
