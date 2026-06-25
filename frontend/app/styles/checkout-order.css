@@ -1008,6 +1008,77 @@
   box-shadow: 0 0 0 3px rgba(177, 55, 75, 0.08);
 }
 
+/* ── Location method tab selector ── */
+.map-method-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.map-method-tab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line);
+  background: linear-gradient(180deg, #fdfcfa, #f4f5ef);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+[dir="rtl"] .map-method-tab {
+  text-align: right;
+}
+
+.map-method-tab:hover {
+  border-color: rgba(96, 122, 66, 0.4);
+  background: linear-gradient(180deg, #fdfcfa, #edf2e5);
+}
+
+.map-method-tab.is-active {
+  border-color: var(--brand-dark);
+  background: linear-gradient(180deg, #f5faee, #eaf3dc);
+  box-shadow: 0 0 0 3px rgba(96, 122, 66, 0.1);
+}
+
+.map-method-tab-icon {
+  font-size: 1.4rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.map-method-tab-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.map-method-tab-text strong {
+  display: block;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.map-method-tab-text small {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Method panel (content below tabs) ── */
+.map-method-panel {
+  display: grid;
+  gap: 6px;
+}
+
+/* ── Search label / input inside panel ── */
 .map-search-row {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -1021,6 +1092,7 @@
   min-width: 0;
 }
 
+/* ── GPS locate button ── */
 .map-locate-btn {
   display: inline-flex;
   align-items: center;
@@ -1035,6 +1107,14 @@
   cursor: pointer;
   white-space: nowrap;
   transition: background-color 180ms ease, border-color 180ms ease, transform 120ms ease;
+}
+
+.map-locate-btn--full {
+  width: 100%;
+  padding: 13px 18px;
+  font-size: 0.9rem;
+  border-radius: 12px;
+  justify-content: center;
 }
 
 .map-locate-btn:hover:not(:disabled) {
@@ -1057,9 +1137,13 @@
   font-style: italic;
 }
 
-@media (max-width: 540px) {
-  .map-search-row {
-    grid-template-columns: 1fr;
+@media (max-width: 480px) {
+  .map-method-tab-text small {
+    display: none;
+  }
+  .map-method-tab {
+    padding: 10px 12px;
+    gap: 8px;
   }
 }
 

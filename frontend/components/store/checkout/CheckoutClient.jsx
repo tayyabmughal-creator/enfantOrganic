@@ -385,6 +385,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
   const [geocodingPin, setGeocodingPin] = useState(false);
   const [geolocating, setGeolocating] = useState(false);
   const [geolocationError, setGeolocationError] = useState("");
+  const [locationMode, setLocationMode] = useState("search"); // "search" | "gps"
   const [onlineProvider, setOnlineProvider] = useState("");
 
   const mapPinRequired = Boolean(backendRegionConfig?.require_map_pin);
@@ -1647,34 +1648,66 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
 
                   {mapStatus === "ready" ? (
                     <>
-                      <div className="map-search-row">
-                        <label className="map-search-label">
-                          {isAr ? "بحث العنوان" : "Search for an address"}
-                          <input
-                            ref={placeInputRef}
-                            name="place-search"
-                            placeholder={isAr ? "ابحث عن عنوان..." : "Search for an address..."}
-                          />
-                        </label>
+                      {/* Two-option selector: GPS or manual search */}
+                      <div className="map-method-tabs">
                         <button
                           type="button"
-                          className="map-locate-btn"
+                          className={`map-method-tab${locationMode === "gps" ? " is-active" : ""}`}
+                          onClick={() => setLocationMode("gps")}
+                        >
+                          <span className="map-method-tab-icon">📍</span>
+                          <span className="map-method-tab-text">
+                            <strong>{isAr ? "موقعي الحالي" : "Current Location"}</strong>
+                            <small>{isAr ? "استخدم GPS تلقائياً" : "Use GPS automatically"}</small>
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`map-method-tab${locationMode === "search" ? " is-active" : ""}`}
+                          onClick={() => { setLocationMode("search"); setTimeout(() => placeInputRef.current?.focus(), 80); }}
+                        >
+                          <span className="map-method-tab-icon">🔍</span>
+                          <span className="map-method-tab-text">
+                            <strong>{isAr ? "بحث عن عنوان" : "Search Address"}</strong>
+                            <small>{isAr ? "اكتب عنوانك يدوياً" : "Type your address manually"}</small>
+                          </span>
+                        </button>
+                      </div>
+
+                      {/* GPS option panel — shown when locationMode === "gps" */}
+                      <div className="map-method-panel" hidden={locationMode !== "gps"} aria-hidden={locationMode !== "gps"}>
+                        <button
+                          type="button"
+                          className="map-locate-btn map-locate-btn--full"
                           onClick={useMyCurrentLocation}
                           disabled={geolocating}
                         >
                           {geolocating
-                            ? (isAr ? "جارٍ تحديد الموقع..." : "Locating...")
-                            : (isAr ? "📍 استخدم موقعي" : "📍 Use my location")}
+                            ? (isAr ? "⏳ جارٍ تحديد الموقع..." : "⏳ Locating you...")
+                            : (isAr ? "📍 استخدم موقعي الحالي" : "📍 Use My Current Location")}
                         </button>
+                        {geolocationError ? (
+                          <p className="form-error map-inline-error">{geolocationError}</p>
+                        ) : null}
                       </div>
-                      {geolocationError ? (
-                        <p className="form-error map-inline-error">{geolocationError}</p>
-                      ) : null}
+
+                      {/* Search option panel — always in DOM so Places autocomplete ref stays stable */}
+                      <div className="map-method-panel" hidden={locationMode !== "search"} aria-hidden={locationMode !== "search"}>
+                        <label className="map-search-label">
+                          <input
+                            ref={placeInputRef}
+                            name="place-search"
+                            placeholder={isAr ? "ابحث عن عنوانك..." : "Search for your address..."}
+                            autoComplete="off"
+                          />
+                        </label>
+                      </div>
+
                       <div ref={mapContainerRef} className="checkout-map-canvas" />
                       <p className="map-address-help">
                         {isAr
-                          ? "اسحب العلامة أو انقر على الخريطة لضبط الموقع. سيُعبَّأ العنوان تلقائياً."
-                          : "Drag the pin or tap the map to adjust. Address fields fill in automatically."}
+                          ? "اسحب العلامة أو انقر على الخريطة لضبط الموقع بدقة."
+                          : "Drag the pin or tap the map to fine-tune your location."}
                       </p>
                       <div className="map-coordinates">
                         <span>{isAr ? "خط العرض" : "Latitude"}: {form.lat || "—"}</span>
