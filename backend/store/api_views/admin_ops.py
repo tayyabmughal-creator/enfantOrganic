@@ -2289,6 +2289,46 @@ class AdminOrderDetailView(generics.RetrieveUpdateAPIView):
         "return_requests__reviewed_by",
     )
 
+    @transaction.atomic
+    def delete(self, request, order_number):
+        order = (
+            Order.objects.select_for_update()
+            .filter(order_number=order_number)
+            .select_related("region", "user")
+            .prefetch_related("items__product")
+            .first()
+        )
+        if not order:
+            return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        snapshot = {
+            "order_number": order.order_number,
+            "status": order.status,
+            "grand_total": str(order.grand_total),
+            "customer_name": order.customer_name,
+        }
+        if not order.inventory_released:
+            try:
+                release_pending_gift_card_redemption(order, reason="deleted")
+            except Exception:
+                logger.exception("Gift card release failed on order delete %s", order.order_number)
+            try:
+                order.restore_inventory()
+            except Exception:
+                logger.exception("Inventory restore failed on order delete %s", order.order_number)
+
+        log_admin_action(
+            request=request,
+            actor=request.user,
+            action=AdminAuditLog.ACTION_ORDER_STATUS_CHANGED,
+            resource_type="order",
+            resource_id=order.order_number,
+            before_snapshot=snapshot,
+            after_snapshot={"action": "order_deleted"},
+        )
+        order.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     def perform_update(self, serializer):
         old_order = self.get_object()
         previous_status = old_order.status

@@ -1103,6 +1103,25 @@ export default function AdminPanelClient() {
     }
   }
 
+  async function handleDeleteOrder(order) {
+    if (!order?.order_number) return;
+    const confirmed = window.confirm(
+      `Delete order ${order.order_number} (${order.customer_name || "customer"})?\n\nThis permanently removes the order and releases any reserved inventory. This cannot be undone.`
+    );
+    if (!confirmed) return;
+    setLoading(true);
+    try {
+      await request(`/admin/orders/${order.order_number}/`, { method: "DELETE" });
+      closeForm();
+      showToast(`Order ${order.order_number} deleted.`, "success");
+      await loadScreen(active);
+    } catch (err) {
+      showToast(err.message || "Delete failed.", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleRollbackOrderStatus(order) {
     if (!order?.order_number) return;
     setLoading(true);
@@ -1641,6 +1660,7 @@ export default function AdminPanelClient() {
           fields={FIELD_CONFIGS[activeKey]}
           request={activeKey === "orders" ? request : undefined}
           onOrderRefreshed={activeKey === "orders" ? (updated) => { setSelected(updated); setEditor(makeEditor(updated, activeKey)); } : undefined}
+          onDeleteOrder={activeKey === "orders" ? handleDeleteOrder : undefined}
         />
       ) : null}
     </div>

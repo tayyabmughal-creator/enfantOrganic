@@ -555,7 +555,7 @@ function shipmentStatusTone(status) {
   return "neutral";
 }
 
-export function CrudFormModal({ activeKey, isSettings, mode, selected, editor, setEditor, canDelete, onClose, onSave, onDelete, onDownloadInvoice, onRefundOrder, onCreateShipment, onRollbackOrderStatus, onGalleryUpload, titleFor, metaFor, fields, request, onOrderRefreshed }) {
+export function CrudFormModal({ activeKey, isSettings, mode, selected, editor, setEditor, canDelete, onClose, onSave, onDelete, onDownloadInvoice, onRefundOrder, onCreateShipment, onRollbackOrderStatus, onGalleryUpload, titleFor, metaFor, fields, request, onOrderRefreshed, onDeleteOrder }) {
   const title  = mode === "create"
     ? `Add ${activeKey === "deals" ? "promotion" : activeKey === "blog" ? "article" : activeKey.replace(/_/g, " ")}`
     : (titleFor ? titleFor(selected, activeKey) : "Edit");
@@ -583,7 +583,7 @@ export function CrudFormModal({ activeKey, isSettings, mode, selected, editor, s
           <button type="button" className="admin-modal-close" onClick={onClose} aria-label="Close">✕</button>
         </div>
 
-        {(activeKey === "orders" || activeKey === "draft_orders") && selected ? <OrderDetailLayout order={selected} onDownloadInvoice={onDownloadInvoice} onRefundOrder={onRefundOrder} onCreateShipment={onCreateShipment} onRollbackOrderStatus={onRollbackOrderStatus} request={request} onOrderRefreshed={onOrderRefreshed} /> : null}
+        {(activeKey === "orders" || activeKey === "draft_orders") && selected ? <OrderDetailLayout order={selected} onDownloadInvoice={onDownloadInvoice} onRefundOrder={onRefundOrder} onCreateShipment={onCreateShipment} onRollbackOrderStatus={onRollbackOrderStatus} request={request} onOrderRefreshed={onOrderRefreshed} onDeleteOrder={onDeleteOrder} /> : null}
         {activeKey === "hero_cards" ? <HeroCardPreview editor={editor} /> : null}
 
         <div className={modalFormClassName}>
@@ -618,7 +618,7 @@ function resolveFields(activeKey, fields, selected) {
   });
 }
 
-function OrderDetailLayout({ order, onDownloadInvoice, onRefundOrder, onCreateShipment, onRollbackOrderStatus, request, onOrderRefreshed }) {
+function OrderDetailLayout({ order, onDownloadInvoice, onRefundOrder, onCreateShipment, onRollbackOrderStatus, request, onOrderRefreshed, onDeleteOrder }) {
   const items = Array.isArray(order.items) ? order.items : [];
   const activityEvents = buildOrderActivityEvents(order);
   const shippingAddressLines = buildShippingAddressLines(order);
@@ -895,6 +895,11 @@ function OrderDetailLayout({ order, onDownloadInvoice, onRefundOrder, onCreateSh
             {onCreateShipment ? (
               <button type="button" className="admin-btn-sm" onClick={() => onCreateShipment(order)}>
                 Create Shipment
+              </button>
+            ) : null}
+            {onDeleteOrder ? (
+              <button type="button" className="admin-btn-sm danger" onClick={() => onDeleteOrder(order)}>
+                Delete Order
               </button>
             ) : null}
           </div>
