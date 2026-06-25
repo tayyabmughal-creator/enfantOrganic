@@ -2375,29 +2375,29 @@ class CheckoutAndPermsTestCase(TestCase):
         self.region.require_map_pin = True
         self.region.save(update_fields=["require_map_pin"])
 
+        base_customer = {
+            "name": "Pin Required User",
+            "phone": "12345678",
+            "city": "Muscat",
+            "country": "Oman",
+        }
+        # address_line_1 is a required non-blank field on every checkout, so a typed
+        # address always satisfies the map-pin alternative path — checkout must succeed.
         payload = {
             "region": self.region.code,
             "locale": "en",
-            "customer": {
-                "name": "Pin Required User",
-                "phone": "12345678",
-                "address_line_1": "Street 1",
-                "city": "Muscat",
-                "country": "Oman",
-            },
+            "customer": {**base_customer, "address_line_1": "Street 1"},
             "payment_method": "cod",
-            "items": [
-                {
-                    "slug": self.product.slug,
-                    "quantity": 1,
-                }
-            ],
+            "items": [{"slug": self.product.slug, "quantity": 1}],
         }
-
         response = self.api_client.post("/api/checkout/", payload, format="json")
+        self.assertEqual(response.status_code, 201)
 
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("Map pin is required", str(response.data))
+        # With a proper lat/lng also works
+        payload["customer"]["lat"] = "23.588000"
+        payload["customer"]["lng"] = "58.382000"
+        response2 = self.api_client.post("/api/checkout/", payload, format="json")
+        self.assertEqual(response2.status_code, 201)
 
     def test_checkout_stores_coordinates_and_address_snapshot(self):
         self.region.require_map_pin = True
