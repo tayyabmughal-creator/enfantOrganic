@@ -200,9 +200,13 @@
   z-index: 3;
 }
 
-/* Last pin: shift fully left so right edge stays inside the padded track-area */
+/* Last pin: anchor to the right edge of the track-area so the label's
+ * right:0 resolves to the track-area boundary (not the layout box at left:100%+36px
+ * which overflows ms-bar's overflow:hidden on narrow screens). */
 .ms-pin.ms-pin-last {
-  transform: translateX(-100%);
+  left: auto !important;
+  right: 0;
+  transform: none;
 }
 
 /* First pin: no shift, left edge sits at start of padded track-area */

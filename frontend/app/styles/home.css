@@ -1982,10 +1982,9 @@
     border-radius: 13px;
   }
 
+  /* Touch screens use swipe — arrow buttons not needed and cause viewport overflow */
   .category-carousel-button {
-    width: 40px;
-    height: 40px;
-    font-size: 1.6rem;
+    display: none;
   }
 
   .category-carousel-rail {
