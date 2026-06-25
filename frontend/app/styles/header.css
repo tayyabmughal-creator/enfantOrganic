@@ -504,6 +504,14 @@
     display: flex;
   }
 
+  /* backdrop-filter on site-header creates a containing block for
+   * position:fixed descendants in Chrome — nav drawer must be fixed
+   * to the viewport so we disable the blur on mobile (solid bg is fine). */
+  .site-header {
+    backdrop-filter: none;
+    background: rgba(248, 249, 244, 0.98);
+  }
+
   /* Full-width nav items in drawer */
   .nav-trigger,
   .nav-link {

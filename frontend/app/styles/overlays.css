@@ -679,12 +679,13 @@
 
   .header-nav {
     display: none;
-    position: absolute;
-    top: 100%;
-    bottom: auto;
+    position: fixed;
     inset-inline: 14px;
-    max-height: calc(100vh - 96px);
+    top: 94px;
+    bottom: 12px;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
     padding: 16px;
     border-radius: 22px;
     border: 1px solid var(--line);
@@ -692,6 +693,7 @@
     box-shadow: var(--shadow);
     flex-direction: column;
     align-items: stretch;
+    z-index: 36;
   }
 
   .header-nav .nav-trigger,
