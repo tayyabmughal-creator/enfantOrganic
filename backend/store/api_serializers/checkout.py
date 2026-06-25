@@ -813,7 +813,9 @@ class CheckoutCreateSerializer(serializers.Serializer):
         latitude = customer.get("latitude")
         longitude = customer.get("longitude")
 
-        if region and region.require_map_pin and (latitude is None or longitude is None):
+        address_line_1 = str(customer.get("address_line_1") or "").strip()
+        has_custom_address = bool(address_line_1)
+        if region and region.require_map_pin and (latitude is None or longitude is None) and not has_custom_address:
             raise serializers.ValidationError(
                 {
                     "customer": (
