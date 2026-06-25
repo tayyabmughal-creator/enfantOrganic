@@ -325,6 +325,7 @@ class AdminOpsExtendedTestCase(TestCase):
             shipping_total=Decimal("0.00"),
             grand_total=Decimal("10.00"),
             currency_code="OMR",
+            payment_status=Order.PAYMENT_PAID,
         )
         Order.objects.create(
             region=self.region,
@@ -339,6 +340,7 @@ class AdminOpsExtendedTestCase(TestCase):
             shipping_total=Decimal("0.00"),
             grand_total=Decimal("5.00"),
             currency_code="OMR",
+            payment_status=Order.PAYMENT_PAID,
         )
 
         response = self.api_client.get("/api/admin/dashboard/")
