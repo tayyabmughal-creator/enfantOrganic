@@ -964,7 +964,7 @@
    so it hides naturally when the cart opens. */
 .floating-whatsapp {
   position: fixed;
-  bottom: 20px;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
   right: 20px;
   width: 48px;
   height: 48px;
@@ -1001,10 +1001,11 @@
   .floating-whatsapp {
     width: 44px;
     height: 44px;
-    bottom: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
     right: 16px;
   }
   [dir="rtl"] .floating-whatsapp {
     left: 16px;
+    right: auto;
   }
 }

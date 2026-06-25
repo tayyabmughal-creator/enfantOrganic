@@ -1,5 +1,6 @@
 import base64
 import logging
+import urllib.request
 from decimal import Decimal, ROUND_HALF_UP
 from io import BytesIO
 from pathlib import Path
@@ -18,65 +19,85 @@ try:
     from reportlab.lib.units import mm
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
-    from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from reportlab.platypus import (
+        Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
+        HRFlowable, KeepTogether,
+    )
+    from reportlab.graphics.barcode import code128
+    from reportlab.graphics.shapes import Drawing
 
     REPORTLAB_AVAILABLE = True
 except ImportError:
     REPORTLAB_AVAILABLE = False
 
 try:
-    import qrcode
-
-    QRCODE_AVAILABLE = True
-except ImportError:
-    QRCODE_AVAILABLE = False
-
-try:
     import arabic_reshaper
     from bidi.algorithm import get_display
-
     ARABIC_SHAPING_AVAILABLE = True
 except ImportError:
     ARABIC_SHAPING_AVAILABLE = False
 
 
-MONEY_QUANTIZER = Decimal("0.01")
+MONEY_QUANTIZER = Decimal("0.001")   # 3 dp for OMR-style display
 AR_FONT_NAME = "InvoiceArabic"
 AR_BOLD_FONT_NAME = "InvoiceArabicBold"
 
+# Shopify palette
+BRAND_GREEN = colors.HexColor("#5a8a2f")
+LIGHT_GREY = colors.HexColor("#f5f5f5")
+MID_GREY = colors.HexColor("#e0e0e0")
+BLACK = colors.HexColor("#1a1a1a")
+TEXT_GREY = colors.HexColor("#555555")
 
-def _money(value):
-    return Decimal(value or "0").quantize(MONEY_QUANTIZER, rounding=ROUND_HALF_UP)
+# Logo shipped with the frontend static assets (copy lives alongside Django)
+_LOGO_CANDIDATES = [
+    Path(__file__).resolve().parent.parent.parent.parent
+    / "frontend/public/enfant/enfant-logo-original.png",
+    Path(__file__).resolve().parent.parent.parent.parent
+    / "frontend/public/enfant/enfant-logo.png",
+    Path("/app/logo/enfant-logo-original.png"),   # Docker container path
+    Path("/app/logo/enfant-logo.png"),
+]
+
+
+def _money(value, dp=3):
+    """Format money with dp decimal places (3 for OMR, 2 for others)."""
+    q = Decimal("0." + "0" * dp)
+    return Decimal(value or "0").quantize(q, rounding=ROUND_HALF_UP)
+
+
+def _money_str(value, currency_code="OMR"):
+    dp = 3 if str(currency_code).upper() in ("OMR", "KWD", "BHD", "JOD") else 2
+    return str(_money(value, dp))
 
 
 def _shape_ar(text):
     value = str(text or "")
-    if not value:
-        return ""
-    if not ARABIC_SHAPING_AVAILABLE:
+    if not value or not ARABIC_SHAPING_AVAILABLE:
         return value
     return get_display(arabic_reshaper.reshape(value))
 
 
-def _bilingual(en_text, ar_text):
-    return f"{en_text} / {_shape_ar(ar_text)}"
-
-
 def _candidate_font_paths():
     return (
-        ("/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf", "/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf"),
-        ("/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf", "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Bold.ttf"),
-        ("/usr/share/fonts/opentype/noto/NotoSansArabic-Regular.ttf", "/usr/share/fonts/opentype/noto/NotoSansArabic-Bold.ttf"),
-        ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
-        ("/System/Library/Fonts/Supplemental/Arial Unicode.ttf", "/System/Library/Fonts/Supplemental/Arial Bold.ttf"),
-        ("/System/Library/Fonts/Supplemental/Arial.ttf", "/System/Library/Fonts/Supplemental/Arial Bold.ttf"),
+        ("/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
+         "/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf"),
+        ("/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf",
+         "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Bold.ttf"),
+        ("/usr/share/fonts/opentype/noto/NotoSansArabic-Regular.ttf",
+         "/usr/share/fonts/opentype/noto/NotoSansArabic-Bold.ttf"),
+        ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+        ("/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+         "/System/Library/Fonts/Supplemental/Arial Bold.ttf"),
+        ("/System/Library/Fonts/Supplemental/Arial.ttf",
+         "/System/Library/Fonts/Supplemental/Arial Bold.ttf"),
     )
 
 
 def _register_invoice_fonts():
     if AR_FONT_NAME in pdfmetrics.getRegisteredFontNames():
         return
-
     for regular_path, bold_path in _candidate_font_paths():
         regular_font = Path(regular_path)
         bold_font = Path(bold_path)
@@ -92,6 +113,454 @@ def _register_invoice_fonts():
         except Exception:
             continue
 
+
+def _get_logo_image(width_mm=38):
+    for candidate in _LOGO_CANDIDATES:
+        if candidate.exists():
+            try:
+                return Image(str(candidate), width=width_mm * mm, height=width_mm * mm * 0.65)
+            except Exception:
+                continue
+    return None
+
+
+def _get_barcode_flowable(text, width_mm=52, height_mm=14):
+    """Return a Code128 barcode as a vector Drawing (works without renderPM)."""
+    try:
+        bc = code128.Code128(
+            text,
+            barWidth=0.55,
+            barHeight=height_mm * mm,
+            humanReadable=False,
+            quiet=False,
+        )
+        bc_w = bc.width
+        d = Drawing(bc_w, height_mm * mm)
+        d.add(bc)
+        return d
+    except Exception:
+        return None
+
+
+def _fetch_product_image(item, size_mm=14):
+    """Try to get product image bytes — local file first, then URL."""
+    product = getattr(item, "product", None)
+    img_bytes = None
+
+    # 1. Local ImageField
+    if product and product.image_file:
+        try:
+            product.image_file.open("rb")
+            img_bytes = product.image_file.read()
+            product.image_file.close()
+        except Exception:
+            img_bytes = None
+
+    # 2. URL field
+    if not img_bytes and product and product.image:
+        try:
+            with urllib.request.urlopen(product.image, timeout=4) as resp:
+                img_bytes = resp.read()
+        except Exception:
+            img_bytes = None
+
+    if not img_bytes:
+        return None
+    try:
+        return Image(BytesIO(img_bytes), width=size_mm * mm, height=size_mm * mm)
+    except Exception:
+        return None
+
+
+def _seller_snapshot(order):
+    region = order.region
+    return {
+        "legal_name": region.seller_legal_name or region.name_en or "Enfant Organics",
+        "vat_number": region.seller_vat_number or "",
+        "cr_number": region.seller_cr_number or "",
+        "address_en": region.seller_address_en or region.address_en or "",
+        "phone": region.seller_phone or region.contact_phone or "",
+        "email": region.seller_email or region.contact_email or "",
+        "website": getattr(region, "website", "") or "www.enfantorganic.com",
+    }
+
+
+def _buyer_snapshot(order):
+    return {
+        "name": order.customer_name or "",
+        "email": order.customer_email or "",
+        "phone": order.customer_phone or "",
+        "address_line_1": order.address_line_1 or "",
+        "address_line_2": order.address_line_2 or "",
+        "area": order.area or "",
+        "city": order.city or "",
+        "country": order.country or "",
+    }
+
+
+def _payment_method_label(order):
+    labels = {
+        "cod": "Cash on Delivery",
+        "whatsapp": "WhatsApp Confirmation",
+        "bank_transfer": "Bank Transfer",
+        "online": "Online Payment",
+    }
+    return labels.get(order.payment_method, order.get_payment_method_display())
+
+
+def _is_ksa_order(order):
+    return (order.region.code or "").lower() == "sa"
+
+
+def _styles(base_font, bold_font):
+    styles = getSampleStyleSheet()
+    return {
+        "section_label": ParagraphStyle(
+            "SectionLabel",
+            fontName=bold_font,
+            fontSize=7.5,
+            leading=10,
+            textColor=BLACK,
+            spaceAfter=3,
+        ),
+        "body": ParagraphStyle(
+            "InvBody",
+            fontName=base_font,
+            fontSize=8.5,
+            leading=12,
+            textColor=BLACK,
+        ),
+        "body_sm": ParagraphStyle(
+            "InvBodySm",
+            fontName=base_font,
+            fontSize=7.5,
+            leading=11,
+            textColor=TEXT_GREY,
+        ),
+        "body_bold": ParagraphStyle(
+            "InvBodyBold",
+            fontName=bold_font,
+            fontSize=8.5,
+            leading=12,
+            textColor=BLACK,
+        ),
+        "item_name": ParagraphStyle(
+            "InvItemName",
+            fontName=base_font,
+            fontSize=8.5,
+            leading=12,
+            textColor=BLACK,
+        ),
+        "total_label": ParagraphStyle(
+            "InvTotalLabel",
+            fontName=bold_font,
+            fontSize=9.5,
+            leading=13,
+            textColor=BLACK,
+        ),
+        "grand_total": ParagraphStyle(
+            "InvGrandTotal",
+            fontName=bold_font,
+            fontSize=10,
+            leading=14,
+            textColor=BLACK,
+        ),
+        "footer": ParagraphStyle(
+            "InvFooter",
+            fontName=base_font,
+            fontSize=8,
+            leading=12,
+            textColor=TEXT_GREY,
+            alignment=1,  # center
+        ),
+        "footer_bold": ParagraphStyle(
+            "InvFooterBold",
+            fontName=bold_font,
+            fontSize=9,
+            leading=13,
+            textColor=BLACK,
+            alignment=1,
+        ),
+        "invoice_ref": ParagraphStyle(
+            "InvRef",
+            fontName=bold_font,
+            fontSize=9,
+            leading=13,
+            textColor=BLACK,
+            alignment=2,  # right
+        ),
+        "invoice_date": ParagraphStyle(
+            "InvDate",
+            fontName=base_font,
+            fontSize=8.5,
+            leading=12,
+            textColor=TEXT_GREY,
+            alignment=2,
+        ),
+    }
+
+
+def _build_invoice_pdf_bytes(order):
+    if not REPORTLAB_AVAILABLE:
+        raise RuntimeError("reportlab is not installed.")
+
+    _register_invoice_fonts()
+    base_font = AR_FONT_NAME if AR_FONT_NAME in pdfmetrics.getRegisteredFontNames() else "Helvetica"
+    bold_font = AR_BOLD_FONT_NAME if AR_BOLD_FONT_NAME in pdfmetrics.getRegisteredFontNames() else "Helvetica-Bold"
+    st = _styles(base_font, bold_font)
+
+    seller = _seller_snapshot(order)
+    buyer = _buyer_snapshot(order)
+    currency = str(order.currency_code or "OMR").upper()
+    invoice_date = timezone.localtime(order.invoice_date or timezone.now())
+    invoice_number = order.invoice_number or order.order_number or ""
+    date_str = invoice_date.strftime("%b %d, %Y")
+
+    # ── ZATCA for KSA ────────────────────────────────────────────────────────
+    zatca_qr_payload = None
+    if _is_ksa_order(order):
+        zatca_qr_payload = build_zatca_phase1_tlv_base64(
+            seller_name=seller["legal_name"],
+            seller_vat_number=seller["vat_number"],
+            timestamp_iso=invoice_date.isoformat(timespec="seconds"),
+            invoice_total=order.grand_total,
+            vat_total=order.tax_total,
+        )
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=18 * mm,
+        rightMargin=18 * mm,
+        topMargin=14 * mm,
+        bottomMargin=16 * mm,
+    )
+    story = []
+    page_w = A4[0] - 36 * mm   # usable width
+
+    # ── HEADER: logo left | ref+date+barcode right ────────────────────────────
+    logo_img = _get_logo_image(width_mm=36)
+    barcode_drawing = _get_barcode_flowable(invoice_number, width_mm=56, height_mm=12)
+
+    right_w = page_w * 0.52
+    left_w = page_w - right_w
+
+    right_content = [
+        Paragraph(f"Receipt / Tax Invoice #{invoice_number}", st["invoice_ref"]),
+        Paragraph(date_str, st["invoice_date"]),
+    ]
+    if barcode_drawing:
+        right_content.append(barcode_drawing)
+
+    logo_cell = logo_img or Paragraph(seller["legal_name"], st["body_bold"])
+    header_tbl = Table(
+        [[logo_cell, right_content]],
+        colWidths=[left_w, right_w],
+    )
+    header_tbl.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    story.append(header_tbl)
+    story.append(Spacer(1, 8 * mm))
+
+    # ── ADDRESS BLOCK: Shipping Address | Customer | Payment Method ───────────
+    def _address_lines(b):
+        ar_name = _shape_ar(b["name"]) if b["name"] else ""
+        parts = []
+        if ar_name and ar_name != b["name"]:
+            parts.append(ar_name)
+        parts.append(b["name"])
+        addr = ", ".join(filter(None, [b["address_line_1"], b["address_line_2"], b["area"]]))
+        if addr:
+            parts.append(addr)
+        city_country = ", ".join(filter(None, [b["city"], b["country"]]))
+        if city_country:
+            parts.append(city_country)
+        if b["phone"]:
+            parts.append(f"Tel. {b['phone']}")
+        return "<br/>".join(filter(None, parts))
+
+    addr_text = _address_lines(buyer)
+    payment_label = _payment_method_label(order)
+    payment_status = order.get_payment_status_display() if hasattr(order, "get_payment_status_display") else ""
+
+    col_w = page_w / 3
+    addr_table = Table(
+        [
+            [
+                Paragraph("SHIPPING ADDRESS", st["section_label"]),
+                Paragraph("CUSTOMER", st["section_label"]),
+                Paragraph("PAYMENT METHOD", st["section_label"]),
+            ],
+            [
+                Paragraph(addr_text or "—", st["body"]),
+                Paragraph(addr_text or "—", st["body"]),
+                Paragraph(f"{payment_label}<br/><br/>{payment_status}", st["body"]),
+            ],
+        ],
+        colWidths=[col_w, col_w, col_w],
+    )
+    addr_table.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), base_font),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.5, MID_GREY),
+    ]))
+    story.append(addr_table)
+    story.append(Spacer(1, 8 * mm))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=MID_GREY))
+    story.append(Spacer(1, 4 * mm))
+
+    # ── ITEMS TABLE ──────────────────────────────────────────────────────────
+    # Column widths: image | name | price | qty | item_total
+    img_w = 14 * mm
+    name_w = page_w - img_w - 28 * mm - 16 * mm - 26 * mm
+    price_w = 28 * mm
+    qty_w = 16 * mm
+    total_w = 26 * mm
+
+    header_row = [
+        "",
+        Paragraph("ITEMS", st["section_label"]),
+        Paragraph("PRICE", st["section_label"]),
+        Paragraph("QTY", st["section_label"]),
+        Paragraph("ITEM TOTAL", st["section_label"]),
+    ]
+    item_rows = [header_row]
+
+    for item in order.items.all():
+        prod_img = _fetch_product_image(item, size_mm=13)
+        name_text = item.product_name or item.product_slug or "—"
+        if item.selected_options_text:
+            name_text += f"\n{item.selected_options_text}"
+        unit_price = _money_str(item.unit_price, currency)
+        line_total = _money_str(item.line_total, currency)
+        item_rows.append([
+            prod_img or "",
+            Paragraph(name_text, st["item_name"]),
+            Paragraph(unit_price, st["body"]),
+            Paragraph(str(item.quantity), st["body"]),
+            Paragraph(line_total, st["body"]),
+        ])
+
+    items_table = Table(
+        item_rows,
+        colWidths=[img_w, name_w, price_w, qty_w, total_w],
+    )
+    items_table.setStyle(TableStyle([
+        # Header row
+        ("FONTNAME", (0, 0), (-1, 0), bold_font),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.5, MID_GREY),
+        # All rows
+        ("FONTNAME", (0, 1), (-1, -1), base_font),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 3),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        # Align price/qty/total right
+        ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
+        # Separator between each item row
+        ("LINEBELOW", (0, 1), (-1, -2), 0.3, colors.HexColor("#eeeeee")),
+    ]))
+    story.append(items_table)
+    story.append(Spacer(1, 4 * mm))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=MID_GREY))
+    story.append(Spacer(1, 3 * mm))
+
+    # ── TOTALS ───────────────────────────────────────────────────────────────
+    subtotal = _money_str(order.subtotal, currency)
+    discount = _money(order.discount_total)
+    shipping = _money_str(order.shipping_total, currency)
+    grand = _money_str(order.grand_total, currency)
+    vat_total = _money(order.tax_total)
+    vat_rate_pct = (_money(order.tax_rate, 4) * 100).quantize(Decimal("0.01"))
+
+    totals_rows = []
+    totals_rows.append(["", Paragraph("Subtotal", st["body"]), Paragraph(subtotal, st["body"])])
+    if discount > 0:
+        totals_rows.append(["", Paragraph("Discount", st["body"]),
+                            Paragraph(f"- {_money_str(discount, currency)}", st["body"])])
+    totals_rows.append(["", Paragraph("Shipping", st["body"]), Paragraph(shipping, st["body"])])
+    if vat_total > 0:
+        vat_label = order.tax_label or f"VAT ({vat_rate_pct}%)"
+        totals_rows.append(["", Paragraph(vat_label, st["body"]),
+                            Paragraph(_money_str(vat_total, currency), st["body"])])
+
+    # Grand total row — bold and slightly larger
+    totals_rows.append([
+        "",
+        Paragraph(f"TOTAL ({currency})", st["total_label"]),
+        Paragraph(f"<b>{grand}</b>", st["grand_total"]),
+    ])
+    totals_rows.append(["", Paragraph("Total due", st["body"]), Paragraph(grand, st["body"])])
+
+    label_w = page_w * 0.55
+    value_w = page_w * 0.28
+    totals_table = Table(
+        totals_rows,
+        colWidths=[page_w - label_w - value_w, label_w, value_w],
+    )
+    grand_row_idx = len(totals_rows) - 2  # second-to-last
+    totals_table.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), base_font),
+        ("ALIGN", (2, 0), (2, -1), "RIGHT"),
+        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 3),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        # Grand total row highlight
+        ("FONTNAME", (1, grand_row_idx), (2, grand_row_idx), bold_font),
+        ("LINEABOVE", (1, grand_row_idx), (2, grand_row_idx), 0.5, MID_GREY),
+        ("LINEBELOW", (1, grand_row_idx), (2, grand_row_idx), 0.5, MID_GREY),
+    ]))
+    story.append(totals_table)
+
+    # ── KSA ZATCA QR (only for Saudi orders) ─────────────────────────────────
+    if _is_ksa_order(order) and zatca_qr_payload:
+        story.append(Spacer(1, 6 * mm))
+        try:
+            import qrcode as _qrcode
+            qr_img = _qrcode.make(zatca_qr_payload)
+            qr_buf = BytesIO()
+            qr_img.save(qr_buf, format="PNG")
+            qr_buf.seek(0)
+            qr_flowable = Image(qr_buf, width=28 * mm, height=28 * mm)
+            story.append(qr_flowable)
+        except Exception:
+            pass
+
+    # ── FOOTER ────────────────────────────────────────────────────────────────
+    story.append(Spacer(1, 12 * mm))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=MID_GREY))
+    story.append(Spacer(1, 4 * mm))
+    story.append(Paragraph("Thank you for shopping with us!", st["footer"]))
+    story.append(Spacer(1, 2 * mm))
+    story.append(Paragraph(f"<b>{seller['legal_name']}</b>", st["footer_bold"]))
+    footer_lines = list(filter(None, [
+        seller["address_en"],
+        seller["email"],
+        seller.get("website", "www.enfantorganic.com"),
+    ]))
+    if footer_lines:
+        story.append(Paragraph("<br/>".join(footer_lines), st["footer"]))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue(), zatca_qr_payload
+
+
+# ─── ZATCA helper (unchanged) ─────────────────────────────────────────────────
 
 def build_zatca_phase1_tlv_base64(
     *,
@@ -117,339 +586,7 @@ def build_zatca_phase1_tlv_base64(
     return base64.b64encode(bytes(payload)).decode("ascii")
 
 
-def _build_qr_image_bytes(data):
-    if not QRCODE_AVAILABLE:
-        return None
-    qr_image = qrcode.make(data)
-    stream = BytesIO()
-    qr_image.save(stream, format="PNG")
-    return stream.getvalue()
-
-
-def _seller_snapshot(order):
-    region = order.region
-    return {
-        "legal_name": region.seller_legal_name or region.name_en or "",
-        "vat_number": region.seller_vat_number or "",
-        "cr_number": region.seller_cr_number or "",
-        "address_en": region.seller_address_en or region.address_en or "",
-        "address_ar": region.seller_address_ar or region.address_ar or "",
-        "phone": region.seller_phone or region.contact_phone or "",
-        "email": region.seller_email or region.contact_email or "",
-    }
-
-
-def _buyer_snapshot(order):
-    return {
-        "name": order.customer_name or "",
-        "email": order.customer_email or "",
-        "phone": order.customer_phone or "",
-        "address_line_1": order.address_line_1 or "",
-        "address_line_2": order.address_line_2 or "",
-        "city": order.city or "",
-        "country": order.country or "",
-    }
-
-
-def _is_ksa_order(order):
-    region_code = (order.region.code or "").lower()
-    return region_code == "sa"
-
-
-def _invoice_styles(base_font, bold_font):
-    styles = getSampleStyleSheet()
-    return {
-        "title": ParagraphStyle(
-            "InvoiceTitle",
-            parent=styles["Title"],
-            fontName=bold_font,
-            fontSize=18,
-            leading=24,
-        ),
-        "heading": ParagraphStyle(
-            "InvoiceHeading",
-            parent=styles["Heading4"],
-            fontName=bold_font,
-            fontSize=10,
-            leading=14,
-        ),
-        "body": ParagraphStyle(
-            "InvoiceBody",
-            parent=styles["BodyText"],
-            fontName=base_font,
-            fontSize=9,
-            leading=13,
-        ),
-        "body_bold": ParagraphStyle(
-            "InvoiceBodyBold",
-            parent=styles["BodyText"],
-            fontName=bold_font,
-            fontSize=9,
-            leading=13,
-        ),
-    }
-
-
-def _build_invoice_pdf_bytes(order):
-    if not REPORTLAB_AVAILABLE:
-        raise RuntimeError("reportlab is not installed. Install backend requirements to generate invoices.")
-
-    _register_invoice_fonts()
-    base_font = AR_FONT_NAME if AR_FONT_NAME in pdfmetrics.getRegisteredFontNames() else "Helvetica"
-    bold_font = AR_BOLD_FONT_NAME if AR_BOLD_FONT_NAME in pdfmetrics.getRegisteredFontNames() else "Helvetica-Bold"
-    styles = _invoice_styles(base_font=base_font, bold_font=bold_font)
-
-    seller = _seller_snapshot(order)
-    buyer = _buyer_snapshot(order)
-    invoice_date = timezone.localtime(order.invoice_date or timezone.now())
-    vat_rate_percent = (_money(order.tax_rate) * Decimal("100")).quantize(MONEY_QUANTIZER)
-    payment_status_label = order.get_payment_status_display() if hasattr(order, "get_payment_status_display") else str(order.payment_status or "")
-
-    zatca_qr_payload = None
-    qr_png_bytes = None
-    if _is_ksa_order(order):
-        zatca_qr_payload = build_zatca_phase1_tlv_base64(
-            seller_name=seller["legal_name"],
-            seller_vat_number=seller["vat_number"],
-            timestamp_iso=invoice_date.isoformat(timespec="seconds"),
-            invoice_total=order.grand_total,
-            vat_total=order.tax_total,
-        )
-        qr_png_bytes = _build_qr_image_bytes(zatca_qr_payload)
-
-    buffer = BytesIO()
-    document = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        leftMargin=16 * mm,
-        rightMargin=16 * mm,
-        topMargin=14 * mm,
-        bottomMargin=14 * mm,
-    )
-    story = []
-
-    story.append(Paragraph(_bilingual("Tax Invoice", "فاتورة ضريبية"), styles["title"]))
-    story.append(Spacer(1, 4 * mm))
-
-    invoice_meta = Table(
-        [
-            [
-                Paragraph(_bilingual("Invoice Number", "رقم الفاتورة"), styles["body_bold"]),
-                Paragraph(order.invoice_number or "—", styles["body"]),
-                Paragraph(_bilingual("Invoice Date", "تاريخ الفاتورة"), styles["body_bold"]),
-                Paragraph(invoice_date.strftime("%Y-%m-%d %H:%M:%S"), styles["body"]),
-            ],
-            [
-                Paragraph(_bilingual("Order Number", "رقم الطلب"), styles["body_bold"]),
-                Paragraph(order.order_number, styles["body"]),
-                Paragraph(_bilingual("Region / Currency", "المنطقة / العملة"), styles["body_bold"]),
-                Paragraph(f"{(order.region.code or '').upper()} / {order.currency_code}", styles["body"]),
-            ],
-            [
-                Paragraph(_bilingual("Payment Status", "حالة الدفع"), styles["body_bold"]),
-                Paragraph(f"{payment_status_label} ({order.payment_status})", styles["body"]),
-                Paragraph(_bilingual("Order Status", "حالة الطلب"), styles["body_bold"]),
-                Paragraph(order.get_status_display(), styles["body"]),
-            ],
-        ],
-        colWidths=[30 * mm, 56 * mm, 30 * mm, 60 * mm],
-        hAlign="LEFT",
-    )
-    invoice_meta.setStyle(
-        TableStyle(
-            [
-                ("FONTNAME", (0, 0), (-1, -1), base_font),
-                ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#d6dad2")),
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f3f6ef")),
-                ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                ("TOPPADDING", (0, 0), (-1, -1), 5),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ]
-        )
-    )
-    story.append(invoice_meta)
-    story.append(Spacer(1, 4 * mm))
-
-    seller_text = "<br/>".join(
-        filter(
-            None,
-            [
-                seller["legal_name"],
-                f"{_bilingual('VAT No.', 'الرقم الضريبي')}: {seller['vat_number']}" if seller["vat_number"] else "",
-                f"{_bilingual('CR No.', 'السجل التجاري')}: {seller['cr_number']}" if seller["cr_number"] else "",
-                seller["address_en"],
-                _shape_ar(seller["address_ar"]) if seller["address_ar"] else "",
-                " · ".join(filter(None, [seller["phone"], seller["email"]])),
-            ],
-        )
-    )
-    buyer_address = ", ".join(
-        filter(
-            None,
-            [
-                buyer["address_line_1"],
-                buyer["address_line_2"],
-                buyer["city"],
-                buyer["country"],
-            ],
-        )
-    )
-    buyer_text = "<br/>".join(
-        filter(
-            None,
-            [
-                buyer["name"],
-                buyer_address,
-                " · ".join(filter(None, [buyer["phone"], buyer["email"]])),
-            ],
-        )
-    )
-    party_table = Table(
-        [
-            [
-                Paragraph(_bilingual("Seller", "البائع"), styles["heading"]),
-                Paragraph(_bilingual("Buyer", "المشتري"), styles["heading"]),
-            ],
-            [
-                Paragraph(seller_text or "—", styles["body"]),
-                Paragraph(buyer_text or "—", styles["body"]),
-            ],
-        ],
-        colWidths=[86 * mm, 86 * mm],
-        hAlign="LEFT",
-    )
-    party_table.setStyle(
-        TableStyle(
-            [
-                ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#d6dad2")),
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f8faf6")),
-                ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                ("TOPPADDING", (0, 0), (-1, -1), 5),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ]
-        )
-    )
-    story.append(party_table)
-    story.append(Spacer(1, 5 * mm))
-
-    item_rows = [
-        [
-            "#",
-            _bilingual("Item", "الصنف"),
-            _bilingual("Qty", "الكمية"),
-            _bilingual("Unit Price", "سعر الوحدة"),
-            _bilingual("Line Total", "الإجمالي"),
-        ]
-    ]
-    for index, item in enumerate(order.items.all(), start=1):
-        name_text = item.product_name
-        if item.selected_options_text:
-            name_text = f"{name_text} ({item.selected_options_text})"
-        item_rows.append(
-            [
-                str(index),
-                name_text,
-                str(item.quantity),
-                f"{_money(item.unit_price)} {order.currency_code}",
-                f"{_money(item.line_total)} {order.currency_code}",
-            ]
-        )
-    items_table = Table(
-        item_rows,
-        colWidths=[8 * mm, 82 * mm, 18 * mm, 30 * mm, 36 * mm],
-        hAlign="LEFT",
-    )
-    items_table.setStyle(
-        TableStyle(
-            [
-                ("FONTNAME", (0, 0), (-1, 0), bold_font),
-                ("FONTNAME", (0, 1), (-1, -1), base_font),
-                ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#d6dad2")),
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#edf2e6")),
-                ("ALIGN", (0, 0), (0, -1), "CENTER"),
-                ("ALIGN", (2, 1), (-1, -1), "RIGHT"),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 5),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-                ("TOPPADDING", (0, 0), (-1, -1), 4),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-            ]
-        )
-    )
-    story.append(items_table)
-    story.append(Spacer(1, 5 * mm))
-
-    totals_rows = [
-        [_bilingual("Subtotal", "المجموع الفرعي"), f"{_money(order.subtotal)} {order.currency_code}"],
-        [_bilingual("Discount", "الخصم"), f"{_money(order.discount_total)} {order.currency_code}"],
-        [_bilingual("Shipping", "الشحن"), f"{_money(order.shipping_total)} {order.currency_code}"],
-        [
-            f"{order.tax_label or _bilingual('VAT', 'ضريبة القيمة المضافة')} ({vat_rate_percent}%)",
-            f"{_money(order.tax_total)} {order.currency_code}",
-        ],
-        [_bilingual("Grand Total", "الإجمالي الكلي"), f"{_money(order.grand_total)} {order.currency_code}"],
-    ]
-    totals_table = Table(totals_rows, colWidths=[112 * mm, 60 * mm], hAlign="LEFT")
-    totals_table.setStyle(
-        TableStyle(
-            [
-                ("FONTNAME", (0, 0), (-1, -2), base_font),
-                ("FONTNAME", (0, -1), (-1, -1), bold_font),
-                ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#d6dad2")),
-                ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#f3f7ed")),
-                ("ALIGN", (1, 0), (1, -1), "RIGHT"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                ("TOPPADDING", (0, 0), (-1, -1), 5),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-            ]
-        )
-    )
-    story.append(totals_table)
-
-    if _is_ksa_order(order):
-        story.append(Spacer(1, 5 * mm))
-        story.append(Paragraph(_bilingual("KSA ZATCA Phase 1 QR", "رمز الاستجابة السريعة - زاتكا المرحلة الأولى"), styles["heading"]))
-        if qr_png_bytes:
-            qr_flowable = Image(BytesIO(qr_png_bytes), width=32 * mm, height=32 * mm)
-            qr_table = Table(
-                [[qr_flowable, Paragraph(_bilingual("TLV Base64 Payload", "بيانات TLV المشفرة"), styles["body_bold"])]],
-                colWidths=[34 * mm, 138 * mm],
-            )
-            qr_table.setStyle(
-                TableStyle(
-                    [
-                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                        ("TOPPADDING", (0, 0), (-1, -1), 2),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-                    ]
-                )
-            )
-            story.append(qr_table)
-        if zatca_qr_payload:
-            story.append(Paragraph(zatca_qr_payload, styles["body"]))
-
-    story.append(Spacer(1, 4 * mm))
-    story.append(
-        Paragraph(
-            _bilingual(
-                "This invoice is generated by Enfant Organic platform and is structured for KSA ZATCA Phase 1 QR compliance where applicable.",
-                "تم إنشاء هذه الفاتورة عبر منصة إنفانت أورجانيك وهي مهيكلة لتوافق رمز زاتكا للمرحلة الأولى في المملكة عند الاقتضاء.",
-            ),
-            styles["body"],
-        )
-    )
-
-    document.build(story)
-    buffer.seek(0)
-    return buffer.getvalue(), zatca_qr_payload
-
+# ─── Public API ───────────────────────────────────────────────────────────────
 
 def generate_order_invoice(order, *, force=False):
     if not force and order.invoice_pdf and order.invoice_status == Order.INVOICE_GENERATED:
