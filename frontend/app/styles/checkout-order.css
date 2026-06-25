@@ -1077,6 +1077,10 @@
   display: grid;
   gap: 6px;
 }
+/* CSS display:grid overrides browser's built-in hidden attribute style — fix it explicitly */
+.map-method-panel[hidden] {
+  display: none;
+}
 
 /* ── Search label / input inside panel ── */
 .map-search-row {
