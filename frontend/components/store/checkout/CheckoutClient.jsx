@@ -391,6 +391,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
   const mapPinRequired = Boolean(backendRegionConfig?.require_map_pin);
   const hasPin =
     form.lat !== "" && form.lng !== "" && Number.isFinite(Number(form.lat)) && Number.isFinite(Number(form.lng));
+  const locationProvided = hasPin || (locationMode === "search" && form.address_line_1.trim().length > 0);
 
   const enabledProviders = useMemo(() => {
     const raw = backendRegionConfig?.payment_enabled_providers;
@@ -1619,17 +1620,16 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                   </div>
                 </div>
 
-                <div id="checkout-location" className={`checkout-location-block ${mapPinRequired && !hasPin ? "is-required-pending" : ""}`}>
+                <div id="checkout-location" className={`checkout-location-block ${mapPinRequired && !locationProvided ? "is-required-pending" : ""}`}>
                   <div className="checkout-location-block-head">
                     <strong>{isAr ? "حدد موقع التوصيل" : "Pin your delivery location"}</strong>
-                    {mapPinRequired ? (
-                      <span className="checkout-location-required" aria-label={isAr ? "مطلوب" : "Required"}>
-                        {isAr ? "مطلوب" : "Required"}
-                      </span>
-                    ) : null}
-                    {hasPin ? (
+                    {locationProvided ? (
                       <span className="checkout-location-set">
                         <Icon name="check" size={12} /> {isAr ? "تم تحديد الموقع" : "Location set"}
+                      </span>
+                    ) : mapPinRequired ? (
+                      <span className="checkout-location-required" aria-label={isAr ? "مطلوب" : "Required"}>
+                        {isAr ? "مطلوب" : "Required"}
                       </span>
                     ) : null}
                   </div>
