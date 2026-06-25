@@ -2664,8 +2664,9 @@ class AdminOrderInvoiceDownloadView(APIView):
 
 
 def _recalculate_order_totals(order):
-    items = list(order.items.all())
-    subtotal = sum(item.line_total for item in items)
+    # Query fresh from DB — never rely on the prefetch cache which is stale after mutations.
+    fresh_items = list(OrderItem.objects.filter(order_id=order.pk))
+    subtotal = sum((item.line_total for item in fresh_items), Decimal("0.00"))
     base_total = subtotal - order.discount_total + order.shipping_total
     if order.tax_inclusive:
         grand_total = base_total
