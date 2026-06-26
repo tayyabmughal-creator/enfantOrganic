@@ -861,7 +861,8 @@
 .admin-orders-table-wrap {
   width: 100%;
   min-width: 0;
-  overflow-x: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid #edf2e6;
   border-radius: 14px;
   background: #fbfdf8;
@@ -991,7 +992,7 @@
 }
 
 .admin-abandoned-table {
-  min-width: 1120px;
+  min-width: 860px;
 }
 
 .admin-abandoned-status {
@@ -2751,19 +2752,43 @@
   .admin-inv-head,
   .admin-inv-row { grid-template-columns: minmax(0, 1fr) 80px auto; }
   .admin-inv-sku { display: none; }
+
+  /* Mobile layout: tighter spacing */
+  .admin-topbar { padding: 14px 16px; gap: 12px; }
+  .admin-content { padding: 14px 12px; gap: 14px; }
+  .admin-panel-card,
+  .admin-chart-card { padding: 16px 14px; }
+  .admin-panel-head { margin-bottom: 14px; }
+  .admin-search-bar .admin-input { max-width: 100%; }
+
+  /* Orders / abandoned tables: ensure horizontal scroll works */
+  .admin-orders-table-wrap { border-radius: 10px; }
+  .admin-orders-table thead th,
+  .admin-orders-table tbody td { padding: 10px 8px; }
+  .admin-orders-table thead th { font-size: 10px; }
+  .admin-orders-table tbody td { font-size: 12px; }
 }
 
 @media (max-width: 620px) {
   .admin-kpi-grid,
   .admin-kpi-grid.four-col { grid-template-columns: 1fr 1fr; }
   .admin-modal-form { grid-template-columns: 1fr; }
-  .admin-modal-backdrop { padding: 12px; }
+  .admin-modal-backdrop { padding: 10px; }
   .admin-modal {
-    max-width: calc(100vw - 16px);
-    padding: 18px;
+    max-width: calc(100vw - 12px);
+    padding: 16px;
+    border-radius: 16px;
   }
-  .admin-topbar h1 { font-size: 18px; }
-  .admin-topbar-cta { padding: 0 12px; font-size: 13px; }
+  .admin-topbar { padding: 11px 14px; gap: 10px; }
+  .admin-topbar h1 { font-size: 17px; }
+  .admin-topbar p { display: none; }
+  .admin-topbar-cta { padding: 0 10px; font-size: 12px; min-height: 36px; }
+  .admin-content { padding: 10px 10px; gap: 10px; }
+  .admin-panel-card,
+  .admin-chart-card { padding: 14px 12px; border-radius: 14px; }
+  .admin-panel-head { flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+  .admin-panel-head h3 { font-size: 16px; }
+  .admin-panel-head .admin-btn-primary { font-size: 12px; padding: 6px 12px; min-height: 32px; }
   .admin-order-item-row { flex-direction: column; align-items: stretch; }
   .admin-order-item-pricing { align-items: flex-start; }
   .admin-order-card { padding: 12px; }
@@ -2776,6 +2801,10 @@
   .admin-record-row { grid-template-columns: minmax(0, 1fr) auto; }
   .admin-row-actions { grid-column: 1 / -1; }
   .admin-list-head { display: none; }
+  .admin-search-bar .admin-input { max-width: 100%; }
+  .admin-kpi-card { padding: 14px 14px 12px; }
+  .admin-orders-section-tabs { gap: 4px; padding: 4px; }
+  .admin-orders-section-tab { padding: 7px 12px; font-size: 12px; border-radius: 8px; }
 }
 
 /* ─── Instagram Posts Admin ──────────────────────────────────────────────── */
@@ -4509,3 +4538,21 @@
 .admin-order-product-name { font-size: 0.83rem; font-weight: 500; color: var(--text); }
 .admin-order-product-slug { font-size: 0.72rem; color: var(--text-soft); }
 .admin-order-product-hint { font-size: 0.8rem; color: var(--text-soft); padding: 10px 12px; margin: 0; }
+
+/* ─── Extra-small screens (≤480px) ──────────────────────────────────────── */
+@media (max-width: 480px) {
+  .admin-topbar { padding: 10px 12px; gap: 8px; }
+  .admin-topbar h1 { font-size: 15px; }
+  .admin-content { padding: 8px 8px; gap: 8px; }
+  .admin-panel-card,
+  .admin-chart-card { padding: 12px 10px; border-radius: 12px; }
+  .admin-panel-head h3 { font-size: 15px; }
+  .admin-kpi-grid,
+  .admin-kpi-grid.four-col { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .admin-kpi-card { padding: 12px 12px 10px; }
+  .admin-orders-table thead th,
+  .admin-orders-table tbody td { padding: 8px 6px; font-size: 11px; }
+  .admin-record-row { padding: 10px 10px; border-radius: 10px; gap: 8px; }
+  .admin-record-main strong { font-size: 13px; }
+  .admin-pagination { gap: 8px; padding: 12px 0 2px; }
+}
