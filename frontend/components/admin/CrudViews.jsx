@@ -424,17 +424,22 @@ function OrdersTable({ rows, canEdit, onEdit, onDownloadInvoice, onBulkStatusCha
 
 function AbandonedCartItems({ items }) {
   if (!Array.isArray(items) || items.length === 0) return <span style={{ color: "var(--text-soft)" }}>—</span>;
+  const visible = items.slice(0, 2);
+  const hidden = items.length - visible.length;
   return (
-    <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "3px" }}>
-      {items.map((item, i) => (
-        <li key={i} style={{ fontSize: "0.8rem", lineHeight: 1.3 }}>
-          <strong>{item.product_name || item.product_slug || "Unknown"}</strong>
-          <span style={{ color: "var(--text-soft)", marginLeft: "4px" }}>×{item.quantity || 1}</span>
-          {item.unit_price && Number(item.unit_price) > 0 ? (
-            <span style={{ color: "var(--text-soft)", marginLeft: "4px" }}>@ {Number(item.unit_price).toFixed(3)}</span>
-          ) : null}
-        </li>
-      ))}
+    <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "3px", minWidth: 0 }}>
+      {visible.map((item, i) => {
+        const name = item.product_name || item.product_slug || "Unknown";
+        return (
+          <li key={i} style={{ fontSize: "0.78rem", lineHeight: 1.3, display: "flex", alignItems: "baseline", gap: "3px", minWidth: 0 }}>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "160px", fontWeight: 600 }} title={name}>{name}</span>
+            <span style={{ color: "var(--text-soft)", flexShrink: 0 }}>×{item.quantity || 1}</span>
+          </li>
+        );
+      })}
+      {hidden > 0 && (
+        <li style={{ fontSize: "0.75rem", color: "var(--text-soft)", fontStyle: "italic" }}>+{hidden} more</li>
+      )}
     </ul>
   );
 }
