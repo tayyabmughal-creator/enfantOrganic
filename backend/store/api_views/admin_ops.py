@@ -3549,10 +3549,15 @@ class AdminAbandonedCartListView(generics.ListAPIView):
     serializer_class = AdminAbandonedCartSerializer
 
     def get_queryset(self):
-        queryset = AbandonedCart.objects.all()
+        queryset = AbandonedCart.objects.select_related("region").order_by("-abandoned_at")
         status_filter = self.request.query_params.get("status")
         if status_filter:
             queryset = queryset.filter(status=status_filter)
+        else:
+            # Default: only show actionable carts — exclude recovered (= completed orders) and lost
+            queryset = queryset.filter(
+                status__in=[AbandonedCart.STATUS_ABANDONED, AbandonedCart.STATUS_CONTACTED]
+            )
         return queryset
 
 
@@ -3729,15 +3734,23 @@ class AbandonedCartCreateView(APIView):
         if region_code:
             region = Region.objects.filter(code=region_code).first()
 
-        cart = AbandonedCart.objects.create(
-            session_token=data.get("session_token", ""),
-            customer_name=data.get("customer_name", ""),
-            customer_email=data.get("customer_email", ""),
-            customer_phone=data.get("customer_phone", ""),
-            cart_items=data.get("cart_items", []),
-            subtotal=data.get("subtotal", 0),
-            currency_code=data.get("currency_code", "OMR"),
-            region=region,
-            locale=data.get("locale", "en"),
-        )
+        session_token = data.get("session_token", "") or ""
+        defaults = {
+            "customer_name": data.get("customer_name", ""),
+            "customer_email": data.get("customer_email", ""),
+            "customer_phone": data.get("customer_phone", ""),
+            "cart_items": data.get("cart_items", []),
+            "subtotal": data.get("subtotal", 0),
+            "currency_code": data.get("currency_code", "OMR"),
+            "region": region,
+            "locale": data.get("locale", "en"),
+        }
+        if session_token:
+            # Reuse existing record for same session so recovered carts don't duplicate
+            cart, _ = AbandonedCart.objects.update_or_create(
+                session_token=session_token,
+                defaults=defaults,
+            )
+        else:
+            cart = AbandonedCart.objects.create(session_token="", **defaults)
         return Response({"id": cart.id, "status": cart.status}, status=status.HTTP_201_CREATED)

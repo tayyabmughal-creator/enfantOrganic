@@ -1060,15 +1060,32 @@ class CheckoutCreateSerializer(serializers.Serializer):
             coupon.used_count += 1
             coupon.save(update_fields=["used_count"])
 
-        # Mark matching abandoned cart as recovered (matched by analytics session UUID)
+        # Mark matching abandoned carts as recovered.
+        # Match by session_token first, then fallback to email/phone so completed
+        # orders never stay visible in the abandoned cart list.
+        _recover_qs = AbandonedCart.objects.filter(
+            status__in=[AbandonedCart.STATUS_ABANDONED, AbandonedCart.STATUS_CONTACTED]
+        )
+        _recovered = False
         if conversion_session_key:
-            AbandonedCart.objects.filter(
-                session_token=conversion_session_key,
-                status=AbandonedCart.STATUS_ABANDONED,
-            ).update(
-                status=AbandonedCart.STATUS_RECOVERED,
-                recovered_at=timezone.now(),
+            _recovered = bool(
+                _recover_qs.filter(session_token=conversion_session_key).update(
+                    status=AbandonedCart.STATUS_RECOVERED,
+                    recovered_at=timezone.now(),
+                )
             )
+        if not _recovered:
+            # Fallback: match by email or phone (customer came back on different device/session)
+            _q = Q()
+            if order.customer_email:
+                _q |= Q(customer_email=order.customer_email)
+            if order.customer_phone:
+                _q |= Q(customer_phone=order.customer_phone)
+            if _q:
+                _recover_qs.filter(_q).update(
+                    status=AbandonedCart.STATUS_RECOVERED,
+                    recovered_at=timezone.now(),
+                )
 
         if gift_card:
             if order.payment_method == Order.PAYMENT_ONLINE:
