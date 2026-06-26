@@ -1270,6 +1270,11 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
       return;
     }
     setSubmitting(true);
+    // Cancel abandoned-cart timer immediately — the customer is submitting an order.
+    // Prevents a race where the 1-second debounce fires during payment processing
+    // and creates a ghost "abandoned" record that can never be recovered.
+    abandonedCartSentRef.current = true;
+    if (abandonedCartTimerRef.current) clearTimeout(abandonedCartTimerRef.current);
     try {
       const pricingIsValid = await validateCouponCode();
       if (!pricingIsValid) {

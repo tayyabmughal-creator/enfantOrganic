@@ -3764,4 +3764,21 @@ class AbandonedCartCreateView(APIView):
             for key, value in defaults.items():
                 setattr(cart, key, value)
             cart.save()
+
+        # If this cart was just created (status=abandoned) but the customer has
+        # already placed an order with the same session/email/phone, mark it
+        # recovered immediately so it never shows as a ghost abandoned entry.
+        if cart.status == AbandonedCart.STATUS_ABANDONED:
+            customer_email = defaults.get("customer_email", "")
+            customer_phone = defaults.get("customer_phone", "")
+            order_q = Q(conversion_session_key=session_token)
+            if customer_email:
+                order_q |= Q(customer_email=customer_email)
+            if customer_phone:
+                order_q |= Q(customer_phone=customer_phone)
+            already_ordered = Order.objects.filter(order_q).exists()
+            if already_ordered:
+                cart.status = AbandonedCart.STATUS_RECOVERED
+                cart.save(update_fields=["status"])
+
         return Response({"id": cart.id, "status": cart.status}, status=status.HTTP_201_CREATED)
