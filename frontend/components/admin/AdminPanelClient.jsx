@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DashboardView from "./DashboardView";
 import AnalyticsView from "./AnalyticsView";
 import { StoreSettingsSection, SettingsPanel, Reports, AuditLogsPanel, IntegrationsView, PaymentGatewaysView, InventoryView, InsightsView, NewsletterPanel, RegionsView, InstagramPostsPanel, PlaceholderModule } from "./OtherViews";
@@ -736,6 +736,7 @@ export default function AdminPanelClient() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [page, setPage]             = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const userPageClickRef            = useRef(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [dashboardFilters, setDashboardFilters] = useState(DASHBOARD_FILTER_DEFAULTS);
@@ -971,6 +972,7 @@ export default function AdminPanelClient() {
   async function loadScreen(screen = active, options = {}) {
     if (!screen || !screen.endpoint) { setData(null); setLoading(false); return; }
     if (!options.silent) setLoading(true);
+    if (!options.silent) setData(null);
     if (mode !== "edit" && !options.silent) closeForm();
     try {
       let url = screen.endpoint;
@@ -981,7 +983,7 @@ export default function AdminPanelClient() {
       if ((CRUD_KEYS.includes(screenKey) || screenKey === "orders" || screenKey === "draft_orders" || screenKey === "abandoned") && debouncedSearchQuery) {
         params.set("search", debouncedSearchQuery);
       }
-      if (page > 1 && (CRUD_KEYS.includes(screenKey) || screenKey === "abandoned")) {
+      if (page > 1 && (CRUD_KEYS.includes(screenKey) || screenKey === "orders" || screenKey === "draft_orders" || screenKey === "abandoned")) {
         params.set("page", String(page));
       }
       if (screenKey === "dashboard") {
@@ -1446,7 +1448,9 @@ export default function AdminPanelClient() {
   }, [orderFilters, token, adminMe, activeKey]);
 
   useEffect(() => {
-    if (!(token && adminMe && active && page > 1)) return;
+    if (!userPageClickRef.current) return;
+    userPageClickRef.current = false;
+    if (!(token && adminMe && active)) return;
     if (!(CRUD_KEYS.includes(activeKey) || activeKey === "orders" || activeKey === "draft_orders" || activeKey === "abandoned")) return;
     void loadScreen(active, { silent: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1719,7 +1723,7 @@ export default function AdminPanelClient() {
               onDownloadInvoice={downloadOrderInvoice}
               titleFor={titleFor} metaFor={metaFor} labelFor={labelFor}
               searchQuery={searchQuery} onSearchChange={(q) => { setSearchQuery(q); setPage(1); }}
-              page={page} totalPages={totalPages} onPageChange={(p) => { setPage(p); }}
+              page={page} totalPages={totalPages} onPageChange={(p) => { userPageClickRef.current = true; setPage(p); }}
             />
         }
       </div>
@@ -1766,7 +1770,7 @@ export default function AdminPanelClient() {
         onSearchChange={(q) => { setSearchQuery(q); setPage(1); }}
         page={page}
         totalPages={totalPages}
-        onPageChange={(p) => { setPage(p); }}
+        onPageChange={(p) => { userPageClickRef.current = true; setPage(p); }}
         orderFilters={activeKey === "orders" || activeKey === "draft_orders" ? orderFilters : null}
         onOrderFiltersChange={activeKey === "orders" || activeKey === "draft_orders" ? (patch) => {
           setOrderFilters((prev) => {
