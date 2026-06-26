@@ -461,22 +461,38 @@ function CartViewModal({ cart, onClose }) {
 
         {/* Cart Items */}
         <div style={{ borderTop: "1px solid var(--border, #e5e7eb)", paddingTop: "16px" }}>
-          <div style={{ fontSize: "0.78rem", color: "var(--text-soft)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "10px" }}>
+          <div style={{ fontSize: "0.78rem", color: "var(--text-soft)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "12px" }}>
             Cart Items ({items.length})
           </div>
           {items.length === 0 ? (
             <p style={{ color: "var(--text-soft)", fontSize: "0.85rem" }}>No items recorded.</p>
           ) : (
-            <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "10px" }}>
-              {items.map((item, i) => (
-                <li key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", fontSize: "0.84rem" }}>
-                  <span style={{ fontWeight: 600, flex: 1 }}>{item.product_name || item.product_slug || "Unknown"}</span>
-                  <span style={{ flexShrink: 0, color: "var(--text-soft)", whiteSpace: "nowrap" }}>
-                    ×{item.quantity || 1}
-                    {item.unit_price && Number(item.unit_price) > 0 ? ` · ${Number(item.unit_price).toFixed(3)} ${cart.currency_code || ""}` : ""}
-                  </span>
-                </li>
-              ))}
+            <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "12px" }}>
+              {items.map((item, i) => {
+                const price = item.unit_price && Number(item.unit_price) > 0 ? Number(item.unit_price) : null;
+                const lineTotal = price ? (price * (item.quantity || 1)).toFixed(3) : null;
+                return (
+                  <li key={i} style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    {/* Product image */}
+                    <div style={{ flexShrink: 0, width: "54px", height: "54px", borderRadius: "8px", overflow: "hidden", background: "#f4f7ef", border: "1px solid #e5e7eb" }}>
+                      {item.image ? (
+                        <img src={item.image} alt={item.product_name || ""} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      ) : (
+                        <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#ccc", fontSize: "1.2rem" }}>📦</div>
+                      )}
+                    </div>
+                    {/* Name + price */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: "0.84rem", lineHeight: 1.3 }}>{item.product_name || item.product_slug || "Unknown"}</div>
+                      <div style={{ fontSize: "0.78rem", color: "var(--text-soft)", marginTop: "3px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                        <span>Qty: {item.quantity || 1}</span>
+                        {price ? <span>{price.toFixed(3)} {cart.currency_code}</span> : null}
+                        {lineTotal ? <span style={{ fontWeight: 600, color: "#4a6741" }}>= {lineTotal} {cart.currency_code}</span> : null}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
