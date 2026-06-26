@@ -142,7 +142,7 @@ export function hasPurchaseEventFired(orderNumber) {
     return false;
   }
   try {
-    return window.sessionStorage.getItem(getPurchaseStorageKey(orderNumber)) === "1";
+    return window.localStorage.getItem(getPurchaseStorageKey(orderNumber)) === "1";
   } catch {
     return false;
   }
@@ -153,7 +153,7 @@ export function markPurchaseEventFired(orderNumber) {
     return false;
   }
   try {
-    window.sessionStorage.setItem(getPurchaseStorageKey(orderNumber), "1");
+    window.localStorage.setItem(getPurchaseStorageKey(orderNumber), "1");
     return true;
   } catch {
     return false;

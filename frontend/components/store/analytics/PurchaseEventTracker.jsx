@@ -57,12 +57,17 @@ export default function PurchaseEventTracker({ order, locale, region }) {
       return;
     }
     // fbq Purchase fires unconditionally (no consent gate for GCC markets).
+    // eventID enables server-side Conversions API deduplication.
+    // currency uses region-native code so Meta attributes to the correct campaign.
+    const regionCurrency = region === "ae" ? "AED" : region === "sa" ? "SAR" : payload.currency;
+    const eventID = `purchase-${order.order_number}`;
     fbqTrack("Purchase", {
       value: payload.value,
-      currency: payload.currency,
+      currency: regionCurrency || payload.currency,
       content_ids: (payload.items || []).map((i) => i.item_id),
       content_type: "product",
       num_items: (payload.items || []).reduce((s, i) => s + (i.quantity || 1), 0),
+      event_id: eventID,
     });
     // GA4/GTM purchase requires consent.
     if (consentState === CONSENT_STATES.GRANTED) {

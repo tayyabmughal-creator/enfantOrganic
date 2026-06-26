@@ -18,10 +18,16 @@ const GA4_ID = String(process.env.NEXT_PUBLIC_GA4_ID || "").trim();
 const META_PIXEL_ID = String(process.env.NEXT_PUBLIC_META_PIXEL_ID || "").trim();
 
 // Shared helper — import this wherever you need to fire Meta Pixel events.
+// eventID in params enables Conversions API server-side deduplication.
 export function fbqTrack(event, params) {
   if (typeof window !== "undefined" && typeof window.fbq === "function") {
     if (params) {
-      window.fbq("track", event, params);
+      const { event_id: eventID, ...rest } = params;
+      if (eventID) {
+        window.fbq("track", event, rest, { eventID });
+      } else {
+        window.fbq("track", event, rest);
+      }
     } else {
       window.fbq("track", event);
     }
