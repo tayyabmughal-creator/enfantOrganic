@@ -3750,8 +3750,18 @@ class AbandonedCartCreateView(APIView):
             "region": region,
             "locale": data.get("locale", "en"),
         }
-        cart, _ = AbandonedCart.objects.update_or_create(
-            session_token=session_token,
-            defaults=defaults,
-        )
+        try:
+            cart, _ = AbandonedCart.objects.update_or_create(
+                session_token=session_token,
+                defaults=defaults,
+            )
+        except AbandonedCart.MultipleObjectsReturned:
+            # Duplicate session_token records from before the unique-token fix.
+            # Keep the newest record, delete the rest, then update it.
+            duplicates = AbandonedCart.objects.filter(session_token=session_token).order_by("-abandoned_at")
+            cart = duplicates.first()
+            duplicates.exclude(pk=cart.pk).delete()
+            for key, value in defaults.items():
+                setattr(cart, key, value)
+            cart.save()
         return Response({"id": cart.id, "status": cart.status}, status=status.HTTP_201_CREATED)

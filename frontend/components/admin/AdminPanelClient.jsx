@@ -885,7 +885,9 @@ export default function AdminPanelClient() {
     } catch { payload = null; }
     if (!res.ok) {
       const fallbackDetail = typeof rawText === "string" ? rawText.trim() : "";
-      throw new Error(payload?.detail || payload?.error || fallbackDetail || "Request failed");
+      const err = new Error(payload?.detail || payload?.error || fallbackDetail || "Request failed");
+      err.status = res.status;
+      throw err;
     }
     return payload;
   }
@@ -1196,7 +1198,12 @@ export default function AdminPanelClient() {
       setEditor(makeEditor(payload));
       setFormOpen(true);
     } catch (err) {
-      showToast(err.message, "error");
+      if (activeKey === "abandoned" && err.status === 404) {
+        showToast("Cart not found — it may have been deleted. Refreshing list...", "warning");
+        await loadScreen(active);
+      } else {
+        showToast(err.message, "error");
+      }
     } finally {
       setLoading(false);
     }
