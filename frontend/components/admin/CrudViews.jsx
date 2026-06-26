@@ -422,6 +422,23 @@ function OrdersTable({ rows, canEdit, onEdit, onDownloadInvoice, onBulkStatusCha
   );
 }
 
+function AbandonedCartItems({ items }) {
+  if (!Array.isArray(items) || items.length === 0) return <span style={{ color: "var(--text-soft)" }}>—</span>;
+  return (
+    <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "3px" }}>
+      {items.map((item, i) => (
+        <li key={i} style={{ fontSize: "0.8rem", lineHeight: 1.3 }}>
+          <strong>{item.product_name || item.product_slug || "Unknown"}</strong>
+          <span style={{ color: "var(--text-soft)", marginLeft: "4px" }}>×{item.quantity || 1}</span>
+          {item.unit_price && Number(item.unit_price) > 0 ? (
+            <span style={{ color: "var(--text-soft)", marginLeft: "4px" }}>@ {Number(item.unit_price).toFixed(3)}</span>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function AbandonedCheckoutsTable({ rows, canEdit, onEdit }) {
   return (
     <div className="admin-orders-table-wrap">
@@ -431,11 +448,11 @@ function AbandonedCheckoutsTable({ rows, canEdit, onEdit }) {
             <th>Customer</th>
             <th>Email</th>
             <th>Phone</th>
+            <th>Cart Items</th>
             <th>Market</th>
             <th>Cart Total</th>
             <th>Recovery Status</th>
             <th>Created</th>
-            <th>Updated</th>
             <th className="actions-col">Actions</th>
           </tr>
         </thead>
@@ -447,11 +464,11 @@ function AbandonedCheckoutsTable({ rows, canEdit, onEdit }) {
                 <td>
                   <div className="admin-order-customer">
                     <strong>{formatAbandonedCustomerName(cart)}</strong>
-                    <span>{cart.session_token ? `Session: ${String(cart.session_token).slice(0, 10)}...` : "Guest session"}</span>
                   </div>
                 </td>
                 <td>{cart.customer_email || "—"}</td>
                 <td>{cart.customer_phone || "—"}</td>
+                <td><AbandonedCartItems items={cart.cart_items} /></td>
                 <td>{formatAbandonedMarket(cart)}</td>
                 <td className="admin-order-total">{formatAbandonedTotal(cart)}</td>
                 <td>
@@ -461,7 +478,6 @@ function AbandonedCheckoutsTable({ rows, canEdit, onEdit }) {
                   </div>
                 </td>
                 <td>{formatOrderDate(cart.abandoned_at)}</td>
-                <td>{formatOrderDate(cart.updated_at)}</td>
                 <td className="actions-col">
                   <div className="admin-row-actions">
                     {canEdit ? <button type="button" className="admin-btn-sm" onClick={() => onEdit(cart)}>Edit</button> : null}
