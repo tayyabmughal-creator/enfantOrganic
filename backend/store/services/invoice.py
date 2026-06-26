@@ -488,7 +488,9 @@ def _build_invoice_pdf_bytes(order):
     totals_rows = []
     totals_rows.append(["", Paragraph("Subtotal", st["body"]), Paragraph(subtotal, st["body"])])
     if discount > 0:
-        totals_rows.append(["", Paragraph("Discount", st["body"]),
+        coupon_code = getattr(order, "coupon_code", "") or ""
+        discount_label = f"Discount ({coupon_code})" if coupon_code else "Discount"
+        totals_rows.append(["", Paragraph(discount_label, st["body"]),
                             Paragraph(f"- {_money_str(discount, currency)}", st["body"])])
     totals_rows.append(["", Paragraph("Shipping", st["body"]), Paragraph(shipping, st["body"])])
     if vat_total > 0:
