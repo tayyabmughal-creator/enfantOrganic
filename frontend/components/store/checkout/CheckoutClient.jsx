@@ -744,7 +744,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
             product_slug: item.slug || "",
             product_name: item.name || "",
             quantity: item.quantity || 1,
-            unit_price: String(item.price || "0"),
+            unit_price: String(item.pricing?.amount ?? item.price ?? "0"),
             image: item.image || "",
           })),
           subtotal: String(sub || "0"),
