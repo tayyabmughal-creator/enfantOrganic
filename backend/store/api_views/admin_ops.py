@@ -2655,7 +2655,7 @@ class AdminOrderInvoiceDownloadView(APIView):
             return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            order = generate_order_invoice(order)
+            order = generate_order_invoice(order, force=True)
         except Exception:
             logger.exception("Admin invoice generation failed for order %s", order.order_number)
             order.invoice_status = Order.INVOICE_FAILED
