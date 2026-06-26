@@ -305,9 +305,20 @@ def _build_invoice_pdf_bytes(order):
         raise RuntimeError("reportlab is not installed.")
 
     _register_invoice_fonts()
-    base_font = AR_FONT_NAME if AR_FONT_NAME in pdfmetrics.getRegisteredFontNames() else "Helvetica"
-    bold_font = AR_BOLD_FONT_NAME if AR_BOLD_FONT_NAME in pdfmetrics.getRegisteredFontNames() else "Helvetica-Bold"
+    # Always use Helvetica for Latin text — NotoSansArabic lacks Latin glyphs.
+    base_font = "Helvetica"
+    bold_font = "Helvetica-Bold"
+    ar_font = AR_FONT_NAME if AR_FONT_NAME in pdfmetrics.getRegisteredFontNames() else None
     st = _styles(base_font, bold_font)
+    if ar_font:
+        st["ar_body"] = ParagraphStyle(
+            "InvArBody",
+            fontName=ar_font,
+            fontSize=8.5,
+            leading=13,
+            textColor=BLACK,
+            alignment=2,  # right-align RTL text
+        )
 
     seller = _seller_snapshot(order)
     buyer = _buyer_snapshot(order)
@@ -370,23 +381,45 @@ def _build_invoice_pdf_bytes(order):
     story.append(Spacer(1, 8 * mm))
 
     # ── ADDRESS BLOCK: Shipping Address | Customer | Payment Method ───────────
-    def _address_lines(b):
-        ar_name = _shape_ar(b["name"]) if b["name"] else ""
-        parts = []
-        if ar_name and ar_name != b["name"]:
-            parts.append(ar_name)
-        parts.append(b["name"])
-        addr = ", ".join(filter(None, [b["address_line_1"], b["address_line_2"], b["area"]]))
-        if addr:
-            parts.append(addr)
-        city_country = ", ".join(filter(None, [b["city"], b["country"]]))
-        if city_country:
-            parts.append(city_country)
-        if b["phone"]:
-            parts.append(f"Tel. {b['phone']}")
-        return "<br/>".join(filter(None, parts))
+    def _address_cell(b):
+        """Return a list of Paragraphs for an address cell, mixing Latin/Arabic fonts."""
+        paras = []
+        ar_style = st.get("ar_body")
 
-    addr_text = _address_lines(buyer)
+        # Name: show Arabic-shaped version (right-aligned) then Latin original
+        name = b.get("name") or ""
+        ar_name = _shape_ar(name) if name else ""
+        if ar_style and ar_name and ar_name != name:
+            paras.append(Paragraph(ar_name, ar_style))
+        if name:
+            paras.append(Paragraph(name, st["body"]))
+
+        # Address line (usually Latin)
+        addr = ", ".join(filter(None, [
+            b.get("address_line_1", ""), b.get("address_line_2", ""), b.get("area", ""),
+        ]))
+        if addr:
+            paras.append(Paragraph(addr, st["body"]))
+
+        # City + Country — may contain Arabic
+        city = b.get("city") or ""
+        country = b.get("country") or ""
+        ar_city = _shape_ar(city) if city else ""
+        if ar_style and ar_city and ar_city != city:
+            ar_country = _shape_ar(country) if country else country
+            city_line = f"{ar_city}، {ar_country}" if ar_country else ar_city
+            paras.append(Paragraph(city_line, ar_style))
+        else:
+            city_country = ", ".join(filter(None, [city, country]))
+            if city_country:
+                paras.append(Paragraph(city_country, st["body"]))
+
+        if b.get("phone"):
+            paras.append(Paragraph(f"Tel. {b['phone']}", st["body"]))
+
+        return paras or [Paragraph("—", st["body"])]
+
+    addr_cell = _address_cell(buyer)
     payment_label = _payment_method_label(order)
     payment_status = order.get_payment_status_display() if hasattr(order, "get_payment_status_display") else ""
 
@@ -399,9 +432,9 @@ def _build_invoice_pdf_bytes(order):
                 Paragraph("PAYMENT METHOD", st["section_label"]),
             ],
             [
-                Paragraph(addr_text or "—", st["body"]),
-                Paragraph(addr_text or "—", st["body"]),
-                Paragraph(f"{payment_label}<br/><br/>{payment_status}", st["body"]),
+                addr_cell,
+                addr_cell,
+                [Paragraph(payment_label, st["body"]), Spacer(1, 6), Paragraph(payment_status, st["body"])],
             ],
         ],
         colWidths=[col_w, col_w, col_w],
