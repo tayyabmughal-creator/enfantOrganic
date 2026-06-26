@@ -1,5 +1,6 @@
 import csv
 import logging
+import uuid
 from collections import Counter, defaultdict
 from datetime import datetime
 from datetime import timedelta
@@ -3734,7 +3735,11 @@ class AbandonedCartCreateView(APIView):
         if region_code:
             region = Region.objects.filter(code=region_code).first()
 
-        session_token = data.get("session_token", "") or ""
+        session_token = (data.get("session_token") or "").strip()
+        # Always ensure a non-empty session_token so update_or_create works correctly.
+        # An empty token would cause every request to create a new record.
+        if not session_token:
+            session_token = f"anon-{uuid.uuid4()}"
         defaults = {
             "customer_name": data.get("customer_name", ""),
             "customer_email": data.get("customer_email", ""),
@@ -3745,12 +3750,8 @@ class AbandonedCartCreateView(APIView):
             "region": region,
             "locale": data.get("locale", "en"),
         }
-        if session_token:
-            # Reuse existing record for same session so recovered carts don't duplicate
-            cart, _ = AbandonedCart.objects.update_or_create(
-                session_token=session_token,
-                defaults=defaults,
-            )
-        else:
-            cart = AbandonedCart.objects.create(session_token="", **defaults)
+        cart, _ = AbandonedCart.objects.update_or_create(
+            session_token=session_token,
+            defaults=defaults,
+        )
         return Response({"id": cart.id, "status": cart.status}, status=status.HTTP_201_CREATED)

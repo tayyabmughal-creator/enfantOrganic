@@ -1060,32 +1060,24 @@ class CheckoutCreateSerializer(serializers.Serializer):
             coupon.used_count += 1
             coupon.save(update_fields=["used_count"])
 
-        # Mark matching abandoned carts as recovered.
-        # Match by session_token first, then fallback to email/phone so completed
-        # orders never stay visible in the abandoned cart list.
+        # Mark ALL matching abandoned carts as recovered so no ghost entries remain.
+        # 1. Match by session_token (exact session).
+        # 2. Always also match by email/phone — same customer may have abandoned on a
+        #    different device/session and that cart must also be cleared.
         _recover_qs = AbandonedCart.objects.filter(
             status__in=[AbandonedCart.STATUS_ABANDONED, AbandonedCart.STATUS_CONTACTED]
         )
-        _recovered = False
+        _recover_now = {"status": AbandonedCart.STATUS_RECOVERED, "recovered_at": timezone.now()}
         if conversion_session_key:
-            _recovered = bool(
-                _recover_qs.filter(session_token=conversion_session_key).update(
-                    status=AbandonedCart.STATUS_RECOVERED,
-                    recovered_at=timezone.now(),
-                )
-            )
-        if not _recovered:
-            # Fallback: match by email or phone (customer came back on different device/session)
-            _q = Q()
-            if order.customer_email:
-                _q |= Q(customer_email=order.customer_email)
-            if order.customer_phone:
-                _q |= Q(customer_phone=order.customer_phone)
-            if _q:
-                _recover_qs.filter(_q).update(
-                    status=AbandonedCart.STATUS_RECOVERED,
-                    recovered_at=timezone.now(),
-                )
+            _recover_qs.filter(session_token=conversion_session_key).update(**_recover_now)
+        # Always run email/phone recovery too — catches carts from other sessions/devices
+        _q = Q()
+        if order.customer_email:
+            _q |= Q(customer_email=order.customer_email)
+        if order.customer_phone:
+            _q |= Q(customer_phone=order.customer_phone)
+        if _q:
+            _recover_qs.filter(_q).update(**_recover_now)
 
         if gift_card:
             if order.payment_method == Order.PAYMENT_ONLINE:
