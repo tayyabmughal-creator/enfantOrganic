@@ -481,6 +481,7 @@
 .admin-btn-sm:hover { background: #e8f0e0; }
 .admin-btn-sm.danger { background: #fff0f0; color: #c44242; border-color: #f5c2c2; }
 .admin-btn-sm.danger:hover { background: #ffe0e0; }
+.admin-btn-sm.admin-btn-icon { padding: 6px 9px; display: inline-flex; align-items: center; justify-content: center; }
 
 /* ─── Badges ──────────────────────────────────────────────────────────────── */
 

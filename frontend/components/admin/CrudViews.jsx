@@ -422,91 +422,139 @@ function OrdersTable({ rows, canEdit, onEdit, onDownloadInvoice, onBulkStatusCha
   );
 }
 
-function AbandonedCartItems({ items }) {
-  const [expanded, setExpanded] = useState(false);
-  if (!Array.isArray(items) || items.length === 0) return <span style={{ color: "var(--text-soft)" }}>—</span>;
-  const visible = expanded ? items : items.slice(0, 2);
-  const hidden = items.length - 2;
+function CartViewModal({ cart, onClose }) {
+  if (!cart) return null;
+  const items = Array.isArray(cart.cart_items) ? cart.cart_items : [];
   return (
-    <div style={{ minWidth: 0 }}>
-      <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "3px" }}>
-        {visible.map((item, i) => {
-          const name = item.product_name || item.product_slug || "Unknown";
-          return (
-            <li key={i} style={{ fontSize: "0.78rem", lineHeight: 1.3, display: "flex", alignItems: "baseline", gap: "3px", minWidth: 0 }}>
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "160px", fontWeight: 600 }} title={name}>{name}</span>
-              <span style={{ color: "var(--text-soft)", flexShrink: 0 }}>×{item.quantity || 1}</span>
-              {item.unit_price && Number(item.unit_price) > 0 ? (
-                <span style={{ color: "var(--text-soft)", flexShrink: 0 }}>@ {Number(item.unit_price).toFixed(3)}</span>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
-      {items.length > 2 && (
-        <button
-          type="button"
-          onClick={() => setExpanded((p) => !p)}
-          style={{ marginTop: "4px", background: "none", border: "none", cursor: "pointer", padding: "2px 0", display: "flex", alignItems: "center", gap: "4px", color: "var(--text-soft)", fontSize: "0.75rem" }}
-        >
-          <Icon name="eye" size={13} />
-          {expanded ? "Show less" : `+${hidden} more`}
-        </button>
-      )}
+    <div
+      onClick={onClose}
+      style={{ position: "fixed", inset: 0, zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.45)", backdropFilter: "blur(2px)" }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ background: "var(--bg, #fff)", borderRadius: "14px", padding: "28px 28px 24px", maxWidth: "500px", width: "92%", maxHeight: "85vh", overflowY: "auto", boxShadow: "0 12px 40px rgba(0,0,0,0.22)", position: "relative" }}
+      >
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+          <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>Abandoned Cart Detail</h3>
+          <button type="button" onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-soft)", padding: "2px 6px", fontSize: "1.3rem", lineHeight: 1 }}>×</button>
+        </div>
+
+        {/* Customer Info */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 16px", marginBottom: "20px", fontSize: "0.85rem" }}>
+          {[
+            ["Customer", cart.customer_name || "—"],
+            ["Phone", cart.customer_phone || "—"],
+            ["Email", cart.customer_email || "—"],
+            ["Market", `${cart.region_name || "—"} (${cart.currency_code || ""})`],
+            ["Total", `${cart.currency_code || ""} ${Number(cart.subtotal || 0).toFixed(3)}`],
+            ["Status", cart.status || "—"],
+            ["Created", cart.abandoned_at ? new Date(cart.abandoned_at).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"],
+            ["Recovery sent", String(cart.recovery_sent_count || 0)],
+          ].map(([label, value]) => (
+            <div key={label}>
+              <div style={{ fontSize: "0.72rem", color: "var(--text-soft)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "2px" }}>{label}</div>
+              <div style={{ fontWeight: 600, wordBreak: "break-word" }}>{value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Cart Items */}
+        <div style={{ borderTop: "1px solid var(--border, #e5e7eb)", paddingTop: "16px" }}>
+          <div style={{ fontSize: "0.78rem", color: "var(--text-soft)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "10px" }}>
+            Cart Items ({items.length})
+          </div>
+          {items.length === 0 ? (
+            <p style={{ color: "var(--text-soft)", fontSize: "0.85rem" }}>No items recorded.</p>
+          ) : (
+            <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "10px" }}>
+              {items.map((item, i) => (
+                <li key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", fontSize: "0.84rem" }}>
+                  <span style={{ fontWeight: 600, flex: 1 }}>{item.product_name || item.product_slug || "Unknown"}</span>
+                  <span style={{ flexShrink: 0, color: "var(--text-soft)", whiteSpace: "nowrap" }}>
+                    ×{item.quantity || 1}
+                    {item.unit_price && Number(item.unit_price) > 0 ? ` · ${Number(item.unit_price).toFixed(3)} ${cart.currency_code || ""}` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Recovery Notes */}
+        {cart.recovery_notes ? (
+          <div style={{ borderTop: "1px solid var(--border, #e5e7eb)", paddingTop: "14px", marginTop: "16px", fontSize: "0.84rem" }}>
+            <div style={{ fontSize: "0.72rem", color: "var(--text-soft)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "6px" }}>Recovery Notes</div>
+            <p style={{ margin: 0 }}>{cart.recovery_notes}</p>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
 
 function AbandonedCheckoutsTable({ rows, canEdit, onEdit }) {
+  const [viewCart, setViewCart] = useState(null);
   return (
-    <div className="admin-orders-table-wrap">
-      <table className="admin-orders-table admin-abandoned-table">
-        <thead>
-          <tr>
-            <th>Customer</th>
-            <th>Email</th>
-            <th>Phone</th>
-            <th>Cart Items</th>
-            <th>Market</th>
-            <th>Cart Total</th>
-            <th>Recovery Status</th>
-            <th>Created</th>
-            <th className="actions-col">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((cart) => {
-            const status = String(cart.status || "").toLowerCase();
-            return (
-              <tr key={cart.id || cart.session_token || `${cart.customer_email}-${cart.abandoned_at}`}>
-                <td>
-                  <div className="admin-order-customer">
-                    <strong>{formatAbandonedCustomerName(cart)}</strong>
-                  </div>
-                </td>
-                <td>{cart.customer_email || "—"}</td>
-                <td>{cart.customer_phone || "—"}</td>
-                <td><AbandonedCartItems items={cart.cart_items} /></td>
-                <td>{formatAbandonedMarket(cart)}</td>
-                <td className="admin-order-total">{formatAbandonedTotal(cart)}</td>
-                <td>
-                  <div className="admin-abandoned-status">
-                    <span className={`admin-badge ${statusTone(status)}`}>{humanizeEnum(status) || "Unknown"}</span>
-                    <span className="admin-abandoned-status-meta">Recovery sent: {Number(cart.recovery_sent_count || 0)}</span>
-                  </div>
-                </td>
-                <td>{formatOrderDate(cart.abandoned_at)}</td>
-                <td className="actions-col">
-                  <div className="admin-row-actions">
-                    {canEdit ? <button type="button" className="admin-btn-sm" onClick={() => onEdit(cart)}>Edit</button> : null}
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <>
+      {viewCart && <CartViewModal cart={viewCart} onClose={() => setViewCart(null)} />}
+      <div className="admin-orders-table-wrap">
+        <table className="admin-orders-table admin-abandoned-table">
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>Email</th>
+              <th>Phone</th>
+              <th>Items</th>
+              <th>Market</th>
+              <th>Cart Total</th>
+              <th>Recovery Status</th>
+              <th>Created</th>
+              <th className="actions-col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((cart) => {
+              const status = String(cart.status || "").toLowerCase();
+              const itemCount = Array.isArray(cart.cart_items) ? cart.cart_items.length : 0;
+              return (
+                <tr key={cart.id || cart.session_token || `${cart.customer_email}-${cart.abandoned_at}`}>
+                  <td>
+                    <div className="admin-order-customer">
+                      <strong>{formatAbandonedCustomerName(cart)}</strong>
+                    </div>
+                  </td>
+                  <td>{cart.customer_email || "—"}</td>
+                  <td>{cart.customer_phone || "—"}</td>
+                  <td>
+                    <span style={{ fontSize: "0.82rem", color: itemCount ? "inherit" : "var(--text-soft)" }}>
+                      {itemCount ? `${itemCount} item${itemCount > 1 ? "s" : ""}` : "—"}
+                    </span>
+                  </td>
+                  <td>{formatAbandonedMarket(cart)}</td>
+                  <td className="admin-order-total">{formatAbandonedTotal(cart)}</td>
+                  <td>
+                    <div className="admin-abandoned-status">
+                      <span className={`admin-badge ${statusTone(status)}`}>{humanizeEnum(status) || "Unknown"}</span>
+                      <span className="admin-abandoned-status-meta">Recovery sent: {Number(cart.recovery_sent_count || 0)}</span>
+                    </div>
+                  </td>
+                  <td>{formatOrderDate(cart.abandoned_at)}</td>
+                  <td className="actions-col">
+                    <div className="admin-row-actions">
+                      <button type="button" className="admin-btn-sm admin-btn-icon" title="View details" onClick={() => setViewCart(cart)}>
+                        <Icon name="eye" size={15} />
+                      </button>
+                      {canEdit ? <button type="button" className="admin-btn-sm" onClick={() => onEdit(cart)}>Edit</button> : null}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 
