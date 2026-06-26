@@ -423,24 +423,37 @@ function OrdersTable({ rows, canEdit, onEdit, onDownloadInvoice, onBulkStatusCha
 }
 
 function AbandonedCartItems({ items }) {
+  const [expanded, setExpanded] = useState(false);
   if (!Array.isArray(items) || items.length === 0) return <span style={{ color: "var(--text-soft)" }}>—</span>;
-  const visible = items.slice(0, 2);
-  const hidden = items.length - visible.length;
+  const visible = expanded ? items : items.slice(0, 2);
+  const hidden = items.length - 2;
   return (
-    <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "3px", minWidth: 0 }}>
-      {visible.map((item, i) => {
-        const name = item.product_name || item.product_slug || "Unknown";
-        return (
-          <li key={i} style={{ fontSize: "0.78rem", lineHeight: 1.3, display: "flex", alignItems: "baseline", gap: "3px", minWidth: 0 }}>
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "160px", fontWeight: 600 }} title={name}>{name}</span>
-            <span style={{ color: "var(--text-soft)", flexShrink: 0 }}>×{item.quantity || 1}</span>
-          </li>
-        );
-      })}
-      {hidden > 0 && (
-        <li style={{ fontSize: "0.75rem", color: "var(--text-soft)", fontStyle: "italic" }}>+{hidden} more</li>
+    <div style={{ minWidth: 0 }}>
+      <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "3px" }}>
+        {visible.map((item, i) => {
+          const name = item.product_name || item.product_slug || "Unknown";
+          return (
+            <li key={i} style={{ fontSize: "0.78rem", lineHeight: 1.3, display: "flex", alignItems: "baseline", gap: "3px", minWidth: 0 }}>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "160px", fontWeight: 600 }} title={name}>{name}</span>
+              <span style={{ color: "var(--text-soft)", flexShrink: 0 }}>×{item.quantity || 1}</span>
+              {item.unit_price && Number(item.unit_price) > 0 ? (
+                <span style={{ color: "var(--text-soft)", flexShrink: 0 }}>@ {Number(item.unit_price).toFixed(3)}</span>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+      {items.length > 2 && (
+        <button
+          type="button"
+          onClick={() => setExpanded((p) => !p)}
+          style={{ marginTop: "4px", background: "none", border: "none", cursor: "pointer", padding: "2px 0", display: "flex", alignItems: "center", gap: "4px", color: "var(--text-soft)", fontSize: "0.75rem" }}
+        >
+          <Icon name="eye" size={13} />
+          {expanded ? "Show less" : `+${hidden} more`}
+        </button>
       )}
-    </ul>
+    </div>
   );
 }
 
