@@ -19,7 +19,7 @@ from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 
 from django.db import transaction
-from django.db.models import Count, Sum, Q
+from django.db.models import Count, Sum, Q, Exists, OuterRef
 from django.db.models.functions import TruncMonth
 from django.db.utils import OperationalError, ProgrammingError
 
@@ -3550,12 +3550,39 @@ class AdminAbandonedCartListView(generics.ListAPIView):
     serializer_class = AdminAbandonedCartSerializer
 
     def get_queryset(self):
+        # Idempotent cleanup: mark any abandoned/contacted cart as recovered if
+        # a matching order exists that was placed AFTER the cart was abandoned.
+        # Using created_at >= abandoned_at prevents false-positives for repeat
+        # customers who legitimately abandon a new cart after a previous purchase.
+        ghost_qs = AbandonedCart.objects.filter(
+            status__in=[AbandonedCart.STATUS_ABANDONED, AbandonedCart.STATUS_CONTACTED]
+        )
+        session_recovered = Exists(
+            Order.objects.filter(conversion_session_key=OuterRef("session_token"))
+        )
+        email_recovered = Exists(
+            Order.objects.filter(
+                customer_email=OuterRef("customer_email"),
+                created_at__gte=OuterRef("abandoned_at"),
+            )
+        )
+        phone_recovered = Exists(
+            Order.objects.filter(
+                customer_phone=OuterRef("customer_phone"),
+                created_at__gte=OuterRef("abandoned_at"),
+            )
+        )
+        ghost_qs.filter(
+            session_recovered
+            | (~Q(customer_email="") & email_recovered)
+            | (~Q(customer_phone="") & phone_recovered)
+        ).update(status=AbandonedCart.STATUS_RECOVERED)
+
         queryset = AbandonedCart.objects.select_related("region").order_by("-abandoned_at")
         status_filter = self.request.query_params.get("status")
         if status_filter:
             queryset = queryset.filter(status=status_filter)
         else:
-            # Default: only show actionable carts — exclude recovered (= completed orders) and lost
             queryset = queryset.filter(
                 status__in=[AbandonedCart.STATUS_ABANDONED, AbandonedCart.STATUS_CONTACTED]
             )
