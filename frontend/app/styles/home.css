@@ -1366,7 +1366,7 @@
 .instagram-tile {
   position: relative;
   overflow: hidden;
-  aspect-ratio: 1 / 1;
+  aspect-ratio: 4 / 5;
   display: block;
   background: #d8edca;
 }

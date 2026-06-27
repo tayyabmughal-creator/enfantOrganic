@@ -118,7 +118,7 @@ def _get_logo_image(width_mm=38):
     for candidate in _LOGO_CANDIDATES:
         if candidate.exists():
             try:
-                return Image(str(candidate), width=width_mm * mm, height=width_mm * mm * 0.65)
+                return Image(str(candidate), width=width_mm * mm, height=width_mm * mm)
             except Exception:
                 continue
     return None
