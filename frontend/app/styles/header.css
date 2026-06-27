@@ -498,10 +498,53 @@
     display: none;
   }
 
-  /* Show mobile versions inside the drawer */
+  /* Show mobile versions inside the nav bar */
   .mobile-lang-toggle,
   .mobile-region-select {
     display: flex;
+  }
+
+  /* Compact everything so search fits alongside lang + region + cart + menu */
+  .header-main {
+    gap: 6px;
+    grid-template-columns: auto 0 auto;
+  }
+
+  .header-controls {
+    gap: 3px;
+  }
+
+  /* Smaller icon buttons on mobile */
+  .icon-link {
+    width: 30px;
+    height: 30px;
+  }
+
+  /* Compact lang toggle — just globe icon, no text */
+  .mobile-lang-toggle {
+    min-height: 28px;
+    padding: 0 7px;
+    gap: 0;
+    font-size: 0.7rem;
+  }
+  .mobile-lang-toggle span:not(.lang-toggle-icon) {
+    display: none;
+  }
+
+  /* Compact region select — flag only, no label/chevron */
+  .mobile-region-select {
+    min-height: 28px;
+    padding: 0 6px;
+    gap: 0;
+  }
+  .mobile-region-select .control-select-value,
+  .mobile-region-select .control-select-chevron {
+    display: none;
+  }
+
+  /* Hide account icon — saves one slot, user reaches it via hamburger */
+  .header-account-link {
+    display: none;
   }
 
   /* backdrop-filter on site-header creates a containing block for
