@@ -476,6 +476,27 @@
   display: none;
 }
 
+/* On mobile, lang toggle shows icon only — no text — to save space */
+.mobile-lang-toggle span:not(.lang-toggle-icon) {
+  display: none;
+}
+.mobile-lang-toggle {
+  min-height: 30px;
+  padding: 0 8px;
+  gap: 0;
+}
+
+/* On mobile, region select shows flag only — hide text and chevron */
+.mobile-region-select .control-select-value,
+.mobile-region-select .control-select-chevron {
+  display: none;
+}
+.mobile-region-select {
+  padding: 0 6px;
+  min-height: 30px;
+  gap: 0;
+}
+
 @media (max-width: 1120px) {
   .brand-copy {
     display: none;
@@ -487,6 +508,22 @@
 }
 
 @media (max-width: 900px) {
+  /* Tighten header to fit all controls */
+  .header-main {
+    gap: 8px;
+    grid-template-columns: auto 0 auto;
+  }
+
+  .header-controls {
+    gap: 4px;
+  }
+
+  /* Slightly smaller icon buttons */
+  .icon-link {
+    width: 32px;
+    height: 32px;
+  }
+
   /* Show hamburger button */
   .mobile-menu-button {
     display: inline-flex;
@@ -498,13 +535,13 @@
     display: none;
   }
 
-  /* Lang/region toggles go into the drawer, not the top bar */
+  /* Show mobile versions inside the nav bar */
   .mobile-lang-toggle,
   .mobile-region-select {
-    display: none;
+    display: flex;
   }
 
-  /* Hide account icon on mobile — accessible via hamburger drawer */
+  /* Hide account icon on mobile to make room for search icon */
   .header-account-link {
     display: none;
   }

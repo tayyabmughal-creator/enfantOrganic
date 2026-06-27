@@ -326,9 +326,6 @@ function HeaderInner({ navigation }) {
               </select>
               <Icon name="chevronDown" size={13} className="control-select-chevron" />
             </label>
-            <a href={buildStorePath(locale, "/account", region)} className="nav-link">
-              {locale === "ar" ? "حسابي" : "My Account"}
-            </a>
           </div>
         </nav>
 
