@@ -1804,6 +1804,9 @@ function CategoriesSelectField({ field, value, editor, setEditor, disabled }) {
 function RichTextEditor({ value, onChange, disabled }) {
   const ref = useRef(null);
   const initializedRef = useRef(false);
+  const [linkUrl, setLinkUrl] = useState("");
+  const [showLinkInput, setShowLinkInput] = useState(false);
+  const savedRangeRef = useRef(null);
 
   useEffect(() => {
     if (ref.current && !initializedRef.current) {
@@ -1817,6 +1820,31 @@ function RichTextEditor({ value, onChange, disabled }) {
     document.execCommand(cmd, false, arg);
     ref.current?.focus();
     onChange(ref.current?.innerHTML || "");
+  };
+
+  const saveSelection = () => {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      savedRangeRef.current = sel.getRangeAt(0).cloneRange();
+    }
+  };
+
+  const restoreSelection = () => {
+    const sel = window.getSelection();
+    if (savedRangeRef.current && sel) {
+      sel.removeAllRanges();
+      sel.addRange(savedRangeRef.current);
+    }
+  };
+
+  const insertLink = () => {
+    const url = linkUrl.trim();
+    if (!url) return;
+    restoreSelection();
+    const fullUrl = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+    exec("createLink", fullUrl);
+    setLinkUrl("");
+    setShowLinkInput(false);
   };
 
   return (
@@ -1839,8 +1867,35 @@ function RichTextEditor({ value, onChange, disabled }) {
           <option value="4">Large</option>
           <option value="5">X-Large</option>
         </select>
+        <button
+          type="button"
+          className={`richtext-btn${showLinkInput ? " richtext-btn--active" : ""}`}
+          title="Insert hyperlink"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            saveSelection();
+            setShowLinkInput((v) => !v);
+            setLinkUrl("");
+          }}
+        >🔗 Link</button>
+        <button type="button" className="richtext-btn" title="Remove link" onMouseDown={(e) => { e.preventDefault(); exec("unlink"); }}>Unlink</button>
         <button type="button" className="richtext-btn" title="Clear formatting" onMouseDown={(e) => { e.preventDefault(); exec("removeFormat"); }}>Clear</button>
       </div>
+      {showLinkInput && (
+        <div className="richtext-link-row">
+          <input
+            className="admin-input richtext-link-input"
+            type="url"
+            placeholder="https://example.com"
+            value={linkUrl}
+            onChange={(e) => setLinkUrl(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); insertLink(); } if (e.key === "Escape") { setShowLinkInput(false); setLinkUrl(""); } }}
+            autoFocus
+          />
+          <button type="button" className="admin-btn-sm admin-btn-primary" onClick={insertLink}>Insert</button>
+          <button type="button" className="admin-btn-sm" onClick={() => { setShowLinkInput(false); setLinkUrl(""); }}>Cancel</button>
+        </div>
+      )}
       <div
         ref={ref}
         contentEditable={!disabled}

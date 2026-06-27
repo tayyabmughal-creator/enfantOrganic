@@ -271,7 +271,7 @@ const FIELD_CONFIGS = {
   blog: [
     ["slug","Slug","text"],["title_en","Title EN","text"],["title_ar","Title AR","text"],
     ["excerpt_en","Excerpt EN","textarea"],["excerpt_ar","Excerpt AR","textarea"],
-    ["body_en","Body EN","textarea"],["body_ar","Body AR","textarea"],
+    ["body_en","Body EN","richtext"],["body_ar","Body AR","richtext"],
     ["image","Cover image URL","text"],["image_file","Cover image file","file"],
     ["category_en","Category EN","text"],["category_ar","Category AR","text"],
     ["published_at","Publish date","date"],["is_published","Published","checkbox"],
@@ -281,7 +281,7 @@ const FIELD_CONFIGS = {
     ["slug","Slug","text"],
     ["region","Region ID (optional)","number"],
     ["title_en","Title EN","text"],["title_ar","Title AR","text"],
-    ["body_en","Body EN","textarea"],["body_ar","Body AR","textarea"],
+    ["body_en","Body EN","richtext"],["body_ar","Body AR","richtext"],
     ["seo_title_en","SEO title EN","text"],["seo_title_ar","SEO title AR","text"],
     ["seo_description_en","SEO description EN","textarea"],["seo_description_ar","SEO description AR","textarea"],
     ["is_published","Published","checkbox"],
