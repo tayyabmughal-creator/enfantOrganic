@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   ANALYTICS_CONSENT_EVENT,
@@ -11,7 +11,7 @@ import {
   markPurchaseEventFired,
   pushDataLayerEvent,
 } from "@/lib/analytics";
-import { fbqTrack } from "@/components/store/analytics/AnalyticsScripts";
+import { fbqTrack, snaptrTrack } from "@/components/store/analytics/AnalyticsScripts";
 
 function asNumber(value) {
   const parsed = Number(value);
@@ -20,6 +20,7 @@ function asNumber(value) {
 
 export default function PurchaseEventTracker({ order, locale, region }) {
   const [consentState, setConsentState] = useState(CONSENT_STATES.UNSET);
+  const firedRef = useRef(false);
 
   useEffect(() => {
     setConsentState(getConsentState());
@@ -50,25 +51,38 @@ export default function PurchaseEventTracker({ order, locale, region }) {
   }, [order]);
 
   useEffect(() => {
-    if (!order?.order_number || !payload) {
-      return;
-    }
-    if (hasPurchaseEventFired(order.order_number)) {
-      return;
-    }
-    // fbq Purchase fires unconditionally (no consent gate for GCC markets).
-    // eventID enables server-side Conversions API deduplication.
-    // currency uses region-native code so Meta attributes to the correct campaign.
+    if (!order?.order_number || !payload) return;
+    // firedRef: in-memory guard prevents double-fire within the same component
+    // lifecycle (e.g. consentState change re-triggering this effect).
+    // localStorage guard: prevents re-fire across navigations in the same browser.
+    if (firedRef.current || hasPurchaseEventFired(order.order_number)) return;
+    firedRef.current = true;
+
     const regionCurrency = region === "ae" ? "AED" : region === "sa" ? "SAR" : payload.currency;
+    const currency = regionCurrency || payload.currency;
+    const itemIds = (payload.items || []).map((i) => i.item_id);
+    const numItems = (payload.items || []).reduce((s, i) => s + (i.quantity || 1), 0);
     const eventID = `purchase-${order.order_number}`;
+
+    // Meta Pixel — unconditional for GCC markets; eventID for CAPI deduplication.
     fbqTrack("Purchase", {
       value: payload.value,
-      currency: regionCurrency || payload.currency,
-      content_ids: (payload.items || []).map((i) => i.item_id),
+      currency,
+      content_ids: itemIds,
       content_type: "product",
-      num_items: (payload.items || []).reduce((s, i) => s + (i.quantity || 1), 0),
+      num_items: numItems,
       event_id: eventID,
     });
+
+    // Snapchat Pixel PURCHASE.
+    snaptrTrack("PURCHASE", {
+      price: payload.value,
+      currency,
+      transaction_id: order.order_number,
+      item_ids: itemIds,
+      number_items: numItems,
+    });
+
     // GA4/GTM purchase requires consent.
     if (consentState === CONSENT_STATES.GRANTED) {
       pushDataLayerEvent("purchase", { ecommerce: payload, locale, region });

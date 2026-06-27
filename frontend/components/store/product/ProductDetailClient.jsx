@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import Icon from "@/components/icons/Icon";
 import { useStore } from "@/components/store/cart/StoreProvider";
 import { buildAnalyticsItem, pushDataLayerEvent } from "@/lib/analytics";
+import { snaptrTrack } from "@/components/store/analytics/AnalyticsScripts";
 import { API_BASE_URL, CUSTOMER_TOKEN_KEY } from "@/lib/config";
 import { trackEvent } from "@/lib/eventTracking";
 import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
@@ -327,6 +328,14 @@ export default function ProductDetailClient({ locale, product, region }) {
       lastTrackedViewItemRef.current = key;
     }
     trackEvent("product_view", { productSlug: product.slug, regionCode: region });
+    snaptrTrack("VIEW_CONTENT", {
+      item_ids: [product.slug],
+      item_category: item?.item_category || "",
+      price: Number(product.pricing?.amount || 0),
+      currency: product.pricing?.currency_code || "",
+      description: product.name_en || product.name || "",
+      number_items: 1,
+    });
   }, [locale, product, region]);
 
   useEffect(() => {

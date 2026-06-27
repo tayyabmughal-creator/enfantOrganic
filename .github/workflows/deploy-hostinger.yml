@@ -112,6 +112,7 @@ jobs:
             API_INTERNAL_BASE_URL=http://backend:8000/api
             NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || 'AIzaSyAzLn2u7C5Gve-zmLJoj73IH_lfQPBMKY4' }}
             NEXT_PUBLIC_META_PIXEL_ID=${{ secrets.NEXT_PUBLIC_META_PIXEL_ID }}
+            NEXT_PUBLIC_SNAPCHAT_PIXEL_ID=${{ secrets.NEXT_PUBLIC_SNAPCHAT_PIXEL_ID }}
             DEFAULT_FROM_EMAIL=${{ secrets.DEFAULT_FROM_EMAIL }}
             EMAIL_BACKEND=${{ secrets.EMAIL_BACKEND || 'django.core.mail.backends.console.EmailBackend' }}
             EMAIL_HOST=${{ secrets.EMAIL_HOST }}
@@ -290,6 +291,7 @@ jobs:
             API_INTERNAL_BASE_URL=http://backend:8000/api
             NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || 'AIzaSyAzLn2u7C5Gve-zmLJoj73IH_lfQPBMKY4' }}
             NEXT_PUBLIC_META_PIXEL_ID=${{ secrets.NEXT_PUBLIC_META_PIXEL_ID }}
+            NEXT_PUBLIC_SNAPCHAT_PIXEL_ID=${{ secrets.NEXT_PUBLIC_SNAPCHAT_PIXEL_ID }}
             DEFAULT_FROM_EMAIL=${{ secrets.DEFAULT_FROM_EMAIL }}
             EMAIL_BACKEND=${{ secrets.EMAIL_BACKEND || 'django.core.mail.backends.console.EmailBackend' }}
             EMAIL_HOST=${{ secrets.EMAIL_HOST }}

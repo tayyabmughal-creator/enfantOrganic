@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useStore } from "@/components/store/cart/StoreProvider";
 import Icon from "@/components/icons/Icon";
 import { buildAnalyticsItems, pushDataLayerEvent } from "@/lib/analytics";
-import { fbqTrack } from "@/components/store/analytics/AnalyticsScripts";
+import { fbqTrack, snaptrTrack } from "@/components/store/analytics/AnalyticsScripts";
 import { getAttributionSnapshot, getOrCreateSessionKey, trackEvent } from "@/lib/eventTracking";
 import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
 import { API_BASE_URL as CONFIG_API_BASE_URL, CUSTOMER_TOKEN_KEY, safeRedirectUrl } from "@/lib/config";
@@ -1224,6 +1224,12 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         content_ids: analyticsItems.map((i) => i.item_id),
         num_items: analyticsItems.reduce((s, i) => s + (i.quantity || 1), 0),
         value: checkoutValue,
+        currency: checkoutCurrency,
+      });
+      snaptrTrack("START_CHECKOUT", {
+        item_ids: analyticsItems.map((i) => i.item_id),
+        number_items: analyticsItems.reduce((s, i) => s + (i.quantity || 1), 0),
+        price: checkoutValue,
         currency: checkoutCurrency,
       });
     }

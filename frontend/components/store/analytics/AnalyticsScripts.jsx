@@ -16,6 +16,7 @@ const GA4_SCRIPT_ID = "enfant-ga4-script";
 const GTM_ID = String(process.env.NEXT_PUBLIC_GTM_ID || "").trim();
 const GA4_ID = String(process.env.NEXT_PUBLIC_GA4_ID || "").trim();
 const META_PIXEL_ID = String(process.env.NEXT_PUBLIC_META_PIXEL_ID || "").trim();
+const SNAPCHAT_PIXEL_ID = String(process.env.NEXT_PUBLIC_SNAPCHAT_PIXEL_ID || "").trim();
 
 // Shared helper — import this wherever you need to fire Meta Pixel events.
 // eventID in params enables Conversions API server-side deduplication.
@@ -30,6 +31,17 @@ export function fbqTrack(event, params) {
       }
     } else {
       window.fbq("track", event);
+    }
+  }
+}
+
+// Shared helper for Snapchat Pixel events.
+export function snaptrTrack(event, params) {
+  if (typeof window !== "undefined" && typeof window.snaptr === "function") {
+    if (params) {
+      window.snaptr("track", event, params);
+    } else {
+      window.snaptr("track", event);
     }
   }
 }
@@ -80,6 +92,9 @@ export default function AnalyticsScripts() {
   useEffect(() => {
     if (META_PIXEL_ID && typeof window !== "undefined" && typeof window.fbq === "function") {
       window.fbq("track", "PageView");
+    }
+    if (SNAPCHAT_PIXEL_ID && typeof window !== "undefined" && typeof window.snaptr === "function") {
+      window.snaptr("track", "PAGE_VIEW");
     }
   }, [pathname]);
 
