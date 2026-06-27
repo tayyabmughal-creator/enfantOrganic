@@ -609,8 +609,8 @@ def build_zatca_phase1_tlv_base64(
         (1, seller_name),
         (2, seller_vat_number),
         (3, timestamp_iso),
-        (4, str(_money(invoice_total))),
-        (5, str(_money(vat_total))),
+        (4, str(_money(invoice_total, 2))),
+        (5, str(_money(vat_total, 2))),
     ]
     payload = bytearray()
     for tag, raw_value in entries:
