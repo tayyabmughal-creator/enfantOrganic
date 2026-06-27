@@ -512,6 +512,10 @@
 
   .header-controls {
     gap: 4px;
+    min-width: 0;
+    max-width: 100%;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
   }
 
   /* All icon buttons: 30px circles */
@@ -551,11 +555,11 @@
   }
 
   /* Order: push lang+region left so search/cart/hamburger always stay visible */
-  .mobile-lang-toggle { order: 1; flex-shrink: 1; }
-  .mobile-region-select { order: 2; flex-shrink: 0; }
-  .header-search-btn { order: 50; flex-shrink: 0; }
-  .cart-link { order: 90; flex-shrink: 0; }
-  .mobile-menu-button { order: 100; flex-shrink: 0; }
+  .mobile-lang-toggle { order: 1; flex: 0 1 auto; }
+  .mobile-region-select { order: 2; flex: 0 0 36px; }
+  .header-search-btn { order: 3; flex: 0 0 30px; display: inline-flex !important; }
+  .cart-link { order: 4; flex: 0 0 30px; }
+  .mobile-menu-button { order: 5; flex: 0 0 30px; }
 
   /* Hide account icon — reachable via hamburger drawer */
   .header-account-link {

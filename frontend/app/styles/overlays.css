@@ -791,7 +791,7 @@
   }
 
   .header-controls {
-    gap: 6px;
+    gap: 4px;
   }
 
   .icon-link {
@@ -799,7 +799,7 @@
     height: 34px;
   }
 
-  .header-controls > .icon-link:not(.cart-link):not(.mobile-menu-button) {
+  .header-controls > .header-account-link {
     display: none;
   }
 
