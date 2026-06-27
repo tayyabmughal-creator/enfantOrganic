@@ -504,47 +504,54 @@
     display: flex;
   }
 
-  /* Compact everything so search fits alongside lang + region + cart + menu */
+  /* Tighten header grid — nav is hidden so middle col collapses */
   .header-main {
     gap: 6px;
     grid-template-columns: auto 0 auto;
   }
 
   .header-controls {
-    gap: 3px;
+    gap: 4px;
   }
 
-  /* Smaller icon buttons on mobile */
+  /* All icon buttons: 30px circles */
   .icon-link {
-    width: 30px;
-    height: 30px;
+    width: 30px !important;
+    height: 30px !important;
+    min-height: 30px !important;
   }
 
-  /* Compact lang toggle — just globe icon, no text */
+  /* Lang toggle: same 30px circle as other icons, globe only */
   .mobile-lang-toggle {
-    min-height: 28px;
-    padding: 0 7px;
-    gap: 0;
-    font-size: 0.7rem;
+    width: 30px !important;
+    height: 30px !important;
+    min-height: 30px !important;
+    padding: 0 !important;
+    gap: 0 !important;
+    box-shadow: none !important;
+    justify-content: center !important;
   }
   .mobile-lang-toggle span:not(.lang-toggle-icon) {
-    display: none;
+    display: none !important;
   }
 
-  /* Compact region select — flag only, no label/chevron */
+  /* Region select: same 30px circle, flag only */
   .mobile-region-select {
-    min-height: 28px;
-    padding: 0 6px;
-    gap: 0;
+    width: 30px !important;
+    height: 30px !important;
+    min-height: 30px !important;
+    padding: 0 !important;
+    gap: 0 !important;
+    justify-content: center !important;
   }
   .mobile-region-select .control-select-value,
   .mobile-region-select .control-select-chevron {
-    display: none;
+    display: none !important;
   }
 
-  /* Hide account icon — saves one slot, user reaches it via hamburger */
+  /* Hide account icon — reachable via hamburger drawer */
   .header-account-link {
-    display: none;
+    display: none !important;
   }
 
   /* backdrop-filter on site-header creates a containing block for
