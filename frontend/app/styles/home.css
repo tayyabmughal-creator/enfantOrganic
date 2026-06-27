@@ -1103,12 +1103,28 @@
   color: var(--text-soft);
   font-size: 0.82rem;
   flex-wrap: nowrap;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
   white-space: nowrap;
 }
 
 .product-reviews strong {
+  flex: 0 0 auto;
   color: var(--text);
   font-size: 0.84rem;
+}
+
+.product-reviews .review-stars {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.product-reviews .review-count-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .product-card-meta {
@@ -1947,6 +1963,21 @@
   .product-card-meta {
     min-height: unset;
     gap: 4px;
+  }
+
+  .product-reviews {
+    gap: 4px;
+    font-size: 0.72rem;
+  }
+
+  .product-reviews strong {
+    font-size: 0.74rem;
+  }
+
+  .product-reviews .review-stars.small {
+    max-width: 48px;
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
   }
 
   .product-price-panel {

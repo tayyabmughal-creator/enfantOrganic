@@ -4516,6 +4516,33 @@ class CheckoutAndPermsTestCase(TestCase):
         self.assertEqual(suggestions[0]["name"], "شامبو أطفال طبيعي")
         self.assertIn("price", suggestions[0])
 
+    def test_search_results_dedupe_products_from_join_matches(self):
+        extra_category = Category.objects.create(slug="daily-care", name_en="Daily Care")
+        product = Product.objects.create(
+            slug="baby-lotion-search",
+            name_en="Baby Lotion Search",
+            short_description_en="Gentle care",
+            is_published=True,
+        )
+        product.categories.add(self.category, extra_category)
+        ProductPrice.objects.create(product=product, region=self.region, price=Decimal("6.25"))
+
+        suggestions_response = self.api_client.get(
+            "/api/search/suggestions/",
+            {"region": self.region.code, "locale": "en", "q": "baby"},
+        )
+        products_response = self.api_client.get(
+            "/api/products/",
+            {"region": self.region.code, "locale": "en", "search": "baby"},
+        )
+
+        self.assertEqual(suggestions_response.status_code, 200)
+        self.assertEqual(products_response.status_code, 200)
+        suggestion_slugs = [item["slug"] for item in suggestions_response.data["suggestions"]]
+        product_slugs = [item["slug"] for item in products_response.data]
+        self.assertEqual(suggestion_slugs.count(product.slug), 1)
+        self.assertEqual(product_slugs.count(product.slug), 1)
+
     def test_search_suggestions_empty_query_returns_empty_list(self):
         response = self.api_client.get(
             "/api/search/suggestions/",

@@ -193,7 +193,7 @@ function ProductCard({ locale, product, region }) {
             <div className="product-reviews">
               <span className="review-stars small">{"★".repeat(Math.round(rating || 5))}</span>
               {rating ? <strong>{rating.toFixed(1).replace(".0", "")}</strong> : null}
-              <span>({product.review_count} {reviewLabel})</span>
+              <span className="review-count-label">({product.review_count} {reviewLabel})</span>
             </div>
           ) : null}
           {featurePills.length ? (

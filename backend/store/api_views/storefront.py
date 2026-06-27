@@ -208,6 +208,8 @@ class CatalogPageView(StorefrontContextMixin, APIView):
         locale = self.get_locale()
         context = self.get_serializer_context()
         products = apply_catalog_filters(product_queryset(), request, context["region"])
+        if request.query_params.get("search", "").strip():
+            products = unique_products_by_slug(products)
 
         category_slug = request.query_params.get("category", "").strip()
         hero_title = "All Products" if locale == "en" else "جميع المنتجات"
@@ -241,8 +243,11 @@ class ProductListView(StorefrontContextMixin, APIView):
 
     def get(self, request):
         context = self.get_serializer_context()
+        products = apply_catalog_filters(product_queryset(), request, context["region"])
+        if request.query_params.get("search", "").strip():
+            products = unique_products_by_slug(products)
         serializer = ProductCardSerializer(
-            apply_catalog_filters(product_queryset(), request, context["region"]),
+            products,
             many=True,
             context=context,
         )
@@ -305,7 +310,8 @@ class SearchSuggestionsView(StorefrontContextMixin, APIView):
 
         region = context["region"]
         matches = apply_ranked_product_search(product_queryset(), query)
-        matches = filter_products_fulfillable_for_region(matches, region).distinct()[:8]
+        matches = filter_products_fulfillable_for_region(matches, region).distinct()
+        matches = unique_products_by_slug(matches, limit=8, scan_limit=48)
 
         seen_slugs = set()
         suggestions = []
@@ -334,6 +340,22 @@ class SearchSuggestionsView(StorefrontContextMixin, APIView):
                 "suggestions": suggestions,
             }
         )
+
+
+def unique_products_by_slug(queryset, *, limit=None, scan_limit=None):
+    """Preserve search ordering while removing duplicate rows from joins."""
+    seen_slugs = set()
+    products = []
+    iterable = queryset[:scan_limit] if scan_limit else queryset
+    for product in iterable:
+        slug = str(getattr(product, "slug", "") or "").strip()
+        if not slug or slug in seen_slugs:
+            continue
+        seen_slugs.add(slug)
+        products.append(product)
+        if limit and len(products) >= limit:
+            break
+    return products
 
 
 class BlogListView(StorefrontContextMixin, APIView):
