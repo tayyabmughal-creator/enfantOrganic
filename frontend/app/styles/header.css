@@ -531,14 +531,17 @@
     letter-spacing: 0 !important;
   }
 
-  /* Region select: same 30px circle, flag only */
+  /* Region select: circle with flag only */
   .mobile-region-select {
-    width: 30px !important;
-    height: 30px !important;
-    min-height: 30px !important;
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    max-width: 36px !important;
+    min-height: 36px !important;
     padding: 0 !important;
     gap: 0 !important;
     justify-content: center !important;
+    border-radius: 999px !important;
   }
   .mobile-region-select .control-select-value,
   .mobile-region-select .control-select-chevron {

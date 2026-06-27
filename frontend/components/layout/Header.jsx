@@ -356,7 +356,7 @@ function HeaderInner({ navigation }) {
             </label>
           </div>
 
-          {/* Mobile-only: locale toggle shown directly in the nav bar */}
+          {/* Mobile-only: locale toggle — compact "EN"/"AR" label */}
           <button
             type="button"
             className="lang-toggle-btn mobile-lang-toggle"
@@ -364,7 +364,7 @@ function HeaderInner({ navigation }) {
             aria-label={locale === "ar" ? "Switch to English" : "التبديل إلى العربية"}
           >
             <Icon name="globe" size={14} className="lang-toggle-icon" />
-            <span>{locale === "ar" ? "EN" : "العربية"}</span>
+            <span>{locale === "ar" ? "EN" : "AR"}</span>
           </button>
           <label className="control-select region-select mobile-region-select">
             <span className="visually-hidden">{t.region}</span>
