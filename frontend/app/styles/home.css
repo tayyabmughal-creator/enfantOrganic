@@ -537,11 +537,9 @@
 }
 
 .category-carousel-button {
-  position: absolute;
-  top: 50%;
-  z-index: 3;
-  width: 48px;
-  height: 48px;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.86);
@@ -553,19 +551,10 @@
   font-size: 2rem;
   line-height: 1;
   box-shadow: var(--shadow-soft);
-  transform: translateY(-50%);
-}
-
-.category-carousel-button:first-of-type {
-  inset-inline-start: -24px;
-}
-
-.category-carousel-button:last-of-type {
-  inset-inline-end: -24px;
+  z-index: 1;
 }
 
 .category-carousel-button:hover {
-  transform: translateY(-50%) scale(1.04);
   background: var(--brand);
   border-color: var(--brand);
   color: white;
@@ -703,23 +692,21 @@
 }
 
 .product-rail-track {
-  position: relative;
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
-  overflow: visible;
 }
 
 .product-rail-track > .product-rail {
-  width: 100%;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
 .product-rail-btn {
-  position: absolute;
-  top: 50%;
-  z-index: 3;
-  width: 48px;
-  height: 48px;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
   border-radius: 999px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.86);
@@ -731,19 +718,10 @@
   font-size: 2rem;
   line-height: 1;
   box-shadow: var(--shadow-soft);
-  transform: translateY(-50%);
-}
-
-.product-rail-btn:first-of-type {
-  inset-inline-start: -24px;
-}
-
-.product-rail-btn:last-of-type {
-  inset-inline-end: -24px;
+  z-index: 1;
 }
 
 .product-rail-btn:hover:not(:disabled) {
-  transform: translateY(-50%) scale(1.04);
   background: var(--brand);
   border-color: var(--brand);
   color: white;
@@ -1663,6 +1641,22 @@
   background: white;
   border: 1px solid var(--line);
   color: var(--text);
+  cursor: pointer;
+  font-size: inherit;
+  transition: background 0.18s, border-color 0.18s, color 0.18s;
+}
+
+.footer-currency-chip:hover {
+  background: var(--brand-light, #e8f5e1);
+  border-color: var(--brand);
+  color: var(--brand-dark);
+}
+
+.footer-currency-chip--active {
+  background: var(--brand);
+  border-color: var(--brand-dark);
+  color: white;
+  font-weight: 600;
 }
 
 .footer-social-row {
@@ -1996,5 +1990,24 @@
 
   .category-round-title {
     font-size: 0.8rem;
+  }
+}
+
+/* Mobile-only View All below product rails */
+.section-view-all-mobile {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .section-view-all-mobile {
+    display: flex;
+    justify-content: center;
+    margin-top: 12px;
+  }
+
+  .section-view-all-mobile .section-link {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
   }
 }

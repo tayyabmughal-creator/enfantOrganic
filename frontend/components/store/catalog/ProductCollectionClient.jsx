@@ -62,9 +62,10 @@ export default function ProductCollectionClient({
   const categoryCounts = useMemo(() => {
     const counts = {};
     for (const product of products) {
-      const slug = product?.category?.slug;
-      if (!slug) continue;
-      counts[slug] = (counts[slug] || 0) + 1;
+      const cats = product?.categories?.length ? product.categories : (product?.category ? [product.category] : []);
+      for (const cat of cats) {
+        if (cat?.slug) counts[cat.slug] = (counts[cat.slug] || 0) + 1;
+      }
     }
     return counts;
   }, [products]);
@@ -128,7 +129,8 @@ export default function ProductCollectionClient({
         !product?.stock_status?.track_inventory
         || Boolean(product?.stock_status?.is_in_stock)
       );
-      const matchesCategory = selectedCategory === "all" || product?.category?.slug === selectedCategory;
+      const productCats = product?.categories?.length ? product.categories : (product?.category ? [product.category] : []);
+      const matchesCategory = selectedCategory === "all" || productCats.some((c) => c?.slug === selectedCategory);
       const matchesTag = selectedTag === "all" || (product?.tags || []).some((tag) => tag.slug === selectedTag);
       const matchesBrand = selectedBrand === "all" || String(product?.brand || "").trim() === selectedBrand;
       const matchesAvailability = (

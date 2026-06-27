@@ -1,5 +1,6 @@
 import { uiText } from "@/lib/storefront";
 import { resolveNavigationHref } from "@/lib/navigationLinks";
+import FooterCurrencyChips from "./FooterCurrencyChips";
 
 const SOCIAL_ICONS = {
   facebook_url:  { label: "Facebook",  svg: "M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" },
@@ -86,11 +87,7 @@ export default function Footer({ locale, navigation }) {
           <span>{t.securePayment}</span>
         </div>
         <div className="footer-chip-row footer-copyright-row">
-          {navigation.regions.map((region) => (
-            <span key={region.code} className="footer-currency-chip">
-              {region.currency_code}
-            </span>
-          ))}
+          <FooterCurrencyChips regions={navigation.regions} currentRegionCode={region} />
           <span className="footer-copyright">{copyright}</span>
         </div>
       </div>

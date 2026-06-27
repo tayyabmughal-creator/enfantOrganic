@@ -1810,8 +1810,12 @@ function RichTextEditor({ value, onChange, disabled }) {
 
   useEffect(() => {
     if (ref.current && !initializedRef.current) {
-      ref.current.innerHTML = value || "";
-      initializedRef.current = true;
+      if (value) {
+        ref.current.innerHTML = value;
+        initializedRef.current = true;
+      } else if (value === "") {
+        initializedRef.current = true;
+      }
     }
   }, [value]);
 

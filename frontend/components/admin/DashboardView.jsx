@@ -11,6 +11,8 @@ const TOP_PRODUCT_METRIC_OPTIONS = [
 
 const TOP_PRODUCT_DATE_OPTIONS = [
   { value: "all_time", label: "All Time" },
+  { value: "today", label: "Today" },
+  { value: "yesterday", label: "Yesterday" },
   { value: "last_7_days", label: "Last 7 Days" },
   { value: "last_30_days", label: "Last 30 Days" },
   { value: "last_60_days", label: "Last 60 Days" },

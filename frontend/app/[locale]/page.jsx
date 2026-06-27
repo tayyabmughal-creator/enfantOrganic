@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-export const revalidate = 86400; // 24 hours
+export const revalidate = 120; // 2 minutes — admin changes reflect quickly
 
 import SiteImage from "@/components/ui/SiteImage";
 import TestimonialCard from "@/components/cards/TestimonialCard";
@@ -109,7 +109,7 @@ export default async function LocalizedHomePage({ params, searchParams }) {
   const sectionPathByKey = {
     "new-arrivals": "/new-arrivals",
     "top-choices": "/best-sellers",
-    "baby-sets": "/collections?category=Baby-Sets",
+    "baby-sets": "/collections?category=baby-sets",
   };
   const sectionEmptyCopy = {
     "new-arrivals": {
@@ -328,13 +328,23 @@ export default async function LocalizedHomePage({ params, searchParams }) {
             </Link>
           </div>
           {sectionProducts.length ? (
-            <ProductRail
-              products={sectionProducts}
-              locale={locale}
-              region={region}
-              listId={`home_${section.key}`}
-              listName={section.title}
-            />
+            <>
+              <ProductRail
+                products={sectionProducts}
+                locale={locale}
+                region={region}
+                listId={`home_${section.key}`}
+                listName={section.title}
+              />
+              <div className="section-view-all-mobile">
+                <Link
+                  href={buildStorePath(locale, sectionPathByKey[section.key] || "/collections", region)}
+                  className="section-link"
+                >
+                  {t.viewAll}
+                </Link>
+              </div>
+            </>
           ) : (
             <div className="store-empty-state">
               <strong>{(sectionEmptyCopy[section.key] || sectionEmptyCopy.default).title}</strong>

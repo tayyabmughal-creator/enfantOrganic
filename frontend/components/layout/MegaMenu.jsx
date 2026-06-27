@@ -10,7 +10,7 @@ export default function MegaMenu({ categories, collections, open }) {
           {categories.map((category) => (
             <Link
               key={category.slug}
-              href="/collections"
+              href={`/collections?category=${category.slug}`}
               className="soft-card"
               style={{
                 display: "grid",
@@ -34,7 +34,7 @@ export default function MegaMenu({ categories, collections, open }) {
         <div className="mega-column">
           <span className="label">Curated Collections</span>
           {collections.map((collection) => (
-            <Link key={collection.slug} href="/collections" className="mega-card">
+            <Link key={collection.slug} href={`/collections?category=${collection.slug}`} className="mega-card">
               <SiteImage src={collection.image} alt={collection.name} width={400} height={200} loading="lazy" />
               <div className="mega-card-content">
                 <span className="label">{collection.eyebrow}</span>

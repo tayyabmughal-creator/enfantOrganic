@@ -307,13 +307,18 @@ class SearchSuggestionsView(StorefrontContextMixin, APIView):
         matches = apply_ranked_product_search(product_queryset(), query)
         matches = filter_products_fulfillable_for_region(matches, region).distinct()[:8]
 
+        seen_slugs = set()
         suggestions = []
         for item in ProductCardSerializer(matches, many=True, context=context).data:
+            slug = item["slug"]
+            if slug in seen_slugs:
+                continue
+            seen_slugs.add(slug)
             pricing = item.get("pricing") or {}
             suggestions.append(
                 {
                     "type": "product",
-                    "slug": item["slug"],
+                    "slug": slug,
                     "name": item["name"],
                     "category": (item["category"] or {}).get("name", ""),
                     "image": item.get("image", ""),

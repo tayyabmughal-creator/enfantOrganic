@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-export const revalidate = 86400; // 24 hours
+export const revalidate = 120; // 2 minutes — admin changes reflect quickly
 
 import JsonLd from "@/components/seo/JsonLd";
 import StorefrontShell from "@/components/layout/StorefrontShell";
