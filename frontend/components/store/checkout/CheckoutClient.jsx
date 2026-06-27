@@ -385,13 +385,13 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
   const [geocodingPin, setGeocodingPin] = useState(false);
   const [geolocating, setGeolocating] = useState(false);
   const [geolocationError, setGeolocationError] = useState("");
-  const [locationMode, setLocationMode] = useState("search"); // "search" | "gps"
+  const [locationMode, setLocationMode] = useState("gps"); // "gps" only — search tab removed
   const [onlineProvider, setOnlineProvider] = useState("");
 
   const mapPinRequired = Boolean(backendRegionConfig?.require_map_pin);
   const hasPin =
     form.lat !== "" && form.lng !== "" && Number.isFinite(Number(form.lat)) && Number.isFinite(Number(form.lng));
-  const locationProvided = hasPin || (locationMode === "search" && form.address_line_1.trim().length > 0);
+  const locationProvided = hasPin || form.address_line_1.trim().length > 0;
 
   const enabledProviders = useMemo(() => {
     const raw = backendRegionConfig?.payment_enabled_providers;
@@ -1078,7 +1078,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
 
   useEffect(() => {
     if (mapStatus !== "ready") return;
-    if (!mapContainerRef.current || !placeInputRef.current || !window.google?.maps?.places) return;
+    if (!mapContainerRef.current || !window.google?.maps) return;
 
     const googleMaps = window.google.maps;
     const hasCoordinates =
@@ -1144,37 +1144,6 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
       syncMarkerPosition(startPosition.lat, startPosition.lng, true);
     }
 
-    if (!autocompleteRef.current) {
-      autocompleteRef.current = new googleMaps.places.Autocomplete(placeInputRef.current, {
-        componentRestrictions: { country: regionConfig.countryCode.toLowerCase() },
-        fields: ["address_components", "formatted_address", "geometry", "name", "place_id"],
-        types: ["geocode"],
-        ...(restrictionBounds ? { bounds: restrictionBounds, strictBounds: false } : {}),
-      });
-      placeListenerRef.current = autocompleteRef.current.addListener("place_changed", () => {
-        const place = autocompleteRef.current?.getPlace?.();
-        if (!place?.geometry?.location) return;
-
-        const lat = place.geometry.location.lat();
-        const lng = place.geometry.location.lng();
-        setForm((current) => ({
-          ...current,
-          lat: lat.toFixed(6),
-          lng: lng.toFixed(6),
-          ...buildAddressPatchFromGoogleResult(place, current),
-        }));
-        syncMarkerPosition(lat, lng, true);
-      });
-    } else {
-      if (autocompleteRef.current.setComponentRestrictions) {
-        autocompleteRef.current.setComponentRestrictions({
-          country: regionConfig.countryCode.toLowerCase(),
-        });
-      }
-      if (restrictionBounds && autocompleteRef.current.setBounds) {
-        autocompleteRef.current.setBounds(restrictionBounds);
-      }
-    }
   }, [
     form.lat,
     form.lng,
@@ -1586,40 +1555,6 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                   </label>
                 </div>
 
-                <div className="checkout-consent">
-                  <label className={`checkout-consent-card ${form.sms_opt_in ? "is-checked" : ""}`}>
-                    <input name="sms_opt_in" type="checkbox" checked={Boolean(form.sms_opt_in)} onChange={updateField} />
-                    <span className="checkout-consent-service-icon checkout-consent-service-icon--sms" aria-hidden="true">
-                      <svg viewBox="0 0 20 20" fill="none">
-                        <path d="M2 4.5A2.5 2.5 0 0 1 4.5 2h11A2.5 2.5 0 0 1 18 4.5v7A2.5 2.5 0 0 1 15.5 14H11l-3.5 3.5V14H4.5A2.5 2.5 0 0 1 2 11.5v-7Z" fill="currentColor" opacity=".15"/>
-                        <path d="M2 4.5A2.5 2.5 0 0 1 4.5 2h11A2.5 2.5 0 0 1 18 4.5v7A2.5 2.5 0 0 1 15.5 14H11l-3.5 3.5V14H4.5A2.5 2.5 0 0 1 2 11.5v-7Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-                        <path d="M6 7.5h8M6 10.5h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                      </svg>
-                    </span>
-                    <span className="checkout-consent-card-body">
-                      <strong>{isAr ? "تحديثات SMS" : "SMS updates"}</strong>
-                      <small>{isAr ? "تأكيدات الطلب" : "Order confirmations"}</small>
-                    </span>
-                    <span className="checkout-consent-card-check" aria-hidden="true">
-                      <Icon name="check" size={11} />
-                    </span>
-                  </label>
-                  <label className={`checkout-consent-card ${form.whatsapp_opt_in ? "is-checked" : ""}`}>
-                    <input name="whatsapp_opt_in" type="checkbox" checked={Boolean(form.whatsapp_opt_in)} onChange={updateField} />
-                    <span className="checkout-consent-service-icon checkout-consent-service-icon--wa" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" fill="none">
-                        <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.978-1.418A9.956 9.956 0 0 0 12 22c5.523 0 10-4.477 10-10S17.523 2 12 2Zm-1.07 13.51-.006-.003c-.634-.372-1.21-.835-1.706-1.372l-.003-.004a7.72 7.72 0 0 1-1.369-2.38c-.158-.47-.1-.985.19-1.404l.523-.748a.6.6 0 0 1 .985-.017l1.09 1.572a.6.6 0 0 1-.03.736l-.388.464a5.23 5.23 0 0 0 .895 1.11 5.23 5.23 0 0 0 1.13.88l.47-.38a.6.6 0 0 1 .74-.018l1.55 1.118a.6.6 0 0 1-.025.988l-.758.5a1.5 1.5 0 0 1-1.408.096 7.744 7.744 0 0 1-.88-.538Z" fill="currentColor"/>
-                      </svg>
-                    </span>
-                    <span className="checkout-consent-card-body">
-                      <strong>{isAr ? "تحديثات واتساب" : "WhatsApp updates"}</strong>
-                      <small>{isAr ? "تتبع الطلب" : "Order tracking"}</small>
-                    </span>
-                    <span className="checkout-consent-card-check" aria-hidden="true">
-                      <Icon name="check" size={11} />
-                    </span>
-                  </label>
-                </div>
               </div>
 
               {/* ── Delivery Address ── */}
@@ -1660,34 +1595,8 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
 
                   {mapStatus === "ready" ? (
                     <>
-                      {/* Two-option selector: GPS or manual search */}
-                      <div className="map-method-tabs">
-                        <button
-                          type="button"
-                          className={`map-method-tab${locationMode === "gps" ? " is-active" : ""}`}
-                          onClick={() => setLocationMode("gps")}
-                        >
-                          <span className="map-method-tab-icon">📍</span>
-                          <span className="map-method-tab-text">
-                            <strong>{isAr ? "موقعي الحالي" : "Current Location"}</strong>
-                            <small>{isAr ? "استخدم GPS تلقائياً" : "Use GPS automatically"}</small>
-                          </span>
-                        </button>
-                        <button
-                          type="button"
-                          className={`map-method-tab${locationMode === "search" ? " is-active" : ""}`}
-                          onClick={() => { setLocationMode("search"); setTimeout(() => placeInputRef.current?.focus(), 80); }}
-                        >
-                          <span className="map-method-tab-icon">🔍</span>
-                          <span className="map-method-tab-text">
-                            <strong>{isAr ? "بحث عن عنوان" : "Search Address"}</strong>
-                            <small>{isAr ? "اكتب عنوانك يدوياً" : "Type your address manually"}</small>
-                          </span>
-                        </button>
-                      </div>
-
-                      {/* GPS option panel — shown when locationMode === "gps" */}
-                      <div className="map-method-panel" hidden={locationMode !== "gps"} aria-hidden={locationMode !== "gps"}>
+                      {/* GPS locate button */}
+                      <div className="map-method-panel">
                         <button
                           type="button"
                           className="map-locate-btn map-locate-btn--full"
@@ -1703,27 +1612,6 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                         ) : null}
                       </div>
 
-                      {/* Search option panel — always in DOM so Places autocomplete ref stays stable */}
-                      <div className="map-method-panel" hidden={locationMode !== "search"} aria-hidden={locationMode !== "search"}>
-                        <label className="map-search-label">
-                          <input
-                            ref={placeInputRef}
-                            name="place-search"
-                            placeholder={isAr ? "اكتب أي عنوان أو ابحث..." : "Type any address or search..."}
-                            autoComplete="off"
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setForm((f) => ({ ...f, address_line_1: val }));
-                            }}
-                          />
-                        </label>
-                        <p className="map-custom-address-hint">
-                          {isAr
-                            ? "يمكنك كتابة أي عنوان مخصص — سيُعبَّأ حقل العنوان تلقائياً. أو اختر من النتائج لتحديد الموقع على الخريطة."
-                            : "Type any custom address and it fills the Street field below — or pick from suggestions to also pin on the map."}
-                        </p>
-                      </div>
-
                       <div ref={mapContainerRef} className="checkout-map-canvas" />
                       <p className="map-address-help">
                         {isAr
@@ -1731,8 +1619,8 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                           : "Drag the pin or tap the map to fine-tune your location."}
                       </p>
                       <div className="map-coordinates">
-                        <span>{isAr ? "خط العرض" : "Latitude"}: {form.lat || "—"}</span>
-                        <span>{isAr ? "خط الطول" : "Longitude"}: {form.lng || "—"}</span>
+                        <span>{isAr ? "خط العرض" : "Latitude"}: {form.lat && String(form.lat) !== "0" ? form.lat : "—"}</span>
+                        <span>{isAr ? "خط الطول" : "Longitude"}: {form.lng && String(form.lng) !== "0" ? form.lng : "—"}</span>
                         {geocodingPin ? (
                           <span className="map-geocoding-status">
                             {isAr ? "جلب العنوان..." : "Looking up address..."}

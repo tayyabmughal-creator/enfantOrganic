@@ -481,19 +481,6 @@ def _send_customer_event_whatsapp(order, event, *, payload=None):
             "webhook_payload": {},
         }
 
-    if not bool(getattr(order, "whatsapp_opt_in", False)):
-        return {
-            "sent": False,
-            "status": NotificationLog.STATUS_SKIPPED,
-            "error_message": "Customer did not opt in for WhatsApp notifications.",
-            "provider": "whatsapp_cloud",
-            "provider_message_id": "",
-            "template_name": "",
-            "request_payload": {},
-            "response_payload": {},
-            "webhook_payload": {},
-        }
-
     try:
         wa_result = send_whatsapp_template(
             order,

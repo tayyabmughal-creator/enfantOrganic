@@ -1091,11 +1091,11 @@
 
 .review-stars {
   letter-spacing: 0.12em;
-  color: var(--brand);
+  color: #f5a623;
 }
 
 .review-stars.small {
-  font-size: 0.68rem;
+  font-size: 0.92rem;
 }
 
 .product-reviews {

@@ -183,7 +183,7 @@
 }
 
 .star-rating .star.is-filled {
-  color: #d4a843;
+  color: #f5a623;
 }
 
 .review-count {
@@ -261,6 +261,12 @@
   color: #fff;
   box-shadow: 0 6px 18px rgba(96, 122, 66, 0.3);
   font-weight: 700;
+}
+
+.option-pill.is-unavailable {
+  opacity: 0.35;
+  cursor: not-allowed;
+  text-decoration: line-through;
 }
 
 /* ── Quantity ─────────────────────────────────────────────────────────── */
@@ -601,9 +607,41 @@
   box-shadow: 0 8px 20px rgba(25, 24, 23, 0.04);
 }
 
+.product-review-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .product-review-head strong {
   font-weight: 750;
   font-size: 0.95rem;
+}
+
+.product-review-rating {
+  color: #f5a623;
+  font-size: 1rem;
+  letter-spacing: 0.05em;
+}
+
+.review-view-all-btn {
+  display: block;
+  margin: 16px auto 0;
+  background: none;
+  border: 1.5px solid var(--brand);
+  color: var(--brand);
+  border-radius: 20px;
+  padding: 8px 24px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.review-view-all-btn:hover {
+  background: var(--brand);
+  color: #fff;
 }
 
 /* ── Stock Notify ─────────────────────────────────────────────────────── */

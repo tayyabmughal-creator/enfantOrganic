@@ -208,6 +208,7 @@ const FIELD_CONFIGS = {
     ["slug","Slug","text"],["name_en","Name EN","text"],["name_ar","Name AR","text"],
     ["description_en","Description EN","textarea"],["description_ar","Description AR","textarea"],
     ["image","Image URL","text"],["image_file","Image File","file"],["sort_order","Sort order","number"],
+    ["products_info","Products in this category","category-products"],
   ],
   deals: [
     ["code","Code","text"],["description","Description","textarea"],

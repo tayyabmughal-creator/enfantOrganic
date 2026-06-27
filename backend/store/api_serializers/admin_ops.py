@@ -145,12 +145,38 @@ class AdminProductSerializer(serializers.ModelSerializer):
 
 
 class AdminCategorySerializer(serializers.ModelSerializer):
+    products_info = serializers.SerializerMethodField(read_only=True)
+    product_slugs = serializers.ListField(
+        child=serializers.CharField(), write_only=True, required=False
+    )
+
     class Meta:
         model = Category
         fields = "__all__"
         extra_kwargs = {
             "image_file": {"required": False},
         }
+
+    def get_products_info(self, obj):
+        return [
+            {"id": p.id, "slug": p.slug, "name": p.name_en or p.name_ar or "", "image": p.image or ""}
+            for p in obj.category_products.all()[:100]
+        ]
+
+    def update(self, instance, validated_data):
+        product_slugs = validated_data.pop("product_slugs", None)
+        instance = super().update(instance, validated_data)
+        if product_slugs is not None:
+            new_slugs = set(product_slugs)
+            current_products = list(instance.category_products.all())
+            current_slugs = {p.slug for p in current_products}
+            to_add = Product.objects.filter(slug__in=new_slugs - current_slugs)
+            for product in to_add:
+                product.categories.add(instance)
+            for product in current_products:
+                if product.slug not in new_slugs:
+                    product.categories.remove(instance)
+        return instance
 
 
 class AdminInstagramPostSerializer(serializers.ModelSerializer):

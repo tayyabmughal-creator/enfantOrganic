@@ -113,6 +113,29 @@ function findSelectedVariant(variants, selectedOptions) {
   );
 }
 
+function getCompatibleValues(variants, groupName, selectedOptions) {
+  return new Set(
+    variants
+      .filter((v) =>
+        Object.entries(selectedOptions).every(
+          ([name, val]) => name === groupName || v.options?.[name] === val,
+        ),
+      )
+      .map((v) => v.options?.[groupName])
+      .filter(Boolean),
+  );
+}
+
+function resolveOptionsOnChange(groupName, value, variants, current) {
+  const next = { ...current, [groupName]: value };
+  const valid = variants.find((v) =>
+    Object.entries(next).every(([n, val]) => v.options?.[n] === val),
+  );
+  if (valid) return next;
+  const fallback = variants.find((v) => v.options?.[groupName] === value);
+  return fallback ? { ...next, ...fallback.options } : next;
+}
+
 function StarRating({ rating = 5, size = 16 }) {
   const fullStars = Math.max(0, Math.min(5, Math.floor(Number(rating || 5))));
   return (
@@ -163,6 +186,7 @@ export default function ProductDetailClient({ locale, product, region }) {
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [isWishSubmitting, setIsWishSubmitting] = useState(false);
   const [wishFeedback, setWishFeedback] = useState("");
+  const [showAllReviews, setShowAllReviews] = useState(false);
   const lastTrackedViewItemRef = useRef("");
   const [selectedOptions, setSelectedOptions] = useState(
     Object.fromEntries(optionGroups.map((group) => [group.name, group.values[0]])),
@@ -553,28 +577,30 @@ export default function ProductDetailClient({ locale, product, region }) {
 
           {/* Purchase Meta */}
           <div className="product-purchase-meta">
-            {optionGroups.map((group) => (
-              <div key={group.name} className="summary-block product-option-block">
-                <h4>{group.name}</h4>
-                <div className="option-pills">
-                  {group.values.map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      className={`option-pill ${selectedOptions[group.name] === value ? "is-active" : ""}`}
-                      onClick={() =>
-                        setSelectedOptions((current) => ({
-                          ...current,
-                          [group.name]: value,
-                        }))
-                      }
-                    >
-                      {value}
-                    </button>
-                  ))}
+            {optionGroups.map((group) => {
+              const compatible = getCompatibleValues(variants, group.name, selectedOptions);
+              return (
+                <div key={group.name} className="summary-block product-option-block">
+                  <h4>{group.name}</h4>
+                  <div className="option-pills">
+                    {group.values.map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={`option-pill ${selectedOptions[group.name] === value ? "is-active" : ""} ${!compatible.has(value) ? "is-unavailable" : ""}`}
+                        onClick={() =>
+                          setSelectedOptions((current) =>
+                            resolveOptionsOnChange(group.name, value, variants, current),
+                          )
+                        }
+                      >
+                        {value}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             <div className="summary-block product-quantity-block">
               <div className="summary-label-row">
@@ -821,18 +847,36 @@ export default function ProductDetailClient({ locale, product, region }) {
               <div className="detail-accordion-inner">
                 <div className="review-list">
                   {customerReviews.length
-                    ? customerReviews.map((review) => (
-                        <article key={`${review.customer_name}-${review.created_at}`} className="product-review-item">
-                          <div className="product-review-head">
-                            <strong>{review.customer_name}</strong>
-                            <span className="product-review-rating">
-                              {"★".repeat(Math.max(1, Math.min(5, Number(review.rating || 5))))}
-                            </span>
-                          </div>
-                          {review.title ? <h5>{review.title}</h5> : null}
-                          <p>{review.comment}</p>
-                        </article>
-                      ))
+                    ? (() => {
+                        const displayed = showAllReviews ? customerReviews : customerReviews.slice(0, 5);
+                        return (
+                          <>
+                            {displayed.map((review) => (
+                              <article key={`${review.customer_name}-${review.created_at}`} className="product-review-item">
+                                <div className="product-review-head">
+                                  <strong>{review.customer_name}</strong>
+                                  <span className="product-review-rating">
+                                    {"★".repeat(Math.max(1, Math.min(5, Number(review.rating || 5))))}
+                                  </span>
+                                </div>
+                                {review.title ? <h5>{review.title}</h5> : null}
+                                <p>{review.comment}</p>
+                              </article>
+                            ))}
+                            {customerReviews.length > 5 && (
+                              <button
+                                type="button"
+                                className="review-view-all-btn"
+                                onClick={() => setShowAllReviews((v) => !v)}
+                              >
+                                {showAllReviews
+                                  ? (isAr ? "عرض أقل" : "Show Less")
+                                  : (isAr ? `عرض الكل (${customerReviews.length})` : `View All (${customerReviews.length})`)}
+                              </button>
+                            )}
+                          </>
+                        );
+                      })()
                     : editorialReviews.length
                       ? editorialReviews.map((review) => (
                           <article key={`${review.name}-${review.copy}`} className="product-review-item">

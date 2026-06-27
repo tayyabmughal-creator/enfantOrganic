@@ -1801,6 +1801,106 @@ function CategoriesSelectField({ field, value, editor, setEditor, disabled }) {
   );
 }
 
+function CategoryProductsField({ field, value, editor, setEditor, disabled }) {
+  const { name, label } = field;
+  const [allProducts, setAllProducts] = useState([]);
+  const [search, setSearch] = useState("");
+  const [loadingProds, setLoadingProds] = useState(false);
+
+  const productsInfo = Array.isArray(value) ? value : [];
+  const currentSlugs = (Array.isArray(editor.product_slugs) ? editor.product_slugs : productsInfo.map((p) => p.slug));
+
+  useEffect(() => {
+    if (!editor.product_slugs) {
+      setEditor((prev) => ({ ...prev, product_slugs: productsInfo.map((p) => p.slug) }));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (disabled) return;
+    setLoadingProds(true);
+    const token = typeof window !== "undefined" ? window.localStorage.getItem("enfhant-admin-token") : null;
+    fetch("/api/admin/products/?limit=400", {
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    })
+      .then((r) => r.json())
+      .then((data) => setAllProducts(Array.isArray(data) ? data : (data?.results || [])))
+      .catch(() => {})
+      .finally(() => setLoadingProds(false));
+  }, [disabled]);
+
+  const addProduct = (product) => {
+    if (currentSlugs.includes(product.slug)) return;
+    setEditor((prev) => ({
+      ...prev,
+      product_slugs: [...(prev.product_slugs || currentSlugs), product.slug],
+    }));
+  };
+
+  const removeProduct = (slug) => {
+    setEditor((prev) => ({
+      ...prev,
+      product_slugs: (prev.product_slugs || currentSlugs).filter((s) => s !== slug),
+    }));
+  };
+
+  const filteredProducts = allProducts.filter(
+    (p) => !currentSlugs.includes(p.slug) &&
+      (p.name_en?.toLowerCase().includes(search.toLowerCase()) || p.slug?.includes(search.toLowerCase())),
+  );
+
+  return (
+    <div className="admin-label full-width">
+      <span style={{ fontWeight: 600, fontSize: 13, display: "block", marginBottom: 8 }}>{label}</span>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+        {currentSlugs.length === 0 ? (
+          <small className="admin-field-help">No products assigned.</small>
+        ) : currentSlugs.map((slug) => {
+          const info = productsInfo.find((p) => p.slug === slug) || allProducts.find((p) => p.slug === slug);
+          const name = info?.name_en || info?.name || slug;
+          return (
+            <span key={slug} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "var(--brand-pale,#f0f4e8)", border: "1px solid var(--brand,#5a7a2e)", borderRadius: 20, padding: "3px 10px", fontSize: 12 }}>
+              {name}
+              {!disabled && (
+                <button type="button" onClick={() => removeProduct(slug)} style={{ background: "none", border: "none", cursor: "pointer", color: "#c00", fontWeight: 700, padding: 0, lineHeight: 1 }}>×</button>
+              )}
+            </span>
+          );
+        })}
+      </div>
+      {!disabled && (
+        <div>
+          <input
+            type="text"
+            className="admin-input"
+            placeholder="Search product to add…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ marginBottom: 6 }}
+          />
+          {loadingProds ? (
+            <small className="admin-field-help">Loading products…</small>
+          ) : search.length > 0 ? (
+            <div style={{ border: "1px solid var(--line,#ddd)", borderRadius: 8, maxHeight: 180, overflowY: "auto", background: "#fff" }}>
+              {filteredProducts.slice(0, 20).map((p) => (
+                <button
+                  key={p.slug}
+                  type="button"
+                  onClick={() => { addProduct(p); setSearch(""); }}
+                  style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 12px", border: "none", background: "none", cursor: "pointer", fontSize: 13, borderBottom: "1px solid var(--line,#f0f0f0)" }}
+                >
+                  {p.name_en || p.slug}
+                </button>
+              ))}
+              {filteredProducts.length === 0 && <small className="admin-field-help" style={{ padding: "8px 12px", display: "block" }}>No products found.</small>}
+            </div>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RichTextEditor({ value, onChange, disabled }) {
   const ref = useRef(null);
   const initializedRef = useRef(false);
@@ -1934,6 +2034,9 @@ function FormField({ field, value, editor, setEditor, mode, onGalleryUpload }) {
 
   if (type === "categories-select") {
     return <CategoriesSelectField field={field} value={value} editor={editor} setEditor={setEditor} disabled={disabled} />;
+  }
+  if (type === "category-products") {
+    return <CategoryProductsField field={field} value={value} editor={editor} setEditor={setEditor} disabled={disabled} />;
   }
   if (type === "gallery") {
     return <GalleryManager field={field} value={value} editor={editor} setEditor={setEditor} mode={mode} onGalleryUpload={onGalleryUpload} />;
