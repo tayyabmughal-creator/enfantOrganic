@@ -498,10 +498,15 @@
     display: none;
   }
 
-  /* Show mobile versions inside the drawer */
+  /* Lang/region toggles go into the drawer, not the top bar */
   .mobile-lang-toggle,
   .mobile-region-select {
-    display: flex;
+    display: none;
+  }
+
+  /* Hide account icon on mobile — accessible via hamburger drawer */
+  .header-account-link {
+    display: none;
   }
 
   /* backdrop-filter on site-header creates a containing block for

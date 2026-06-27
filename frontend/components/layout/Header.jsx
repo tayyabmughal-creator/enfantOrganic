@@ -326,6 +326,9 @@ function HeaderInner({ navigation }) {
               </select>
               <Icon name="chevronDown" size={13} className="control-select-chevron" />
             </label>
+            <a href={buildStorePath(locale, "/account", region)} className="nav-link">
+              {locale === "ar" ? "حسابي" : "My Account"}
+            </a>
           </div>
         </nav>
 
@@ -384,7 +387,7 @@ function HeaderInner({ navigation }) {
           <button type="button" className="icon-link" aria-label={t.search} onClick={() => setSearchOpen(true)}>
             <Icon name="search" size={18} />
           </button>
-          <a href={buildStorePath(locale, "/account", region)} className="icon-link" aria-label={locale === "ar" ? "حسابي" : "My Account"}>
+          <a href={buildStorePath(locale, "/account", region)} className="icon-link header-account-link" aria-label={locale === "ar" ? "حسابي" : "My Account"}>
             <Icon name="user" size={18} />
           </a>
           <button type="button" className="icon-link cart-link" aria-label={t.cart} onClick={openCart}>
