@@ -356,7 +356,7 @@ function HeaderInner({ navigation }) {
             </label>
           </div>
 
-          {/* Mobile-only: locale toggle — compact "EN"/"AR" label */}
+          {/* Mobile-only: locale toggle */}
           <button
             type="button"
             className="lang-toggle-btn mobile-lang-toggle"
@@ -364,7 +364,7 @@ function HeaderInner({ navigation }) {
             aria-label={locale === "ar" ? "Switch to English" : "التبديل إلى العربية"}
           >
             <Icon name="globe" size={14} className="lang-toggle-icon" />
-            <span>{locale === "ar" ? "EN" : "AR"}</span>
+            <span>{locale === "ar" ? "EN" : "العربية"}</span>
           </button>
           <label className="control-select region-select mobile-region-select">
             <span className="visually-hidden">{t.region}</span>
@@ -381,7 +381,7 @@ function HeaderInner({ navigation }) {
             <Icon name="chevronDown" size={12} className="control-select-chevron" />
           </label>
 
-          <button type="button" className="icon-link" aria-label={t.search} onClick={() => setSearchOpen(true)}>
+          <button type="button" className="icon-link header-search-btn" aria-label={t.search} onClick={() => setSearchOpen(true)}>
             <Icon name="search" size={18} />
           </button>
           <a href={buildStorePath(locale, "/account", region)} className="icon-link header-account-link" aria-label={locale === "ar" ? "حسابي" : "My Account"}>
