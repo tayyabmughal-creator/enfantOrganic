@@ -521,18 +521,14 @@
     min-height: 30px !important;
   }
 
-  /* Lang toggle: same 30px circle as other icons, globe only */
+  /* Lang toggle: compact pill with globe + EN/AR text */
   .mobile-lang-toggle {
-    width: 30px !important;
-    height: 30px !important;
     min-height: 30px !important;
-    padding: 0 !important;
-    gap: 0 !important;
+    padding: 0 8px !important;
+    gap: 4px !important;
     box-shadow: none !important;
-    justify-content: center !important;
-  }
-  .mobile-lang-toggle span:not(.lang-toggle-icon) {
-    display: none !important;
+    font-size: 0.72rem !important;
+    letter-spacing: 0 !important;
   }
 
   /* Region select: same 30px circle, flag only */
