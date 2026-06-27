@@ -48,7 +48,8 @@ export function snaptrTrack(event, params) {
 
 function loadGtm(gtmId) {
   if (!gtmId || typeof window === "undefined" || typeof document === "undefined") return;
-  if (document.getElementById(GTM_SCRIPT_ID)) return;
+  if (window.__gtmInjected || document.getElementById(GTM_SCRIPT_ID)) return;
+  window.__gtmInjected = true;
   ensureDataLayer();
   window.dataLayer.push({ "gtm.start": Date.now(), event: "gtm.js" });
   const script = document.createElement("script");

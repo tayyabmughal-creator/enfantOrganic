@@ -35,7 +35,7 @@ export default function GtmScript() {
     if (!gtmId || !consentGranted || typeof window === "undefined") return;
 
     // Prevent double-injection
-    if (window.__gtmInjected) return;
+    if (window.__gtmInjected || document.getElementById("enfant-gtm-script")) return;
     window.__gtmInjected = true;
 
     // Initialize dataLayer
@@ -47,6 +47,7 @@ export default function GtmScript() {
 
     // Inject GTM script
     const script = document.createElement("script");
+    script.id = "enfant-gtm-script";
     script.async = true;
     script.src = `https://www.googletagmanager.com/gtm.js?id=${gtmId}`;
     document.head.appendChild(script);

@@ -33,11 +33,12 @@ from store.models import (
     TaxRate,
     WhatsAppLog,
     ProductStock,
+    Review,
     Warehouse,
 )
 from store.api_serializers.checkout import CheckoutCreateSerializer
-from store.api_serializers.admin_ops import AdminOrderSerializer
-from store.api_serializers.catalog import RegionSerializer
+from store.api_serializers.admin_ops import AdminCategorySerializer, AdminOrderSerializer
+from store.api_serializers.catalog import ProductDetailSerializer, RegionSerializer
 from store.api_views.admin_ops import HasAdminCapability, IsStaffUser
 from store.emails import send_order_confirmation_email, send_payment_paid_email
 from store.notifications import NotificationDispatchRetryableError
@@ -115,6 +116,49 @@ class CheckoutAndPermsTestCase(TestCase):
                 }
             ],
         }
+
+    def test_admin_category_create_attaches_product_slugs(self):
+        serializer = AdminCategorySerializer(
+            data={
+                "slug": "snacks",
+                "name_en": "Snacks",
+                "product_slugs": [self.product.slug],
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        category = serializer.save()
+
+        self.assertTrue(self.product.categories.filter(pk=category.pk).exists())
+
+    def test_product_detail_reviews_include_image_urls(self):
+        Review.objects.create(
+            product=self.product,
+            customer_name="Photo Reviewer",
+            rating=5,
+            title="Loved it",
+            comment="Gentle and useful.",
+            images=[
+                "https://cdn.example.com/review-1.jpg",
+                {"url": "https://cdn.example.com/review-2.jpg"},
+                "https://cdn.example.com/review-1.jpg",
+                {"src": ""},
+            ],
+            is_approved=True,
+        )
+
+        data = ProductDetailSerializer(
+            self.product,
+            context={"locale": "en", "region": self.region},
+        ).data
+
+        self.assertEqual(
+            data["customer_reviews"][0]["images"],
+            [
+                "https://cdn.example.com/review-1.jpg",
+                "https://cdn.example.com/review-2.jpg",
+            ],
+        )
 
     def test_checkout_inventory_deduction_and_pricing(self):
         payload = {

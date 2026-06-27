@@ -131,6 +131,7 @@ class ReviewCreateSerializer(serializers.ModelSerializer):
             "rating",
             "title",
             "comment",
+            "images",
             "is_verified_purchase",
             "is_approved",
             "created_at",

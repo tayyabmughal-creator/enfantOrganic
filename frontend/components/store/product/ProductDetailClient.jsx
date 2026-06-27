@@ -861,6 +861,13 @@ export default function ProductDetailClient({ locale, product, region }) {
                                 </div>
                                 {review.title ? <h5>{review.title}</h5> : null}
                                 <p>{review.comment}</p>
+                                {Array.isArray(review.images) && review.images.length ? (
+                                  <div className="product-review-images" aria-label={isAr ? "صور المراجعة" : "Review photos"}>
+                                    {review.images.map((image) => (
+                                      <img key={image} src={image} alt="" loading="lazy" />
+                                    ))}
+                                  </div>
+                                ) : null}
                               </article>
                             ))}
                             {customerReviews.length > 5 && (

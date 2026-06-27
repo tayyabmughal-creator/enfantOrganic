@@ -123,6 +123,22 @@ def option_groups_from_variants(variants):
     return [{"name": name, "values": grouped[name]} for name in order if len(grouped[name]) > 1]
 
 
+def _review_images(raw):
+    if not isinstance(raw, list):
+        return []
+    images = []
+    for item in raw:
+        if isinstance(item, str):
+            url = item.strip()
+        elif isinstance(item, dict):
+            url = str(item.get("url") or item.get("image") or item.get("src") or "").strip()
+        else:
+            url = ""
+        if url and url not in images:
+            images.append(url)
+    return images
+
+
 class CartMilestoneSerializer(serializers.ModelSerializer):
     label = serializers.SerializerMethodField()
 
@@ -529,6 +545,7 @@ class ProductDetailSerializer(ProductCardSerializer):
                 "rating": review.rating,
                 "title": review.title,
                 "comment": review.comment,
+                "images": _review_images(review.images),
                 "is_verified_purchase": review.is_verified_purchase,
                 "created_at": review.created_at,
             }

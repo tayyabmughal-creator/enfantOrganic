@@ -18,6 +18,7 @@ import { readStoredRegion, regionFromSearchParams } from "./regionResolver.js";
 const SESSION_KEY = "enfant-session-id";
 const ATTRIBUTION_KEY = "enfant-attribution";
 const LOCALIZED_STOREFRONT_PATH = /^\/(en|ar)(?=\/|$)/i;
+const UTM_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"];
 
 function inferSource({ utmSource = "", referrer = "" } = {}) {
   const raw = String(utmSource || "").trim().toLowerCase();
@@ -36,6 +37,41 @@ function inferSource({ utmSource = "", referrer = "" } = {}) {
   } catch {
     return "Referral";
   }
+}
+
+function isExternalReferrer(referrer = "") {
+  if (typeof window === "undefined" || !referrer) return false;
+  try {
+    const referrerUrl = new URL(referrer);
+    return referrerUrl.hostname !== window.location.hostname;
+  } catch {
+    return false;
+  }
+}
+
+function buildAttributionSnapshot({ sessionKey, regionCode = "" } = {}) {
+  const params = new URLSearchParams(window.location.search);
+  const referrer = document.referrer || "";
+  return {
+    session_key: sessionKey,
+    source: inferSource({ utmSource: params.get("utm_source") || "", referrer }),
+    medium: params.get("utm_medium") || "",
+    campaign: params.get("utm_campaign") || "",
+    utm_source: params.get("utm_source") || "",
+    utm_medium: params.get("utm_medium") || "",
+    utm_campaign: params.get("utm_campaign") || "",
+    utm_content: params.get("utm_content") || "",
+    utm_term: params.get("utm_term") || "",
+    referrer,
+    landing_page: window.location.href,
+    current_page: window.location.href,
+    region_code: regionCode,
+  };
+}
+
+function hasFreshAttribution() {
+  const params = new URLSearchParams(window.location.search);
+  return UTM_KEYS.some((key) => params.get(key)) || isExternalReferrer(document.referrer || "");
 }
 
 /**
@@ -72,11 +108,30 @@ export function getAttributionSnapshot(extras = {}) {
     if (existing) {
       const parsed = JSON.parse(existing);
       if (parsed?.session_key === sessionKey) {
-        const snapshot = {
-          ...parsed,
-          current_page: window.location.href,
-          region_code: extras.regionCode || parsed.region_code || "",
-        };
+        const freshAttribution = hasFreshAttribution()
+          ? buildAttributionSnapshot({ sessionKey, regionCode: extras.regionCode || parsed.region_code || "" })
+          : null;
+        const shouldResetLandingPage = Boolean(
+          freshAttribution
+          && (
+            freshAttribution.utm_source
+            || freshAttribution.referrer !== parsed.referrer
+            || freshAttribution.source !== parsed.source
+          ),
+        );
+        const snapshot = freshAttribution
+          ? {
+              ...parsed,
+              ...freshAttribution,
+              landing_page: shouldResetLandingPage
+                ? freshAttribution.landing_page
+                : parsed.landing_page || freshAttribution.landing_page,
+            }
+          : {
+              ...parsed,
+              current_page: window.location.href,
+              region_code: extras.regionCode || parsed.region_code || "",
+            };
         window.localStorage.setItem(ATTRIBUTION_KEY, JSON.stringify(snapshot));
         return snapshot;
       }
@@ -85,23 +140,7 @@ export function getAttributionSnapshot(extras = {}) {
     // Fall through and rebuild attribution below.
   }
 
-  const params = new URLSearchParams(window.location.search);
-  const referrer = document.referrer || "";
-  const snapshot = {
-    session_key: sessionKey,
-    source: inferSource({ utmSource: params.get("utm_source") || "", referrer }),
-    medium: params.get("utm_medium") || "",
-    campaign: params.get("utm_campaign") || "",
-    utm_source: params.get("utm_source") || "",
-    utm_medium: params.get("utm_medium") || "",
-    utm_campaign: params.get("utm_campaign") || "",
-    utm_content: params.get("utm_content") || "",
-    utm_term: params.get("utm_term") || "",
-    referrer,
-    landing_page: window.location.href,
-    current_page: window.location.href,
-    region_code: extras.regionCode || "",
-  };
+  const snapshot = buildAttributionSnapshot({ sessionKey, regionCode: extras.regionCode || "" });
 
   try {
     window.localStorage.setItem(ATTRIBUTION_KEY, JSON.stringify(snapshot));

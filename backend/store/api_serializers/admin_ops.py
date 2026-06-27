@@ -163,6 +163,14 @@ class AdminCategorySerializer(serializers.ModelSerializer):
             for p in obj.category_products.all()[:100]
         ]
 
+    def create(self, validated_data):
+        product_slugs = validated_data.pop("product_slugs", None)
+        instance = super().create(validated_data)
+        if product_slugs is not None:
+            for product in Product.objects.filter(slug__in=set(product_slugs)):
+                product.categories.add(instance)
+        return instance
+
     def update(self, instance, validated_data):
         product_slugs = validated_data.pop("product_slugs", None)
         instance = super().update(instance, validated_data)

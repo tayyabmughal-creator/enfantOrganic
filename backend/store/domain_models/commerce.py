@@ -722,6 +722,7 @@ class Review(models.Model):
     rating = models.PositiveSmallIntegerField(default=5)
     title = models.CharField(max_length=160, blank=True)
     comment = models.TextField()
+    images = models.JSONField(default=list, blank=True)
     is_verified_purchase = models.BooleanField(default=False)
     is_approved = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)

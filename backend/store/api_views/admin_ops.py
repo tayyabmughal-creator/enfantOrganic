@@ -882,7 +882,7 @@ class AdminDashboardView(APIView):
             top_metric = "rating"
 
         top_date_range = str(request.query_params.get("top_date_range", "all_time") or "all_time").strip().lower()
-        if top_date_range not in {"all_time", "last_7_days", "last_30_days", "last_60_days", "last_90_days", "custom_date"}:
+        if top_date_range not in {"all_time", "today", "yesterday", "last_7_days", "last_30_days", "last_60_days", "last_90_days", "custom_date"}:
             top_date_range = "all_time"
 
         top_market = str(request.query_params.get("top_market", "all") or "all").strip().lower()
@@ -915,8 +915,16 @@ class AdminDashboardView(APIView):
         def _as_day_end(target_date):
             return timezone.make_aware(datetime.combine(target_date, datetime.max.time()))
 
+        today_start = _as_day_start(timezone.localdate())
+        yesterday_start = today_start - timedelta(days=1)
+        day_before_yesterday_start = today_start - timedelta(days=2)
+
         scoped_orders = base_orders
-        if top_date_range == "custom_date":
+        if top_date_range == "today":
+            scoped_orders = scoped_orders.filter(created_at__gte=today_start, created_at__lte=now)
+        elif top_date_range == "yesterday":
+            scoped_orders = scoped_orders.filter(created_at__gte=yesterday_start, created_at__lt=today_start)
+        elif top_date_range == "custom_date":
             if custom_range_valid:
                 scoped_orders = scoped_orders.filter(
                     created_at__gte=_as_day_start(start_date),
@@ -940,6 +948,12 @@ class AdminDashboardView(APIView):
         if top_date_range == "all_time":
             current_period_orders = base_orders
             previous_period_orders = base_orders.none()
+        elif top_date_range == "today":
+            current_period_orders = base_orders.filter(created_at__gte=today_start, created_at__lte=now)
+            previous_period_orders = base_orders.filter(created_at__gte=yesterday_start, created_at__lt=today_start)
+        elif top_date_range == "yesterday":
+            current_period_orders = base_orders.filter(created_at__gte=yesterday_start, created_at__lt=today_start)
+            previous_period_orders = base_orders.filter(created_at__gte=day_before_yesterday_start, created_at__lt=yesterday_start)
         elif top_date_range in {"last_7_days", "last_30_days", "last_60_days", "last_90_days"}:
             day_window = {
                 "last_7_days": 7,
@@ -972,6 +986,12 @@ class AdminDashboardView(APIView):
         if top_date_range == "all_time":
             current_period_carts = base_abandoned_carts
             previous_period_carts = AbandonedCart.objects.none()
+        elif top_date_range == "today":
+            current_period_carts = base_abandoned_carts.filter(abandoned_at__gte=today_start, abandoned_at__lte=now)
+            previous_period_carts = base_abandoned_carts.filter(abandoned_at__gte=yesterday_start, abandoned_at__lt=today_start)
+        elif top_date_range == "yesterday":
+            current_period_carts = base_abandoned_carts.filter(abandoned_at__gte=yesterday_start, abandoned_at__lt=today_start)
+            previous_period_carts = base_abandoned_carts.filter(abandoned_at__gte=day_before_yesterday_start, abandoned_at__lt=yesterday_start)
         elif top_date_range in {"last_7_days", "last_30_days", "last_60_days", "last_90_days"}:
             day_window = {
                 "last_7_days": 7,
@@ -1037,20 +1057,34 @@ class AdminDashboardView(APIView):
         # Period window mirrors current_period_orders (this month / last N days / custom range).
         if top_date_range == "all_time":
             event_period_start = None
+            event_period_end = None
             event_prev_start = None
             event_prev_end = None
+        elif top_date_range == "today":
+            event_period_start = today_start
+            event_period_end = None
+            event_prev_start = yesterday_start
+            event_prev_end = today_start
+        elif top_date_range == "yesterday":
+            event_period_start = yesterday_start
+            event_period_end = today_start
+            event_prev_start = day_before_yesterday_start
+            event_prev_end = yesterday_start
         elif top_date_range in {"last_7_days", "last_30_days", "last_60_days", "last_90_days"}:
             _dw = {"last_7_days": 7, "last_30_days": 30, "last_60_days": 60, "last_90_days": 90}[top_date_range]
             event_period_start = now - timedelta(days=_dw)
+            event_period_end = None
             event_prev_start = event_period_start - timedelta(days=_dw)
             event_prev_end = event_period_start
         elif top_date_range == "custom_date" and custom_range_valid:
             event_period_start = _as_day_start(start_date)
+            event_period_end = _as_day_end(end_date)
             _range_days = max(1, (end_date - start_date).days + 1)
             event_prev_start = event_period_start - timedelta(days=_range_days)
             event_prev_end = event_period_start
         else:
             event_period_start = this_month_start
+            event_period_end = None
             event_prev_start = last_month_start
             event_prev_end = this_month_start
 
@@ -1065,7 +1099,7 @@ class AdminDashboardView(APIView):
             return qs
 
         try:
-            curr_events = _period_events(event_period_start)
+            curr_events = _period_events(event_period_start, event_period_end)
             prev_events = _period_events(event_prev_start, event_prev_end) if event_prev_start is not None else AnalyticsEvent.objects.none()
 
             current_sessions = curr_events.filter(

@@ -625,6 +625,22 @@
   letter-spacing: 0.05em;
 }
 
+.product-review-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.product-review-images img {
+  width: 72px;
+  height: 72px;
+  border-radius: 12px;
+  border: 1px solid rgba(223, 231, 214, 0.9);
+  object-fit: cover;
+  background: #fff;
+}
+
 .review-view-all-btn {
   display: block;
   margin: 16px auto 0;

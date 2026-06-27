@@ -516,6 +516,7 @@
     max-width: 100%;
     flex-wrap: nowrap;
     justify-content: flex-end;
+    justify-self: end;
   }
 
   /* All icon buttons: 30px circles */
@@ -616,5 +617,36 @@
     padding-top: 14px;
     margin-top: 6px;
     border-top: 1px solid var(--line);
+  }
+}
+
+@media (max-width: 380px) {
+  .site-header .container {
+    width: min(100% - 20px, 1280px);
+  }
+
+  .site-header .header-main {
+    gap: 4px;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .site-header .brand-logo {
+    height: 44px;
+    max-width: 62px;
+  }
+
+  .site-header .mobile-lang-toggle {
+    padding: 0 5px !important;
+    gap: 3px !important;
+    font-size: 0.68rem !important;
+  }
+
+  .site-header .mobile-region-select {
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    max-width: 32px !important;
+    min-height: 32px !important;
+    flex-basis: 32px !important;
   }
 }

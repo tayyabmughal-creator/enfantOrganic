@@ -244,6 +244,7 @@ const FIELD_CONFIGS = {
     ["product","Product ID","number"],["order","Order ID","number"],
     ["customer_name","Customer name","text"],["rating","Rating","number"],
     ["title","Title","text"],["comment","Comment","textarea"],
+    ["images","Review image URLs JSON","json"],
     ["is_verified_purchase","Verified purchase","checkbox"],["is_approved","Approved","checkbox"],
   ],
   shipping: [
@@ -463,7 +464,7 @@ const CREATE_DEFAULTS = {
   deals:      { code:"",description:"",discount_type:"fixed",value:0,minimum_subtotal:0,max_uses:"",starts_at:"",ends_at:"",is_active:true },
   customers:  { username:"",email:"",password:"",first_name:"",last_name:"",is_active:true,is_staff:false },
   payments:   { order:"",provider:"cod",provider_reference:"",amount:0,currency_code:"OMR",status:"pending",raw_response:{} },
-  reviews:    { product:"",order:"",customer_name:"",rating:5,title:"",comment:"",is_verified_purchase:false,is_approved:false },
+  reviews:    { product:"",order:"",customer_name:"",rating:5,title:"",comment:"",images:[],is_verified_purchase:false,is_approved:false },
   shipping:   { region:"",city:"",area:"",min_order_value:0,max_order_value:"",shipping_fee:0,free_shipping_threshold:0,eta_min_days:"",eta_max_days:"",carrier_name:"",active:true },
   cart_milestones: { region:"",reward_type:"free_shipping",threshold:0,discount_value:0,label_en:"",label_ar:"",sort_order:0,is_active:true },
   blog:       { slug:"",title_en:"",title_ar:"",excerpt_en:"",excerpt_ar:"",body_en:"",body_ar:"",image:"",category_en:"",category_ar:"",published_at:"",is_published:false,sort_order:0 },
@@ -698,6 +699,7 @@ function buildPayload(editor, key, mode) {
       else if (type === "option-groups") fd.append(k, JSON.stringify(cleanOptionGroups(v)));
       else if (type === "json" || type === "gallery") fd.append(k, JSON.stringify(typeof v === "string" ? JSON.parse(v || "null") : v));
       else if (type === "categories-select") { const ids = Array.isArray(v) ? v : []; ids.forEach((id) => fd.append(k, id)); if (ids.length === 0) fd.append(k, ""); }
+      else if (k === "product_slugs") { const slugs = Array.isArray(v) ? v : []; slugs.forEach((slug) => fd.append(k, slug)); if (slugs.length === 0) fd.append(k, ""); }
       else if (v instanceof File) fd.append(k, v);
       else fd.append(k, v);
     }
@@ -711,6 +713,7 @@ function buildPayload(editor, key, mode) {
     else if (type === "option-groups") payload[k] = cleanOptionGroups(v);
     else if (type === "json" || type === "gallery") payload[k] = typeof v === "string" ? JSON.parse(v || "null") : v;
     else if (type === "categories-select") payload[k] = Array.isArray(v) ? v : [];
+    else if (k === "product_slugs") payload[k] = Array.isArray(v) ? v : [];
     else payload[k] = v;
   }
   return payload;

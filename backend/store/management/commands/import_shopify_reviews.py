@@ -14,6 +14,7 @@ Requires openpyxl:
     pip install openpyxl
 """
 import datetime
+import re
 from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
@@ -64,6 +65,26 @@ class Command(BaseCommand):
                 if v is not None:
                     return str(v).strip()
             return ""
+
+        def review_images(row_dict):
+            values = []
+            for header in headers:
+                key = str(header or "").strip().lower()
+                if not key:
+                    continue
+                if not any(token in key for token in ("image", "photo", "picture")):
+                    continue
+                raw = row_dict.get(header)
+                if raw is None:
+                    continue
+                values.extend(re.split(r"[\n,;]+", str(raw)))
+
+            images = []
+            for value in values:
+                url = str(value or "").strip()
+                if url.startswith(("http://", "https://")) and url not in images:
+                    images.append(url)
+            return images
 
         # Pre-load product slug → pk mapping (slug is unique index).
         slug_to_pk = dict(Product.objects.values_list("slug", "pk"))
@@ -137,6 +158,7 @@ class Command(BaseCommand):
                             rating=rating,
                             title=title,
                             comment=comment,
+                            images=review_images(row),
                             is_approved=True,
                             is_verified_purchase=False,
                         )
