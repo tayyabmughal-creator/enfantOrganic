@@ -720,43 +720,74 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     };
   }, [form.email, form.phone, form.name, cartItems, subtotal, regionCurrency, cartCurrency, region, locale]);
 
-  // Debounced capture: fires 1 s after user stops typing in email OR phone.
+  // Fire the abandoned-cart capture exactly once, reading the latest snapshot.
+  // keepalive:true lets the POST complete even if it is triggered while the page
+  // is reloading / closing / navigating away (a plain fetch would be aborted).
+  const flushAbandonedCart = useCallback(() => {
+    if (abandonedCartSentRef.current) return;
+    const snap = abandonedCartSnapRef.current || {};
+    const email = (snap.email || "").trim();
+    const phone = (snap.phone || "").trim();
+    const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    const validPhone = phone.replace(/\D/g, "").length >= 8;
+    if (!validEmail && !validPhone) return;
+    abandonedCartSentRef.current = true;
+    const url = `${API_BASE_URL}/abandoned-carts/`;
+    const body = JSON.stringify({
+      session_token: getOrCreateSessionKey() || `anon-${Date.now()}`,
+      customer_email: email,
+      customer_name: snap.name || "",
+      customer_phone: phone,
+      cart_items: (snap.items || []).map((item) => ({
+        product_slug: item.slug || "",
+        product_name: item.name || "",
+        quantity: item.quantity || 1,
+        unit_price: String(item.pricing?.amount ?? item.price ?? "0"),
+        image: item.image || "",
+      })),
+      subtotal: String(snap.subtotal ?? "0"),
+      currency_code: snap.currency || "OMR",
+      region: snap.region || "om",
+      locale: snap.locale || "en",
+    });
+    const beacon = () => {
+      try { navigator.sendBeacon?.(url, new Blob([body], { type: "application/json" })); } catch { /* ignore */ }
+    };
+    try {
+      fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+        keepalive: true,
+      }).catch(beacon);
+    } catch {
+      beacon();
+    }
+  }, []);
+
+  // Debounced capture: fires ~0.8 s after the user stops typing email OR phone.
   useEffect(() => {
     if (abandonedCartSentRef.current) return;
     if (!form.email && !form.phone) return;
     if (abandonedCartTimerRef.current) clearTimeout(abandonedCartTimerRef.current);
-    abandonedCartTimerRef.current = setTimeout(() => {
-      if (abandonedCartSentRef.current) return;
-      const { email, phone, name, items, subtotal: sub, currency, region: reg, locale: loc } = abandonedCartSnapRef.current;
-      const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((email || "").trim());
-      const validPhone = (phone || "").replace(/\D/g, "").length >= 8;
-      if (!validEmail && !validPhone) return;
-      abandonedCartSentRef.current = true;
-      fetch(`${API_BASE_URL}/abandoned-carts/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          session_token: getOrCreateSessionKey() || `anon-${Date.now()}`,
-          customer_email: (email || "").trim(),
-          customer_name: name || "",
-          customer_phone: (phone || "").trim(),
-          cart_items: (items || []).map((item) => ({
-            product_slug: item.slug || "",
-            product_name: item.name || "",
-            quantity: item.quantity || 1,
-            unit_price: String(item.pricing?.amount ?? item.price ?? "0"),
-            image: item.image || "",
-          })),
-          subtotal: String(sub || "0"),
-          currency_code: currency,
-          region: reg,
-          locale: loc,
-        }),
-      }).catch(() => {});
-    }, 1000);
+    abandonedCartTimerRef.current = setTimeout(flushAbandonedCart, 800);
     return () => { if (abandonedCartTimerRef.current) clearTimeout(abandonedCartTimerRef.current); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.email, form.phone]);
+  }, [form.email, form.phone, flushAbandonedCart]);
+
+  // Safety net (Shopify-like): if the customer enters contact info then reloads,
+  // closes the tab, or navigates away before the debounce fires, capture on the
+  // way out. pagehide + visibilitychange:hidden are the reliable "leaving"
+  // signals; flushAbandonedCart's keepalive POST survives the unload.
+  useEffect(() => {
+    const onVisibility = () => { if (document.visibilityState === "hidden") flushAbandonedCart(); };
+    const onPageHide = () => flushAbandonedCart();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", onPageHide);
+    };
+  }, [flushAbandonedCart]);
 
   const checkoutItemsPayload = useCallback(
     () =>

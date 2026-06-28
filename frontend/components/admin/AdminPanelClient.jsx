@@ -741,6 +741,7 @@ export default function AdminPanelClient() {
   const [page, setPage]             = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const userPageClickRef            = useRef(false);
+  const loadDataSeqRef              = useRef(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [dashboardFilters, setDashboardFilters] = useState(DASHBOARD_FILTER_DEFAULTS);
@@ -975,6 +976,11 @@ export default function AdminPanelClient() {
 
   async function loadScreen(screen = active, options = {}) {
     if (!screen || !screen.endpoint) { setData(null); setLoading(false); return; }
+    // Stale-response guard: every load gets a sequence number. When the user
+    // switches tabs (or search/pagination changes) a newer load is issued; a
+    // slow earlier response (e.g. Orders) must NOT overwrite the current screen
+    // (e.g. Abandoned). Only the latest load is allowed to apply its result.
+    const mySeq = ++loadDataSeqRef.current;
     if (!options.silent) setLoading(true);
     if (!options.silent) setData(null);
     if (mode !== "edit" && !options.silent) closeForm();
@@ -1016,6 +1022,7 @@ export default function AdminPanelClient() {
       }
       const qs = params.toString();
       const raw = await request(qs ? `${url}?${qs}` : url);
+      if (mySeq !== loadDataSeqRef.current) return;   // superseded by a newer load — discard
       if (screenKey === "dashboard" && raw?.inventory_health_threshold !== undefined) {
         setInventoryThreshold(Number(raw.inventory_health_threshold || 10));
       }
@@ -1025,6 +1032,7 @@ export default function AdminPanelClient() {
           request("/admin/product-stocks/?page_size=500"),
           request("/admin/back-in-stock-requests/?page_size=500"),
         ]);
+        if (mySeq !== loadDataSeqRef.current) return;   // superseded during the inventory side-loads
         setInventoryThreshold(Number(settingsPayload?.inventory_low_stock_threshold || 10));
         setWarehouseStocks(Array.isArray(warehousePayload?.results) ? warehousePayload.results : []);
         setDemandAlerts(Array.isArray(demandPayload?.results) ? demandPayload.results : []);
@@ -1047,9 +1055,12 @@ export default function AdminPanelClient() {
         setTotalPages(1);
       }
     } catch (err) {
-      showToast(err.message, "error");
+      if (mySeq === loadDataSeqRef.current) showToast(err.message, "error");
     } finally {
-      if (!options.silent) setLoading(false);
+      // Clear the spinner once the latest load settles (a non-silent load turned
+      // it on; whichever load is current must turn it off — even if that load is
+      // a silent one that superseded the non-silent one).
+      if (mySeq === loadDataSeqRef.current) setLoading(false);
     }
   }
 
