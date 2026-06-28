@@ -3592,7 +3592,10 @@ class AdminAbandonedCartListView(generics.ListAPIView):
             status__in=[AbandonedCart.STATUS_ABANDONED, AbandonedCart.STATUS_CONTACTED]
         )
         session_recovered = Exists(
-            Order.objects.filter(conversion_session_key=OuterRef("session_token"))
+            Order.objects.filter(
+                conversion_session_key=OuterRef("session_token"),
+                created_at__gte=OuterRef("abandoned_at"),
+            )
         )
         email_recovered = Exists(
             Order.objects.filter(
@@ -3826,20 +3829,32 @@ class AbandonedCartCreateView(APIView):
                 setattr(cart, key, value)
             cart.save()
 
-        # If this cart was just created (status=abandoned) but the customer has
-        # already placed an order with the same session/email/phone, mark it
-        # recovered immediately so it never shows as a ghost abandoned entry.
-        if cart.status == AbandonedCart.STATUS_ABANDONED:
+        # Reconcile this cart's status against real orders. A cart counts as
+        # "recovered" ONLY if a matching order was placed AT OR AFTER it was
+        # abandoned. Without the created_at >= abandoned_at guard, entering an
+        # email/phone (or reusing a browser session) that has ANY past order — a
+        # returning customer, or the owner testing with their own details — would
+        # instantly flip a brand-new cart to "recovered" and hide it from the admin
+        # list. This mirrors AdminAbandonedCartListView's ghost-cleanup.
+        # We also run this for an existing cart that update_or_create just
+        # refreshed: if it was previously (falsely) auto-marked "recovered" but has
+        # no qualifying order, reset it to "abandoned" so it reappears — this
+        # self-heals legacy ghost-recovered rows the moment the customer is back in
+        # checkout. Admin-set "contacted"/"lost" states are left untouched.
+        if cart.status in (AbandonedCart.STATUS_ABANDONED, AbandonedCart.STATUS_RECOVERED):
             customer_email = defaults.get("customer_email", "")
             customer_phone = defaults.get("customer_phone", "")
-            order_q = Q(conversion_session_key=session_token)
+            order_q = Q(conversion_session_key=session_token, created_at__gte=cart.abandoned_at)
             if customer_email:
-                order_q |= Q(customer_email=customer_email)
+                order_q |= Q(customer_email=customer_email, created_at__gte=cart.abandoned_at)
             if customer_phone:
-                order_q |= Q(customer_phone=customer_phone)
+                order_q |= Q(customer_phone=customer_phone, created_at__gte=cart.abandoned_at)
             already_ordered = Order.objects.filter(order_q).exists()
-            if already_ordered:
-                cart.status = AbandonedCart.STATUS_RECOVERED
+            new_status = (
+                AbandonedCart.STATUS_RECOVERED if already_ordered else AbandonedCart.STATUS_ABANDONED
+            )
+            if new_status != cart.status:
+                cart.status = new_status
                 cart.save(update_fields=["status"])
 
         return Response({"id": cart.id, "status": cart.status}, status=status.HTTP_201_CREATED)
