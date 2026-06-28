@@ -3814,8 +3814,9 @@ class AbandonedCartCreateView(APIView):
             "region": region,
             "locale": data.get("locale", "en"),
         }
+        now = timezone.now()
         try:
-            cart, _ = AbandonedCart.objects.update_or_create(
+            cart, created = AbandonedCart.objects.update_or_create(
                 session_token=session_token,
                 defaults=defaults,
             )
@@ -3828,6 +3829,17 @@ class AbandonedCartCreateView(APIView):
             for key, value in defaults.items():
                 setattr(cart, key, value)
             cart.save()
+            created = False
+
+        update_fields = []
+        # Re-abandonment: a returning customer keeps ONE row (keyed by the
+        # persistent localStorage session_token), but abandoned_at is auto_now_add
+        # so it is frozen at the row's original creation date. Refresh it to now so
+        # the cart floats back to the TOP of the admin list (ordered by
+        # -abandoned_at) and shows the current activity time, not a stale date.
+        if not created:
+            cart.abandoned_at = now
+            update_fields.append("abandoned_at")
 
         # Reconcile this cart's status against real orders. A cart counts as
         # "recovered" ONLY if a matching order was placed AT OR AFTER it was
@@ -3855,6 +3867,9 @@ class AbandonedCartCreateView(APIView):
             )
             if new_status != cart.status:
                 cart.status = new_status
-                cart.save(update_fields=["status"])
+                update_fields.append("status")
+
+        if update_fields:
+            cart.save(update_fields=update_fields)
 
         return Response({"id": cart.id, "status": cart.status}, status=status.HTTP_201_CREATED)
