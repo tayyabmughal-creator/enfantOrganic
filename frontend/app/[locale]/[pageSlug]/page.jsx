@@ -4,10 +4,21 @@ import { notFound } from "next/navigation";
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import { getCmsPageBySlug, getNavigationData } from "@/lib/api";
 import { resolveServerRegion } from "@/lib/regionResolver";
+import { hasHtml, sanitizeHtml } from "@/lib/safeHtml";
 import { buildSeoMetadata } from "@/lib/seo";
 import { buildStorePath, normalizeLocale, normalizeRegion } from "@/lib/storefront";
 
 const WHATSAPP_PHONE = process.env.NEXT_PUBLIC_WHATSAPP_PHONE || "";
+
+const PAGE_ALIASES = {
+  returns: "return-policy",
+  shipping: "shipping-policy",
+};
+
+function canonicalPageSlug(slug) {
+  const normalized = String(slug || "").trim();
+  return PAGE_ALIASES[normalized] || normalized;
+}
 
 const STATIC_CONTENT = {
   about: {
@@ -715,7 +726,8 @@ function buildCmsContent(cmsPage) {
 }
 
 async function resolvePageContent({ pageSlug, locale, region }) {
-  const cmsPage = await getCmsPageBySlug(pageSlug, locale, region);
+  const canonicalSlug = canonicalPageSlug(pageSlug);
+  const cmsPage = await getCmsPageBySlug(canonicalSlug, locale, region);
   if (cmsPage) {
     return {
       source: "cms",
@@ -724,7 +736,7 @@ async function resolvePageContent({ pageSlug, locale, region }) {
     };
   }
 
-  const staticContent = STATIC_CONTENT?.[pageSlug]?.[locale] || null;
+  const staticContent = STATIC_CONTENT?.[canonicalSlug]?.[locale] || null;
   if (staticContent) {
     return {
       source: "static",
@@ -738,6 +750,16 @@ async function resolvePageContent({ pageSlug, locale, region }) {
     cmsPage: null,
     content: null,
   };
+}
+
+function StaticBody({ body }) {
+  if (hasHtml(body)) {
+    return <div className="static-rich-html rich-html" dangerouslySetInnerHTML={{ __html: sanitizeHtml(body) }} />;
+  }
+  return String(body || "")
+    .split("\n")
+    .filter(Boolean)
+    .map((line, j) => <p key={j}>{line}</p>);
 }
 
 export async function generateMetadata({ params, searchParams }) {
@@ -807,9 +829,7 @@ export default async function StaticPage({ params, searchParams }) {
             {content.sections.map((section, i) => (
               <div key={i} className="static-section">
                 {section.heading ? <h2>{section.heading}</h2> : null}
-                {section.body.split("\n").filter(Boolean).map((line, j) => (
-                  <p key={j}>{line}</p>
-                ))}
+                <StaticBody body={section.body} />
                 {section.whatsapp && phone ? (
                   <a
                     href={waLink}

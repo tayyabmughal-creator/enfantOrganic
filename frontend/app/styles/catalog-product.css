@@ -1329,8 +1329,27 @@
 .product-desc-text p {
   margin: 0 0 10px;
   font-size: 0.92rem;
-  color: var(--text-soft);
+  color: var(--text);
   line-height: 1.75;
+}
+
+.product-desc-text,
+.product-desc-text p,
+.product-desc-text li {
+  color: var(--text);
+}
+
+.product-desc-text strong,
+.product-desc-text b {
+  color: var(--text);
+  font-weight: 850;
+}
+
+.product-desc-text a {
+  color: var(--brand-dark);
+  font-weight: 750;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .product-desc-text p:last-child {

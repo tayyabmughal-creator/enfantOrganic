@@ -553,11 +553,14 @@ class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
     product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True, blank=True)
     product_slug = models.SlugField(max_length=255)
+    sku = models.CharField(max_length=120, blank=True, default="")
     product_name = models.CharField(max_length=255)
     selected_options_text = models.CharField(max_length=255, blank=True)
     quantity = models.PositiveIntegerField(default=1)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     line_total = models.DecimalField(max_digits=10, decimal_places=2)
+    unit_cost_price = models.DecimalField(max_digits=10, decimal_places=3, default=0)
+    line_cost_total = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     taxable_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     tax_rate = models.DecimalField(max_digits=5, decimal_places=4, default=0)
     tax_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -974,9 +977,11 @@ class WishlistItem(models.Model):
 
 
 class NewsletterSubscription(models.Model):
-    email = models.EmailField(unique=True)
+    email = models.EmailField(blank=True, default="", db_index=True)
+    phone = models.CharField(max_length=32, blank=True, default="", db_index=True)
     locale = models.CharField(max_length=8, default="en")
     region = models.ForeignKey(Region, on_delete=models.SET_NULL, null=True, blank=True, related_name="newsletter_subscriptions")
+    source = models.CharField(max_length=40, blank=True, default="newsletter")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -985,7 +990,7 @@ class NewsletterSubscription(models.Model):
         ordering = ("-created_at",)
 
     def __str__(self):
-        return self.email
+        return self.email or self.phone
 
 
 class GiftCard(models.Model):

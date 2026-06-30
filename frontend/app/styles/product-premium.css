@@ -246,6 +246,18 @@
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   letter-spacing: 0.01em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.2;
+}
+
+.option-pill small {
+  font-size: 0.74rem;
+  font-weight: 750;
+  opacity: 0.82;
 }
 
 .option-pill:hover {
@@ -266,7 +278,6 @@
 .option-pill.is-unavailable {
   opacity: 0.35;
   cursor: not-allowed;
-  text-decoration: line-through;
 }
 
 /* ── Quantity ─────────────────────────────────────────────────────────── */
@@ -579,7 +590,39 @@
 .product-desc-text p {
   font-size: 0.95rem;
   line-height: 1.85;
-  color: var(--text-soft);
+  color: var(--text);
+}
+
+.product-desc-text,
+.rich-html {
+  color: var(--text);
+}
+
+.product-desc-text p,
+.rich-html p,
+.rich-html li {
+  color: var(--text);
+}
+
+.product-desc-text strong,
+.product-desc-text b,
+.rich-html strong,
+.rich-html b {
+  font-weight: 850;
+  color: var(--text);
+}
+
+.product-desc-text u,
+.rich-html u {
+  text-underline-offset: 3px;
+}
+
+.product-desc-text a,
+.rich-html a {
+  color: var(--brand-dark);
+  font-weight: 750;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .detail-accordion-list {
@@ -747,6 +790,18 @@
   display: inline-grid;
   place-items: center;
   border-radius: 12px;
+}
+
+.mobile-sticky-whatsapp {
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 12px;
+  display: inline-grid;
+  place-items: center;
+  background: #25D366;
+  color: #25D366;
+  box-shadow: 0 8px 18px rgba(37, 211, 102, 0.24);
 }
 
 .mobile-product-sticky-bar .product-buy-action {

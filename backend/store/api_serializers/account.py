@@ -320,18 +320,32 @@ class BackInStockRequestSerializer(serializers.ModelSerializer):
 
 
 class NewsletterSubscriptionSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(required=False, allow_blank=True)
+    phone = serializers.CharField(required=False, allow_blank=True)
+    source = serializers.CharField(required=False, allow_blank=True)
     region_code = serializers.SlugField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = NewsletterSubscription
-        fields = ("email", "locale", "region_code", "is_active", "created_at")
+        fields = ("email", "phone", "locale", "region_code", "source", "is_active", "created_at")
         read_only_fields = ("is_active", "created_at")
+
+    def validate(self, attrs):
+        email = str(attrs.get("email") or "").strip().lower()
+        phone = str(attrs.get("phone") or "").strip()
+        if not email and not phone:
+            raise serializers.ValidationError({"detail": "Email or phone is required."})
+        attrs["email"] = email
+        attrs["phone"] = phone
+        attrs["source"] = str(attrs.get("source") or "newsletter").strip()[:40]
+        return attrs
 
     def create(self, validated_data):
         region_code = validated_data.pop("region_code", "")
         region = Region.objects.filter(code=region_code, is_active=True).first() if region_code else None
+        lookup = {"email": validated_data["email"]} if validated_data.get("email") else {"phone": validated_data["phone"]}
         subscription, _ = NewsletterSubscription.objects.update_or_create(
-            email=validated_data["email"],
+            **lookup,
             defaults={**validated_data, "region": region, "is_active": True},
         )
         return subscription

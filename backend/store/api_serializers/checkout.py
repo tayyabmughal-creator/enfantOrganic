@@ -29,6 +29,7 @@ from ..models import (
     TaxRate,
 )
 from ..services import carrier_router
+from ..services.costing import resolve_order_item_cost
 from ..services.stock import StockError, ensure_region_stock_available, reserve_and_deduct_stock_for_item
 from .catalog import active_product_variants
 
@@ -1013,6 +1014,12 @@ class CheckoutCreateSerializer(serializers.Serializer):
             prepared_item = entry["prepared_item"]
             product = prepared_item["product"]
             variant_snapshot = prepared_item.get("variant") or None
+            cost_snapshot = resolve_order_item_cost(
+                product,
+                quantity=prepared_item["quantity"],
+                variant_snapshot=variant_snapshot,
+                variant_id=prepared_item.get("variant_id", ""),
+            )
             order_item_payload = {
                 key: value
                 for key, value in prepared_item.items()
@@ -1032,6 +1039,9 @@ class CheckoutCreateSerializer(serializers.Serializer):
 
             OrderItem.objects.create(
                 order=order,
+                sku=cost_snapshot["sku"],
+                unit_cost_price=cost_snapshot["unit_cost_price"],
+                line_cost_total=cost_snapshot["line_cost_total"],
                 taxable_amount=entry["item_taxable"],
                 tax_rate=totals["tax_rate"],
                 tax_total=entry["item_tax"],
@@ -1051,6 +1061,11 @@ class CheckoutCreateSerializer(serializers.Serializer):
                     "currency_code": region.currency_code,
                     "variant_id": prepared_item.get("variant_id", ""),
                     "variant": variant_snapshot,
+                    "sku": cost_snapshot["sku"],
+                    "unit_cost_price": str(cost_snapshot["unit_cost_price"]),
+                    "line_cost_total": str(cost_snapshot["line_cost_total"]),
+                    "cost_source": cost_snapshot["cost_source"],
+                    "missing_cost": cost_snapshot["missing_cost"],
                     "warehouse_allocations": allocations,
                 },
                 **order_item_payload,

@@ -41,7 +41,8 @@ function ProductCard({ locale, product, region }) {
   const hasOptions = hasVariants || (product.option_groups || []).some((group) => group.values.length > 1);
   const primaryImage = resolveProductCardImage(product.image);
   const hoverImage = product.hover_image ? resolveProductCardImage(product.hover_image) : "";
-  const rating = Number(product.rating || 0);
+  const rating = Number(product.rating || 5);
+  const reviewCount = Number(product.review_count || 0);
   const reviewLabel = locale === "ar" ? "تقييم" : "reviews";
   const saveLabel = locale === "ar" ? "وفر" : "Save";
   const wishlistLabel = isWishlisted
@@ -189,13 +190,11 @@ function ProductCard({ locale, product, region }) {
           <h4>{product.name}</h4>
         </Link>
         <div className="product-card-meta">
-          {product.review_count > 0 ? (
-            <div className="product-reviews">
-              <span className="review-stars small">{"★".repeat(Math.round(rating || 5))}</span>
-              {rating ? <strong>{rating.toFixed(1).replace(".0", "")}</strong> : null}
-              <span className="review-count-label">({product.review_count} {reviewLabel})</span>
-            </div>
-          ) : null}
+          <div className="product-reviews">
+            <span className="review-stars small">{"★".repeat(Math.max(1, Math.min(5, Math.round(rating || 5))))}</span>
+            <strong>{rating.toFixed(1).replace(".0", "")}</strong>
+            <span className="review-count-label">({reviewCount} {reviewLabel})</span>
+          </div>
           {featurePills.length ? (
             <div className="product-pill-row">
               {featurePills.map((pill) => (

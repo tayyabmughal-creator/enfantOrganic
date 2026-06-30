@@ -1542,6 +1542,7 @@ function normalizeProductVariants(value) {
       : {},
     price: variant?.price ?? "",
     compare_at_price: variant?.compare_at_price ?? "",
+    cost_price: variant?.cost_price ?? "",
     image: String(variant?.image || ""),
     stock_quantity: variant?.stock_quantity ?? "",
     is_active: variant?.is_active !== false,
@@ -1564,6 +1565,7 @@ function ProductVariantsManager({ field, value, editor, setEditor, onGalleryUplo
       options: { Size: "" },
       price: "",
       compare_at_price: "",
+      cost_price: "",
       image: "",
       stock_quantity: "",
       is_active: true,
@@ -1628,10 +1630,11 @@ function ProductVariantsManager({ field, value, editor, setEditor, onGalleryUplo
                   <button type="button" style={{ ...OPT_BTN, color: "#c0392b" }} onClick={() => removeVariant(index)} title="Remove">×</button>
                 </div>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8, marginTop: 8 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 8, marginTop: 8 }}>
                 <input className="admin-input" value={variant.sku} placeholder="SKU" onChange={(event) => patchVariant(index, { sku: event.target.value })} />
                 <input className="admin-input" type="number" value={variant.price} placeholder="Price OMR" onChange={(event) => patchVariant(index, { price: event.target.value })} />
                 <input className="admin-input" type="number" value={variant.compare_at_price} placeholder="Compare OMR" onChange={(event) => patchVariant(index, { compare_at_price: event.target.value })} />
+                <input className="admin-input" type="number" min="0" step="0.001" value={variant.cost_price} placeholder="Unit cost" onChange={(event) => patchVariant(index, { cost_price: event.target.value })} />
                 <input className="admin-input" type="number" value={variant.stock_quantity} placeholder="Stock" onChange={(event) => patchVariant(index, { stock_quantity: event.target.value })} />
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
@@ -1672,7 +1675,7 @@ function ProductVariantsManager({ field, value, editor, setEditor, onGalleryUplo
         {variants.length === 0 ? <small className="admin-field-help">No variants yet. Add variants when one product has different sizes, prices, SKUs, or images.</small> : null}
         <button type="button" className="admin-btn-sm" onClick={addVariant}>+ Add variant</button>
       </div>
-      <small className="admin-field-help">Variant prices are authored in OMR; UAE/Saudi display prices use the existing FX rates.</small>
+      <small className="admin-field-help">Variant prices and unit costs are authored in OMR; UAE/Saudi display prices use the existing FX rates.</small>
     </div>
   );
 }

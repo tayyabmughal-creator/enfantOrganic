@@ -1,43 +1,67 @@
 "use client";
 
-import { useRef } from "react";
+import { useCallback, useRef } from "react";
 
 import TestimonialCard from "@/components/cards/TestimonialCard";
 
-export default function TestimonialsSlider({ testimonials }) {
+export default function TestimonialsSlider({ testimonials, locale = "en" }) {
   const railRef = useRef(null);
+  const isAr = locale === "ar";
 
-  const scrollByAmount = (direction) => {
-    railRef.current?.scrollBy({
-      left: direction * 380,
+  const scrollByAmount = useCallback((direction) => {
+    const rail = railRef.current;
+    if (!rail) return;
+    const amount = Math.max(280, Math.round(rail.clientWidth * 0.82));
+    rail.scrollBy({
+      left: direction * amount,
       behavior: "smooth",
     });
+  }, []);
+
+  const handleKeyDown = (event) => {
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      scrollByAmount(isAr ? 1 : -1);
+    }
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      scrollByAmount(isAr ? -1 : 1);
+    }
   };
 
   return (
-    <div style={{ display: "grid", gap: 28 }}>
-      <div className="section-toolbar">
-        <div className="section-heading" style={{ marginBottom: 0 }}>
-          <span className="kicker">Testimonials</span>
-          <h2 className="section-title">Social proof with space to breathe.</h2>
-          <p className="body-lg">
-            The slider stays touch-friendly on mobile and reads like premium editorial
-            cards on larger screens.
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: 12 }}>
-          <button className="icon-button" type="button" onClick={() => scrollByAmount(-1)}>
-            ←
-          </button>
-          <button className="icon-button" type="button" onClick={() => scrollByAmount(1)}>
-            →
-          </button>
-        </div>
+    <div className="review-carousel">
+      <div className="review-carousel-controls" aria-hidden={testimonials.length < 2}>
+        <button
+          className="review-carousel-btn"
+          type="button"
+          onClick={() => scrollByAmount(isAr ? 1 : -1)}
+          aria-label={isAr ? "التقييمات السابقة" : "Previous reviews"}
+          disabled={testimonials.length < 2}
+        >
+          ‹
+        </button>
+        <button
+          className="review-carousel-btn"
+          type="button"
+          onClick={() => scrollByAmount(isAr ? -1 : 1)}
+          aria-label={isAr ? "التقييمات التالية" : "Next reviews"}
+          disabled={testimonials.length < 2}
+        >
+          ›
+        </button>
       </div>
 
-      <div className="scroll-strip" ref={railRef}>
+      <div
+        className="review-grid"
+        ref={railRef}
+        role="region"
+        aria-label={isAr ? "تقييمات العملاء" : "Customer reviews"}
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
+      >
         {testimonials.map((testimonial) => (
-          <TestimonialCard key={testimonial.name} testimonial={testimonial} />
+          <TestimonialCard key={`${testimonial.name}-${testimonial.location}`} testimonial={testimonial} />
         ))}
       </div>
     </div>

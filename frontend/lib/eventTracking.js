@@ -20,13 +20,27 @@ const ATTRIBUTION_KEY = "enfant-attribution";
 const LOCALIZED_STOREFRONT_PATH = /^\/(en|ar)(?=\/|$)/i;
 const UTM_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"];
 
-function inferSource({ utmSource = "", referrer = "" } = {}) {
+function inferSource({ utmSource = "", utmMedium = "", utmCampaign = "", utmContent = "", referrer = "", fbclid = "" } = {}) {
   const raw = String(utmSource || "").trim().toLowerCase();
   const ref = String(referrer || "").trim().toLowerCase();
-  const value = raw || ref;
+  const values = [raw, utmMedium, utmCampaign, utmContent, ref, fbclid]
+    .map((item) => String(item || "").trim().toLowerCase())
+    .filter(Boolean);
+  const value = values.join(" ");
   if (!value) return "Direct";
-  if (value.includes("instagram") || value === "ig") return "Instagram";
-  if (value.includes("facebook") || value === "fb") return "Facebook";
+  if (
+    value.includes("instagram") ||
+    value.includes("l.instagram.com") ||
+    value.includes("igshopping") ||
+    values.includes("ig")
+  ) return "Instagram";
+  if (
+    value.includes("facebook") ||
+    value.includes("fb.com") ||
+    value.includes("m.facebook.com") ||
+    values.includes("fb") ||
+    fbclid
+  ) return "Facebook";
   if (value.includes("tiktok")) return "TikTok";
   if (value.includes("snapchat")) return "Snapchat";
   if (value.includes("google")) return "Google";
@@ -54,7 +68,14 @@ function buildAttributionSnapshot({ sessionKey, regionCode = "" } = {}) {
   const referrer = document.referrer || "";
   return {
     session_key: sessionKey,
-    source: inferSource({ utmSource: params.get("utm_source") || "", referrer }),
+    source: inferSource({
+      utmSource: params.get("utm_source") || "",
+      utmMedium: params.get("utm_medium") || "",
+      utmCampaign: params.get("utm_campaign") || "",
+      utmContent: params.get("utm_content") || "",
+      referrer,
+      fbclid: params.get("fbclid") || "",
+    }),
     medium: params.get("utm_medium") || "",
     campaign: params.get("utm_campaign") || "",
     utm_source: params.get("utm_source") || "",

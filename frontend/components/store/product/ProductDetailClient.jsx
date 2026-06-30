@@ -10,6 +10,7 @@ import { buildAnalyticsItem, pushDataLayerEvent } from "@/lib/analytics";
 import { snaptrTrack } from "@/components/store/analytics/AnalyticsScripts";
 import { API_BASE_URL, CUSTOMER_TOKEN_KEY } from "@/lib/config";
 import { trackEvent } from "@/lib/eventTracking";
+import { hasHtml, sanitizeHtml } from "@/lib/safeHtml";
 import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
 import {
   addWishlistProduct,
@@ -91,8 +92,8 @@ function parseDescSections(description) {
 
 function DescriptionText({ description }) {
   if (!description) return null;
-  if (/<[a-z][\s\S]*>/i.test(description)) {
-    return <div className="product-desc-text" dangerouslySetInnerHTML={{ __html: description }} />;
+  if (hasHtml(description)) {
+    return <div className="product-desc-text rich-html" dangerouslySetInnerHTML={{ __html: sanitizeHtml(description) }} />;
   }
   return (
     <div className="product-desc-text">
@@ -100,6 +101,43 @@ function DescriptionText({ description }) {
         <p key={i}>{para}</p>
       ))}
     </div>
+  );
+}
+
+function optionPillLabel(groupName, value, variants, selectedOptions) {
+  const normalizedGroup = String(groupName || "").toLowerCase();
+  const matchCurrentSelection = (variant) =>
+    Object.entries(selectedOptions || {}).every(
+      ([name, selected]) => name === groupName || variant.options?.[name] === selected,
+    );
+  const variant =
+    variants.find((item) => item.options?.[groupName] === value && matchCurrentSelection(item)) ||
+    variants.find((item) => item.options?.[groupName] === value);
+  const options = variant?.options || {};
+  const secondaryEntry = Object.entries(options).find(([name, optionValue]) => {
+    const normalizedName = String(name || "").toLowerCase();
+    return (
+      name !== groupName &&
+      String(optionValue || "").trim() &&
+      normalizedGroup !== "size" &&
+      (normalizedName.includes("size") || normalizedName.includes("capacity") || normalizedName.includes("volume"))
+    );
+  });
+  return {
+    primary: value,
+    secondary: secondaryEntry?.[1] || "",
+  };
+}
+
+function WhatsAppGlyph({ size = 20 }) {
+  return (
+    <svg viewBox="0 0 48 48" width={size} height={size} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <circle cx="24" cy="24" r="22" fill="currentColor" />
+      <path
+        fill="white"
+        d="M24 11C16.8 11 11 16.8 11 24c0 2.3.6 4.4 1.6 6.3L11 37l6.9-1.6c1.8.9 3.8 1.4 5.9 1.4 7.2 0 13-5.8 13-13S31.2 11 24 11zm0 23.8c-2 0-3.9-.5-5.5-1.4l-.4-.2-3.8.9 1-3.7-.3-.4c-1-1.7-1.6-3.7-1.6-5.8 0-5.9 4.8-10.7 10.7-10.7S34.8 18.1 34.8 24 30 34.8 24 34.8zm5.9-7.9c-.3-.2-1.8-.9-2.1-1s-.5-.2-.7.2-.8 1-1 1.2-.4.3-.7.1c-1.9-.9-3.2-1.7-4.4-3.8-.3-.6.3-.5.9-1.7.1-.2.1-.4-.1-.6l-1.5-3.7c-.4-.9-.8-.8-1.1-.8h-.9c-.3 0-.7.1-1.1.5-.4.4-1.4 1.3-1.4 3.2s1.4 3.7 1.6 4 2.8 4.2 6.7 5.9c2.5 1 3.4 1.1 4.7.9.7-.1 2.3-1 2.6-1.9.3-.9.3-1.7.2-1.9 0-.2-.3-.3-.6-.5z"
+      />
+    </svg>
   );
 }
 
@@ -583,20 +621,24 @@ export default function ProductDetailClient({ locale, product, region }) {
                 <div key={group.name} className="summary-block product-option-block">
                   <h4>{group.name}</h4>
                   <div className="option-pills">
-                    {group.values.map((value) => (
-                      <button
-                        key={value}
-                        type="button"
-                        className={`option-pill ${selectedOptions[group.name] === value ? "is-active" : ""} ${!compatible.has(value) ? "is-unavailable" : ""}`}
-                        onClick={() =>
-                          setSelectedOptions((current) =>
-                            resolveOptionsOnChange(group.name, value, variants, current),
-                          )
-                        }
-                      >
-                        {value}
-                      </button>
-                    ))}
+                    {group.values.map((value) => {
+                      const label = optionPillLabel(group.name, value, variants, selectedOptions);
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          className={`option-pill ${selectedOptions[group.name] === value ? "is-active" : ""} ${!compatible.has(value) ? "is-unavailable" : ""}`}
+                          onClick={() =>
+                            setSelectedOptions((current) =>
+                              resolveOptionsOnChange(group.name, value, variants, current),
+                            )
+                          }
+                        >
+                          <span>{label.primary}</span>
+                          {label.secondary ? <small>{label.secondary}</small> : null}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -917,6 +959,18 @@ export default function ProductDetailClient({ locale, product, region }) {
               <span>{formatMoney({ ...selectedPricing, amount: compareAmount, prefix: "" }, locale)}</span>
             )}
           </div>
+          <button
+            type="button"
+            className="mobile-sticky-whatsapp"
+            onClick={() => {
+              const url = encodeURIComponent(getShareUrl());
+              const text = encodeURIComponent(shareTitle);
+              openShareLink(`https://wa.me/?text=${text}%20${url}`);
+            }}
+            aria-label={isAr ? "مشاركة عبر واتساب" : "Share on WhatsApp"}
+          >
+            <WhatsAppGlyph size={22} />
+          </button>
           <button type="button" className="secondary-action product-cart-action" onClick={() => addCurrentProduct()}>
             <Icon name="bag" size={18} />
           </button>

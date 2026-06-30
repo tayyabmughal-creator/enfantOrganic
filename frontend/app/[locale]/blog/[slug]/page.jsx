@@ -7,6 +7,7 @@ import JsonLd from "@/components/seo/JsonLd";
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import { getBlogBySlug, getNavigationData } from "@/lib/api";
 import { resolveServerRegion } from "@/lib/regionResolver";
+import { hasHtml, sanitizeHtml } from "@/lib/safeHtml";
 import { buildSeoMetadata, buildLocalizedPath, toAbsoluteUrl } from "@/lib/seo";
 import { buildStorePath, normalizeLocale, normalizeRegion } from "@/lib/storefront";
 
@@ -70,7 +71,9 @@ export default async function BlogDetailPage({ params, searchParams }) {
     notFound();
   }
 
-  const paragraphs = (post.body || post.excerpt || "").split("\n").filter(Boolean);
+  const body = post.body || post.excerpt || "";
+  const paragraphs = body.split("\n").filter(Boolean);
+  const bodyHasHtml = hasHtml(body);
   const breadcrumbJsonLd = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
@@ -125,17 +128,21 @@ export default async function BlogDetailPage({ params, searchParams }) {
             </div>
           ) : null}
 
-          <div className="blog-detail-body">
-            {paragraphs.map((para, i) => {
-              if (para.startsWith("•")) {
-                return <li key={i} style={{ marginBottom: "6px" }}>{para.slice(1).trim()}</li>;
-              }
-              if (/^\d+[–-]/.test(para) || /^[A-Z0-9].*:/.test(para)) {
-                return <p key={i} className="blog-body-heading">{para}</p>;
-              }
-              return <p key={i}>{para}</p>;
-            })}
-          </div>
+          {bodyHasHtml ? (
+            <div className="blog-detail-body rich-html" dangerouslySetInnerHTML={{ __html: sanitizeHtml(body) }} />
+          ) : (
+            <div className="blog-detail-body">
+              {paragraphs.map((para, i) => {
+                if (para.startsWith("•")) {
+                  return <li key={i} style={{ marginBottom: "6px" }}>{para.slice(1).trim()}</li>;
+                }
+                if (/^\d+[–-]/.test(para) || /^[A-Z0-9].*:/.test(para)) {
+                  return <p key={i} className="blog-body-heading">{para}</p>;
+                }
+                return <p key={i}>{para}</p>;
+              })}
+            </div>
+          )}
 
           <div className="blog-detail-footer">
             <Link href={buildStorePath(locale, "/blog", region)} className="section-link">

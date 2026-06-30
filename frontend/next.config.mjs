@@ -90,9 +90,6 @@ const withPWAConfig = withPWA({
   disable: isDev,
   register: true,
   reloadOnOnline: true,
-  fallbacks: {
-    document: "/offline",
-  },
   workboxOptions: {
     skipWaiting: true,
     clientsClaim: true,

@@ -1,4 +1,5 @@
 import logging
+from decimal import Decimal, InvalidOperation
 
 from django.contrib.auth import get_user_model
 from django.db.models import Max, Min
@@ -107,6 +108,29 @@ class AdminProductSerializer(serializers.ModelSerializer):
             convert_product_prices(product)
         except Exception:
             logger.exception("Regional price conversion failed for product %s", product.pk)
+
+    def validate_cost_price(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError("Cost price cannot be negative.")
+        return value
+
+    def validate_variants(self, value):
+        if value in (None, ""):
+            return []
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Variants must be a list.")
+        for index, variant in enumerate(value, start=1):
+            if not isinstance(variant, dict):
+                raise serializers.ValidationError(f"Variant {index} must be an object.")
+            raw_cost = variant.get("cost_price")
+            if raw_cost in (None, ""):
+                continue
+            try:
+                if Decimal(str(raw_cost)) < 0:
+                    raise serializers.ValidationError(f"Variant {index} unit cost cannot be negative.")
+            except (InvalidOperation, TypeError, ValueError):
+                raise serializers.ValidationError(f"Variant {index} unit cost must be a valid number.")
+        return value
 
     def create(self, validated_data):
         base_price = validated_data.pop("base_price", None)
@@ -279,6 +303,9 @@ class AdminOrderItemSerializer(serializers.ModelSerializer):
         return get_image_url(product, request, "image_file", "image")
 
     def get_sku(self, obj):
+        item_sku = str(getattr(obj, "sku", "") or "").strip()
+        if item_sku:
+            return item_sku
         product = getattr(obj, "product", None)
         product_sku = str(getattr(product, "sku", "") or "").strip() if product else ""
         return product_sku or str(obj.product_slug or "")

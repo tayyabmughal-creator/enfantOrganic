@@ -104,7 +104,7 @@ class StorefrontRegionBehaviorTests(TestCase):
             image="https://example.com/category.jpg",
         )
 
-    def create_product(self, slug, *, show_in_new_arrivals=False):
+    def create_product(self, slug, *, show_in_new_arrivals=False, show_in_baby_sets=False):
         p = Product.objects.create(
             slug=slug,
             name_en=slug.replace("-", " ").title(),
@@ -116,6 +116,7 @@ class StorefrontRegionBehaviorTests(TestCase):
             image="https://example.com/product.jpg",
             is_published=True,
             show_in_new_arrivals=show_in_new_arrivals,
+            show_in_baby_sets=show_in_baby_sets,
         )
         p.categories.add(self.category)
         return p
@@ -195,6 +196,22 @@ class StorefrontRegionBehaviorTests(TestCase):
         slugs = [item["slug"] for item in response.data["products"]]
         self.assertIn("new-product", slugs)
         self.assertNotIn("classic-product", slugs)
+
+    def test_catalog_collection_filter_returns_baby_sets_only(self):
+        baby_set = self.create_product("starter-baby-set", show_in_baby_sets=True)
+        regular = self.create_product("daily-lotion", show_in_baby_sets=False)
+        ProductPrice.objects.create(product=baby_set, region=self.om, price=Decimal("9.00"))
+        ProductPrice.objects.create(product=regular, region=self.om, price=Decimal("4.50"))
+
+        response = self.client.get(
+            "/api/catalog/",
+            {"locale": "en", "region": "om", "collection": "baby_sets"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        slugs = [item["slug"] for item in response.data["products"]]
+        self.assertIn("starter-baby-set", slugs)
+        self.assertNotIn("daily-lotion", slugs)
 
     def test_catalog_collection_filter_returns_best_sellers_from_paid_orders(self):
         top_product = self.create_product("top-seller")

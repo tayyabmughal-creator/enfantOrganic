@@ -258,6 +258,7 @@ export default function StoreProvider({ children }) {
         if (item) {
           const atcCurrency = product.pricing?.currency_code || "";
           const atcValue = (Number(product.pricing?.amount) || 0) * nextQuantity;
+          const eventID = `add-to-cart-${item.item_id}-${variantId || "base"}-${Date.now()}`;
           pushDataLayerEvent("add_to_cart", {
             locale: product.locale || "en",
             region: product.pricing?.region_code || "",
@@ -269,6 +270,7 @@ export default function StoreProvider({ children }) {
             content_type: "product",
             value: atcValue,
             currency: atcCurrency,
+            event_id: eventID,
           });
           snaptrTrack("ADD_CART", {
             item_ids: [item.item_id],

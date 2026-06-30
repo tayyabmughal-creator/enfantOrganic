@@ -66,6 +66,11 @@ def serialize_site_settings(settings, locale):
         # Newsletter
         "newsletter_title": _loc("newsletter_title"),
         "newsletter_subtitle": _loc("newsletter_subtitle"),
+        "discount_popup": {
+            "enabled": settings.discount_popup_enabled,
+            "text": _loc("discount_popup_text"),
+            "image": settings.discount_popup_image_url,
+        },
         # Content sections
         "instagram_title": _loc("instagram_title"),
         "instagram_cta": _loc("instagram_cta"),
@@ -90,6 +95,13 @@ def serialize_site_settings(settings, locale):
         "youtube_url": settings.youtube_url,
         "tiktok_url": settings.tiktok_url,
         "whatsapp_number": settings.whatsapp_number,
+        "facebook_pixel_id": settings.facebook_pixel_id,
+        "tiktok_pixel_id": settings.tiktok_pixel_id,
+        "snapchat_pixel_id": settings.snapchat_pixel_id,
+        "pinterest_tag_id": settings.pinterest_tag_id,
+        "twitter_pixel_id": settings.twitter_pixel_id,
+        "google_analytics_id": settings.google_analytics_id,
+        "google_tag_manager_id": settings.google_tag_manager_id,
         # Footer
         "copyright": _loc("copyright"),
         # Contact
@@ -103,4 +115,5 @@ def serialize_site_settings(settings, locale):
         # Legal
         "return_policy": _loc("return_policy"),
         "privacy_policy": _loc("privacy_policy"),
+        "terms_policy": _loc("terms_policy"),
     }

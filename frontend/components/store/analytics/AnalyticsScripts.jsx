@@ -12,11 +12,13 @@ import {
 
 const GTM_SCRIPT_ID = "enfant-gtm-script";
 const GA4_SCRIPT_ID = "enfant-ga4-script";
+const META_SCRIPT_ID = "enfant-meta-pixel-script";
+const SNAPCHAT_SCRIPT_ID = "enfant-snapchat-pixel-script";
 
-const GTM_ID = String(process.env.NEXT_PUBLIC_GTM_ID || "").trim();
-const GA4_ID = String(process.env.NEXT_PUBLIC_GA4_ID || "").trim();
-const META_PIXEL_ID = String(process.env.NEXT_PUBLIC_META_PIXEL_ID || "").trim();
-const SNAPCHAT_PIXEL_ID = String(process.env.NEXT_PUBLIC_SNAPCHAT_PIXEL_ID || "").trim();
+const ENV_GTM_ID = String(process.env.NEXT_PUBLIC_GTM_ID || "").trim();
+const ENV_GA4_ID = String(process.env.NEXT_PUBLIC_GA4_ID || "").trim();
+const ENV_META_PIXEL_ID = String(process.env.NEXT_PUBLIC_META_PIXEL_ID || "").trim();
+const ENV_SNAPCHAT_PIXEL_ID = String(process.env.NEXT_PUBLIC_SNAPCHAT_PIXEL_ID || "").trim();
 
 // Shared helper — import this wherever you need to fire Meta Pixel events.
 // eventID in params enables Conversions API server-side deduplication.
@@ -73,9 +75,64 @@ function loadGa4(ga4Id) {
   window.gtag("config", ga4Id);
 }
 
-export default function AnalyticsScripts() {
+function loadMetaPixel(pixelId) {
+  if (!pixelId || typeof window === "undefined" || typeof document === "undefined") return;
+  window.__metaPixelIds = window.__metaPixelIds || new Set();
+  if (!window.fbq) {
+    window.fbq = function fbq() {
+      window.fbq.callMethod
+        ? window.fbq.callMethod.apply(window.fbq, arguments)
+        : window.fbq.queue.push(arguments);
+    };
+    window._fbq = window.fbq;
+    window.fbq.push = window.fbq;
+    window.fbq.loaded = true;
+    window.fbq.version = "2.0";
+    window.fbq.queue = [];
+  }
+  if (!document.getElementById(META_SCRIPT_ID)) {
+    const script = document.createElement("script");
+    script.id = META_SCRIPT_ID;
+    script.async = true;
+    script.src = "https://connect.facebook.net/en_US/fbevents.js";
+    document.head.appendChild(script);
+  }
+  if (!window.__metaPixelIds.has(pixelId)) {
+    window.fbq("init", pixelId);
+    window.__metaPixelIds.add(pixelId);
+  }
+}
+
+function loadSnapchatPixel(pixelId) {
+  if (!pixelId || typeof window === "undefined" || typeof document === "undefined") return;
+  if (!window.snaptr) {
+    window.snaptr = function snaptr() {
+      window.snaptr.handleRequest
+        ? window.snaptr.handleRequest.apply(window.snaptr, arguments)
+        : window.snaptr.queue.push(arguments);
+    };
+    window.snaptr.queue = [];
+  }
+  if (!document.getElementById(SNAPCHAT_SCRIPT_ID)) {
+    const script = document.createElement("script");
+    script.id = SNAPCHAT_SCRIPT_ID;
+    script.async = true;
+    script.src = "https://sc-static.net/scevent.min.js";
+    document.head.appendChild(script);
+  }
+  if (window.__snapchatPixelId !== pixelId) {
+    window.snaptr("init", pixelId, {});
+    window.__snapchatPixelId = pixelId;
+  }
+}
+
+export default function AnalyticsScripts({ settings = {} }) {
   const [consentState, setConsentState] = useState(CONSENT_STATES.UNSET);
   const pathname = usePathname();
+  const gtmId = String(settings?.google_tag_manager_id || ENV_GTM_ID || "").trim();
+  const ga4Id = String(settings?.google_analytics_id || ENV_GA4_ID || "").trim();
+  const metaPixelId = String(settings?.facebook_pixel_id || ENV_META_PIXEL_ID || "").trim();
+  const snapchatPixelId = String(settings?.snapchat_pixel_id || ENV_SNAPCHAT_PIXEL_ID || "").trim();
 
   useEffect(() => {
     ensureDataLayer();
@@ -89,21 +146,26 @@ export default function AnalyticsScripts() {
     };
   }, []);
 
+  useEffect(() => {
+    if (metaPixelId) loadMetaPixel(metaPixelId);
+    if (snapchatPixelId) loadSnapchatPixel(snapchatPixelId);
+  }, [metaPixelId, snapchatPixelId]);
+
   // Fire PageView on every Next.js client-side navigation (SPA route change).
   useEffect(() => {
-    if (META_PIXEL_ID && typeof window !== "undefined" && typeof window.fbq === "function") {
+    if (metaPixelId && typeof window !== "undefined" && typeof window.fbq === "function") {
       window.fbq("track", "PageView");
     }
-    if (SNAPCHAT_PIXEL_ID && typeof window !== "undefined" && typeof window.snaptr === "function") {
+    if (snapchatPixelId && typeof window !== "undefined" && typeof window.snaptr === "function") {
       window.snaptr("track", "PAGE_VIEW");
     }
-  }, [pathname]);
+  }, [metaPixelId, pathname, snapchatPixelId]);
 
   useEffect(() => {
     if (consentState !== CONSENT_STATES.GRANTED) return;
-    if (GTM_ID) { loadGtm(GTM_ID); return; }
-    if (GA4_ID) { loadGa4(GA4_ID); }
-  }, [consentState]);
+    if (gtmId) { loadGtm(gtmId); return; }
+    if (ga4Id) { loadGa4(ga4Id); }
+  }, [consentState, ga4Id, gtmId]);
 
   return null;
 }

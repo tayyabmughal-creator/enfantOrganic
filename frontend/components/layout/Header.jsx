@@ -146,6 +146,11 @@ function HeaderInner({ navigation }) {
     setSearchError("");
   };
 
+  const closeMobileNavigation = () => {
+    setOpenDropdown(null);
+    setMobileOpen(false);
+  };
+
   const changeRegion = (nextRegion) => {
     const normalizedRegion = normalizeRegion(nextRegion);
     if (normalizedRegion === region) return;
@@ -225,6 +230,7 @@ function HeaderInner({ navigation }) {
             <button
               type="button"
               className="nav-trigger"
+              aria-expanded={openDropdown === "products"}
               onClick={() => setOpenDropdown((value) => (value === "products" ? null : "products"))}
             >
               {t.products}
@@ -239,7 +245,7 @@ function HeaderInner({ navigation }) {
                       key={category.slug}
                       href={`${buildStorePath(locale, "/collections", region)}&category=${category.slug}`}
                       className="dropdown-link dropdown-link-media"
-                      onClick={() => setOpenDropdown(null)}
+                      onClick={closeMobileNavigation}
                     >
                       <span className="dropdown-link-thumb">
                         <SiteImage src={category.image} alt={category.name} width={56} height={56} loading="lazy" />
@@ -264,7 +270,7 @@ function HeaderInner({ navigation }) {
               <Link
                 href={buildStorePath(locale, "/collections", region)}
                 className="dropdown-view-all"
-                onClick={() => setOpenDropdown(null)}
+                onClick={closeMobileNavigation}
               >
                 {locale === "ar" ? "عرض كل المنتجات" : "View all products"}
                 <Icon name="chevronRight" size={15} />
@@ -280,6 +286,7 @@ function HeaderInner({ navigation }) {
             <button
               type="button"
               className="nav-trigger"
+              aria-expanded={openDropdown === "why"}
               onClick={() => setOpenDropdown((value) => (value === "why" ? null : "why"))}
             >
               {t.whyChooseUs}
@@ -291,6 +298,7 @@ function HeaderInner({ navigation }) {
                   key={item.label}
                   href={resolveNavigationHref(item.href, { locale, region: activeRegionCode })}
                   className="dropdown-link single"
+                  onClick={closeMobileNavigation}
                 >
                   <strong>{item.label}</strong>
                 </a>
@@ -303,12 +311,13 @@ function HeaderInner({ navigation }) {
               key={item.label}
               href={resolveNavigationHref(item.href, { locale, region: activeRegionCode })}
               className="nav-link"
+              onClick={closeMobileNavigation}
             >
               {item.label}
             </a>
           ))}
 
-          <Link href={buildStorePath(locale, "/track-order", region)} className="nav-link">
+          <Link href={buildStorePath(locale, "/track-order", region)} className="nav-link" onClick={closeMobileNavigation}>
             {locale === "en" ? "Track Order" : "تتبع الطلب"}
           </Link>
 

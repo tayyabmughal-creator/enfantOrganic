@@ -175,12 +175,12 @@ def _fetch_product_image(item, size_mm=14):
 def _seller_snapshot(order):
     region = order.region
     return {
-        "legal_name": region.seller_legal_name or region.name_en or "Enfant Organics",
+        "legal_name": region.seller_legal_name or "Enfant Organic",
         "vat_number": region.seller_vat_number or "",
         "cr_number": region.seller_cr_number or "",
-        "address_en": region.seller_address_en or region.address_en or "",
+        "address_en": region.seller_address_en or region.address_en or "IFZA Business Park - Building A02 - Dubai Silicon Oasis - Industrial Area - Dubai - United Arab Emirates",
         "phone": region.seller_phone or region.contact_phone or "",
-        "email": region.seller_email or region.contact_email or "",
+        "email": region.seller_email or region.contact_email or "sales@enfant-me.com",
         "website": getattr(region, "website", "") or "www.enfantorganic.com",
     }
 

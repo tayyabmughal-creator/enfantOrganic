@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 import os
 from datetime import timedelta
@@ -6,6 +8,7 @@ import tempfile
 from unittest.mock import patch
 
 from django.conf import settings
+from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -13,7 +16,7 @@ from django.utils import timezone
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 
-from store.models import AnalyticsEvent, BlogPost, Category, HeroPromoCard, Order, OrderItem, Product, ProductStock, Warehouse, Region
+from store.models import AnalyticsEvent, BlogPost, Category, HeroPromoCard, Order, OrderItem, Product, ProductStock, Warehouse, Region, SiteSettings
 from store.services.admin_roles import ROLE_MANAGER, ensure_default_admin_roles
 
 User = get_user_model()
@@ -417,6 +420,101 @@ class AdminOpsExtendedTestCase(TestCase):
         top_products = response.data.get("top_products") or []
         self.assertTrue(top_products)
         self.assertEqual(top_products[0].get("metric_label"), "By rating (sold products)")
+
+    def test_cost_of_goods_report_uses_order_item_snapshot(self):
+        self.api_client.force_authenticate(self.staff_user)
+        category = Category.objects.create(
+            slug="cogs-products",
+            name_en="COGS Products",
+            name_ar="COGS Products",
+            image="https://example.com/cogs.jpg",
+        )
+        product = Product.objects.create(
+            slug="snapshot-product",
+            name_en="Snapshot Product",
+            name_ar="Snapshot Product",
+            is_published=True,
+            cost_price=Decimal("9.000"),
+            variants=[
+                {
+                    "id": "small",
+                    "sku": "SKU-S",
+                    "options": {"Size": "Small"},
+                    "cost_price": "2.500",
+                }
+            ],
+        )
+        product.categories.add(category)
+        order = Order.objects.create(
+            region=self.region,
+            customer_name="COGS Customer",
+            customer_email="cogs@example.com",
+            customer_phone="12345678",
+            address_line_1="Street 1",
+            city="Muscat",
+            country="Oman",
+            subtotal=Decimal("20.00"),
+            shipping_total=Decimal("0.00"),
+            grand_total=Decimal("20.00"),
+            currency_code="OMR",
+            status=Order.STATUS_PAID,
+            payment_status=Order.PAYMENT_PAID,
+        )
+        OrderItem.objects.create(
+            order=order,
+            product=product,
+            product_slug=product.slug,
+            sku="SKU-S",
+            product_name=product.name_en,
+            selected_options_text="Size: Small",
+            quantity=2,
+            unit_price=Decimal("10.00"),
+            line_total=Decimal("20.00"),
+            unit_cost_price=Decimal("2.500"),
+            line_cost_total=Decimal("5.000"),
+        )
+
+        product.cost_price = Decimal("99.000")
+        product.save(update_fields=["cost_price"])
+
+        csv_response = self.api_client.get("/api/admin/reports/cost-of-goods/", {"date_range": "all"})
+        self.assertEqual(csv_response.status_code, 200)
+        rows = list(csv.reader(io.StringIO(csv_response.content.decode("utf-8"))))
+        header = rows[0]
+        first = dict(zip(header, rows[1]))
+        total = dict(zip(header, rows[2]))
+        self.assertEqual(first["sku"], "SKU-S")
+        self.assertEqual(first["variant"], "Size: Small")
+        self.assertEqual(first["avg_unit_cost"], "2.500")
+        self.assertEqual(first["cost_of_goods"], "5.000")
+        self.assertEqual(first["missing_cost"], "no")
+        self.assertEqual(total["product_slug"], "TOTAL")
+        self.assertEqual(total["cost_of_goods"], "5.000")
+
+        preview_response = self.api_client.get(
+            "/api/admin/reports/cost-of-goods/",
+            {"date_range": "all", "preview": "1"},
+        )
+        self.assertEqual(preview_response.status_code, 200)
+        self.assertEqual(preview_response.data["rows"][0]["avg_unit_cost"], "2.500")
+        self.assertEqual(preview_response.data["total"]["gross_profit"], "15.000")
+
+    def test_seed_regions_preserves_existing_admin_values(self):
+        self.region.contact_phone = "+968 ADMIN"
+        self.region.whatsapp_phone = "+968 ADMIN"
+        self.region.save(update_fields=["contact_phone", "whatsapp_phone"])
+
+        call_command("seed_regions", verbosity=0)
+        self.region.refresh_from_db()
+        self.assertEqual(self.region.contact_phone, "+968 ADMIN")
+        self.assertEqual(self.region.whatsapp_phone, "+968 ADMIN")
+
+        settings = SiteSettings.objects.get(pk=1)
+        settings.contact_phone = "+968 SETTINGS"
+        settings.save(update_fields=["contact_phone"])
+        call_command("seed_regions", verbosity=0)
+        settings.refresh_from_db()
+        self.assertEqual(settings.contact_phone, "+968 SETTINGS")
 
     def test_token_refresh(self):
         # Authenticate and get token

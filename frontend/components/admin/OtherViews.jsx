@@ -1,8 +1,16 @@
 "use client";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { AdminEmpty } from "./SharedUI";
 
-const REPORT_TYPES = ["orders", "customers", "inventory", "sales", "abandoned-carts"];
+const REPORT_TYPES = ["orders", "customers", "inventory", "sales", "abandoned-carts", "cost-of-goods"];
+const COGS_DATE_RANGES = [
+  ["previous_month", "Previous month"],
+  ["today", "Today"],
+  ["yesterday", "Yesterday"],
+  ["month_to_date", "Month to date"],
+  ["all", "All time"],
+  ["custom", "Custom dates"],
+];
 
 const SOCIAL_INTEGRATIONS = [
   { name: "Facebook Commerce", abbr: "FB", color: "#1877f2", status: "available", desc: "Sync catalog to Instagram and FB Shops." },
@@ -190,7 +198,73 @@ export function SettingsPanel({ data, onEdit, canEdit }) {
   return <StoreSettingsSection section="homepage" data={data} onEdit={onEdit} canEdit={canEdit} />;
 }
 
-export function Reports({ data, onDownload }) {
+export function Reports({ data, onDownload, onPreview }) {
+  const [cogsRange, setCogsRange] = useState("previous_month");
+  const [cogsStart, setCogsStart] = useState("");
+  const [cogsEnd, setCogsEnd] = useState("");
+  const [cogsPreview, setCogsPreview] = useState(null);
+  const [cogsLoading, setCogsLoading] = useState(false);
+  const [cogsError, setCogsError] = useState("");
+  const [cogsSearch, setCogsSearch] = useState("");
+  const [cogsSort, setCogsSort] = useState({ key: "units_sold", dir: -1 });
+  const COGS_NUM_KEYS = useMemo(
+    () => new Set(["units_sold", "revenue", "avg_unit_cost", "cost_of_goods", "gross_profit", "stock_left"]),
+    [],
+  );
+  const visibleCogsRows = useMemo(() => {
+    const rows = Array.isArray(cogsPreview?.rows) ? [...cogsPreview.rows] : [];
+    const q = cogsSearch.trim().toLowerCase();
+    const filtered = q
+      ? rows.filter((row) =>
+          `${row.product_name || row.product_slug || ""} ${row.sku || ""} ${row.variant || ""}`
+            .toLowerCase()
+            .includes(q))
+      : rows;
+    const { key, dir } = cogsSort;
+    return filtered.sort((a, b) => {
+      if (COGS_NUM_KEYS.has(key)) {
+        return ((Number(a[key]) || 0) - (Number(b[key]) || 0)) * dir;
+      }
+      return String(a[key] || "").localeCompare(String(b[key] || "")) * dir;
+    });
+  }, [cogsPreview, cogsSearch, cogsSort, COGS_NUM_KEYS]);
+  const toggleCogsSort = useCallback((key) => {
+    setCogsSort((prev) => (prev.key === key ? { key, dir: prev.dir * -1 } : { key, dir: -1 }));
+  }, []);
+  const renderStockBadge = (stock) => {
+    if (stock === null || stock === undefined) return <span className="admin-cogs-stock">—</span>;
+    const count = Number(stock) || 0;
+    const tone = count <= 0 ? "is-out" : count <= 15 ? "is-low" : "is-ok";
+    return <span className={`admin-cogs-stock ${tone}`}>{count <= 0 ? "Out" : count}</span>;
+  };
+  const buildCogsParams = useCallback(() => {
+    const params = { date_range: cogsRange };
+    if (cogsRange === "custom") {
+      if (cogsStart) params.start_date = cogsStart;
+      if (cogsEnd) params.end_date = cogsEnd;
+    }
+    return params;
+  }, [cogsEnd, cogsRange, cogsStart]);
+  const downloadCogs = () => {
+    const params = buildCogsParams();
+    onDownload("cost-of-goods", params);
+  };
+  const loadCogsPreview = useCallback(async () => {
+    if (typeof onPreview !== "function") return;
+    setCogsLoading(true);
+    setCogsError("");
+    try {
+      const payload = await onPreview("cost-of-goods", { ...buildCogsParams(), limit: 20 });
+      setCogsPreview(payload);
+    } catch (error) {
+      setCogsError(error?.message || "Preview unavailable");
+    } finally {
+      setCogsLoading(false);
+    }
+  }, [buildCogsParams, onPreview]);
+  useEffect(() => {
+    loadCogsPreview();
+  }, [loadCogsPreview]);
   return (
     <div className="admin-reports">
       <section className="admin-panel-card">
@@ -200,14 +274,152 @@ export function Reports({ data, onDownload }) {
         </div>
         <div className="admin-report-grid">
           {REPORT_TYPES.map((type) => (
-            <button key={type} type="button" className="admin-report-btn" onClick={() => onDownload(type)}>
+            <button key={type} type="button" className="admin-report-btn" onClick={() => type === "cost-of-goods" ? downloadCogs() : onDownload(type)}>
               <span className="admin-report-icon">⇩</span>
               <div>
-                <strong>{type.replace("-", " ").replace(/\b\w/g, (l) => l.toUpperCase())}</strong>
+                <strong>{type.replaceAll("-", " ").replace(/\b\w/g, (l) => l.toUpperCase())}</strong>
                 <span>Download as CSV</span>
               </div>
             </button>
           ))}
+        </div>
+        <div className="admin-report-filters">
+          <label>
+            <span>COGS date range</span>
+            <select value={cogsRange} onChange={(event) => setCogsRange(event.target.value)}>
+              {COGS_DATE_RANGES.map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </label>
+          {cogsRange === "custom" ? (
+            <>
+              <label>
+                <span>Start date</span>
+                <input type="date" value={cogsStart} onChange={(event) => setCogsStart(event.target.value)} />
+              </label>
+              <label>
+                <span>End date</span>
+                <input type="date" value={cogsEnd} onChange={(event) => setCogsEnd(event.target.value)} />
+              </label>
+            </>
+          ) : null}
+        </div>
+        <div className="admin-cogs-preview">
+          <div className="admin-panel-head admin-panel-head-compact">
+            <div>
+              <h3>Inventory Sold &amp; Cost of Goods</h3>
+              <span>
+                {cogsPreview?.include_unpaid === false
+                  ? "Counting paid orders only · excludes cancelled / refunded"
+                  : "Counting paid + unpaid orders · excludes cancelled / refunded"}
+              </span>
+            </div>
+            <button type="button" className="admin-btn-sm" onClick={loadCogsPreview} disabled={cogsLoading}>
+              {cogsLoading ? "Loading" : "Recalculate"}
+            </button>
+          </div>
+          {cogsError ? <div className="admin-form-error">{cogsError}</div> : null}
+          {cogsPreview?.total ? (
+            <div className="admin-cogs-summary">
+              <div className="admin-cogs-stat">
+                <span className="admin-cogs-stat-label">Units sold</span>
+                <span className="admin-cogs-stat-value">{cogsPreview.total.units_sold}</span>
+              </div>
+              <div className="admin-cogs-stat">
+                <span className="admin-cogs-stat-label">Orders included</span>
+                <span className="admin-cogs-stat-value">{cogsPreview.orders_included ?? "—"}</span>
+              </div>
+              <div className="admin-cogs-stat">
+                <span className="admin-cogs-stat-label">Avg. cost / unit</span>
+                <span className="admin-cogs-stat-value">{cogsPreview.total.avg_unit_cost}</span>
+              </div>
+              <div className="admin-cogs-stat is-accent">
+                <span className="admin-cogs-stat-label">Total cost of goods</span>
+                <span className="admin-cogs-stat-value">{cogsPreview.total.cost_of_goods}</span>
+              </div>
+            </div>
+          ) : null}
+          <div className="admin-cogs-toolbar">
+            <input
+              type="search"
+              className="admin-cogs-search"
+              placeholder="Search product or SKU…"
+              value={cogsSearch}
+              onChange={(event) => setCogsSearch(event.target.value)}
+            />
+            <span className="admin-cogs-rowcount">
+              {visibleCogsRows.length} product{visibleCogsRows.length === 1 ? "" : "s"}
+            </span>
+          </div>
+          {!cogsError && cogsLoading ? <div className="admin-list-empty">Loading COGS preview…</div> : null}
+          {!cogsError && !cogsLoading && visibleCogsRows.length ? (
+            <div className="admin-orders-table-wrap admin-cogs-table-wrap">
+              <table className="admin-orders-table admin-cogs-table">
+                <thead>
+                  <tr>
+                    {[
+                      ["product_name", "Product"],
+                      ["sku", "SKU"],
+                      ["variant", "Variant"],
+                      ["stock_left", "Stock left"],
+                      ["units_sold", "Units sold"],
+                      ["revenue", "Revenue"],
+                      ["avg_unit_cost", "Cost / unit"],
+                      ["cost_of_goods", "Total cost"],
+                      ["gross_profit", "Gross profit"],
+                    ].map(([key, label]) => (
+                      <th
+                        key={key}
+                        className={`admin-cogs-th${cogsSort.key === key ? " is-active" : ""}`}
+                        onClick={() => toggleCogsSort(key)}
+                      >
+                        {label}
+                        <span className="admin-cogs-arrow">
+                          {cogsSort.key === key ? (cogsSort.dir === 1 ? "▲" : "▼") : "▾"}
+                        </span>
+                      </th>
+                    ))}
+                    <th>Cost data</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleCogsRows.map((row) => (
+                    <tr key={`${row.product_slug}-${row.sku}-${row.variant}-${row.currency}`}>
+                      <td>{row.product_name || row.product_slug}</td>
+                      <td>{row.sku || "—"}</td>
+                      <td>{row.variant || "—"}</td>
+                      <td>{renderStockBadge(row.stock_left)}</td>
+                      <td>{row.units_sold}</td>
+                      <td>{row.revenue} {row.currency}</td>
+                      <td>{row.avg_unit_cost}</td>
+                      <td>{row.cost_of_goods} {row.currency}</td>
+                      <td>{row.gross_profit} {row.currency}</td>
+                      <td>{row.missing_cost ? <span className="admin-badge danger">Missing</span> : <span className="admin-badge success">OK</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  {cogsPreview.total ? (
+                    <tr className="admin-cogs-total-row">
+                      <td colSpan={4}>Total</td>
+                      <td>{cogsPreview.total.units_sold}</td>
+                      <td>{cogsPreview.total.revenue}</td>
+                      <td>{cogsPreview.total.avg_unit_cost}</td>
+                      <td>{cogsPreview.total.cost_of_goods}</td>
+                      <td>{cogsPreview.total.gross_profit}</td>
+                      <td>{cogsPreview.total.missing_cost ? <span className="admin-badge danger">Missing</span> : <span className="admin-badge success">OK</span>}</td>
+                    </tr>
+                  ) : null}
+                </tfoot>
+              </table>
+            </div>
+          ) : null}
+          {!cogsError && !cogsLoading && !visibleCogsRows.length ? (
+            <div className="admin-list-empty">
+              {cogsSearch ? "No products match your search." : "No order items found for this range."}
+            </div>
+          ) : null}
         </div>
       </section>
 
@@ -949,9 +1161,9 @@ export function NewsletterPanel({ data }) {
   const activeCount = rows.filter((s) => s.is_active !== false).length;
 
   function exportCsv() {
-    const header = "email,region,locale,is_active,subscribed_at";
+    const header = "email,phone,source,region,locale,is_active,subscribed_at";
     const lines = rows.map((s) =>
-      [s.email, s.region || "", s.locale || "", s.is_active !== false ? "true" : "false", s.subscribed_at || ""].join(",")
+      [s.email || "", s.phone || "", s.source || "", s.region || "", s.locale || "", s.is_active !== false ? "true" : "false", s.subscribed_at || ""].join(",")
     );
     const blob = new Blob([header + "\n" + lines.join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -975,11 +1187,12 @@ export function NewsletterPanel({ data }) {
         <div className="admin-record-list">
           {rows.length ? (
             rows.map((sub, i) => (
-              <div key={sub.email || i} className="admin-record-row">
+              <div key={sub.email || sub.phone || i} className="admin-record-row">
                 <div className="admin-record-info">
-                  <strong>{sub.email}</strong>
+                  <strong>{sub.email || sub.phone || "Subscriber"}</strong>
                   <span>
                     {sub.region ? `${sub.region.toUpperCase()} · ` : ""}
+                    {sub.source ? `${sub.source.replaceAll("_", " ")} · ` : ""}
                     Subscribed: {sub.subscribed_at ? new Date(sub.subscribed_at).toLocaleDateString() : "—"}
                   </span>
                 </div>

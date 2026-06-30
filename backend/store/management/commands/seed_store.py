@@ -31,19 +31,46 @@ from store.sample_data import (
 class Command(BaseCommand):
     help = "Seed the Enfant Organic storefront data."
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--force-overwrite",
+            action="store_true",
+            help="Overwrite existing rows with sample data. Without this flag, existing admin edits are preserved.",
+        )
+
+    @staticmethod
+    def _is_empty(value):
+        return value is None or value == "" or value == [] or value == {}
+
+    def _apply_defaults(self, obj, defaults, *, force=False):
+        changed = []
+        for field, value in defaults.items():
+            if force or self._is_empty(getattr(obj, field, None)):
+                setattr(obj, field, value)
+                changed.append(field)
+        if changed:
+            obj.save(update_fields=changed)
+        return changed
+
     @transaction.atomic
     def handle(self, *args, **options):
+        force = bool(options.get("force_overwrite"))
         region_map = {}
         category_map = {}
         tag_map = {}
 
-        SiteSettings.objects.update_or_create(pk=1, defaults=SITE_SETTINGS)
+        settings, created = SiteSettings.objects.get_or_create(pk=1, defaults=SITE_SETTINGS)
+        if not created:
+            self._apply_defaults(settings, SITE_SETTINGS, force=force)
 
         for payload in REGIONS:
-            region, _ = Region.objects.update_or_create(
+            defaults = payload.copy()
+            region, created = Region.objects.get_or_create(
                 code=payload["code"],
-                defaults=payload,
+                defaults=defaults,
             )
+            if not created:
+                self._apply_defaults(region, defaults, force=force)
             region_map[payload["code"]] = region
 
         for payload in TAX_RATES:
@@ -52,31 +79,39 @@ class Command(BaseCommand):
             region = region_map.get(region_code) or Region.objects.filter(code=region_code).first()
             if not region:
                 continue
-            TaxRate.objects.update_or_create(
+            tax_rate, created = TaxRate.objects.get_or_create(
                 region=region,
                 label=defaults["label"],
                 effective_from=defaults["effective_from"],
                 defaults=defaults,
             )
+            if not created:
+                self._apply_defaults(tax_rate, defaults, force=force)
 
         for payload in HERO_PROMO_CARDS:
-            HeroPromoCard.objects.update_or_create(
+            card, created = HeroPromoCard.objects.get_or_create(
                 title_en=payload["title_en"],
                 defaults=payload,
             )
+            if not created:
+                self._apply_defaults(card, payload, force=force)
 
         for payload in CATEGORIES:
-            category, _ = Category.objects.update_or_create(
+            category, created = Category.objects.get_or_create(
                 slug=payload["slug"],
                 defaults=payload,
             )
+            if not created:
+                self._apply_defaults(category, payload, force=force)
             category_map[payload["slug"]] = category
 
         for payload in TAGS:
-            tag, _ = Tag.objects.update_or_create(
+            tag, created = Tag.objects.get_or_create(
                 slug=payload["slug"],
                 defaults=payload,
             )
+            if not created:
+                self._apply_defaults(tag, payload, force=force)
             tag_map[payload["slug"]] = tag
 
         for payload in PRODUCTS:
@@ -86,37 +121,48 @@ class Command(BaseCommand):
             tag_slugs = payload_copy.pop("tag_slugs")
 
             product_defaults = {**payload_copy}
-            product, _ = Product.objects.update_or_create(
+            product, created = Product.objects.get_or_create(
                 slug=payload_copy["slug"],
                 defaults=product_defaults,
             )
-            product.categories.set([category_map[category_slug]])
-            product.tags.set([tag_map[slug] for slug in tag_slugs])
+            if not created:
+                self._apply_defaults(product, product_defaults, force=force)
+            if created or force:
+                product.categories.set([category_map[category_slug]])
+                product.tags.set([tag_map[slug] for slug in tag_slugs])
 
             for region_code, price_payload in prices.items():
-                ProductPrice.objects.update_or_create(
+                price, created = ProductPrice.objects.get_or_create(
                     product=product,
                     region=region_map[region_code],
                     defaults=price_payload,
                 )
+                if not created:
+                    self._apply_defaults(price, price_payload, force=force)
 
         for payload in TESTIMONIALS:
-            Testimonial.objects.update_or_create(
+            testimonial, created = Testimonial.objects.get_or_create(
                 name=payload["name"],
                 defaults=payload,
             )
+            if not created:
+                self._apply_defaults(testimonial, payload, force=force)
 
         for payload in INSTAGRAM_POSTS:
-            InstagramPost.objects.update_or_create(
+            post, created = InstagramPost.objects.get_or_create(
                 href=payload["href"],
                 sort_order=payload["sort_order"],
                 defaults=payload,
             )
+            if not created:
+                self._apply_defaults(post, payload, force=force)
 
         for payload in BLOG_POSTS:
-            BlogPost.objects.update_or_create(
+            post, created = BlogPost.objects.get_or_create(
                 slug=payload["slug"],
                 defaults=payload,
             )
+            if not created:
+                self._apply_defaults(post, payload, force=force)
 
         self.stdout.write(self.style.SUCCESS("Storefront data seeded successfully."))

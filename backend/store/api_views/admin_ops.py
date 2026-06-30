@@ -82,6 +82,7 @@ from ..api_serializers.admin_ops import (
     AdminWarehouseSerializer,
 )
 from ..notifications import notify_admins_low_stock, notify_admins_paid_order, notify_admins_payment_review
+from ..services.costing import quantize_cost, resolve_order_item_cost
 from ..api_serializers.checkout import (
     build_tax_breakdown,
     calculate_checkout_totals,
@@ -645,7 +646,14 @@ def _replace_draft_order_items(*, order, region, prepared_items, totals):
 
     for entry in item_entries:
         prepared_item = entry["prepared_item"]
+        product = prepared_item["product"]
         variant_snapshot = prepared_item.get("variant") or None
+        cost_snapshot = resolve_order_item_cost(
+            product,
+            quantity=prepared_item["quantity"],
+            variant_snapshot=variant_snapshot,
+            variant_id=prepared_item.get("variant_id", ""),
+        )
         order_item_payload = {
             key: value
             for key, value in prepared_item.items()
@@ -653,6 +661,9 @@ def _replace_draft_order_items(*, order, region, prepared_items, totals):
         }
         OrderItem.objects.create(
             order=order,
+            sku=cost_snapshot["sku"],
+            unit_cost_price=cost_snapshot["unit_cost_price"],
+            line_cost_total=cost_snapshot["line_cost_total"],
             taxable_amount=entry["item_taxable"],
             tax_rate=totals["tax_rate"],
             tax_total=entry["item_tax"],
@@ -672,6 +683,11 @@ def _replace_draft_order_items(*, order, region, prepared_items, totals):
                 "currency_code": region.currency_code,
                 "variant_id": prepared_item.get("variant_id", ""),
                 "variant": variant_snapshot,
+                "sku": cost_snapshot["sku"],
+                "unit_cost_price": str(cost_snapshot["unit_cost_price"]),
+                "line_cost_total": str(cost_snapshot["line_cost_total"]),
+                "cost_source": cost_snapshot["cost_source"],
+                "missing_cost": cost_snapshot["missing_cost"],
                 "warehouse_allocations": [],
                 "inventory_committed": False,
                 "inventory_mode": "draft_unreserved",
@@ -1557,15 +1573,37 @@ class AdminAnalyticsView(APIView):
 
             # Traffic sources — read `source` key from metadata of page_view events
             # Uses one session per source (first-touch attribution per session)
+            def _normalize_source(metadata):
+                raw_source = str((metadata or {}).get("source") or "").strip()
+                joined = " ".join(
+                    str((metadata or {}).get(key) or "")
+                    for key in ("source", "utm_source", "utm_medium", "utm_campaign", "utm_content", "referrer")
+                ).lower()
+                if "instagram" in joined or "l.instagram.com" in joined or raw_source.lower() == "ig":
+                    return "Instagram"
+                if "facebook" in joined or "fb.com" in joined or raw_source.lower() == "fb":
+                    return "Facebook"
+                if "tiktok" in joined:
+                    return "TikTok"
+                if "snapchat" in joined:
+                    return "Snapchat"
+                if "google" in joined:
+                    return "Google"
+                if "whatsapp" in joined:
+                    return "WhatsApp"
+                return raw_source or "Direct"
+
             page_view_events = (
                 all_events.filter(event_type=AnalyticsEvent.EVENT_PAGE_VIEW)
+                .order_by("created_at", "id")
                 .values("session_key", "metadata")
             )
             source_sessions = {}
             for ev in page_view_events:
                 sk = ev["session_key"]
-                if sk not in source_sessions:
-                    src = (ev.get("metadata") or {}).get("source") or "Direct"
+                src = _normalize_source(ev.get("metadata") or {})
+                current = source_sessions.get(sk)
+                if current is None or (current == "Direct" and src != "Direct"):
                     source_sessions[sk] = src
             source_counts: dict[str, int] = {}
             for src in source_sessions.values():
@@ -1640,6 +1678,80 @@ class AdminAnalyticsView(APIView):
         })
 
 
+def build_cogs_report_rows(start_date=None, end_date=None, include_unpaid=True):
+    sold_items = (
+        OrderItem.objects.select_related("order")
+        .exclude(order__status__in=[Order.STATUS_CANCELLED, Order.STATUS_FAILED, Order.STATUS_REFUNDED])
+        .order_by("product_slug", "sku", "selected_options_text", "order__currency_code")
+    )
+    if not include_unpaid:
+        sold_items = sold_items.filter(order__payment_status=Order.PAYMENT_PAID)
+    if start_date:
+        sold_items = sold_items.filter(order__created_at__date__gte=start_date)
+    if end_date:
+        sold_items = sold_items.filter(order__created_at__date__lte=end_date)
+
+    orders_included = sold_items.values("order_id").distinct().count()
+    totals = {}
+    for item in sold_items.iterator(chunk_size=1000):
+        currency = item.order.currency_code or "OMR"
+        sku = str(item.sku or "").strip()
+        variant = str(item.selected_options_text or "").strip()
+        key = (item.product_slug, sku, variant, currency)
+        row = totals.setdefault(
+            key,
+            {
+                "product_slug": item.product_slug,
+                "sku": sku,
+                "variant": variant,
+                "product_name": item.product_name,
+                "currency": currency,
+                "units_sold": 0,
+                "revenue": Decimal("0"),
+                "cost_of_goods": Decimal("0"),
+                "missing_cost": False,
+            },
+        )
+        qty = int(item.quantity or 0)
+        unit_cost = quantize_cost(item.unit_cost_price)
+        line_cost = quantize_cost(item.line_cost_total)
+        if line_cost <= 0 and unit_cost > 0 and qty:
+            line_cost = quantize_cost(unit_cost * qty)
+        row["units_sold"] += qty
+        row["revenue"] += Decimal(item.line_total or 0)
+        row["cost_of_goods"] += line_cost
+        row["missing_cost"] = row["missing_cost"] or unit_cost <= 0
+
+    rows = []
+    for row in sorted(totals.values(), key=lambda item: (-item["units_sold"], item["product_name"], item["sku"])):
+        avg_unit_cost = quantize_cost(row["cost_of_goods"] / row["units_sold"]) if row["units_sold"] else Decimal("0.000")
+        rows.append({
+            **row,
+            "avg_unit_cost": avg_unit_cost,
+            "gross_profit": row["revenue"] - row["cost_of_goods"],
+        })
+
+    grand_units = sum(row["units_sold"] for row in rows)
+    grand_revenue = sum((row["revenue"] for row in rows), Decimal("0"))
+    grand_cogs = sum((row["cost_of_goods"] for row in rows), Decimal("0"))
+    total = {
+        "product_slug": "TOTAL",
+        "sku": "",
+        "variant": "",
+        "product_name": "",
+        "currency": "",
+        "units_sold": grand_units,
+        "revenue": grand_revenue,
+        "avg_unit_cost": quantize_cost(grand_cogs / grand_units) if grand_units else Decimal("0.000"),
+        "cost_of_goods": grand_cogs,
+        "gross_profit": grand_revenue - grand_cogs,
+        "missing_cost": any(row["missing_cost"] for row in rows),
+        "orders_included": orders_included,
+        "include_unpaid": include_unpaid,
+    }
+    return rows, total
+
+
 class ReportCsvView(APIView):
     permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
     admin_read_capabilities = (CAP_REPORTS_VIEW,)
@@ -1665,6 +1777,26 @@ class ReportCsvView(APIView):
             writer.writerow(row)
             rows_written += 1
             return True
+
+        def resolve_report_date_bounds():
+            today = timezone.localdate()
+            range_key = str(request.query_params.get("date_range") or "previous_month").strip().lower()
+            if range_key == "today":
+                return today, today
+            if range_key == "yesterday":
+                day = today - timedelta(days=1)
+                return day, day
+            if range_key == "month_to_date":
+                return today.replace(day=1), today
+            if range_key == "all":
+                return None, None
+            if range_key == "custom":
+                start = parse_date(str(request.query_params.get("start_date") or ""))
+                end = parse_date(str(request.query_params.get("end_date") or ""))
+                return start, end
+            first_this_month = today.replace(day=1)
+            previous_month_end = first_this_month - timedelta(days=1)
+            return previous_month_end.replace(day=1), previous_month_end
 
         if report_type == "orders":
             writer.writerow(["order_number", "customer", "phone", "status", "payment_status", "total", "currency"])
@@ -1708,6 +1840,111 @@ class ReportCsvView(APIView):
                     "OMR",
                 ]):
                     break
+        elif report_type == "cost-of-goods":
+            start_date, end_date = resolve_report_date_bounds()
+            cogs_settings = SiteSettings.objects.first()
+            include_unpaid = True if cogs_settings is None else bool(cogs_settings.cogs_include_unpaid)
+            cogs_rows, cogs_total = build_cogs_report_rows(
+                start_date=start_date, end_date=end_date, include_unpaid=include_unpaid
+            )
+            if str(request.query_params.get("preview") or "").lower() in {"1", "true", "yes"}:
+                try:
+                    preview_limit = min(max(int(request.query_params.get("limit") or 25), 1), 100)
+                except (TypeError, ValueError):
+                    preview_limit = 25
+                preview_slugs = {
+                    row["product_slug"]
+                    for row in cogs_rows[:preview_limit]
+                    if row.get("product_slug") and row["product_slug"] != "TOTAL"
+                }
+                stock_map = {}
+                if preview_slugs:
+                    for prod in Product.objects.filter(slug__in=preview_slugs).annotate(
+                        wh_qty=Sum("warehouse_stocks__quantity"),
+                        wh_reserved=Sum("warehouse_stocks__reserved_quantity"),
+                    ):
+                        if prod.wh_qty is not None:
+                            available = int(prod.wh_qty) - int(prod.wh_reserved or 0)
+                        else:
+                            available = int(prod.stock_quantity or 0)
+                        stock_map[prod.slug] = max(available, 0)
+                def serialize_cogs_row(row):
+                    return {
+                        "product_slug": row["product_slug"],
+                        "sku": row["sku"],
+                        "variant": row["variant"],
+                        "product_name": row["product_name"],
+                        "currency": row["currency"],
+                        "units_sold": row["units_sold"],
+                        "revenue": str(row["revenue"]),
+                        "avg_unit_cost": str(row["avg_unit_cost"]),
+                        "cost_of_goods": str(row["cost_of_goods"]),
+                        "gross_profit": str(row["gross_profit"]),
+                        "missing_cost": row["missing_cost"],
+                        "stock_left": stock_map.get(row["product_slug"]),
+                    }
+                return Response({
+                    "date_from": start_date.isoformat() if start_date else "",
+                    "date_to": end_date.isoformat() if end_date else "",
+                    "count": len(cogs_rows),
+                    "orders_included": cogs_total.get("orders_included", 0),
+                    "include_unpaid": include_unpaid,
+                    "rows": [serialize_cogs_row(row) for row in cogs_rows[:preview_limit]],
+                    "total": serialize_cogs_row(cogs_total),
+                    "truncated": len(cogs_rows) > preview_limit,
+                })
+            writer.writerow([
+                "product_slug",
+                "sku",
+                "variant",
+                "product_name",
+                "currency",
+                "units_sold",
+                "revenue",
+                "avg_unit_cost",
+                "cost_of_goods",
+                "gross_profit",
+                "missing_cost",
+                "date_from",
+                "date_to",
+            ])
+            sorted_rows = cogs_rows
+            detail_limit = max(max_rows - 1, 0)
+            if len(sorted_rows) > detail_limit:
+                truncated = True
+            for row in sorted_rows[:detail_limit]:
+                if not write_row([
+                    row["product_slug"],
+                    row["sku"],
+                    row["variant"],
+                    row["product_name"],
+                    row["currency"],
+                    row["units_sold"],
+                    row["revenue"],
+                    row["avg_unit_cost"],
+                    row["cost_of_goods"],
+                    row["gross_profit"],
+                    "yes" if row["missing_cost"] else "no",
+                    start_date.isoformat() if start_date else "",
+                    end_date.isoformat() if end_date else "",
+                ]):
+                    break
+            if sorted_rows:
+                write_row([
+                    cogs_total["product_slug"],
+                    cogs_total["sku"],
+                    cogs_total["variant"],
+                    cogs_total["product_name"],
+                    cogs_total["currency"],
+                    cogs_total["units_sold"],
+                    cogs_total["revenue"],
+                    cogs_total["avg_unit_cost"],
+                    cogs_total["cost_of_goods"],
+                    cogs_total["gross_profit"],
+                    "yes" if cogs_total["missing_cost"] else "no",
+                    start_date.isoformat() if start_date else "",
+                    end_date.isoformat() if end_date else "",
+                ])
         elif report_type == "abandoned-carts":
             writer.writerow(["order_number", "customer", "phone", "created_at", "total", "currency"])
             queryset = Order.objects.filter(status=Order.STATUS_CANCELLED).order_by("-created_at").only(
@@ -1812,8 +2049,10 @@ class AdminNewsletterSubscriberListView(generics.ListAPIView):
             {
                 "id": sub.id,
                 "email": sub.email,
+                "phone": sub.phone,
                 "locale": sub.locale,
                 "region": sub.region.code if sub.region else None,
+                "source": sub.source,
                 "is_active": sub.is_active,
                 "subscribed_at": sub.created_at.isoformat(),
             }
@@ -2768,24 +3007,41 @@ class AdminOrderItemsView(APIView):
             unit_price = quantize_money(price_obj.price) if price_obj else Decimal("0.00")
 
         line_total = quantize_money(unit_price * quantity)
+        cost_snapshot = resolve_order_item_cost(product, quantity=quantity)
         existing = order.items.filter(product_slug=product_slug).first()
-        if existing:
+        if existing and existing.unit_price == unit_price and existing.unit_cost_price == cost_snapshot["unit_cost_price"]:
             existing.quantity += quantity
             existing.line_total = quantize_money(existing.unit_price * existing.quantity)
-            existing.save(update_fields=["quantity", "line_total"])
+            existing.line_cost_total = quantize_cost(existing.line_cost_total + cost_snapshot["line_cost_total"])
+            if not existing.sku and cost_snapshot["sku"]:
+                existing.sku = cost_snapshot["sku"]
+            existing.save(update_fields=["quantity", "line_total", "line_cost_total", "sku"])
         else:
             OrderItem.objects.create(
                 order=order,
                 product=product,
                 product_slug=product_slug,
+                sku=cost_snapshot["sku"],
                 product_name=product.name_en or product_slug,
                 quantity=quantity,
                 unit_price=unit_price,
                 line_total=line_total,
+                unit_cost_price=cost_snapshot["unit_cost_price"],
+                line_cost_total=cost_snapshot["line_cost_total"],
                 selected_options_text="",
                 taxable_amount=Decimal("0.00"),
                 tax_rate=Decimal("0.00"),
                 tax_total=Decimal("0.00"),
+                price_snapshot={
+                    "unit_price": str(unit_price),
+                    "line_total": str(line_total),
+                    "currency_code": order.currency_code,
+                    "sku": cost_snapshot["sku"],
+                    "unit_cost_price": str(cost_snapshot["unit_cost_price"]),
+                    "line_cost_total": str(cost_snapshot["line_cost_total"]),
+                    "cost_source": cost_snapshot["cost_source"],
+                    "missing_cost": cost_snapshot["missing_cost"],
+                },
             )
 
         _recalculate_order_totals(order)

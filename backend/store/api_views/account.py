@@ -295,7 +295,10 @@ class NewsletterSubscriptionView(APIView):
     serializer_class = NewsletterSubscriptionSerializer
 
     def post(self, request):
-        serializer = NewsletterSubscriptionSerializer(data=request.data)
+        data = request.data.copy()
+        if data.get("region") and not data.get("region_code"):
+            data["region_code"] = data.get("region")
+        serializer = NewsletterSubscriptionSerializer(data=data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response({"detail": "Newsletter subscription saved."}, status=status.HTTP_201_CREATED)

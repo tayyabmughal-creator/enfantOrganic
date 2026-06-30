@@ -185,6 +185,7 @@ const FIELD_CONFIGS = {
   products: [
     ["slug","Slug","text"],["name_en","Name EN","text"],["name_ar","Name AR","text"],
     ["base_price","Price (OMR, base)","number"],["base_compare_at_price","Compare-at price (OMR)","number"],
+    ["cost_price","Cost price (internal)","number"],
     ["brand","Brand","text"],["unit","Unit / weight","text"],["categories","Categories","categories-select"],
     ["vendor_en","Vendor EN","text"],["vendor_ar","Vendor AR","text"],
     ["short_description_en","Short description EN","textarea"],["short_description_ar","Short description AR","textarea"],
@@ -195,6 +196,9 @@ const FIELD_CONFIGS = {
     ["organic_certification_name","Certification","text"],["shelf_life","Shelf life","text"],
     ["expiry_date","Expiry date","date"],["badge_en","Badge EN","text"],["badge_ar","Badge AR","text"],
     ["review_count","Review count","number"],["rating","Rating","number"],
+    ["seo_title_en","SEO title EN","text"],["seo_title_ar","SEO title AR","text"],
+    ["seo_description_en","SEO description EN","textarea"],["seo_description_ar","SEO description AR","textarea"],
+    ["shopify_meta","Shopify/extra meta JSON","json"],
     ["image","Image URL","text"],["image_file","Image File","file"],
     ["hover_image","Hover image URL","text"],["hover_image_file","Hover Image File","file"],
     ["gallery","Gallery images","gallery"],["variants","Variants","product-variants"],["option_groups_en","Options EN","option-groups"],["option_groups_ar","Options AR","option-groups"],
@@ -295,7 +299,7 @@ const FIELD_CONFIGS = {
     ["cta_en","CTA EN","text"],["cta_ar","CTA AR","text"],
     ["href","Link destination","combobox",[
       ["/collections","All Collections"],
-      ["/collections?category=baby-sets","Gift Sets"],
+      ["/collections?collection=baby_sets","Gift Sets"],
       ["/collections?category=bath-body","Bath & Body"],
       ["/collections?category=bedding","Bedtime Care"],
       ["/collections?category=baby-oil","Relaxing Care"],
@@ -347,6 +351,9 @@ const FIELD_CONFIGS = {
     ["announcement_en","Announcement EN","text"],["announcement_ar","Announcement AR","text"],
     ["newsletter_title_en","Newsletter title EN","text"],["newsletter_title_ar","Newsletter title AR","text"],
     ["newsletter_subtitle_en","Newsletter subtitle EN","textarea"],["newsletter_subtitle_ar","Newsletter subtitle AR","textarea"],
+    ["discount_popup_enabled","Discount popup enabled","checkbox"],
+    ["discount_popup_text_en","Discount popup text EN","textarea"],["discount_popup_text_ar","Discount popup text AR","textarea"],
+    ["discount_popup_image_url","Discount popup image URL","text"],
     ["instagram_title_en","Instagram title EN","text"],["instagram_title_ar","Instagram title AR","text"],
     ["instagram_cta_en","Instagram CTA EN","text"],["instagram_cta_ar","Instagram CTA AR","text"],
     ["blog_title_en","Blog title EN","text"],["blog_title_ar","Blog title AR","text"],
@@ -386,9 +393,11 @@ const FIELD_CONFIGS = {
     ["og_image_url","Open Graph image URL","text"],
     ["return_policy_en","Return policy EN","textarea"],["return_policy_ar","Return policy AR","textarea"],
     ["privacy_policy_en","Privacy policy EN","textarea"],["privacy_policy_ar","Privacy policy AR","textarea"],
+    ["terms_policy_en","Terms policy EN","textarea"],["terms_policy_ar","Terms policy AR","textarea"],
   ],
   inventory_settings: [
     ["inventory_low_stock_threshold","Inventory health threshold","number"],
+    ["cogs_include_unpaid","COGS report counts unpaid orders too (Paid + Unpaid, excludes cancelled)","checkbox"],
   ],
   returns: [
     ["status","Status","select",[["requested","Requested"],["approved","Approved"],["rejected","Rejected"],["refunded","Refunded"]]],
@@ -459,7 +468,7 @@ const FIELD_CONFIGS = {
 };
 
 const CREATE_DEFAULTS = {
-  products:   { slug:"",name_en:"",name_ar:"",brand:"Enfant",unit:"",categories:[],image:"",hover_image:"",dietary_tags:[],gallery:[],variants:[],details_en:[],details_ar:[],option_groups_en:[],option_groups_ar:[],stock_quantity:0,rating:5,review_count:0,track_inventory:false,is_published:true,is_featured:false,sort_order:0 },
+  products:   { slug:"",name_en:"",name_ar:"",brand:"Enfant",unit:"",categories:[],cost_price:0,image:"",hover_image:"",dietary_tags:[],gallery:[],variants:[],details_en:[],details_ar:[],option_groups_en:[],option_groups_ar:[],seo_title_en:"",seo_title_ar:"",seo_description_en:"",seo_description_ar:"",shopify_meta:{},stock_quantity:0,rating:5,review_count:0,track_inventory:false,is_published:true,is_featured:false,sort_order:0 },
   categories: { slug:"",name_en:"",name_ar:"",description_en:"",description_ar:"",image:"",sort_order:0 },
   deals:      { code:"",description:"",discount_type:"fixed",value:0,minimum_subtotal:0,max_uses:"",starts_at:"",ends_at:"",is_active:true },
   customers:  { username:"",email:"",password:"",first_name:"",last_name:"",is_active:true,is_staff:false },
@@ -629,12 +638,13 @@ function cleanProductVariants(value) {
         options,
         price: variant?.price === "" || variant?.price === null || variant?.price === undefined ? "" : String(variant.price),
         compare_at_price: variant?.compare_at_price === "" || variant?.compare_at_price === null || variant?.compare_at_price === undefined ? "" : String(variant.compare_at_price),
+        cost_price: variant?.cost_price === "" || variant?.cost_price === null || variant?.cost_price === undefined ? "" : String(variant.cost_price),
         image: String(variant?.image || "").trim(),
         stock_quantity: variant?.stock_quantity === "" || variant?.stock_quantity === null || variant?.stock_quantity === undefined ? "" : Number(variant.stock_quantity),
         is_active: variant?.is_active !== false,
       };
     })
-    .filter((variant) => variant.title_en || Object.keys(variant.options).length || variant.price);
+    .filter((variant) => variant.title_en || Object.keys(variant.options).length || variant.price || variant.cost_price);
 }
 
 function formatLocalDate(date) {
@@ -1399,13 +1409,14 @@ export default function AdminPanelClient() {
     }
   }
 
-  async function downloadReport(type) {
+  async function downloadReport(type, params = {}) {
     if (!canViewKey("reports")) {
       showToast("You do not have permission to download reports.", "error");
       return;
     }
     try {
-      const res = await fetch(`${API_BASE}/admin/reports/${type}/`, { headers: { Authorization: `Bearer ${token}` } });
+      const qs = new URLSearchParams(params).toString();
+      const res = await fetch(`${API_BASE}/admin/reports/${type}/${qs ? `?${qs}` : ""}`, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error("Report download failed");
       const blob = await res.blob();
       const href = window.URL.createObjectURL(blob);
@@ -1418,6 +1429,18 @@ export default function AdminPanelClient() {
     } catch (err) {
       showToast(err.message, "error");
     }
+  }
+
+  async function previewReport(type, params = {}) {
+    if (!canViewKey("reports")) {
+      throw new Error("You do not have permission to view reports.");
+    }
+    const qs = new URLSearchParams({ ...params, preview: "1" }).toString();
+    const res = await fetch(`${API_BASE}/admin/reports/${type}/${qs ? `?${qs}` : ""}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error("Report preview failed");
+    return res.json();
   }
 
   async function downloadOrderInvoice(order) {
@@ -1744,7 +1767,7 @@ export default function AdminPanelClient() {
       </div>
     );
     if (activeKey === "newsletter")             return <NewsletterPanel data={data} />;
-    if (activeKey === "reports")               return <Reports data={data} onDownload={downloadReport} />;
+    if (activeKey === "reports")               return <Reports data={data} onDownload={downloadReport} onPreview={previewReport} />;
     if (activeKey === "audit_logs")            return <AuditLogsPanel rows={Array.isArray(data) ? data : []} filters={auditFilters} onFiltersChange={(patch) => setAuditFilters((prev) => ({ ...prev, ...patch }))} />;
     if (activeKey === "regions")               return <RegionsView rows={Array.isArray(data) ? data : []} request={request} onSaved={() => loadScreen()} />;
     if (activeKey === "instagram_posts")       return <InstagramPostsPanel rows={Array.isArray(data) ? data : []} request={request} onSaved={() => loadScreen()} />;

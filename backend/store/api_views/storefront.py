@@ -212,12 +212,20 @@ class CatalogPageView(StorefrontContextMixin, APIView):
             products = unique_products_by_slug(products)
 
         category_slug = request.query_params.get("category", "").strip()
+        collection = request.query_params.get("collection", "").strip().lower().replace("-", "_")
         hero_title = "All Products" if locale == "en" else "جميع المنتجات"
         hero_subtitle = (
             "Pure, gentle, organic essentials — thoughtfully crafted for your little one."
             if locale == "en"
             else "منتجات عضوية نقية ولطيفة — مصمّمة بعناية لطفلك الصغير."
         )
+        if collection == "baby_sets":
+            hero_title = "Baby Sets" if locale == "en" else "مجموعات الأطفال"
+            hero_subtitle = (
+                "Curated Enfant care sets for gifting, routines, and everyday essentials."
+                if locale == "en"
+                else "مجموعات إنفانت مختارة للهدايا والروتين اليومي."
+            )
         if category_slug:
             try:
                 cat = Category.objects.get(slug=category_slug)
@@ -441,6 +449,8 @@ def apply_catalog_filters(queryset, request, region):
         queryset = queryset.filter(track_inventory=True, stock_quantity__lte=0)
     if collection == "new_arrivals" or only_new_arrivals:
         queryset = queryset.filter(show_in_new_arrivals=True)
+    if collection == "baby_sets":
+        queryset = queryset.filter(show_in_baby_sets=True)
     if use_best_seller_ranking:
         queryset = apply_best_seller_ranking(queryset)
         if collection == "best_sellers" or only_best_sellers:

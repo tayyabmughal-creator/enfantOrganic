@@ -1,3 +1,4 @@
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -287,6 +288,28 @@ class SiteSettings(models.Model):
     newsletter_title_ar = models.CharField(max_length=255)
     newsletter_subtitle_en = models.TextField()
     newsletter_subtitle_ar = models.TextField()
+    discount_popup_enabled = models.BooleanField(default=True)
+    discount_popup_text_en = models.TextField(
+        blank=True,
+        default="Enter Phone Number to get exclusive discount updates at very first",
+    )
+    discount_popup_text_ar = models.TextField(
+        blank=True,
+        default="Enter Phone Number to get exclusive discount updates at very first",
+    )
+    discount_popup_image_url = models.CharField(
+        max_length=500,
+        blank=True,
+        default="/enfant/hero-gift-box-offer-v2.jpg",
+    )
+    cogs_include_unpaid = models.BooleanField(
+        default=True,
+        help_text=(
+            "Include unpaid (e.g. COD pending) orders in the Inventory Sold & Cost of "
+            "Goods report. Cancelled, failed and refunded orders are always excluded. "
+            "Turn off to count paid/completed orders only."
+        ),
+    )
     instagram_title_en = models.CharField(max_length=255)
     instagram_title_ar = models.CharField(max_length=255)
     instagram_cta_en = models.CharField(max_length=120)
@@ -342,6 +365,8 @@ class SiteSettings(models.Model):
     return_policy_ar = models.TextField(blank=True, default="")
     privacy_policy_en = models.TextField(blank=True, default="")
     privacy_policy_ar = models.TextField(blank=True, default="")
+    terms_policy_en = models.TextField(blank=True, default="")
+    terms_policy_ar = models.TextField(blank=True, default="")
 
     # Social Pixels
     facebook_pixel_id = models.CharField(max_length=50, blank=True, default="")
@@ -602,6 +627,7 @@ class Product(OrderedModel):
     badge_ar = models.CharField(max_length=60, blank=True, default="")
     review_count = models.PositiveIntegerField(default=0)
     rating = models.DecimalField(max_digits=3, decimal_places=1, default=5.0)
+    cost_price = models.DecimalField(max_digits=10, decimal_places=3, default=0, validators=[MinValueValidator(0)])
     image = models.URLField(max_length=500, blank=True, default="")
     image_file = models.ImageField(upload_to="products/", blank=True, null=True)
     hover_image = models.URLField(max_length=500, blank=True, default="")

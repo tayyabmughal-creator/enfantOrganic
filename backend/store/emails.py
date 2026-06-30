@@ -8,7 +8,7 @@ from django.utils.html import strip_tags
 from django.utils import timezone
 
 from .models import Order
-from .services.invoice import ensure_paid_order_invoice
+from .services.invoice import ensure_paid_order_invoice, generate_order_invoice
 
 logger = logging.getLogger(__name__)
 
@@ -145,6 +145,8 @@ def _attach_invoice_if_available(email, order):
     try:
         if order.payment_status == Order.PAYMENT_PAID:
             ensure_paid_order_invoice(order)
+        elif not order.invoice_pdf:
+            generate_order_invoice(order)
         if not order.invoice_pdf:
             return
         order.invoice_pdf.open("rb")

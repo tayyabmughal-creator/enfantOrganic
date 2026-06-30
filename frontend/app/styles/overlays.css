@@ -14,6 +14,119 @@
   visibility: visible;
 }
 
+.discount-popup-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(25, 24, 23, 0.46);
+}
+
+.discount-popup {
+  position: relative;
+  width: min(820px, 100%);
+  max-height: min(620px, calc(100vh - 40px));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  overflow: hidden;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid rgba(223, 231, 214, 0.86);
+  box-shadow: 0 24px 70px rgba(25, 24, 23, 0.22);
+}
+
+.discount-popup-close {
+  position: absolute;
+  top: 10px;
+  inset-inline-end: 10px;
+  z-index: 2;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text);
+  font-size: 1.3rem;
+  line-height: 1;
+  box-shadow: 0 4px 16px rgba(25, 24, 23, 0.12);
+}
+
+.discount-popup-copy {
+  min-height: 340px;
+  padding: clamp(28px, 4vw, 48px);
+  display: grid;
+  align-content: center;
+  gap: 18px;
+}
+
+.discount-popup-copy p {
+  margin: 0;
+  color: var(--text);
+  font-size: clamp(1.45rem, 3vw, 2.25rem);
+  line-height: 1.12;
+  font-weight: 850;
+}
+
+.discount-popup-form {
+  display: grid;
+  gap: 10px;
+}
+
+.discount-popup-form input {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 14px;
+  background: #fff;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.discount-popup-form button {
+  min-height: 48px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--brand-dark);
+  color: #fff;
+  font-weight: 850;
+}
+
+.discount-popup-form button:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.discount-popup-status {
+  color: var(--text-soft);
+  font-size: 0.9rem;
+  font-weight: 750;
+}
+
+.discount-popup-status.is-success {
+  color: #1f7a4d;
+}
+
+.discount-popup-status.is-error {
+  color: #b42318;
+}
+
+.discount-popup-media {
+  min-height: 340px;
+  background: var(--surface-soft);
+}
+
+.discount-popup-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .cart-drawer {
   position: fixed;
   top: 0;
@@ -655,8 +768,7 @@
 @media (max-width: 1100px) {
   .category-grid,
   .catalog-grid,
-  .blog-grid,
-  .review-grid {
+  .blog-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -773,6 +885,31 @@
 }
 
 @media (max-width: 640px) {
+  .discount-popup-backdrop {
+    padding: 12px;
+    place-items: end center;
+  }
+
+  .discount-popup {
+    grid-template-columns: 1fr;
+    max-height: calc(100vh - 24px);
+  }
+
+  .discount-popup-media {
+    order: -1;
+    min-height: 210px;
+    max-height: 34vh;
+  }
+
+  .discount-popup-copy {
+    min-height: 0;
+    padding: 24px;
+  }
+
+  .discount-popup-copy p {
+    font-size: 1.35rem;
+  }
+
   .container {
     width: min(100% - 32px, 1280px);
   }
@@ -842,8 +979,7 @@
   }
 
   .category-grid,
-  .blog-grid,
-  .review-grid {
+  .blog-grid {
     grid-template-columns: 1fr;
   }
 

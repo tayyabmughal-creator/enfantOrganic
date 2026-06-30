@@ -1220,11 +1220,13 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     });
     if (didPush) {
       lastBeginCheckoutSignatureRef.current = signature;
+      const eventID = `initiate-checkout-${region || "default"}-${Date.now()}`;
       fbqTrack("InitiateCheckout", {
         content_ids: analyticsItems.map((i) => i.item_id),
         num_items: analyticsItems.reduce((s, i) => s + (i.quantity || 1), 0),
         value: checkoutValue,
         currency: checkoutCurrency,
+        event_id: eventID,
       });
       snaptrTrack("START_CHECKOUT", {
         item_ids: analyticsItems.map((i) => i.item_id),
