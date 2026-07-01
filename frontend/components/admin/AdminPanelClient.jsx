@@ -387,6 +387,17 @@ const FIELD_CONFIGS = {
     ["contact_phone","Contact phone","text"],
     ["address_en","Address EN","text"],["address_ar","Address AR","text"],
   ],
+  social: [
+    ["facebook_pixel_id","Meta / Facebook Pixel ID (from Events Manager — the dataset/pixel ID your ads use)","text"],
+    ["snapchat_pixel_id","Snapchat Pixel ID","text"],
+    ["tiktok_pixel_id","TikTok Pixel ID","text"],
+    ["pinterest_tag_id","Pinterest Tag ID","text"],
+    ["twitter_pixel_id","Twitter / X Pixel ID","text"],
+    ["facebook_app_id","Facebook App ID","text"],
+    ["google_analytics_id","Google Analytics 4 ID (G-XXXXXXX)","text"],
+    ["google_ads_id","Google Ads ID (AW-XXXXXXX)","text"],
+    ["google_tag_manager_id","Google Tag Manager ID (GTM-XXXXXXX)","text"],
+  ],
   seo_legal: [
     ["seo_title_en","SEO meta title EN","text"],["seo_title_ar","SEO meta title AR","text"],
     ["seo_description_en","SEO meta description EN","textarea"],["seo_description_ar","SEO meta description AR","textarea"],

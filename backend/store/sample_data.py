@@ -78,6 +78,8 @@ SITE_SETTINGS = {
     "contact_phone": "+968 7760 1158",
     "address_en": "IFZA Business Park - Building A02 - Dubai Silicon Oasis - Industrial Area - Dubai - United Arab Emirates",
     "address_ar": "IFZA Business Park - Building A02 - Dubai Silicon Oasis - Industrial Area - Dubai - United Arab Emirates",
+    "facebook_pixel_id": "2127480041027733",
+    "snapchat_pixel_id": "a43535d8-5748-44f7-87c4-f712db4a5cb4",
 }
 
 REGIONS = [
