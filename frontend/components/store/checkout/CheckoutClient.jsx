@@ -1357,6 +1357,14 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         },
       });
 
+      // Meta AddPaymentInfo — fires when the customer submits with a payment method chosen.
+      fbqTrack("AddPaymentInfo", {
+        content_ids: analyticsItems.map((i) => i.item_id),
+        content_type: "product",
+        value: orderValue + shippingAmount + taxAmount,
+        currency: currencyCode,
+      });
+
       const response = await fetch(`${API_BASE_URL}/checkout/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

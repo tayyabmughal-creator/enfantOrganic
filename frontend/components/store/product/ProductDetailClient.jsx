@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import Icon from "@/components/icons/Icon";
 import { useStore } from "@/components/store/cart/StoreProvider";
 import { buildAnalyticsItem, pushDataLayerEvent } from "@/lib/analytics";
-import { snaptrTrack } from "@/components/store/analytics/AnalyticsScripts";
+import { fbqTrack, snaptrTrack } from "@/components/store/analytics/AnalyticsScripts";
 import { API_BASE_URL, CUSTOMER_TOKEN_KEY } from "@/lib/config";
 import { trackEvent } from "@/lib/eventTracking";
 import { hasHtml, sanitizeHtml } from "@/lib/safeHtml";
@@ -397,6 +397,15 @@ export default function ProductDetailClient({ locale, product, region }) {
       currency: product.pricing?.currency_code || "",
       description: product.name_en || product.name || "",
       number_items: 1,
+    });
+    // Meta ViewContent — value/currency from the same pricing source as the other events.
+    fbqTrack("ViewContent", {
+      content_ids: [product.slug],
+      content_name: product.name_en || product.name || "",
+      content_type: "product",
+      content_category: item?.item_category || "",
+      value: Number(product.pricing?.amount || 0),
+      currency: product.pricing?.currency_code || "",
     });
   }, [locale, product, region]);
 
