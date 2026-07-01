@@ -58,8 +58,12 @@ export default function PurchaseEventTracker({ order, locale, region }) {
     if (firedRef.current || hasPurchaseEventFired(order.order_number)) return;
     firedRef.current = true;
 
-    const regionCurrency = region === "ae" ? "AED" : region === "sa" ? "SAR" : payload.currency;
-    const currency = regionCurrency || payload.currency;
+    // Currency MUST match the currency that `value` (order.grand_total) is denominated
+    // in. The order's currency_code is authoritatively set to its region currency at
+    // checkout (OMR / AED / SAR), so use it directly — never infer from the URL region,
+    // which can differ from the order's region on shared/bookmarked thank-you links and
+    // would report the amount under the wrong currency.
+    const currency = payload.currency;
     const itemIds = (payload.items || []).map((i) => i.item_id);
     const numItems = (payload.items || []).reduce((s, i) => s + (i.quantity || 1), 0);
     const eventID = `purchase-${order.order_number}`;
