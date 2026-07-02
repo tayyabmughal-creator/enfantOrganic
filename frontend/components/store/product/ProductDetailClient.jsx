@@ -214,6 +214,7 @@ export default function ProductDetailClient({ locale, product, region }) {
   const [wishFeedback, setWishFeedback] = useState("");
   const [showAllReviews, setShowAllReviews] = useState(false);
   const lastTrackedViewItemRef = useRef("");
+  const lastPixelViewItemRef = useRef("");
   const [selectedOptions, setSelectedOptions] = useState(
     Object.fromEntries(optionGroups.map((group) => [group.name, group.values[0]])),
   );
@@ -358,57 +359,62 @@ export default function ProductDetailClient({ locale, product, region }) {
 
   useEffect(() => {
     const key = `${region}:${product.slug}`;
-    if (lastTrackedViewItemRef.current === key) {
-      return;
-    }
     const item = buildAnalyticsItem(product);
     if (!item) {
       return;
     }
-    const didPush = pushDataLayerEvent("view_item", {
-      locale,
-      region,
-      ecommerce: {
+    // Pixels + admin funnel dedupe on their own ref: tying it to the
+    // consent-gated dataLayer push below made every re-render re-fire
+    // ViewContent (double counts on Meta/TikTok/Snap) when consent was unset.
+    if (lastPixelViewItemRef.current !== key) {
+      lastPixelViewItemRef.current = key;
+      trackEvent("product_view", { productSlug: product.slug, regionCode: region });
+      snaptrTrack("VIEW_CONTENT", {
+        item_ids: [product.slug],
+        item_category: item?.item_category || "",
+        price: Number(product.pricing?.amount || 0),
         currency: product.pricing?.currency_code || "",
+        description: product.name_en || product.name || "",
+        number_items: 1,
+      });
+      // Meta ViewContent — value/currency from the same pricing source as the other events.
+      fbqTrack("ViewContent", {
+        content_ids: [product.slug],
+        content_name: product.name_en || product.name || "",
+        content_type: "product",
+        content_category: item?.item_category || "",
         value: Number(product.pricing?.amount || 0),
-        items: [item],
-      },
-    });
-    if (didPush) {
-      lastTrackedViewItemRef.current = key;
+        currency: product.pricing?.currency_code || "",
+      });
+      // TikTok ViewContent.
+      ttqTrack("ViewContent", {
+        contents: [
+          {
+            content_id: product.slug,
+            content_type: "product",
+            content_name: product.name_en || product.name || "",
+            quantity: 1,
+            price: Number(product.pricing?.amount || 0),
+          },
+        ],
+        value: Number(product.pricing?.amount || 0),
+        currency: product.pricing?.currency_code || "",
+      });
     }
-    trackEvent("product_view", { productSlug: product.slug, regionCode: region });
-    snaptrTrack("VIEW_CONTENT", {
-      item_ids: [product.slug],
-      item_category: item?.item_category || "",
-      price: Number(product.pricing?.amount || 0),
-      currency: product.pricing?.currency_code || "",
-      description: product.name_en || product.name || "",
-      number_items: 1,
-    });
-    // Meta ViewContent — value/currency from the same pricing source as the other events.
-    fbqTrack("ViewContent", {
-      content_ids: [product.slug],
-      content_name: product.name_en || product.name || "",
-      content_type: "product",
-      content_category: item?.item_category || "",
-      value: Number(product.pricing?.amount || 0),
-      currency: product.pricing?.currency_code || "",
-    });
-    // TikTok ViewContent.
-    ttqTrack("ViewContent", {
-      contents: [
-        {
-          content_id: product.slug,
-          content_type: "product",
-          content_name: product.name_en || product.name || "",
-          quantity: 1,
-          price: Number(product.pricing?.amount || 0),
+    if (lastTrackedViewItemRef.current !== key) {
+      const didPush = pushDataLayerEvent("view_item", {
+        locale,
+        region,
+        ecommerce: {
+          currency: product.pricing?.currency_code || "",
+          value: Number(product.pricing?.amount || 0),
+          items: [item],
         },
-      ],
-      value: Number(product.pricing?.amount || 0),
-      currency: product.pricing?.currency_code || "",
-    });
+      });
+      if (didPush) {
+        lastTrackedViewItemRef.current = key;
+      }
+    }
   }, [locale, product, region]);
 
   useEffect(() => {
