@@ -356,6 +356,7 @@ const FIELD_CONFIGS = {
     ["discount_popup_enabled","Discount popup enabled","checkbox"],
     ["discount_popup_text_en","Discount popup text EN","textarea"],["discount_popup_text_ar","Discount popup text AR","textarea"],
     ["discount_popup_image_url","Discount popup image URL","text"],
+    ["discount_popup_image_file","Upload popup image (replaces URL above)","file"],
     ["instagram_title_en","Instagram title EN","text"],["instagram_title_ar","Instagram title AR","text"],
     ["instagram_cta_en","Instagram CTA EN","text"],["instagram_cta_ar","Instagram CTA AR","text"],
     ["blog_title_en","Blog title EN","text"],["blog_title_ar","Blog title AR","text"],

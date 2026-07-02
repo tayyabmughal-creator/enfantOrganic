@@ -1396,6 +1396,62 @@ class CheckoutAndPermsTestCase(TestCase):
         self.assertEqual(settings.paymob_hmac_secret, "SECRET-HMAC")  # untouched
         self.assertEqual(settings.paymob_integration_id, "65592")     # untouched
 
+    def test_admin_settings_discount_popup_image_upload_sets_url(self):
+        import io
+        import tempfile
+
+        from PIL import Image as PILImage
+
+        user = self._create_staff_user("settings-popup-image", role_name=ROLE_MANAGER)
+        self._site_settings_with_paymob()
+        self.api_client.force_authenticate(user)
+
+        buffer = io.BytesIO()
+        PILImage.new("RGB", (4, 4), "green").save(buffer, format="PNG")
+        buffer.seek(0)
+        buffer.name = "Popup Offer Image.png"
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with self.settings(MEDIA_ROOT=media_root, MEDIA_URL="/media/"):
+                response = self.api_client.patch(
+                    "/api/admin/settings/",
+                    {
+                        "discount_popup_image_file": buffer,
+                        "announcement_en": "popup image test",
+                        # JSON field sent as a string, exactly like the admin's
+                        # multipart save — must come back as a list, not a string.
+                        "why_choose_links": json.dumps([
+                            {"label_en": "Why", "label_ar": "لماذا", "href": "/why"},
+                        ]),
+                    },
+                    format="multipart",
+                )
+        self.assertEqual(response.status_code, 200, response.data)
+        settings = SiteSettings.objects.first()
+        self.assertTrue(
+            settings.discount_popup_image_url.startswith("/media/settings/popup/popup-offer-image-"),
+            settings.discount_popup_image_url,
+        )
+        self.assertEqual(settings.announcement_en, "popup image test")
+        self.assertIsInstance(settings.why_choose_links, list)
+        self.assertEqual(settings.why_choose_links[0]["href"], "/why")
+
+    def test_admin_settings_discount_popup_rejects_non_image_upload(self):
+        import io
+
+        user = self._create_staff_user("settings-popup-nonimage", role_name=ROLE_MANAGER)
+        self._site_settings_with_paymob()
+        self.api_client.force_authenticate(user)
+
+        fake = io.BytesIO(b"not an image at all")
+        fake.name = "evil.png"
+        response = self.api_client.patch(
+            "/api/admin/settings/",
+            {"discount_popup_image_file": fake},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 400)
+
     def test_admin_settings_audit_redacts_paymob_secrets(self):
         user = self._create_staff_user("settings-paymob-audit", role_name=ROLE_MANAGER)
         settings = self._site_settings_with_paymob()

@@ -1290,6 +1290,97 @@ export function PopupLeadsPanel({ data, onDownload, canExport }) {
   );
 }
 
+// Region content fields editable line-by-line from the Regions screen.
+// Backend PATCH /admin/regions/<code>/ accepts any Region model field.
+const REGION_CONTENT_FIELDS = [
+  ["name_en", "Name EN"],
+  ["name_ar", "Name AR"],
+  ["contact_phone", "Contact phone"],
+  ["contact_email", "Contact email", "email"],
+  ["address_en", "Address EN", "textarea"],
+  ["address_ar", "Address AR", "textarea"],
+  ["seller_legal_name", "Legal name"],
+  ["seller_vat_number", "VAT number"],
+  ["seller_cr_number", "CR number"],
+  ["seller_address_en", "Seller address EN", "textarea"],
+  ["seller_address_ar", "Seller address AR", "textarea"],
+  ["seller_phone", "Seller phone"],
+  ["seller_email", "Seller email", "email"],
+];
+
+function RegionContentRow({ code, field, label, kind, value, request, onSaved }) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [draft, setDraft] = useState("");
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    try {
+      await request(`/admin/regions/${code}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ [field]: draft.trim() }),
+      });
+      setEditing(false);
+      onSaved?.();
+    } catch {
+      setError("Save failed — try again");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="admin-settings-row admin-threshold-row">
+      <strong>{label}</strong>
+      {editing ? (
+        <span className="admin-threshold-edit">
+          {kind === "textarea" ? (
+            <textarea
+              className="admin-threshold-input"
+              rows={2}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Escape") setEditing(false); }}
+              autoFocus
+            />
+          ) : (
+            <input
+              type={kind || "text"}
+              className="admin-threshold-input"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") save();
+                if (e.key === "Escape") setEditing(false);
+              }}
+              autoFocus
+            />
+          )}
+          <button className="admin-btn admin-btn-xs admin-btn-primary" disabled={saving} onClick={save}>
+            {saving ? "Saving…" : "Save"}
+          </button>
+          <button className="admin-btn admin-btn-xs" onClick={() => setEditing(false)}>Cancel</button>
+          {error && <span className="admin-threshold-error">{error}</span>}
+        </span>
+      ) : (
+        <span className="admin-threshold-display">
+          <span>{value || "—"}</span>
+          {request && (
+            <button
+              className="admin-btn admin-btn-xs admin-btn-ghost"
+              onClick={() => { setDraft(value || ""); setEditing(true); }}
+            >
+              Edit
+            </button>
+          )}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function RegionsView({ rows, request, onSaved }) {
   const [editingThreshold, setEditingThreshold] = useState({});
   const [savingThreshold, setSavingThreshold] = useState({});
@@ -1443,16 +1534,24 @@ export function RegionsView({ rows, request, onSaved }) {
           <section key={region.id || code} className="admin-panel-card admin-region-card">
             <div className="admin-panel-head">
               <div>
-                <h3>{region.name || code?.toUpperCase()} <span className="admin-badge neutral">{code?.toUpperCase()}</span></h3>
+                <h3>{region.name_en || region.name || code?.toUpperCase()} <span className="admin-badge neutral">{code?.toUpperCase()}</span></h3>
                 <span>{region.currency_code} · {region.locale || "en/ar"}</span>
               </div>
               <span className={`admin-badge ${region.is_active ? "success" : "neutral"}`}>{region.is_active ? "Active" : "Inactive"}</span>
             </div>
             <div className="admin-settings-preview">
-              {region.seller_legal_name && <div className="admin-settings-row"><strong>Legal name</strong><span>{region.seller_legal_name}</span></div>}
-              {region.contact_email && <div className="admin-settings-row"><strong>Contact email</strong><span>{region.contact_email}</span></div>}
-              {region.contact_phone && <div className="admin-settings-row"><strong>Contact phone</strong><span>{region.contact_phone}</span></div>}
-              {region.seller_address_en && <div className="admin-settings-row"><strong>Address</strong><span>{region.seller_address_en}</span></div>}
+              {REGION_CONTENT_FIELDS.map(([field, label, kind]) => (
+                <RegionContentRow
+                  key={field}
+                  code={code}
+                  field={field}
+                  label={label}
+                  kind={kind}
+                  value={region[field]}
+                  request={request}
+                  onSaved={onSaved}
+                />
+              ))}
               {region.payment_enabled_providers?.length > 0 && (
                 <div className="admin-settings-row">
                   <strong>Payment providers</strong>

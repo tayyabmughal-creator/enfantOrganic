@@ -3793,10 +3793,55 @@ class AdminSettingsView(APIView):
     def patch(self, request):
         settings = SiteSettings.objects.first()
         before_snapshot = snapshot_instance(settings) if settings else None
+        data = request.data
+        upload = request.FILES.get("discount_popup_image_file")
+        if upload is not None:
+            import os
+            import uuid
+            from django.conf import settings as dj_settings
+            from django.core.files.storage import default_storage
+            from django.utils.text import slugify
+            from PIL import Image
+
+            try:
+                Image.open(upload).verify()
+                upload.seek(0)
+            except Exception:
+                return Response({"detail": f"'{upload.name}' is not a valid image."}, status=400)
+            base, ext = os.path.splitext(upload.name or "")
+            ext = ext.lower()
+            if ext not in {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}:
+                ext = ".jpg"
+            safe_base = slugify(base)[:60] or "popup"
+            target = f"settings/popup/{safe_base}-{uuid.uuid4().hex[:8]}{ext}"
+            try:
+                stored_path = default_storage.save(target, upload)
+            except Exception:
+                logger.exception("Discount popup image save failed (file=%s)", upload.name)
+                return Response(
+                    {"detail": f"Could not save '{upload.name}'. Please try a different file."},
+                    status=400,
+                )
+            # The file only exists to produce a URL — the model keeps storing a
+            # plain URL so env-provided/static paths keep working unchanged.
+            data = {k: v for k, v in request.data.items() if k != "discount_popup_image_file"}
+            data["discount_popup_image_url"] = f"{dj_settings.MEDIA_URL.rstrip('/')}/{stored_path}"
+            # Multipart flattens JSON fields to strings — restore them so a
+            # settings save that includes the image can't corrupt link lists.
+            import json as json_module
+            from django.db.models import JSONField
+
+            json_fields = {f.name for f in SiteSettings._meta.get_fields() if isinstance(f, JSONField)}
+            for key in list(data.keys()):
+                if key in json_fields and isinstance(data[key], str):
+                    try:
+                        data[key] = json_module.loads(data[key])
+                    except (TypeError, ValueError):
+                        pass
         if not settings:
-            serializer = AdminSiteSettingsSerializer(data=request.data)
+            serializer = AdminSiteSettingsSerializer(data=data)
         else:
-            serializer = AdminSiteSettingsSerializer(settings, data=request.data, partial=True)
+            serializer = AdminSiteSettingsSerializer(settings, data=data, partial=True)
         serializer.is_valid(raise_exception=True)
         updated_settings = serializer.save()
         log_admin_action(
