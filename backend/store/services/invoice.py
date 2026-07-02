@@ -1,9 +1,11 @@
 import base64
 import logging
+import re
 import urllib.request
 from decimal import Decimal, ROUND_HALF_UP
 from io import BytesIO
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 from django.core.files.base import ContentFile
 from django.utils import timezone
@@ -76,6 +78,47 @@ def _shape_ar(text):
     if not value or not ARABIC_SHAPING_AVAILABLE:
         return value
     return get_display(arabic_reshaper.reshape(value))
+
+
+# Arabic blocks + presentation forms (reshaper output lands in FB50–FEFF).
+_ARABIC_RANGES = (
+    "؀-ۿ"   # Arabic
+    "ݐ-ݿ"   # Arabic Supplement
+    "ࢠ-ࣿ"   # Arabic Extended-A
+    "ﭐ-﷿"   # Arabic Presentation Forms-A
+    "ﹰ-﻿"   # Arabic Presentation Forms-B
+)
+_ARABIC_CHAR_RE = re.compile(f"[{_ARABIC_RANGES}]")
+_ARABIC_RUN_RE = re.compile(f"[{_ARABIC_RANGES}][{_ARABIC_RANGES}\\s]*")
+_LATIN_LETTER_RE = re.compile(r"[A-Za-z]")
+
+
+def _contains_arabic(text):
+    return bool(_ARABIC_CHAR_RE.search(str(text or "")))
+
+
+def _smart_markup(text, ar_font=None):
+    """Escape text for Paragraph markup; shape Arabic and wrap each Arabic run
+    in a <font> tag for the registered Arabic font.
+
+    The base (Latin) font stays in charge of the paragraph, so mixed lines like
+    "Bowsher, شارع الخوير" render both scripts with real glyphs even though
+    Helvetica has no Arabic and NotoSansArabic has no Latin.
+    """
+    value = str(text or "")
+    if not _contains_arabic(value):
+        return escape(value)
+    shaped = _shape_ar(value)
+    if not ar_font:
+        return escape(shaped)
+    parts = []
+    cursor = 0
+    for match in _ARABIC_RUN_RE.finditer(shaped):
+        parts.append(escape(shaped[cursor:match.start()]))
+        parts.append(f'<font name="{ar_font}">{escape(match.group(0))}</font>')
+        cursor = match.end()
+    parts.append(escape(shaped[cursor:]))
+    return "".join(parts)
 
 
 def _candidate_font_paths():
@@ -308,17 +351,33 @@ def _build_invoice_pdf_bytes(order):
     # Always use Helvetica for Latin text — NotoSansArabic lacks Latin glyphs.
     base_font = "Helvetica"
     bold_font = "Helvetica-Bold"
-    ar_font = AR_FONT_NAME if AR_FONT_NAME in pdfmetrics.getRegisteredFontNames() else None
+    registered = pdfmetrics.getRegisteredFontNames()
+    ar_font = AR_FONT_NAME if AR_FONT_NAME in registered else None
+    ar_bold_font = AR_BOLD_FONT_NAME if AR_BOLD_FONT_NAME in registered else ar_font
     st = _styles(base_font, bold_font)
     if ar_font:
         st["ar_body"] = ParagraphStyle(
             "InvArBody",
-            fontName=ar_font,
+            fontName=base_font,  # Arabic runs carry their own <font> tag
             fontSize=8.5,
             leading=13,
             textColor=BLACK,
             alignment=2,  # right-align RTL text
         )
+
+    def _para(text, style, rtl_style=None):
+        """Paragraph with correct glyphs for Arabic/Latin/mixed content.
+
+        Pure-Arabic lines get the right-aligned RTL style when one is given;
+        mixed lines keep the column's Latin style so the layout stays put.
+        """
+        value = str(text or "")
+        if not _contains_arabic(value):
+            return Paragraph(escape(value), style)
+        markup = _smart_markup(value, ar_font)
+        if rtl_style is not None and not _LATIN_LETTER_RE.search(value):
+            return Paragraph(markup, rtl_style)
+        return Paragraph(markup, style)
 
     seller = _seller_snapshot(order)
     buyer = _buyer_snapshot(order)
@@ -364,7 +423,7 @@ def _build_invoice_pdf_bytes(order):
     if barcode_drawing:
         right_content.append(barcode_drawing)
 
-    logo_cell = logo_img or Paragraph(seller["legal_name"], st["body_bold"])
+    logo_cell = logo_img or _para(seller["legal_name"], st["body_bold"])
     header_tbl = Table(
         [[logo_cell, right_content]],
         colWidths=[left_w, right_w],
@@ -386,36 +445,22 @@ def _build_invoice_pdf_bytes(order):
         paras = []
         ar_style = st.get("ar_body")
 
-        # Name: show Arabic-shaped version (right-aligned) then Latin original
         name = b.get("name") or ""
-        ar_name = _shape_ar(name) if name else ""
-        if ar_style and ar_name and ar_name != name:
-            paras.append(Paragraph(ar_name, ar_style))
         if name:
-            paras.append(Paragraph(name, st["body"]))
+            paras.append(_para(name, st["body"], ar_style))
 
-        # Address line (usually Latin)
         addr = ", ".join(filter(None, [
             b.get("address_line_1", ""), b.get("address_line_2", ""), b.get("area", ""),
         ]))
         if addr:
-            paras.append(Paragraph(addr, st["body"]))
+            paras.append(_para(addr, st["body"], ar_style))
 
-        # City + Country — may contain Arabic
-        city = b.get("city") or ""
-        country = b.get("country") or ""
-        ar_city = _shape_ar(city) if city else ""
-        if ar_style and ar_city and ar_city != city:
-            ar_country = _shape_ar(country) if country else country
-            city_line = f"{ar_city}، {ar_country}" if ar_country else ar_city
-            paras.append(Paragraph(city_line, ar_style))
-        else:
-            city_country = ", ".join(filter(None, [city, country]))
-            if city_country:
-                paras.append(Paragraph(city_country, st["body"]))
+        city_country = ", ".join(filter(None, [b.get("city") or "", b.get("country") or ""]))
+        if city_country:
+            paras.append(_para(city_country, st["body"], ar_style))
 
         if b.get("phone"):
-            paras.append(Paragraph(f"Tel. {b['phone']}", st["body"]))
+            paras.append(Paragraph(f"Tel. {escape(str(b['phone']))}", st["body"]))
 
         return paras or [Paragraph("—", st["body"])]
 
@@ -479,7 +524,7 @@ def _build_invoice_pdf_bytes(order):
         line_total = _money_str(item.line_total, currency)
         item_rows.append([
             prod_img or "",
-            Paragraph(name_text, st["item_name"]),
+            _para(name_text, st["item_name"]),
             Paragraph(unit_price, st["body"]),
             Paragraph(str(item.quantity), st["body"]),
             Paragraph(line_total, st["body"]),
@@ -581,14 +626,18 @@ def _build_invoice_pdf_bytes(order):
     story.append(Spacer(1, 4 * mm))
     story.append(Paragraph("Thank you for shopping with us!", st["footer"]))
     story.append(Spacer(1, 2 * mm))
-    story.append(Paragraph(f"<b>{seller['legal_name']}</b>", st["footer_bold"]))
+    story.append(
+        Paragraph(f"<b>{_smart_markup(seller['legal_name'], ar_bold_font)}</b>", st["footer_bold"])
+    )
     footer_lines = list(filter(None, [
         seller["address_en"],
         seller["email"],
         seller.get("website", "www.enfantorganic.com"),
     ]))
     if footer_lines:
-        story.append(Paragraph("<br/>".join(footer_lines), st["footer"]))
+        story.append(
+            Paragraph("<br/>".join(_smart_markup(line, ar_font) for line in footer_lines), st["footer"])
+        )
 
     doc.build(story)
     buffer.seek(0)
