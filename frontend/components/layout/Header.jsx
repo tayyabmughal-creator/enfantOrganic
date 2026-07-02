@@ -18,6 +18,7 @@ import {
 import { resolveNavigationHref } from "@/lib/navigationLinks";
 import { saveSelectedRegion } from "@/lib/regionResolver";
 import { pushDataLayerEvent } from "@/lib/analytics";
+import { fbqTrack, snaptrTrack, ttqTrack } from "@/components/store/analytics/AnalyticsScripts";
 import { API_BASE_URL as CONFIG_API_BASE_URL } from "@/lib/config";
 
 const DEFAULT_LOGO_SRC = "/enfant/enfant-logo.png";
@@ -137,6 +138,15 @@ function HeaderInner({ navigation }) {
       controller.abort();
     };
   }, [locale, region, searchOpen, searchQuery, searchUiText.error]);
+
+  // Fires the Search event on every enabled ad pixel when the shopper
+  // actually runs a search (form submit / "see all results" — not keystrokes).
+  const trackSearchEvent = (term) => {
+    pushDataLayerEvent("search", { search_term: term, locale, region });
+    fbqTrack("Search", { search_string: term });
+    snaptrTrack("SEARCH", { search_string: term });
+    ttqTrack("Search", { query: term });
+  };
 
   const closeSearchModal = () => {
     setSearchOpen(false);
@@ -427,11 +437,7 @@ function HeaderInner({ navigation }) {
                   e.preventDefault();
                   const term = searchQuery.trim();
                   if (term) {
-                    pushDataLayerEvent("search", {
-                      search_term: term,
-                      locale,
-                      region,
-                    });
+                    trackSearchEvent(term);
                     closeSearchModal();
                     router.push(
                       `${buildStorePath(locale, "/collections", region)}&search=${encodeURIComponent(term)}`,
@@ -504,11 +510,7 @@ function HeaderInner({ navigation }) {
                   <button type="button" className="search-suggestions-submit" onClick={() => {
                     const term = searchQuery.trim();
                     if (!term) return;
-                    pushDataLayerEvent("search", {
-                      search_term: term,
-                      locale,
-                      region,
-                    });
+                    trackSearchEvent(term);
                     closeSearchModal();
                     router.push(
                       `${buildStorePath(locale, "/collections", region)}&search=${encodeURIComponent(term)}`,
