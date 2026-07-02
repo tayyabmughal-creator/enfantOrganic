@@ -919,6 +919,14 @@
   box-shadow: 0 10px 22px rgba(96, 122, 66, 0.2);
 }
 
+.product-badge-stock.is-out {
+  background: var(--danger);
+}
+
+.product-badge-stock.is-low {
+  background: #9c5a14;
+}
+
 .product-card-body {
   flex: 1;
   padding: 12px 14px 14px;

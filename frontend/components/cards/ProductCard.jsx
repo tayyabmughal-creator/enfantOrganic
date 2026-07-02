@@ -39,6 +39,9 @@ function ProductCard({ locale, product, region }) {
   const [isWishSubmitting, setIsWishSubmitting] = useState(false);
   const hasVariants = Boolean(product.has_variants || (product.variants || []).length);
   const hasOptions = hasVariants || (product.option_groups || []).some((group) => group.values.length > 1);
+  const stockStatus = product.stock_status || {};
+  const isOutOfStock = Boolean(stockStatus.track_inventory) && !Boolean(stockStatus.is_in_stock);
+  const isLowStock = Boolean(stockStatus.track_inventory) && Boolean(stockStatus.is_in_stock) && Boolean(stockStatus.is_low_stock);
   const primaryImage = resolveProductCardImage(product.image);
   const hoverImage = product.hover_image ? resolveProductCardImage(product.hover_image) : "";
   const rating = Number(product.rating || 5);
@@ -57,6 +60,8 @@ function ProductCard({ locale, product, region }) {
   );
 
   const handlePrimaryAction = () => {
+    if (isOutOfStock) return;
+
     if (hasVariants || hasOptions) {
       openQuickView({ ...product, locale, region });
       return;
@@ -167,7 +172,17 @@ function ProductCard({ locale, product, region }) {
               className="product-card-image-secondary"
             />
           ) : null}
-          {product.badge ? <span className="product-badge">{product.badge}</span> : null}
+          {isOutOfStock ? (
+            <span className="product-badge product-badge-stock is-out">
+              {locale === "ar" ? "غير متوفر" : "Out of stock"}
+            </span>
+          ) : isLowStock ? (
+            <span className="product-badge product-badge-stock is-low">
+              {locale === "ar" ? "كمية محدودة" : "Low stock"}
+            </span>
+          ) : product.badge ? (
+            <span className="product-badge">{product.badge}</span>
+          ) : null}
         </Link>
         <button
           type="button"
@@ -231,9 +246,15 @@ function ProductCard({ locale, product, region }) {
         {!hasVariants && product.pricing?.unit_price_text ? (
           <span className="unit-price-label">{product.pricing.unit_price_text}</span>
         ) : null}
-        <button ref={addBtnRef} type="button" className="product-action-button" onClick={handlePrimaryAction}>
+        <button
+          ref={addBtnRef}
+          type="button"
+          className="product-action-button"
+          onClick={handlePrimaryAction}
+          disabled={isOutOfStock}
+        >
           <Icon name="bag" size={18} />
-          {hasOptions ? t.chooseOptions : t.addToCart}
+          {isOutOfStock ? t.outOfStock : hasOptions ? t.chooseOptions : t.addToCart}
         </button>
       </div>
     </article>

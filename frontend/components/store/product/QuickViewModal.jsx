@@ -60,9 +60,11 @@ export default function QuickViewModal() {
     : quickViewProduct.pricing;
 
   const variantStock = selectedVariant?.stock_quantity;
+  const baseOutOfStock = Boolean(quickViewProduct?.stock_status?.track_inventory)
+    && !Boolean(quickViewProduct?.stock_status?.is_in_stock);
   const isOutOfStock = hasVariants
     ? (selectedVariant ? (variantStock != null && Number(variantStock) <= 0) : false)
-    : false;
+    : baseOutOfStock;
 
   // Build option groups from variants (all unique option keys + their values)
   const variantOptionGroups = hasVariants
@@ -200,7 +202,9 @@ export default function QuickViewModal() {
             {/* Out of stock notice */}
             {isOutOfStock ? (
               <p className="quick-view-out-of-stock">
-                {isAr ? "هذا الخيار غير متوفر حالياً" : "This option is currently out of stock"}
+                {hasVariants
+                  ? (isAr ? "هذا الخيار غير متوفر حالياً" : "This option is currently out of stock")
+                  : (isAr ? "هذا المنتج غير متوفر حالياً" : "This product is currently out of stock")}
               </p>
             ) : null}
 
