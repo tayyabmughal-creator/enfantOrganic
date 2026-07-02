@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import Icon from "@/components/icons/Icon";
 import { useStore } from "@/components/store/cart/StoreProvider";
 import { buildAnalyticsItem, pushDataLayerEvent } from "@/lib/analytics";
-import { fbqTrack, snaptrTrack } from "@/components/store/analytics/AnalyticsScripts";
+import { fbqTrack, snaptrTrack, ttqTrack } from "@/components/store/analytics/AnalyticsScripts";
 import { API_BASE_URL, CUSTOMER_TOKEN_KEY } from "@/lib/config";
 import { trackEvent } from "@/lib/eventTracking";
 import { hasHtml, sanitizeHtml } from "@/lib/safeHtml";
@@ -404,6 +404,20 @@ export default function ProductDetailClient({ locale, product, region }) {
       content_name: product.name_en || product.name || "",
       content_type: "product",
       content_category: item?.item_category || "",
+      value: Number(product.pricing?.amount || 0),
+      currency: product.pricing?.currency_code || "",
+    });
+    // TikTok ViewContent.
+    ttqTrack("ViewContent", {
+      contents: [
+        {
+          content_id: product.slug,
+          content_type: "product",
+          content_name: product.name_en || product.name || "",
+          quantity: 1,
+          price: Number(product.pricing?.amount || 0),
+        },
+      ],
       value: Number(product.pricing?.amount || 0),
       currency: product.pricing?.currency_code || "",
     });

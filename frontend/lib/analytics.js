@@ -133,6 +133,47 @@ export function buildAnalyticsItems(list, extrasBuilder = null) {
     .filter(Boolean);
 }
 
+// TikTok `contents` payload from analytics items (see buildAnalyticsItem).
+// price = unit price; quantity >= 1; entries without any identity are dropped.
+export function buildTikTokContents(items) {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+  return items
+    .map((item) => ({
+      content_id: String(item?.item_id || ""),
+      content_type: "product",
+      content_name: String(item?.item_name || ""),
+      quantity: Math.max(asNumber(item?.quantity ?? 1), 1),
+      price: asNumber(item?.price),
+    }))
+    .filter((content) => content.content_id || content.content_name);
+}
+
+const PURCHASE_BLOCKED_ORDER_STATUSES = new Set([
+  "cancelled",
+  "failed",
+  "returned",
+  "refunded",
+]);
+const PURCHASE_BLOCKED_PAYMENT_STATUSES = new Set(["failed", "refunded"]);
+
+// Purchase pixels must never fire for an order that is known to have failed.
+// COD/WhatsApp/bank orders are legitimately "unpaid"+"pending" at thank-you
+// time, so only explicit failure states are blocked — not missing payment.
+export function isPurchaseTrackable(order) {
+  if (!order || typeof order !== "object" || !order.order_number) {
+    return false;
+  }
+  if (PURCHASE_BLOCKED_ORDER_STATUSES.has(String(order.status || "").toLowerCase())) {
+    return false;
+  }
+  if (PURCHASE_BLOCKED_PAYMENT_STATUSES.has(String(order.payment_status || "").toLowerCase())) {
+    return false;
+  }
+  return true;
+}
+
 function getPurchaseStorageKey(orderNumber) {
   return `${PURCHASE_STORAGE_PREFIX}:${String(orderNumber || "").trim()}`;
 }

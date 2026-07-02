@@ -7,7 +7,7 @@ import QuickViewModal from "@/components/store/product/QuickViewModal";
 import { buildAnalyticsItem, pushDataLayerEvent } from "@/lib/analytics";
 import { API_BASE_URL as CONFIG_API_BASE_URL } from "@/lib/config";
 import { trackEvent } from "@/lib/eventTracking";
-import { fbqTrack, snaptrTrack } from "@/components/store/analytics/AnalyticsScripts";
+import { fbqTrack, snaptrTrack, ttqTrack } from "@/components/store/analytics/AnalyticsScripts";
 
 const CART_STORAGE_KEY = "enfant-organics-cart";
 const API_BASE_URL = CONFIG_API_BASE_URL;
@@ -279,6 +279,20 @@ export default function StoreProvider({ children }) {
             currency: atcCurrency,
             description: item.item_name || "",
             number_items: nextQuantity,
+          });
+          ttqTrack("AddToCart", {
+            contents: [
+              {
+                content_id: item.item_id,
+                content_type: "product",
+                content_name: item.item_name || "",
+                quantity: nextQuantity,
+                price: Number(product.pricing?.amount) || 0,
+              },
+            ],
+            value: atcValue,
+            currency: atcCurrency,
+            event_id: eventID,
           });
         }
         // Record a real add_to_cart event for admin funnel analytics.

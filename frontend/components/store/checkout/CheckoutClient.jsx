@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 
 import { useStore } from "@/components/store/cart/StoreProvider";
 import Icon from "@/components/icons/Icon";
-import { buildAnalyticsItems, pushDataLayerEvent } from "@/lib/analytics";
-import { fbqTrack, snaptrTrack } from "@/components/store/analytics/AnalyticsScripts";
+import { buildAnalyticsItems, buildTikTokContents, pushDataLayerEvent } from "@/lib/analytics";
+import { fbqTrack, snaptrTrack, ttqTrack } from "@/components/store/analytics/AnalyticsScripts";
 import { getAttributionSnapshot, getOrCreateSessionKey, trackEvent } from "@/lib/eventTracking";
 import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
 import { API_BASE_URL as CONFIG_API_BASE_URL, CUSTOMER_TOKEN_KEY, safeRedirectUrl } from "@/lib/config";
@@ -1234,6 +1234,12 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         price: checkoutValue,
         currency: checkoutCurrency,
       });
+      ttqTrack("InitiateCheckout", {
+        contents: buildTikTokContents(analyticsItems),
+        value: checkoutValue,
+        currency: checkoutCurrency,
+        event_id: eventID,
+      });
     }
   }, [
     analyticsItems,
@@ -1361,6 +1367,13 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
       fbqTrack("AddPaymentInfo", {
         content_ids: analyticsItems.map((i) => i.item_id),
         content_type: "product",
+        value: orderValue + shippingAmount + taxAmount,
+        currency: currencyCode,
+      });
+
+      // TikTok AddPaymentInfo — same trigger and totals as the Meta event.
+      ttqTrack("AddPaymentInfo", {
+        contents: buildTikTokContents(analyticsItems),
         value: orderValue + shippingAmount + taxAmount,
         currency: currencyCode,
       });

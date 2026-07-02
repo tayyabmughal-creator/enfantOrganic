@@ -5,13 +5,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ANALYTICS_CONSENT_EVENT,
   buildAnalyticsItems,
+  buildTikTokContents,
   CONSENT_STATES,
   getConsentState,
   hasPurchaseEventFired,
+  isPurchaseTrackable,
   markPurchaseEventFired,
   pushDataLayerEvent,
 } from "@/lib/analytics";
-import { fbqTrack, snaptrTrack } from "@/components/store/analytics/AnalyticsScripts";
+import { fbqTrack, snaptrTrack, ttqTrack } from "@/components/store/analytics/AnalyticsScripts";
 
 function asNumber(value) {
   const parsed = Number(value);
@@ -52,6 +54,10 @@ export default function PurchaseEventTracker({ order, locale, region }) {
 
   useEffect(() => {
     if (!order?.order_number || !payload) return;
+    // Never fire Purchase for orders in an explicit failure state (failed,
+    // cancelled, refunded, returned) — e.g. a bookmarked thank-you URL for an
+    // online payment that was later declined or an order the admin cancelled.
+    if (!isPurchaseTrackable(order)) return;
     // firedRef: in-memory guard prevents double-fire within the same component
     // lifecycle (e.g. consentState change re-triggering this effect).
     // localStorage guard: prevents re-fire across navigations in the same browser.
@@ -85,6 +91,15 @@ export default function PurchaseEventTracker({ order, locale, region }) {
       transaction_id: order.order_number,
       item_ids: itemIds,
       number_items: numItems,
+    });
+
+    // TikTok Pixel CompletePayment — event_id for Events API deduplication.
+    ttqTrack("CompletePayment", {
+      contents: buildTikTokContents(payload.items),
+      value: payload.value,
+      currency,
+      order_id: order.order_number,
+      event_id: eventID,
     });
 
     // GA4/GTM purchase requires consent.
