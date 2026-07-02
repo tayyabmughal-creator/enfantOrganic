@@ -273,22 +273,26 @@ export default async function LocalizedHomePage({ params, searchParams }) {
               {[
                 {
                   year: "1984",
+                  image: "/enfant/our-story-1984.webp",
                   en: "Enfant is founded in Thailand with one promise: pure, natural care for baby's delicate skin.",
                   ar: "تأسست إنفانت في تايلاند بوعد واحد: عناية نقية وطبيعية لبشرة الطفل الحساسة.",
                 },
                 {
                   year: "1986",
+                  image: "/enfant/our-story-1986.webp",
                   en: "The brand launches its first toiletry range, made with natural ingredients.",
                   ar: "أطلقت العلامة أول مجموعة عناية لها، مصنوعة من مكونات طبيعية.",
                 },
                 {
                   year: "2013",
+                  image: "/enfant/our-story-2013.webp",
                   en: "Enfant launches an organic toiletry line — same trusted formulas, now free from harsh chemicals.",
                   ar: "أطلقت إنفانت خط عناية عضوي — نفس التركيبات الموثوقة، الآن خالية من المواد الكيميائية القاسية.",
                 },
                 {
                   year: "2025",
                   launch: true,
+                  image: "/enfant/our-story-2025.webp",
                   en: "Enfant Organic arrives in the GCC — organic-certified and dermatologically tested in Germany.",
                   ar: "تصل إنفانت أورجانيك إلى الخليج — معتمدة عضويًا ومختبرة جلديًا في ألمانيا.",
                   badgeEn: "Now Here",
@@ -296,13 +300,8 @@ export default async function LocalizedHomePage({ params, searchParams }) {
                 },
               ].map((node) => (
                 <div key={node.year} className={`our-story-node${node.launch ? " is-launch" : ""}`}>
-                  {/* Placeholder photo circle — swap with <SiteImage> when client milestone photos arrive */}
-                  <span className="our-story-photo" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-                      <rect x="3" y="6" width="18" height="14" rx="2" />
-                      <circle cx="12" cy="13" r="3.2" />
-                      <path d="M8 6l1.5-2h5L16 6" />
-                    </svg>
+                  <span className="our-story-photo">
+                    <SiteImage src={node.image} alt="" fill sizes="74px" />
                   </span>
                   <div className="our-story-year">{node.year}</div>
                   <p className="our-story-caption">{isAr ? node.ar : node.en}</p>
