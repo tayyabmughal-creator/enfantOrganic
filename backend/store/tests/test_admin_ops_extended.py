@@ -516,6 +516,44 @@ class AdminOpsExtendedTestCase(TestCase):
         settings.refresh_from_db()
         self.assertEqual(settings.contact_phone, "+968 SETTINGS")
 
+    def test_seed_regions_preserves_announcement_bar_text_and_shipping_threshold(self):
+        """
+        Regression test for the header announcement bar: its text
+        (SiteSettings.announcement_en/ar) and its bold amount
+        (Region.shipping_threshold) are two independently admin-edited fields
+        that must survive `seed_regions`, which runs on every deploy
+        (.github/workflows/deploy-hostinger.yml). Neither may revert to the
+        sample_data.py defaults once an admin has set a real value.
+        """
+        settings, _ = SiteSettings.objects.get_or_create(pk=1)
+        settings.announcement_en = "Enjoy 15% OFF on your order — Use code WELCOME15 at checkout to add discount"
+        settings.announcement_ar = "استمتعي بخصم 15% — استخدمي كود WELCOME15"
+        settings.save(update_fields=["announcement_en", "announcement_ar"])
+
+        self.region.shipping_threshold = Decimal("35.00")
+        self.region.save(update_fields=["shipping_threshold"])
+
+        call_command("seed_regions", verbosity=0)
+
+        settings.refresh_from_db()
+        self.region.refresh_from_db()
+        self.assertEqual(
+            settings.announcement_en,
+            "Enjoy 15% OFF on your order — Use code WELCOME15 at checkout to add discount",
+        )
+        self.assertEqual(settings.announcement_ar, "استمتعي بخصم 15% — استخدمي كود WELCOME15")
+        self.assertEqual(self.region.shipping_threshold, Decimal("35.00"))
+
+        # Running it again (idempotent — mirrors a second deploy) must not drift either.
+        call_command("seed_regions", verbosity=0)
+        settings.refresh_from_db()
+        self.region.refresh_from_db()
+        self.assertEqual(
+            settings.announcement_en,
+            "Enjoy 15% OFF on your order — Use code WELCOME15 at checkout to add discount",
+        )
+        self.assertEqual(self.region.shipping_threshold, Decimal("35.00"))
+
     def test_token_refresh(self):
         # Authenticate and get token
         response = self.api_client.post(

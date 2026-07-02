@@ -43,7 +43,6 @@ function ProductCard({ locale, product, region }) {
   const hoverImage = product.hover_image ? resolveProductCardImage(product.hover_image) : "";
   const rating = Number(product.rating || 5);
   const reviewCount = Number(product.review_count || 0);
-  const reviewLabel = locale === "ar" ? "تقييم" : "reviews";
   const saveLabel = locale === "ar" ? "وفر" : "Save";
   const wishlistLabel = isWishlisted
     ? (locale === "ar" ? "إزالة من المفضلة" : "Remove from wishlist")
@@ -193,7 +192,7 @@ function ProductCard({ locale, product, region }) {
           <div className="product-reviews">
             <span className="review-stars small">{"★".repeat(Math.max(1, Math.min(5, Math.round(rating || 5))))}</span>
             <strong>{rating.toFixed(1).replace(".0", "")}</strong>
-            <span className="review-count-label">({reviewCount} {reviewLabel})</span>
+            <span className="review-count-label">({reviewCount})</span>
           </div>
           {featurePills.length ? (
             <div className="product-pill-row">
