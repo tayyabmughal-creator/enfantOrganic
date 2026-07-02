@@ -319,6 +319,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
   const placeListenerRef = useRef(null);
   const hasAutoAddressPrefillRef = useRef(false);
   const lastBeginCheckoutSignatureRef = useRef("");
+  const lastPixelCheckoutSignatureRef = useRef("");
   const abandonedCartSentRef = useRef(false);
 
   const [form, setForm] = useState({
@@ -1203,23 +1204,13 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     const signature = analyticsItems
       .map((item) => `${item.item_id}:${item.quantity}`)
       .join("|");
-    if (signature === lastBeginCheckoutSignatureRef.current) {
-      return;
-    }
     const checkoutCurrency = couponPreview?.currency_code || summaryPricing?.currency_code || "";
     const checkoutValue = asNumber(couponPreview?.final_total ?? subtotal);
-    const didPush = pushDataLayerEvent("begin_checkout", {
-      locale,
-      region,
-      ecommerce: {
-        currency: checkoutCurrency,
-        value: checkoutValue,
-        coupon: form.coupon_code || undefined,
-        items: analyticsItems,
-      },
-    });
-    if (didPush) {
-      lastBeginCheckoutSignatureRef.current = signature;
+    // Ad pixels fire unconditionally for GCC markets — same policy as
+    // ViewContent / AddToCart / Purchase. Only the GA4/GTM dataLayer event
+    // below is consent-gated, so it keeps its own signature ref.
+    if (signature !== lastPixelCheckoutSignatureRef.current) {
+      lastPixelCheckoutSignatureRef.current = signature;
       const eventID = `initiate-checkout-${region || "default"}-${Date.now()}`;
       fbqTrack("InitiateCheckout", {
         content_ids: analyticsItems.map((i) => i.item_id),
@@ -1240,6 +1231,21 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         currency: checkoutCurrency,
         event_id: eventID,
       });
+    }
+    if (signature !== lastBeginCheckoutSignatureRef.current) {
+      const didPush = pushDataLayerEvent("begin_checkout", {
+        locale,
+        region,
+        ecommerce: {
+          currency: checkoutCurrency,
+          value: checkoutValue,
+          coupon: form.coupon_code || undefined,
+          items: analyticsItems,
+        },
+      });
+      if (didPush) {
+        lastBeginCheckoutSignatureRef.current = signature;
+      }
     }
   }, [
     analyticsItems,

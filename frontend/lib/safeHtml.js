@@ -84,7 +84,12 @@ function cleanAttributes(tag, attrs = "") {
       next.push(`size="${escapeAttr(value)}"`);
       continue;
     }
-    if ((tag === "span" || tag === "p") && name === "style") {
+    // The admin rich-text editor (execCommand) writes un-bold/format overrides
+    // as inline styles on whatever element wraps the selection (<font>, <h2>,
+    // <em>, <li>, …) — not just <span>/<p>. Styles are whitelisted per property
+    // in cleanStyle, so keeping them on any allowed tag is safe; dropping them
+    // made "remove bold" silently not stick on the storefront.
+    if (name === "style") {
       const style = cleanStyle(value);
       if (style) next.push(`style="${escapeAttr(style)}"`);
     }
