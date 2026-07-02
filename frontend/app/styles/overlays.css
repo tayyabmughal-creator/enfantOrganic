@@ -1154,11 +1154,20 @@
   display: block;
 }
 
+/* The product detail page's mobile sticky bar (z-index 50) sits fixed at the
+   very bottom and would otherwise cover this button (z-index 40) — same
+   width range the sticky bar switches on at (product-premium.css). */
+@media (max-width: 640px) {
+  .floating-whatsapp {
+    bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 @media (max-width: 480px) {
   .floating-whatsapp {
     width: 44px;
     height: 44px;
-    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
     right: 16px;
   }
   [dir="rtl"] .floating-whatsapp {
