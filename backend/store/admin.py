@@ -1033,8 +1033,8 @@ class WishlistItemAdmin(admin.ModelAdmin):
 
 @admin.register(NewsletterSubscription)
 class NewsletterSubscriptionAdmin(admin.ModelAdmin):
-    list_display = ("email", "phone", "source", "region", "locale", "is_active", "created_at")
-    list_filter = ("is_active", "source", "region", "locale")
+    list_display = ("email", "phone", "country_code", "source", "region", "locale", "is_active", "created_at")
+    list_filter = ("is_active", "source", "region", "locale", "country_code")
     search_fields = ("email", "phone")
 
 

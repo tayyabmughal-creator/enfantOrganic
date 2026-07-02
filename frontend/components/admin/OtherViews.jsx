@@ -1208,6 +1208,88 @@ export function NewsletterPanel({ data }) {
   );
 }
 
+const POPUP_LEAD_REGIONS = [
+  ["", "All regions"],
+  ["om", "Oman (+968)"],
+  ["ae", "UAE (+971)"],
+  ["sa", "Saudi Arabia (+966)"],
+];
+
+export function PopupLeadsPanel({ data, onDownload, canExport }) {
+  const rows = Array.isArray(data) ? data : [];
+  const [region, setRegion] = useState("");
+  const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
+  const filtered = useMemo(() => {
+    const list = Array.isArray(data) ? data : [];
+    return list.filter((lead) => {
+      if (region && lead.region !== region) return false;
+      if (search && !(lead.phone || "").includes(search.trim())) return false;
+      if (dateFrom && lead.subscribed_at && lead.subscribed_at.slice(0, 10) < dateFrom) return false;
+      if (dateTo && lead.subscribed_at && lead.subscribed_at.slice(0, 10) > dateTo) return false;
+      return true;
+    });
+  }, [data, region, search, dateFrom, dateTo]);
+
+  function buildExportParams(exportFormat) {
+    const params = { source: "discount_popup", export_format: exportFormat };
+    if (region) params.region = region;
+    if (search.trim()) params.search = search.trim();
+    if (dateFrom) params.date_from = dateFrom;
+    if (dateTo) params.date_to = dateTo;
+    return params;
+  }
+
+  return (
+    <div className="admin-newsletter">
+      <section className="admin-panel-card">
+        <div className="admin-panel-head">
+          <div>
+            <h3>Popup Leads</h3>
+            <span>{filtered.length} of {rows.length} phone submissions</span>
+          </div>
+          {canExport ? (
+            <div style={{ display: "flex", gap: 8 }}>
+              <button type="button" className="admin-btn-sm" onClick={() => onDownload(buildExportParams("csv"))}>Export CSV</button>
+              <button type="button" className="admin-btn-sm" onClick={() => onDownload(buildExportParams("xlsx"))}>Export Excel</button>
+            </div>
+          ) : null}
+        </div>
+        <div className="admin-filters-row" style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "0 0 14px" }}>
+          <select value={region} onChange={(e) => setRegion(e.target.value)}>
+            {POPUP_LEAD_REGIONS.map(([value, label]) => <option key={value || "all"} value={value}>{label}</option>)}
+          </select>
+          <input type="text" placeholder="Search phone" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            From <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            To <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+          </label>
+        </div>
+        <div className="admin-record-list">
+          {filtered.length ? (
+            filtered.map((lead, i) => (
+              <div key={lead.id || i} className="admin-record-row">
+                <div className="admin-record-info">
+                  <strong>{lead.country_code ? `${lead.country_code} ` : ""}{lead.phone || "—"}</strong>
+                  <span>
+                    {lead.region ? `${lead.region.toUpperCase()} · ` : ""}
+                    {lead.page_path ? `${lead.page_path} · ` : ""}
+                    Submitted: {lead.subscribed_at ? new Date(lead.subscribed_at).toLocaleString() : "—"}
+                  </span>
+                </div>
+              </div>
+            ))
+          ) : <AdminEmpty label="popup leads" />}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export function RegionsView({ rows, request, onSaved }) {
   const [editingThreshold, setEditingThreshold] = useState({});
   const [savingThreshold, setSavingThreshold] = useState({});

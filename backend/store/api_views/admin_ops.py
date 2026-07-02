@@ -1,4 +1,5 @@
 import csv
+import io
 import logging
 import uuid
 from collections import Counter, defaultdict
@@ -1756,11 +1757,79 @@ class ReportCsvView(APIView):
     permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
     admin_read_capabilities = (CAP_REPORTS_VIEW,)
 
+    def _export_newsletter_xlsx(self, request, max_rows):
+        import openpyxl
+        from openpyxl.utils import get_column_letter
+
+        queryset = newsletter_queryset_from_params(request.query_params)[: max_rows + 1]
+        headers = ["Phone", "Country Code", "Region", "Email", "Source", "Page", "Locale", "Active", "Submitted At"]
+
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.title = "Popup Leads"
+        sheet.append(headers)
+
+        rows_written = 0
+        truncated = False
+        for sub in queryset:
+            if rows_written >= max_rows:
+                truncated = True
+                break
+            sheet.append([
+                sub.phone,
+                sub.country_code,
+                sub.region.code if sub.region else "",
+                sub.email,
+                sub.source,
+                sub.page_path,
+                sub.locale,
+                "Yes" if sub.is_active else "No",
+                timezone.localtime(sub.created_at).strftime("%Y-%m-%d %H:%M"),
+            ])
+            rows_written += 1
+
+        for idx, header in enumerate(headers, start=1):
+            sheet.column_dimensions[get_column_letter(idx)].width = max(14, len(header) + 4)
+
+        buffer = io.BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = f'attachment; filename="newsletter-{timezone.localdate()}.xlsx"'
+        if truncated:
+            response["X-Export-Truncated"] = "true"
+            response["X-Export-Max-Rows"] = str(max_rows)
+
+        try:
+            AdminAuditLog.objects.create(
+                actor=request.user if getattr(request.user, "pk", None) else None,
+                action="export",
+                resource_type="report",
+                resource_id="newsletter-xlsx",
+                after_snapshot={"rows": rows_written, "truncated": truncated},
+                ip_address=(request.META.get("REMOTE_ADDR") or "")[:45],
+                user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:255],
+            )
+        except Exception:
+            logger.exception("Failed to write audit log for xlsx export type=newsletter")
+
+        return response
+
     @extend_schema(responses={200: bytes})
     def get(self, request, report_type):
         from django.conf import settings as _settings
 
         max_rows = int(getattr(_settings, "ADMIN_CSV_MAX_ROWS", 10000))
+        # NOTE: intentionally NOT "format" — that query param name is reserved by DRF's
+        # content negotiation (URL_FORMAT_OVERRIDE) and would 404 before get() even runs.
+        export_format = str(request.query_params.get("export_format") or "csv").strip().lower()
+
+        if report_type == "newsletter" and export_format in {"xlsx", "excel"}:
+            return self._export_newsletter_xlsx(request, max_rows)
 
         response = HttpResponse(content_type="text/csv")
         response["Content-Disposition"] = f'attachment; filename="{report_type}-{timezone.localdate()}.csv"'
@@ -1972,6 +2041,22 @@ class ReportCsvView(APIView):
             for user in queryset:
                 if not write_row([user.id, user.username, user.email, user.first_name, user.last_name, user.date_joined]):
                     break
+        elif report_type == "newsletter":
+            writer.writerow(["phone", "country_code", "region", "email", "source", "page_path", "locale", "is_active", "submitted_at"])
+            queryset = newsletter_queryset_from_params(request.query_params)[: max_rows + 1]
+            for sub in queryset:
+                if not write_row([
+                    sub.phone,
+                    sub.country_code,
+                    sub.region.code if sub.region else "",
+                    sub.email,
+                    sub.source,
+                    sub.page_path,
+                    sub.locale,
+                    "true" if sub.is_active else "false",
+                    sub.created_at.isoformat(),
+                ]):
+                    break
         elif report_type in {"inventory", "low-stock"}:
             writer.writerow(["slug", "name", "brand", "stock_quantity", "track_inventory", "active"])
             products = Product.objects.all().only(
@@ -2036,28 +2121,52 @@ class AdminModerationSummaryView(APIView):
         )
 
 
+def newsletter_queryset_from_params(params):
+    """Shared filter logic for the admin list view and the CSV/Excel export."""
+    queryset = NewsletterSubscription.objects.select_related("region").order_by("-created_at")
+    source = str(params.get("source") or "").strip()
+    if source:
+        queryset = queryset.filter(source=source)
+    region_code = str(params.get("region") or "").strip().lower()
+    if region_code:
+        queryset = queryset.filter(region__code=region_code)
+    search = str(params.get("search") or "").strip()
+    if search:
+        queryset = queryset.filter(Q(phone__icontains=search) | Q(email__icontains=search))
+    date_from = parse_date(str(params.get("date_from") or ""))
+    if date_from:
+        queryset = queryset.filter(created_at__date__gte=date_from)
+    date_to = parse_date(str(params.get("date_to") or ""))
+    if date_to:
+        queryset = queryset.filter(created_at__date__lte=date_to)
+    return queryset
+
+
+def serialize_newsletter_subscriber(sub):
+    return {
+        "id": sub.id,
+        "email": sub.email,
+        "phone": sub.phone,
+        "country_code": sub.country_code,
+        "page_path": sub.page_path,
+        "locale": sub.locale,
+        "region": sub.region.code if sub.region else None,
+        "source": sub.source,
+        "is_active": sub.is_active,
+        "subscribed_at": sub.created_at.isoformat(),
+    }
+
+
 class AdminNewsletterSubscriberListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
     admin_read_capabilities = (CAP_MODERATION_VIEW,)
 
     def get_queryset(self):
-        return NewsletterSubscription.objects.select_related("region").order_by("-created_at")
+        return newsletter_queryset_from_params(self.request.query_params)
 
     def list(self, request, *args, **kwargs):
         qs = self.get_queryset()
-        data = [
-            {
-                "id": sub.id,
-                "email": sub.email,
-                "phone": sub.phone,
-                "locale": sub.locale,
-                "region": sub.region.code if sub.region else None,
-                "source": sub.source,
-                "is_active": sub.is_active,
-                "subscribed_at": sub.created_at.isoformat(),
-            }
-            for sub in qs
-        ]
+        data = [serialize_newsletter_subscriber(sub) for sub in qs]
         return Response(data)
 
 

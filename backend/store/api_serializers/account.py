@@ -1,3 +1,5 @@
+import re
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
@@ -319,31 +321,67 @@ class BackInStockRequestSerializer(serializers.ModelSerializer):
         return BackInStockRequest.objects.create(**validated_data)
 
 
+# Popup/lead phone country codes — kept intentionally limited to the GCC markets
+# this storefront ships to. Backend-enforced so the frontend selector can't be bypassed.
+NEWSLETTER_COUNTRY_REGION = {"+968": "om", "+971": "ae", "+966": "sa"}
+NEWSLETTER_PHONE_PATTERNS = {
+    "+968": re.compile(r"^[1-9]\d{7}$"),  # Oman mobile: 8 digits
+    "+971": re.compile(r"^5\d{8}$"),      # UAE mobile: 9 digits, starts with 5
+    "+966": re.compile(r"^5\d{8}$"),      # KSA mobile: 9 digits, starts with 5
+}
+
+
 class NewsletterSubscriptionSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(required=False, allow_blank=True)
     phone = serializers.CharField(required=False, allow_blank=True)
+    country_code = serializers.CharField(required=False, allow_blank=True)
+    page_path = serializers.CharField(required=False, allow_blank=True)
     source = serializers.CharField(required=False, allow_blank=True)
     region_code = serializers.SlugField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = NewsletterSubscription
-        fields = ("email", "phone", "locale", "region_code", "source", "is_active", "created_at")
+        fields = ("email", "phone", "country_code", "locale", "region_code", "source", "page_path", "is_active", "created_at")
         read_only_fields = ("is_active", "created_at")
 
     def validate(self, attrs):
         email = str(attrs.get("email") or "").strip().lower()
-        phone = str(attrs.get("phone") or "").strip()
-        if not email and not phone:
+        phone_raw = str(attrs.get("phone") or "").strip()
+        country_code = str(attrs.get("country_code") or "").strip()
+
+        if not email and not phone_raw:
             raise serializers.ValidationError({"detail": "Email or phone is required."})
+
+        if phone_raw:
+            if country_code not in NEWSLETTER_PHONE_PATTERNS:
+                raise serializers.ValidationError({"country_code": "Select Oman, UAE, or Saudi Arabia."})
+            digits = re.sub(r"\D", "", phone_raw)
+            dial_digits = country_code.lstrip("+")
+            if digits.startswith(dial_digits) and len(digits) > len(dial_digits):
+                digits = digits[len(dial_digits):]
+            elif digits.startswith("0"):
+                digits = digits.lstrip("0")
+            if not NEWSLETTER_PHONE_PATTERNS[country_code].match(digits):
+                raise serializers.ValidationError({"phone": "Enter a valid phone number for the selected country."})
+            attrs["phone"] = digits
+            attrs["country_code"] = country_code
+            # Region is derived from the verified country code, not trusted client input.
+            attrs["region_code"] = NEWSLETTER_COUNTRY_REGION[country_code]
+        else:
+            attrs["country_code"] = ""
+
         attrs["email"] = email
-        attrs["phone"] = phone
         attrs["source"] = str(attrs.get("source") or "newsletter").strip()[:40]
+        attrs["page_path"] = str(attrs.get("page_path") or "").strip()[:255]
         return attrs
 
     def create(self, validated_data):
         region_code = validated_data.pop("region_code", "")
         region = Region.objects.filter(code=region_code, is_active=True).first() if region_code else None
-        lookup = {"email": validated_data["email"]} if validated_data.get("email") else {"phone": validated_data["phone"]}
+        if validated_data.get("phone"):
+            lookup = {"phone": validated_data["phone"], "country_code": validated_data.get("country_code", "")}
+        else:
+            lookup = {"email": validated_data["email"]}
         subscription, _ = NewsletterSubscription.objects.update_or_create(
             **lookup,
             defaults={**validated_data, "region": region, "is_active": True},

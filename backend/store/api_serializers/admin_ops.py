@@ -37,6 +37,7 @@ from ..models import (
 )
 from ..services.payment_router import get_region_provider_options, get_region_provider_warnings
 from ..services.carrier_router import get_region_carrier_options, get_region_carrier_warnings
+from ..services.sanitize import sanitize_rich_text
 from ..services.payment_config import (
     get_hyperpay_config,
     get_omannet_config,
@@ -1230,10 +1231,49 @@ class AdminBlogPostSerializer(serializers.ModelSerializer):
 
 class AdminCmsPageSerializer(serializers.ModelSerializer):
     region_code = serializers.CharField(source="region.code", read_only=True, default="")
+    # Declared explicitly (with no validators) so DRF doesn't auto-attach a plain,
+    # region-blind UniqueValidator for the single-field global constraint — the
+    # real slug+region uniqueness (matching the two DB UniqueConstraints) is
+    # enforced by validate() below instead.
+    slug = serializers.SlugField(max_length=120, validators=[])
 
     class Meta:
         model = CmsPage
         fields = "__all__"
+        # DRF would otherwise auto-attach a UniqueTogetherValidator for the
+        # (slug, region) constraint that *requires* region to be explicitly present
+        # in the payload — even though it's nullable/optional on the model. validate()
+        # below fully replaces it with the correct semantics.
+        validators = []
+        extra_kwargs = {
+            # Arabic content is optional — storefront falls back to the English
+            # copy when a translation hasn't been added yet (same convention as
+            # products/categories), so creating a page shouldn't require it upfront.
+            "title_ar": {"required": False, "allow_blank": True},
+            "body_ar": {"required": False, "allow_blank": True},
+        }
+
+    def validate_body_en(self, value):
+        return sanitize_rich_text(value)
+
+    def validate_body_ar(self, value):
+        return sanitize_rich_text(value)
+
+    def validate(self, attrs):
+        slug = attrs.get("slug", getattr(self.instance, "slug", None))
+        if "region" in attrs:
+            region = attrs["region"]
+        else:
+            region = getattr(self.instance, "region", None)
+        if slug:
+            conflict = CmsPage.objects.filter(slug=slug, region=region)
+            if self.instance:
+                conflict = conflict.exclude(pk=self.instance.pk)
+            if conflict.exists():
+                raise serializers.ValidationError(
+                    {"slug": "A page with this slug already exists for this region."}
+                )
+        return attrs
 
 
 class AdminTaxRateSerializer(serializers.ModelSerializer):

@@ -87,6 +87,27 @@
   font-size: 0.95rem;
 }
 
+.discount-popup-phone-row {
+  display: grid;
+  grid-template-columns: minmax(112px, auto) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.discount-popup-phone-row input {
+  min-height: 48px;
+}
+
+.discount-popup-country {
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 10px;
+  background: #fff;
+  color: var(--text);
+  font-size: 0.85rem;
+  max-width: 100%;
+}
+
 .discount-popup-form button {
   min-height: 48px;
   border: 0;

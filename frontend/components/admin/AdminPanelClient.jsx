@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DashboardView from "./DashboardView";
 import AnalyticsView from "./AnalyticsView";
-import { StoreSettingsSection, SettingsPanel, Reports, AuditLogsPanel, IntegrationsView, PaymentGatewaysView, InventoryView, InsightsView, NewsletterPanel, RegionsView, InstagramPostsPanel, PlaceholderModule } from "./OtherViews";
+import { StoreSettingsSection, SettingsPanel, Reports, AuditLogsPanel, IntegrationsView, PaymentGatewaysView, InventoryView, InsightsView, NewsletterPanel, PopupLeadsPanel, RegionsView, InstagramPostsPanel, PlaceholderModule } from "./OtherViews";
 import { CrudPanel, CrudFormModal } from "./CrudViews";
 import DraftOrderComposer from "./DraftOrderComposer";
 import { AdminToast } from "./SharedUI";
@@ -52,6 +52,7 @@ const NAV_GROUPS = [
       { key: "deals",           label: "Promotions",     icon: "percent",   endpoint: "/admin/promotions/",              desc: "Coupons, codes, and deals." },
       { key: "giftcards",       label: "Gift Cards",     icon: "gift",      endpoint: "/admin/gift-cards/",              desc: "Issue and track gift cards." },
       { key: "newsletter",      label: "Newsletter",     icon: "mail",      endpoint: "/admin/newsletter-subscribers/",  desc: "Subscribers and campaigns." },
+      { key: "popup_leads",     label: "Popup Leads",    icon: "target",    endpoint: "/admin/newsletter-subscribers/?source=discount_popup", desc: "Phone numbers captured from the discount popup." },
       { key: "blog",            label: "Blog",           icon: "edit",      endpoint: "/admin/blog-posts/",              desc: "Articles, guides, and brand stories." },
       { key: "pages",           label: "Pages",          icon: "edit",      endpoint: "/admin/cms-pages/",               desc: "CMS-managed policy and static content pages." },
       { key: "hero_cards",      label: "Hero Cards",     icon: "image",     endpoint: "/admin/hero-promo-cards/",        desc: "Homepage hero promo cards and visuals." },
@@ -118,6 +119,7 @@ const NAV_READ_CAPABILITY = {
   giftcards: "coupons.view",
   abandoned: "abandoned.view",
   newsletter: "moderation.view",
+  popup_leads: "moderation.view",
   analytics: "dashboard.view",
   insights: "customers.view", // legacy key kept for backward compat
   reports: "reports.view",
@@ -1433,7 +1435,8 @@ export default function AdminPanelClient() {
       const href = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = href;
-      a.download = `${type}.csv`;
+      const ext = params.export_format === "xlsx" ? "xlsx" : "csv";
+      a.download = `${type}.${ext}`;
       a.click();
       window.URL.revokeObjectURL(href);
       showToast(`${type} report downloaded.`, "success");
@@ -1778,6 +1781,7 @@ export default function AdminPanelClient() {
       </div>
     );
     if (activeKey === "newsletter")             return <NewsletterPanel data={data} />;
+    if (activeKey === "popup_leads")            return <PopupLeadsPanel data={data} onDownload={(params) => downloadReport("newsletter", params)} canExport={canViewKey("reports")} />;
     if (activeKey === "reports")               return <Reports data={data} onDownload={downloadReport} onPreview={previewReport} />;
     if (activeKey === "audit_logs")            return <AuditLogsPanel rows={Array.isArray(data) ? data : []} filters={auditFilters} onFiltersChange={(patch) => setAuditFilters((prev) => ({ ...prev, ...patch }))} />;
     if (activeKey === "regions")               return <RegionsView rows={Array.isArray(data) ? data : []} request={request} onSaved={() => loadScreen()} />;

@@ -979,6 +979,8 @@ class WishlistItem(models.Model):
 class NewsletterSubscription(models.Model):
     email = models.EmailField(blank=True, default="", db_index=True)
     phone = models.CharField(max_length=32, blank=True, default="", db_index=True)
+    country_code = models.CharField(max_length=8, blank=True, default="", db_index=True)
+    page_path = models.CharField(max_length=255, blank=True, default="")
     locale = models.CharField(max_length=8, default="en")
     region = models.ForeignKey(Region, on_delete=models.SET_NULL, null=True, blank=True, related_name="newsletter_subscriptions")
     source = models.CharField(max_length=40, blank=True, default="newsletter")
