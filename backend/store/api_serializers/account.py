@@ -357,13 +357,21 @@ class NewsletterSubscriptionSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({"country_code": "Select Oman, UAE, or Saudi Arabia."})
             digits = re.sub(r"\D", "", phone_raw)
             dial_digits = country_code.lstrip("+")
+            # Try the raw digits plus versions with the 00/dial-code prefix and
+            # leading zeros stripped, keeping the first form the country rule
+            # accepts. Trying raw FIRST keeps legitimate numbers that merely
+            # start with the dial digits (e.g. Oman 968xxxxx) intact.
+            candidates = [digits]
+            if digits.startswith(f"00{dial_digits}") and len(digits) > len(dial_digits) + 2:
+                candidates.append(digits[len(dial_digits) + 2:])
             if digits.startswith(dial_digits) and len(digits) > len(dial_digits):
-                digits = digits[len(dial_digits):]
-            elif digits.startswith("0"):
-                digits = digits.lstrip("0")
-            if not NEWSLETTER_PHONE_PATTERNS[country_code].match(digits):
+                candidates.append(digits[len(dial_digits):])
+            candidates.extend([c.lstrip("0") for c in list(candidates) if c.startswith("0")])
+            pattern = NEWSLETTER_PHONE_PATTERNS[country_code]
+            normalized = next((c for c in candidates if c and pattern.match(c)), None)
+            if normalized is None:
                 raise serializers.ValidationError({"phone": "Enter a valid phone number for the selected country."})
-            attrs["phone"] = digits
+            attrs["phone"] = normalized
             attrs["country_code"] = country_code
             # Region is derived from the verified country code, not trusted client input.
             attrs["region_code"] = NEWSLETTER_COUNTRY_REGION[country_code]

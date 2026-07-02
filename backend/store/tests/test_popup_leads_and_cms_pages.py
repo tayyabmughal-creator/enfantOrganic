@@ -68,6 +68,43 @@ class PopupLeadCaptureApiTestCase(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("phone", response.data)
 
+    def test_accepts_common_pasted_formats_per_region(self):
+        # People paste numbers with the dial code, 00 prefix, leading zero, or
+        # spaces — every one of these must normalize to the clean local number.
+        cases = [
+            ("+968", "968 9123 4567", "91234567"),      # dial code + spaces (Oman)
+            ("+968", "0096891234567", "91234567"),      # 00 international prefix
+            ("+971", "971501234567", "501234567"),      # dial code glued on (UAE)
+            ("+971", "+971 50 123 4567", "501234567"),  # full international format
+            ("+971", "0501234567", "501234567"),        # local leading zero
+            ("+966", "966501234567", "501234567"),      # dial code glued on (KSA)
+            ("+966", "00966 50 123 4567", "501234567"), # 00 prefix + spaces
+        ]
+        for country_code, typed, expected in cases:
+            with self.subTest(country_code=country_code, typed=typed):
+                NewsletterSubscription.objects.all().delete()
+                response = self.client_api.post(
+                    "/api/newsletter/",
+                    {"phone": typed, "country_code": country_code, "source": "discount_popup"},
+                    format="json",
+                )
+                self.assertEqual(response.status_code, 201, response.data)
+                self.assertTrue(
+                    NewsletterSubscription.objects.filter(phone=expected, country_code=country_code).exists(),
+                    f"{typed} should normalize to {expected}",
+                )
+
+    def test_oman_number_starting_with_dial_digits_is_kept_intact(self):
+        # An 8-digit Omani mobile can legitimately start with 968 — the dial
+        # code strip must not mangle it into an invalid 5-digit number.
+        response = self.client_api.post(
+            "/api/newsletter/",
+            {"phone": "96871234", "country_code": "+968", "source": "discount_popup"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertTrue(NewsletterSubscription.objects.filter(phone="96871234", country_code="+968").exists())
+
     def test_resubmitting_same_number_updates_instead_of_duplicating(self):
         payload = {"phone": "91234567", "country_code": "+968", "source": "discount_popup"}
         self.client_api.post("/api/newsletter/", payload, format="json")

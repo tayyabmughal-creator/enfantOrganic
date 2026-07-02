@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { ANALYTICS_CONSENT_EVENT, CONSENT_STATES, getConsentState } from "@/lib/analytics";
 import { API_BASE_URL } from "@/lib/config";
 
 const DISCOUNT_POPUP_SESSION_KEY = "enfant-discount-popup-dismissed";
@@ -34,13 +35,33 @@ export default function DiscountPopup({ locale = "en", navigation }) {
   const image = settings.image || "/enfant/hero-gift-box-offer-v2.jpg";
   const isAr = locale === "ar";
   const [open, setOpen] = useState(false);
+  const [consentDecided, setConsentDecided] = useState(false);
   const [countryCode, setCountryCode] = useState(() => defaultCountryForRegion(region).code);
   const [phone, setPhone] = useState("");
   const [status, setStatus] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // Hold the popup until the visitor answers the cookie banner — both showing
+  // at once buried the popup's form under the banner on phones. The event
+  // detail is the fallback for private browsing where storage reads fail.
   useEffect(() => {
-    if (!enabled) return undefined;
+    const check = (event) => {
+      const state = event?.detail?.state || getConsentState();
+      if (state === CONSENT_STATES.GRANTED || state === CONSENT_STATES.DENIED) {
+        setConsentDecided(true);
+      }
+    };
+    check();
+    window.addEventListener(ANALYTICS_CONSENT_EVENT, check);
+    window.addEventListener("storage", check);
+    return () => {
+      window.removeEventListener(ANALYTICS_CONSENT_EVENT, check);
+      window.removeEventListener("storage", check);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!enabled || !consentDecided) return undefined;
     try {
       if (window.sessionStorage.getItem(DISCOUNT_POPUP_SESSION_KEY) === "1") {
         return undefined;
@@ -50,15 +71,28 @@ export default function DiscountPopup({ locale = "en", navigation }) {
     }
     const timer = window.setTimeout(() => setOpen(true), 650);
     return () => window.clearTimeout(timer);
-  }, [enabled]);
+  }, [enabled, consentDecided]);
 
-  const cleanedDigits = useMemo(() => phone.replace(/\D/g, ""), [phone]);
+  // People paste numbers as "0501234567", "+971 50 123 4567", "00971…" or
+  // "97150…" — accept any of those by trying the raw digits plus versions
+  // with the dial code / leading zeros stripped, and submit the first form
+  // the country rule accepts (mirrors the backend's normalization).
+  const normalizedPhone = useMemo(() => {
+    const rule = PHONE_RULES[countryCode];
+    if (!rule) return "";
+    const raw = phone.replace(/\D/g, "");
+    const dial = countryCode.replace("+", "");
+    const candidates = [raw];
+    if (raw.startsWith(`00${dial}`)) candidates.push(raw.slice(2 + dial.length));
+    if (raw.startsWith(dial)) candidates.push(raw.slice(dial.length));
+    for (const candidate of [...candidates]) {
+      if (candidate.startsWith("0")) candidates.push(candidate.replace(/^0+/, ""));
+    }
+    return candidates.find((digits) => digits && rule.test(digits)) || "";
+  }, [countryCode, phone]);
 
   function isValidPhone() {
-    const rule = PHONE_RULES[countryCode];
-    if (!rule) return false;
-    const digits = cleanedDigits.startsWith("0") ? cleanedDigits.replace(/^0+/, "") : cleanedDigits;
-    return rule.test(digits);
+    return Boolean(normalizedPhone);
   }
 
   function markDismissedForSession() {
@@ -89,7 +123,7 @@ export default function DiscountPopup({ locale = "en", navigation }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          phone: cleanedDigits,
+          phone: normalizedPhone,
           country_code: countryCode,
           locale,
           source: "discount_popup",
