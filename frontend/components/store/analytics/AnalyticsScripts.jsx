@@ -116,6 +116,11 @@ function loadMetaPixel(pixelId) {
     document.head.appendChild(script);
   }
   if (!window.__metaPixelIds.has(pixelId)) {
+    // Hard-disable Meta's automatic event detection (SubscribedButtonClick /
+    // inferred purchases from button text). All standard events are sent
+    // explicitly by our code; the Events Manager toggle alone is not enough —
+    // its config is CDN-cached and kept firing after being switched off.
+    window.fbq("set", "autoConfig", false, pixelId);
     window.fbq("init", pixelId);
     window.__metaPixelIds.add(pixelId);
   }
