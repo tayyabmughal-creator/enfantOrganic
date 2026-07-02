@@ -918,8 +918,16 @@
 
   .discount-popup-media {
     order: -1;
-    min-height: 210px;
-    max-height: 34vh;
+    min-height: 0;
+    max-height: 38vh;
+  }
+
+  /* Show the whole poster on phones — the desktop side-by-side layout can
+     crop with cover, but the short mobile banner box was cutting it off. */
+  .discount-popup-media img {
+    height: auto;
+    max-height: 38vh;
+    object-fit: contain;
   }
 
   .discount-popup-copy {
