@@ -664,7 +664,7 @@ export default function ProductDetailClient({ locale, product, region }) {
             <div className="summary-block product-quantity-block">
               <div className="summary-label-row">
                 <h4>{t.quantity}</h4>
-                {product?.stock_status?.is_low_stock ? (
+                {!isOutOfStock && product?.stock_status?.is_low_stock ? (
                   <span className="summary-helper-pill summary-helper-pill--urgent">
                     {isAr ? "كمية محدودة" : "Only a few left"}
                   </span>

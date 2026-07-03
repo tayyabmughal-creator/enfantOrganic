@@ -460,7 +460,7 @@ class ProductCardSerializer(serializers.ModelSerializer):
                 "track_inventory": bool(quantities) or obj.track_inventory,
                 "is_in_stock": bool(available),
                 "available_quantity": sum(quantities) if quantities else None,
-                "is_low_stock": bool(quantities) and sum(quantities) <= 10,
+                "is_low_stock": bool(available) and bool(quantities) and 0 < sum(quantities) <= 10,
             }
         if not obj.track_inventory:
             return {
@@ -478,7 +478,7 @@ class ProductCardSerializer(serializers.ModelSerializer):
             "track_inventory": True,
             "is_in_stock": int(available_qty or 0) > 0,
             "available_quantity": int(available_qty or 0),
-            "is_low_stock": int(available_qty or 0) <= int(threshold),
+            "is_low_stock": 0 < int(available_qty or 0) <= int(threshold),
         }
 
 
