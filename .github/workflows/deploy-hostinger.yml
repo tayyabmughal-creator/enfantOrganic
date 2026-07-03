@@ -56,20 +56,20 @@ jobs:
           { echo "host=$ssh_host"; echo "port=$ssh_port"; echo "user=$ssh_user"; echo "deploy_path=$deploy_path"; } >> "$GITHUB_OUTPUT"
 
       - name: Upload project to server
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@v1
         with:
           host: ${{ steps.ssh_target.outputs.host }}
           username: ${{ steps.ssh_target.outputs.user }}
           key: ${{ secrets.HOSTINGER_SSH_KEY }}
           port: ${{ steps.ssh_target.outputs.port }}
-          source: "backend,frontend,deploy,scripts,docker-compose.prod.yml,.env.production.example"
+          source: "backend/","frontend/","deploy/","scripts/","docker-compose.prod.yml",".env.production.example"
           target: ${{ steps.ssh_target.outputs.deploy_path }}
           overwrite: true
           timeout: 10m
           command_timeout: 45m
 
       - name: Run deployment on server
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ steps.ssh_target.outputs.host }}
           username: ${{ steps.ssh_target.outputs.user }}
@@ -236,20 +236,20 @@ jobs:
           { echo "host=$ssh_host"; echo "port=$ssh_port"; echo "user=$ssh_user"; echo "deploy_path=$deploy_path"; } >> "$GITHUB_OUTPUT"
 
       - name: Upload project to server
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@v1
         with:
           host: ${{ steps.ssh_target.outputs.host }}
           username: ${{ steps.ssh_target.outputs.user }}
           key: ${{ secrets.HOSTINGER_SSH_KEY }}
           port: ${{ steps.ssh_target.outputs.port }}
-          source: "backend,frontend,deploy,scripts,docker-compose.prod.yml,.env.production.example"
+          source: "backend/","frontend/","deploy/","scripts/","docker-compose.prod.yml",".env.production.example"
           target: ${{ steps.ssh_target.outputs.deploy_path }}
           overwrite: true
           timeout: 10m
           command_timeout: 45m
 
       - name: Run deployment on server
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ steps.ssh_target.outputs.host }}
           username: ${{ steps.ssh_target.outputs.user }}
