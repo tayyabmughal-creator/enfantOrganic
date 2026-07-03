@@ -37,6 +37,14 @@
   gap: 12px;
 }
 
+.admin-sidebar-logo-img {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  border-radius: 14px;
+  flex-shrink: 0;
+}
+
 .admin-logo-orb {
   display: grid;
   place-items: center;
@@ -2797,6 +2805,13 @@
 
 .admin-login-brand {
   margin-bottom: 24px;
+}
+
+.admin-login-logo-img {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  border-radius: 18px;
 }
 
 .admin-login-brand .admin-logo-orb {

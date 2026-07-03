@@ -49,17 +49,14 @@ body {
   color: #191817;
 }
 
-.eo-admin-mark {
-  display: grid;
+.eo-admin-logo-img {
   width: 48px;
   height: 48px;
-  place-items: center;
+  object-fit: contain;
   border-radius: 18px;
-  background: linear-gradient(135deg, #92ab69, #607a42);
-  color: #ffffff;
-  font-weight: 900;
-  letter-spacing: 0.04em;
   box-shadow: 0 12px 28px rgba(96, 122, 66, 0.28);
+  background: #ffffff;
+  padding: 4px;
 }
 
 .eo-admin-brand strong {

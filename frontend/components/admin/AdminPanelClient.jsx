@@ -1543,7 +1543,7 @@ export default function AdminPanelClient() {
         <div className="admin-login-ambient" />
         <section className="admin-login-card">
           <div className="admin-login-brand">
-            <span className="admin-logo-orb">E</span>
+            <img src="/enfant/enfant-logo-original.png" alt="Enfant Organic" className="admin-login-logo-img" />
           </div>
           <p className="admin-login-eyebrow">Management Portal</p>
           <h1 className="admin-login-title">Enfant Organics</h1>
@@ -1605,7 +1605,7 @@ export default function AdminPanelClient() {
       <aside className={`admin-sidebar ${sidebarOpen ? "open" : ""}`}>
         <div className="admin-sidebar-header">
           <div className="admin-sidebar-logo">
-            <span className="admin-logo-orb">E</span>
+            <img src="/enfant/enfant-logo-original.png" alt="Enfant Organic" className="admin-sidebar-logo-img" />
             <div>
               <strong>Enfant</strong>
               <span>Admin Console</span>
