@@ -93,7 +93,17 @@ export default function PurchaseEventTracker({ order, locale, region }) {
       number_items: numItems,
     });
 
-    // TikTok Pixel CompletePayment — event_id for Events API deduplication.
+    // TikTok Pixel Purchase — primary purchase conversion event.
+    // event_id for Events API deduplication.
+    ttqTrack("Purchase", {
+      contents: buildTikTokContents(payload.items),
+      value: payload.value,
+      currency,
+      order_id: order.order_number,
+      event_id: eventID,
+    });
+
+    // TikTok Pixel CompletePayment — payment info completed stage.
     ttqTrack("CompletePayment", {
       contents: buildTikTokContents(payload.items),
       value: payload.value,
@@ -111,4 +121,3 @@ export default function PurchaseEventTracker({ order, locale, region }) {
 
   return null;
 }
-
