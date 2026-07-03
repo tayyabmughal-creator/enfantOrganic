@@ -55,28 +55,21 @@ jobs:
           [ -n "$deploy_path" ] || { echo "FATAL: HOSTINGER_DEPLOY_PATH is empty."; exit 1; }
           { echo "host=$ssh_host"; echo "port=$ssh_port"; echo "user=$ssh_user"; echo "deploy_path=$deploy_path"; } >> "$GITHUB_OUTPUT"
 
-      - name: Pull latest code on server
-        uses: appleboy/ssh-action@v1.2.5
+      - name: Upload project to server
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ steps.ssh_target.outputs.host }}
           username: ${{ steps.ssh_target.outputs.user }}
           key: ${{ secrets.HOSTINGER_SSH_KEY }}
           port: ${{ steps.ssh_target.outputs.port }}
-          timeout: 2m
-          command_timeout: 20m
-          script_stop: false
-          script: |
-            set -e
-            # Install git if not available
-            if ! command -v git &>/dev/null; then
-              apt-get update -qq && apt-get install -y -qq git
-            fi
-            cd "${{ steps.ssh_target.outputs.deploy_path }}"
-            git fetch origin main
-            git reset --hard origin/main
+          source: "backend,frontend,deploy,scripts,docker-compose.prod.yml,.env.production.example"
+          target: ${{ steps.ssh_target.outputs.deploy_path }}
+          overwrite: true
+          timeout: 10m
+          command_timeout: 45m
 
       - name: Run deployment on server
-        uses: appleboy/ssh-action@v1.2.5
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ steps.ssh_target.outputs.host }}
           username: ${{ steps.ssh_target.outputs.user }}
@@ -242,29 +235,21 @@ jobs:
           [ -n "$deploy_path" ] || { echo "FATAL: HOSTINGER_DEPLOY_PATH is empty."; exit 1; }
           { echo "host=$ssh_host"; echo "port=$ssh_port"; echo "user=$ssh_user"; echo "deploy_path=$deploy_path"; } >> "$GITHUB_OUTPUT"
 
-      - name: Pull latest code on server
-        uses: appleboy/ssh-action@v1.2.5
+      - name: Upload project to server
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ steps.ssh_target.outputs.host }}
           username: ${{ steps.ssh_target.outputs.user }}
           key: ${{ secrets.HOSTINGER_SSH_KEY }}
           port: ${{ steps.ssh_target.outputs.port }}
-          timeout: 2m
-          command_timeout: 20m
-          script_stop: false
-          script: |
-            set -e
-            # Install git if not available
-            if ! command -v git &>/dev/null; then
-              apt-get update -qq && apt-get install -y -qq git
-            fi
-            cd "${{ steps.ssh_target.outputs.deploy_path }}"
-            if [ ! -d .git ]; then git clone git@github.com:tayyabmughal-creator/enfantOrganic.git .; fi
-            git fetch origin main
-            git reset --hard origin/main
+          source: "backend,frontend,deploy,scripts,docker-compose.prod.yml,.env.production.example"
+          target: ${{ steps.ssh_target.outputs.deploy_path }}
+          overwrite: true
+          timeout: 10m
+          command_timeout: 45m
 
       - name: Run deployment on server
-        uses: appleboy/ssh-action@v1.2.5
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ steps.ssh_target.outputs.host }}
           username: ${{ steps.ssh_target.outputs.user }}
