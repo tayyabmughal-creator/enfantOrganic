@@ -27,14 +27,25 @@ export async function generateMetadata({ params, searchParams }) {
   try {
     const post = await getBlogBySlug(slug, locale, region);
     if (post?.title) {
-      title = `${post.title} | Enfant Organics`;
+      title = post?.seo?.title || `${post.title} | Enfant Organics`;
     }
     if (post?.excerpt) {
-      description = post.excerpt;
+      description = post?.seo?.description || post.excerpt;
     }
-    if (post?.image) {
-      image = post.image;
-    }
+    image = post?.seo?.og_image || post?.image || image;
+    return buildSeoMetadata({
+      locale,
+      region,
+      path: `/blog/${slug}`,
+      title,
+      description,
+      image,
+      canonicalUrl: post?.seo?.canonical_url,
+      ogTitle: post?.seo?.og_title,
+      ogDescription: post?.seo?.og_description,
+      robots: post?.seo,
+      type: "article",
+    });
   } catch {
     // Keep fallback metadata when API is unavailable.
   }

@@ -17,10 +17,10 @@ class StockError(Exception):
 def get_region_warehouses(region):
     if not region:
         return Warehouse.objects.none()
-    mapped = region.fulfillment_warehouses.filter(active=True)
+    mapped = region.fulfillment_warehouses.filter(active=True).order_by("priority", "code", "id")
     if mapped.exists():
         return mapped
-    return Warehouse.objects.filter(region=region, active=True)
+    return Warehouse.objects.filter(region=region, active=True).order_by("priority", "code", "id")
 
 
 def _region_stocks_queryset(product, region, *, lock=False):
@@ -123,7 +123,13 @@ def reserve_and_deduct_stock_for_item(product, region, quantity, *, commit_immed
         return []
 
     warehouses = list(get_region_warehouses(region).values_list("id", flat=True))
-    stocks = list(_region_stocks_queryset(product, region, lock=True).order_by("-quantity", "id"))
+    stocks = list(
+        _region_stocks_queryset(product, region, lock=True).order_by(
+            "warehouse__priority",
+            "warehouse__code",
+            "id",
+        )
+    )
     allocations = []
 
     # Legacy fallback for products without warehouse rows.
@@ -169,7 +175,8 @@ def reserve_and_deduct_stock_for_item(product, region, quantity, *, commit_immed
             continue
         if commit_immediately:
             stock.quantity = int(stock.quantity or 0) - take
-        stock.reserved_quantity = int(stock.reserved_quantity or 0) + take
+        else:
+            stock.reserved_quantity = int(stock.reserved_quantity or 0) + take
         stock.save(update_fields=["quantity", "reserved_quantity", "updated_at"])
         allocations.append(
             {

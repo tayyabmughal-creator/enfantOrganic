@@ -2,6 +2,7 @@ import os
 import sys
 from datetime import timedelta
 from pathlib import Path
+from django.core.exceptions import ImproperlyConfigured
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -275,6 +276,27 @@ EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
 EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True") == "True"
+
+# In production a console/dummy/locmem backend means customer emails silently go
+# nowhere. Hard-fail only when EMAIL_REQUIRE_SMTP=1 (set it once real SMTP
+# credentials exist); until then boot with a loud warning so the storefront stays
+# up while email remains visibly unconfigured (also surfaced by the admin
+# notification-health endpoint).
+_EMAIL_BACKEND_UNSAFE = any(key in EMAIL_BACKEND.lower() for key in ("console", "dummy", "locmem"))
+EMAIL_REQUIRE_SMTP = os.environ.get("EMAIL_REQUIRE_SMTP", "0") == "1"
+if not DEBUG and _EMAIL_BACKEND_UNSAFE:
+    if EMAIL_REQUIRE_SMTP:
+        raise ImproperlyConfigured(
+            "Production email delivery requires EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend "
+            "and valid SMTP credentials. Console/dummy/locmem backends are only allowed when DEBUG=True."
+        )
+    import warnings
+
+    warnings.warn(
+        "EMAIL_BACKEND is a console/dummy/locmem backend in production: customer emails are NOT "
+        "being delivered. Configure SMTP credentials and set EMAIL_REQUIRE_SMTP=1.",
+        RuntimeWarning,
+    )
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"

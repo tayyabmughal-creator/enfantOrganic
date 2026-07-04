@@ -981,8 +981,14 @@ const INV_TABS = [
   { key: "demand", label: "Demand Alerts" },
 ];
 
-export function InventoryView({ rows, threshold = 10, focusProductSlug = "", warehouseStocks = [], demandAlerts = [] }) {
+export function InventoryView({ rows, threshold = 10, focusProductSlug = "", warehouseStocks = [], warehouses = [], demandAlerts = [], onSaveStock }) {
   const [activeTab, setActiveTab] = useState("stock");
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState("");
+  const [selectedProductId, setSelectedProductId] = useState("");
+  const [stockQuantity, setStockQuantity] = useState("");
+  const [adjustmentReason, setAdjustmentReason] = useState("");
+  const [stockSaving, setStockSaving] = useState(false);
+  const [stockError, setStockError] = useState("");
   const numericThreshold = Number(threshold || 10);
   const sorted = [...rows].sort((a, b) => {
     const aStatus = inventoryHealthStatus(a, numericThreshold);
@@ -997,6 +1003,20 @@ export function InventoryView({ rows, threshold = 10, focusProductSlug = "", war
   const critical = sorted.filter((p) => inventoryHealthStatus(p, numericThreshold).label === "Critical");
   const low = sorted.filter((p) => inventoryHealthStatus(p, numericThreshold).label === "Low Stock");
   const healthy = sorted.filter((p) => inventoryHealthStatus(p, numericThreshold).label === "In Stock");
+  const selectedStock = warehouseStocks.find((s) => (
+    String(s.warehouse) === String(selectedWarehouseId)
+    && String(s.product) === String(selectedProductId)
+  ));
+  const selectedProduct = rows.find((p) => String(p.id) === String(selectedProductId));
+  const selectedWarehouse = warehouses.find((w) => String(w.id) === String(selectedWarehouseId));
+
+  useEffect(() => {
+    if (!selectedStock?.id) {
+      setStockQuantity("");
+      return;
+    }
+    setStockQuantity(String(selectedStock.quantity ?? 0));
+  }, [selectedStock?.id, selectedStock?.quantity]);
 
   useEffect(() => {
     if (!focusProductSlug) return;
@@ -1072,6 +1092,86 @@ export function InventoryView({ rows, threshold = 10, focusProductSlug = "", war
             <h3>Warehouse Stock</h3>
             <span>{warehouseStocks.length} stock entries</span>
           </div>
+          <form
+            className="admin-stock-editor"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              setStockError("");
+              if (!selectedWarehouseId || !selectedProductId) {
+                setStockError("Select a warehouse and product first.");
+                return;
+              }
+              if (selectedStock && Number(stockQuantity || 0) < Number(selectedStock.reserved_quantity || 0)) {
+                setStockError("Physical quantity cannot be lower than reserved quantity.");
+                return;
+              }
+              setStockSaving(true);
+              try {
+                await onSaveStock?.({
+                  stockId: selectedStock?.id,
+                  productId: selectedProductId,
+                  warehouseId: selectedWarehouseId,
+                  quantity: stockQuantity,
+                  reason: adjustmentReason,
+                });
+                setAdjustmentReason("");
+              } catch (error) {
+                setStockError(error?.message || "Stock update failed.");
+              } finally {
+                setStockSaving(false);
+              }
+            }}
+          >
+            <label>
+              <span>Warehouse</span>
+              <select value={selectedWarehouseId} onChange={(event) => setSelectedWarehouseId(event.target.value)}>
+                <option value="">Select warehouse</option>
+                {warehouses.map((warehouse) => (
+                  <option key={warehouse.id} value={warehouse.id}>
+                    {(warehouse.name_en || warehouse.code)} · {(warehouse.region_code || "").toUpperCase()}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Product</span>
+              <select value={selectedProductId} onChange={(event) => setSelectedProductId(event.target.value)}>
+                <option value="">Select product</option>
+                {rows.map((product) => (
+                  <option key={product.id || product.slug} value={product.id}>
+                    {product.name_en || product.name || product.slug} · {product.slug}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Physical quantity</span>
+              <input type="number" min="0" value={stockQuantity} onChange={(event) => setStockQuantity(event.target.value)} />
+            </label>
+            <label>
+              <span>Adjustment reason</span>
+              <input value={adjustmentReason} onChange={(event) => setAdjustmentReason(event.target.value)} placeholder="Optional" />
+            </label>
+            <div className="admin-stock-editor-summary">
+              <span>Reserved: <strong>{selectedStock?.reserved_quantity ?? 0}</strong></span>
+              <span>Available: <strong>{selectedStock?.available_quantity ?? (stockQuantity || 0)}</strong></span>
+              <span>Last updated: <strong>{selectedStock?.updated_at ? new Date(selectedStock.updated_at).toLocaleString() : "New entry"}</strong></span>
+              <span>By: <strong>{selectedStock?.last_updated_by || "—"}</strong></span>
+            </div>
+            {stockError ? <p className="admin-form-error">{stockError}</p> : null}
+            <button
+              type="submit"
+              className="admin-btn-primary"
+              disabled={stockSaving || !selectedWarehouseId || !selectedProductId}
+            >
+              {stockSaving ? "Saving…" : selectedStock ? "Update stock" : "Create stock row"}
+            </button>
+            {selectedProduct && selectedWarehouse ? (
+              <p className="admin-form-hint">
+                Updating {selectedProduct.name_en || selectedProduct.slug} in {selectedWarehouse.name_en || selectedWarehouse.code}.
+              </p>
+            ) : null}
+          </form>
           {warehouseStocks.length ? (
             <div className="admin-inv-table">
               <div className="admin-inv-head" style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr" }}>
@@ -1203,6 +1303,73 @@ export function NewsletterPanel({ data }) {
             ))
           ) : <AdminEmpty label="subscribers" />}
         </div>
+      </section>
+    </div>
+  );
+}
+
+export function NotificationHealthView({ data }) {
+  const failures = Array.isArray(data?.recent_failures) ? data.recent_failures : [];
+  const providers = data?.sms?.providers || {};
+  const providerRows = Object.entries(providers);
+  const badgeTone = (ok) => (ok ? "success" : "warning");
+
+  return (
+    <div className="admin-notification-health">
+      <section className="admin-panel-card">
+        <div className="admin-panel-head">
+          <h3>Email delivery</h3>
+          <span className={`admin-badge ${badgeTone(data?.email?.configured)}`}>
+            {data?.email?.configured ? "Configured" : "Needs setup"}
+          </span>
+        </div>
+        <div className="admin-record-list compact">
+          <div className="admin-record-row">
+            <span>Backend</span>
+            <strong>{data?.email?.backend || "—"}</strong>
+          </div>
+          <div className="admin-record-row">
+            <span>Missing</span>
+            <strong>{(data?.email?.missing || []).join(", ") || "None"}</strong>
+          </div>
+        </div>
+      </section>
+
+      <section className="admin-panel-card">
+        <div className="admin-panel-head">
+          <h3>SMS delivery</h3>
+          <span className={`admin-badge ${badgeTone(data?.sms?.configured)}`}>
+            {data?.sms?.configured ? "Configured" : "Needs setup"}
+          </span>
+        </div>
+        <div className="admin-record-list compact">
+          {providerRows.map(([key, provider]) => (
+            <div key={key} className="admin-record-row">
+              <span>{key}</span>
+              <strong>{provider.configured ? "Ready" : `Missing ${(provider.missing || []).join(", ") || "configuration"}`}</strong>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="admin-panel-card">
+        <div className="admin-panel-head">
+          <h3>Recent failures</h3>
+          <span>{failures.length} latest</span>
+        </div>
+        {failures.length ? (
+          <div className="admin-record-list compact">
+            {failures.map((failure, index) => (
+              <div key={`${failure.event}-${failure.channel}-${index}`} className="admin-record-row">
+                <div className="admin-record-info">
+                  <strong>{failure.event} · {failure.channel}</strong>
+                  <span>{failure.recipient || "No recipient"} · {failure.status}</span>
+                </div>
+                <span>{failure.error_message || "No error message"}</span>
+              </div>
+            ))}
+          </div>
+        ) : <AdminEmpty label="notification failures" />}
       </section>
     </div>
   );

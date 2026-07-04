@@ -83,6 +83,8 @@ Owner labels:
 | `EMAIL_HOST_PASSWORD` | Conditional | `app-password` | `backend/enfant_backend/settings.py` | Provider/Ops |
 | `EMAIL_USE_TLS` | Conditional | `True` | `backend/enfant_backend/settings.py` | DevOps |
 
+Production must use `django.core.mail.backends.smtp.EmailBackend`; console, dummy, and locmem backends are blocked when `DJANGO_DEBUG=0`.
+
 ## 5) Frontend, URLs, and Public Keys
 
 | Variable | Required | Example | Where used | Who provides it |
@@ -204,6 +206,8 @@ Owner labels:
 | `TWILIO_FROM_NUMBER` | Conditional | `+12025550100` | `settings.py`, `services/sms_router.py` | Provider/Ops |
 | `TWILIO_MESSAGING_SERVICE_SID` | Conditional | `MGxxxxxxxx` | `settings.py`, `services/sms_router.py` | Provider/Ops |
 | `TWILIO_BASE_URL` | Optional | `https://api.twilio.com` | `settings.py`, `services/sms_router.py` | Backend |
+
+Production SMS delivery requires `SMS_ENABLE_MOCK=0` plus the selected provider credentials. The admin Notifications page reports missing values without exposing secrets.
 
 ## 9) WhatsApp Cloud API
 

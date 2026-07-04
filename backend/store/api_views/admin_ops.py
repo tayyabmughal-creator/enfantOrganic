@@ -8,6 +8,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.conf import settings as django_settings
 from django.http import FileResponse, HttpResponse
 from django.utils.dateparse import parse_date
 from django.utils import timezone
@@ -20,7 +21,7 @@ from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 
 from django.db import transaction
-from django.db.models import Count, Sum, Q, Exists, OuterRef
+from django.db.models import Count, Sum, Q, Exists, OuterRef, F
 from django.db.models.functions import TruncMonth
 from django.db.utils import OperationalError, ProgrammingError
 
@@ -2121,6 +2122,57 @@ class AdminModerationSummaryView(APIView):
         )
 
 
+class AdminNotificationHealthView(APIView):
+    permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
+    admin_read_capabilities = (CAP_MODERATION_VIEW,)
+
+    @extend_schema(responses=dict)
+    def get(self, request):
+        email_backend = str(getattr(django_settings, "EMAIL_BACKEND", "") or "")
+        unsafe_email_backend = any(key in email_backend.lower() for key in ("console", "dummy", "locmem"))
+        email_required = ["DEFAULT_FROM_EMAIL", "EMAIL_HOST", "EMAIL_PORT", "EMAIL_HOST_USER", "EMAIL_HOST_PASSWORD"]
+        email_missing = [
+            key for key in email_required
+            if not str(getattr(django_settings, key, "") or "").strip()
+        ]
+        if unsafe_email_backend and not django_settings.DEBUG:
+            email_missing.append("EMAIL_BACKEND=smtp")
+
+        from ..services.sms_router import PROVIDER_REGISTRY
+
+        sms_payload = {}
+        for key, provider in PROVIDER_REGISTRY.items():
+            sms_payload[key] = {
+                "configured": provider.is_configured(),
+                "missing": provider.missing_settings(),
+            }
+        default_provider = str(getattr(django_settings, "SMS_DEFAULT_PROVIDER", "unifonic") or "unifonic").strip().lower()
+        sms_ready = bool(sms_payload.get(default_provider, {}).get("configured"))
+        if not sms_ready and not django_settings.DEBUG and getattr(django_settings, "SMS_ENABLE_MOCK", False):
+            sms_payload["mock"]["production_warning"] = "SMS_ENABLE_MOCK must be disabled for production delivery."
+
+        return Response(
+            {
+                "email": {
+                    "configured": not email_missing and not unsafe_email_backend,
+                    "backend": email_backend,
+                    "unsafe_backend": unsafe_email_backend,
+                    "missing": sorted(set(email_missing)),
+                },
+                "sms": {
+                    "default_provider": default_provider,
+                    "configured": sms_ready,
+                    "providers": sms_payload,
+                },
+                "recent_failures": list(
+                    NotificationLog.objects.filter(success=False)
+                    .order_by("-created_at")
+                    .values("event", "channel", "recipient", "status", "error_message", "created_at")[:10]
+                ),
+            }
+        )
+
+
 def newsletter_queryset_from_params(params):
     """Shared filter logic for the admin list view and the CSV/Excel export."""
     queryset = NewsletterSubscription.objects.select_related("region").order_by("-created_at")
@@ -3656,6 +3708,18 @@ class AdminWarehouseListCreateView(generics.ListCreateAPIView):
     serializer_class = AdminWarehouseSerializer
     queryset = Warehouse.objects.select_related("region").prefetch_related("fulfillment_regions").all()
 
+    def perform_create(self, serializer):
+        warehouse = serializer.save()
+        log_admin_action(
+            request=self.request,
+            actor=self.request.user,
+            action="warehouse_created",
+            resource_type="warehouse",
+            resource_id=str(warehouse.pk),
+            before_snapshot=None,
+            after_snapshot=snapshot_instance(warehouse, include_m2m=True),
+        )
+
 
 class AdminWarehouseDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
@@ -3663,6 +3727,19 @@ class AdminWarehouseDetailView(generics.RetrieveUpdateDestroyAPIView):
     admin_write_capabilities = (CAP_INVENTORY_EDIT,)
     serializer_class = AdminWarehouseSerializer
     queryset = Warehouse.objects.select_related("region").prefetch_related("fulfillment_regions").all()
+
+    def perform_update(self, serializer):
+        before_snapshot = snapshot_instance(self.get_object(), include_m2m=True)
+        warehouse = serializer.save()
+        log_admin_action(
+            request=self.request,
+            actor=self.request.user,
+            action="warehouse_changed",
+            resource_type="warehouse",
+            resource_id=str(warehouse.pk),
+            before_snapshot=before_snapshot,
+            after_snapshot=snapshot_instance(warehouse, include_m2m=True),
+        )
 
 
 class AdminProductStockListCreateView(generics.ListCreateAPIView):
@@ -3677,13 +3754,43 @@ class AdminProductStockListCreateView(generics.ListCreateAPIView):
         region_code = self.request.query_params.get("region", "").strip().lower()
         warehouse_code = self.request.query_params.get("warehouse", "").strip().lower()
         product_slug = self.request.query_params.get("product", "").strip().lower()
+        search = self.request.query_params.get("search", "").strip()
+        stock_status = self.request.query_params.get("stock_status", "").strip().lower()
         if region_code:
             queryset = queryset.filter(warehouse__region__code=region_code)
         if warehouse_code:
             queryset = queryset.filter(warehouse__code=warehouse_code)
         if product_slug:
             queryset = queryset.filter(product__slug=product_slug)
+        if search:
+            queryset = queryset.filter(
+                Q(product__slug__icontains=search)
+                | Q(product__name_en__icontains=search)
+                | Q(product__variants__icontains=search)
+                | Q(warehouse__code__icontains=search)
+                | Q(warehouse__name_en__icontains=search)
+            )
+        if stock_status == "out":
+            queryset = queryset.filter(quantity__lte=F("reserved_quantity"))
+        elif stock_status == "available":
+            queryset = queryset.filter(quantity__gt=F("reserved_quantity"))
         return queryset
+
+    def perform_create(self, serializer):
+        reason = str(self.request.data.get("adjustment_reason") or "").strip()
+        stock = serializer.save()
+        from ..services.stock import sync_product_stock_quantity
+
+        sync_product_stock_quantity(stock.product)
+        log_admin_action(
+            request=self.request,
+            actor=self.request.user,
+            action="stock_adjusted",
+            resource_type="product_stock",
+            resource_id=str(stock.pk),
+            before_snapshot=None,
+            after_snapshot={**snapshot_instance(stock), "adjustment_reason": reason},
+        )
 
 
 class AdminProductStockDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -3692,6 +3799,26 @@ class AdminProductStockDetailView(generics.RetrieveUpdateDestroyAPIView):
     admin_write_capabilities = (CAP_INVENTORY_EDIT,)
     serializer_class = AdminProductStockSerializer
     queryset = ProductStock.objects.select_related("product", "warehouse", "warehouse__region").all()
+
+    @transaction.atomic
+    def perform_update(self, serializer):
+        stock = ProductStock.objects.select_for_update().get(pk=self.get_object().pk)
+        before_snapshot = snapshot_instance(stock)
+        reason = str(self.request.data.get("adjustment_reason") or "").strip()
+        serializer.instance = stock
+        updated_stock = serializer.save()
+        from ..services.stock import sync_product_stock_quantity
+
+        sync_product_stock_quantity(updated_stock.product)
+        log_admin_action(
+            request=self.request,
+            actor=self.request.user,
+            action="stock_adjusted",
+            resource_type="product_stock",
+            resource_id=str(updated_stock.pk),
+            before_snapshot={**before_snapshot, "adjustment_reason": reason},
+            after_snapshot={**snapshot_instance(updated_stock), "adjustment_reason": reason},
+        )
 
 
 class AdminBlogPostListCreateView(StaffListCreateView):

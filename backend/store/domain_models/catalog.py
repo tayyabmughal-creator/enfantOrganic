@@ -578,6 +578,18 @@ class Category(OrderedModel):
     description_ar = models.TextField(blank=True, default="")
     image = models.URLField(max_length=500, blank=True, default="")
     image_file = models.ImageField(upload_to="categories/", blank=True, null=True)
+    seo_title_en = models.CharField(max_length=255, blank=True, default="")
+    seo_title_ar = models.CharField(max_length=255, blank=True, default="")
+    seo_description_en = models.TextField(blank=True, default="")
+    seo_description_ar = models.TextField(blank=True, default="")
+    canonical_url = models.URLField(max_length=500, blank=True, default="")
+    og_title_en = models.CharField(max_length=255, blank=True, default="")
+    og_title_ar = models.CharField(max_length=255, blank=True, default="")
+    og_description_en = models.TextField(blank=True, default="")
+    og_description_ar = models.TextField(blank=True, default="")
+    og_image = models.URLField(max_length=500, blank=True, default="")
+    meta_robots_index = models.BooleanField(default=True)
+    meta_robots_follow = models.BooleanField(default=True)
 
     def __str__(self):
         return self.name_en
@@ -649,6 +661,14 @@ class Product(OrderedModel):
     seo_title_ar = models.CharField(max_length=255, blank=True, default="")
     seo_description_en = models.TextField(blank=True, default="")
     seo_description_ar = models.TextField(blank=True, default="")
+    canonical_url = models.URLField(max_length=500, blank=True, default="")
+    og_title_en = models.CharField(max_length=255, blank=True, default="")
+    og_title_ar = models.CharField(max_length=255, blank=True, default="")
+    og_description_en = models.TextField(blank=True, default="")
+    og_description_ar = models.TextField(blank=True, default="")
+    og_image = models.URLField(max_length=500, blank=True, default="")
+    meta_robots_index = models.BooleanField(default=True)
+    meta_robots_follow = models.BooleanField(default=True)
     shopify_meta = models.JSONField(default=dict, blank=True)
 
     def __str__(self):
@@ -675,12 +695,13 @@ class Warehouse(models.Model):
     region = models.ForeignKey(Region, on_delete=models.CASCADE, related_name="warehouses")
     city = models.CharField(max_length=120, blank=True, default="")
     address = models.TextField(blank=True, default="")
+    priority = models.PositiveSmallIntegerField(default=100)
     active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ("region__sort_order", "region__id", "code")
+        ordering = ("region__sort_order", "region__id", "priority", "code")
 
     def __str__(self):
         return f"{self.code.upper()} ({self.region.code.upper()})"
@@ -769,6 +790,18 @@ class BlogPost(OrderedModel):
     category_ar = models.CharField(max_length=120, default="", blank=True)
     published_at = models.DateField(blank=True, null=True)
     is_published = models.BooleanField(default=False, db_index=True)
+    seo_title_en = models.CharField(max_length=255, blank=True, default="")
+    seo_title_ar = models.CharField(max_length=255, blank=True, default="")
+    seo_description_en = models.TextField(blank=True, default="")
+    seo_description_ar = models.TextField(blank=True, default="")
+    canonical_url = models.URLField(max_length=500, blank=True, default="")
+    og_title_en = models.CharField(max_length=255, blank=True, default="")
+    og_title_ar = models.CharField(max_length=255, blank=True, default="")
+    og_description_en = models.TextField(blank=True, default="")
+    og_description_ar = models.TextField(blank=True, default="")
+    og_image = models.URLField(max_length=500, blank=True, default="")
+    meta_robots_index = models.BooleanField(default=True)
+    meta_robots_follow = models.BooleanField(default=True)
 
     def __str__(self):
         return self.title_en
@@ -784,6 +817,14 @@ class CmsPage(models.Model):
     seo_title_ar = models.CharField(max_length=255, blank=True, default="")
     seo_description_en = models.TextField(blank=True, default="")
     seo_description_ar = models.TextField(blank=True, default="")
+    canonical_url = models.URLField(max_length=500, blank=True, default="")
+    og_title_en = models.CharField(max_length=255, blank=True, default="")
+    og_title_ar = models.CharField(max_length=255, blank=True, default="")
+    og_description_en = models.TextField(blank=True, default="")
+    og_description_ar = models.TextField(blank=True, default="")
+    og_image = models.URLField(max_length=500, blank=True, default="")
+    meta_robots_index = models.BooleanField(default=True)
+    meta_robots_follow = models.BooleanField(default=True)
     is_published = models.BooleanField(default=False, db_index=True)
     region = models.ForeignKey(
         Region,

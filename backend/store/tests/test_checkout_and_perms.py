@@ -4102,7 +4102,7 @@ class CheckoutAndPermsTestCase(TestCase):
         self.assertEqual(order.status, Order.STATUS_PENDING)
         self.assertFalse(order.inventory_released)
         self.assertEqual(stock.quantity, 3)
-        self.assertEqual(stock.reserved_quantity, 2)
+        self.assertEqual(stock.reserved_quantity, 0)
 
     def test_admin_gateway_refund_uses_provider_router(self):
         staff_user = self._create_staff_user("gateway-refund-staff")
@@ -4485,7 +4485,7 @@ class CheckoutAndPermsTestCase(TestCase):
 
         stock.refresh_from_db()
         self.assertEqual(stock.quantity, 3)
-        self.assertEqual(stock.reserved_quantity, 2)
+        self.assertEqual(stock.reserved_quantity, 0)
         self.assertFalse(order.inventory_released)
 
         order.cancel()

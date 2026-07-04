@@ -219,6 +219,7 @@ class CatalogPageView(StorefrontContextMixin, APIView):
             if locale == "en"
             else "منتجات عضوية نقية ولطيفة — مصمّمة بعناية لطفلك الصغير."
         )
+        category = None
         if collection == "baby_sets":
             hero_title = "Baby Sets" if locale == "en" else "مجموعات الأطفال"
             hero_subtitle = (
@@ -228,17 +229,18 @@ class CatalogPageView(StorefrontContextMixin, APIView):
             )
         if category_slug:
             try:
-                cat = Category.objects.get(slug=category_slug)
-                hero_title = cat.name_ar if locale == "ar" and cat.name_ar else cat.name_en
-                if locale == "en" and cat.description_en:
-                    hero_subtitle = cat.description_en
-                elif locale == "ar" and cat.description_ar:
-                    hero_subtitle = cat.description_ar
+                category = Category.objects.get(slug=category_slug)
+                hero_title = category.name_ar if locale == "ar" and category.name_ar else category.name_en
+                if locale == "en" and category.description_en:
+                    hero_subtitle = category.description_en
+                elif locale == "ar" and category.description_ar:
+                    hero_subtitle = category.description_ar
             except Category.DoesNotExist:
                 pass
 
         payload = {
             "hero": {"title": hero_title, "subtitle": hero_subtitle},
+            "seo": CategorySerializer(category, context=context).data.get("seo") if category else {},
             "categories": CategorySerializer(Category.objects.all(), many=True, context=context).data,
             "tags": TagSerializer(Tag.objects.all(), many=True, context=context).data,
             "products": ProductDetailSerializer(products, many=True, context=context).data,
@@ -269,12 +271,18 @@ class ProductDetailView(StorefrontContextMixin, APIView):
         locale = self.get_locale()
         context = self.get_serializer_context()
         region = context["region"]
+        base_product = product_queryset().filter(slug=slug, prices__region=region).distinct().first()
         product = products_available_for_region(
             product_queryset().filter(slug=slug),
             region,
         ).first()
         if not product:
-            return Response({"detail": "Not found"}, status=404)
+            if not base_product:
+                return Response({"detail": "Not found"}, status=404)
+            product = base_product
+            unavailable_for_region = True
+        else:
+            unavailable_for_region = False
 
         primary_category = product.categories.first()
         related_qs = product_queryset().exclude(pk=product.pk)
@@ -291,6 +299,7 @@ class ProductDetailView(StorefrontContextMixin, APIView):
             ],
             "product": ProductDetailSerializer(product, context=context).data,
             "related_products": ProductCardSerializer(related, many=True, context=context).data,
+            "unavailable_for_region": unavailable_for_region,
         }
         return Response(payload)
 

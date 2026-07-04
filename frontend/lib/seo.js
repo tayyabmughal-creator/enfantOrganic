@@ -67,20 +67,29 @@ export function buildSeoMetadata({
   title,
   description,
   image,
+  canonicalUrl = "",
+  ogTitle = "",
+  ogDescription = "",
+  robots = null,
   type = "website",
 }) {
   const normalizedLocale = normalizeLocale(locale);
   const normalizedRegion = normalizeRegion(region);
   const alternates = buildAlternates(normalizedLocale, path, normalizedRegion);
+  if (canonicalUrl) {
+    alternates.canonical = toAbsoluteUrl(canonicalUrl);
+  }
   const imageUrl = getSeoImage(image);
+  const resolvedOgTitle = ogTitle || title;
+  const resolvedOgDescription = ogDescription || description;
 
-  return {
+  const metadata = {
     title,
     description,
     alternates,
     openGraph: {
-      title,
-      description,
+      title: resolvedOgTitle,
+      description: resolvedOgDescription,
       type,
       url: alternates.canonical,
       siteName: SITE_NAME,
@@ -93,10 +102,16 @@ export function buildSeoMetadata({
     },
     twitter: {
       card: "summary_large_image",
-      title,
-      description,
+      title: resolvedOgTitle,
+      description: resolvedOgDescription,
       images: [imageUrl],
     },
   };
+  if (robots) {
+    metadata.robots = {
+      index: robots.index !== false,
+      follow: robots.follow !== false,
+    };
+  }
+  return metadata;
 }
-

@@ -884,16 +884,48 @@ class AdminWarehouseSerializer(serializers.ModelSerializer):
 
 class AdminProductStockSerializer(serializers.ModelSerializer):
     product_slug = serializers.CharField(source="product.slug", read_only=True)
+    product_name = serializers.CharField(source="product.name_en", read_only=True)
     warehouse_code = serializers.CharField(source="warehouse.code", read_only=True)
+    warehouse_name = serializers.CharField(source="warehouse.name_en", read_only=True)
     warehouse_region_code = serializers.CharField(source="warehouse.region.code", read_only=True)
     available_quantity = serializers.SerializerMethodField(read_only=True)
+    physical_quantity = serializers.IntegerField(source="quantity", read_only=True)
+    adjustment_reason = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    last_updated_by = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = ProductStock
         fields = "__all__"
+        read_only_fields = ("reserved_quantity",)
 
     def get_available_quantity(self, obj):
         return int(obj.available_quantity)
+
+    def get_last_updated_by(self, obj):
+        audit = (
+            AdminAuditLog.objects.filter(resource_type="product_stock", resource_id=str(obj.pk))
+            .select_related("actor")
+            .order_by("-timestamp")
+            .first()
+        )
+        if not audit or not audit.actor_id:
+            return ""
+        return audit.actor.get_username()
+
+    def validate_quantity(self, value):
+        if int(value or 0) < 0:
+            raise serializers.ValidationError("Physical quantity cannot be negative.")
+        return value
+
+    def validate(self, attrs):
+        quantity = attrs.get("quantity", getattr(self.instance, "quantity", 0))
+        reserved_quantity = getattr(self.instance, "reserved_quantity", 0)
+        if int(quantity or 0) < int(reserved_quantity or 0):
+            raise serializers.ValidationError(
+                {"quantity": "Physical quantity cannot be lower than reserved quantity."}
+            )
+        attrs.pop("adjustment_reason", None)
+        return attrs
 
 
 class AdminSiteSettingsSerializer(serializers.ModelSerializer):

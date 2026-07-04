@@ -204,11 +204,13 @@ function ProductCard({ locale, product, region }) {
           <h4>{product.name}</h4>
         </Link>
         <div className="product-card-meta">
-          <div className="product-reviews">
-            <span className="review-stars small">{"★".repeat(Math.max(1, Math.min(5, Math.round(rating || 5))))}</span>
-            <strong>{rating.toFixed(1).replace(".0", "")}</strong>
-            <span className="review-count-label">({reviewCount})</span>
-          </div>
+          {reviewCount > 0 ? (
+            <div className="product-reviews">
+              <span className="review-stars small">{"★".repeat(Math.max(1, Math.min(5, Math.round(rating || 5))))}</span>
+              <strong>{rating.toFixed(1).replace(".0", "")}</strong>
+              <span className="review-count-label">({reviewCount})</span>
+            </div>
+          ) : null}
           {featurePills.length ? (
             <div className="product-pill-row">
               {featurePills.map((pill) => (

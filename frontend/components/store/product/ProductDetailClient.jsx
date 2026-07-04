@@ -224,7 +224,7 @@ export default function ProductDetailClient({ locale, product, region }) {
   const isOutOfStock = selectedVariantStock != null
     ? Number(selectedVariantStock) <= 0
     : Boolean(product?.stock_status?.track_inventory) && !Boolean(product?.stock_status?.is_in_stock);
-  const reviewCount = Number(product.review_count || customerReviews.length || editorialReviews.length || 0);
+  const reviewCount = Number(product.review_count || customerReviews.length || 0);
   const vendorLabel = String(product.vendor || product.brand || "ENFANT ORGANICS").toUpperCase();
   const compareAmount = Number(selectedPricing?.compare_amount || 0);
   const showComparePrice = compareAmount > Number(selectedPricing?.amount || 0);
@@ -601,11 +601,19 @@ export default function ProductDetailClient({ locale, product, region }) {
             <h1>{product.name}</h1>
 
             <div className="product-reviews product-reviews-inline product-reviews--premium">
-              <StarRating rating={product.rating || 5} size={18} />
-              <span className="review-count">{reviewCount}</span>
-              <span className="product-review-caption">
-                {isAr ? "تقييم" : "reviews"}
-              </span>
+              {reviewCount > 0 ? (
+                <>
+                  <StarRating rating={product.rating || 5} size={18} />
+                  <span className="review-count">{reviewCount}</span>
+                  <span className="product-review-caption">
+                    {isAr ? "تقييم" : "reviews"}
+                  </span>
+                </>
+              ) : (
+                <span className="product-review-caption">
+                  {isAr ? "لا توجد مراجعات بعد" : "No reviews yet"}
+                </span>
+              )}
             </div>
 
             <div className="product-pricing large product-pricing--premium">

@@ -33,14 +33,24 @@ export async function generateMetadata({ params, searchParams }) {
   try {
     const productPage = await getProductBySlug(slug, locale, region);
     if (productPage?.product?.name) {
-      title = `${productPage.product.name} | Enfant Organics`;
+      title = productPage.product?.seo?.title || productPage.product.seo_title || `${productPage.product.name} | Enfant Organics`;
     }
     if (productPage?.product?.short_description) {
-      description = productPage.product.short_description;
+      description = productPage.product?.seo?.description || productPage.product.seo_description || productPage.product.short_description;
     }
-    if (productPage?.product?.image) {
-      image = productPage.product.image;
-    }
+    image = productPage.product?.seo?.og_image || productPage.product?.image || image;
+    return buildSeoMetadata({
+      locale,
+      region,
+      path: `/product/${slug}`,
+      title,
+      description,
+      image,
+      canonicalUrl: productPage.product?.seo?.canonical_url,
+      ogTitle: productPage.product?.seo?.og_title,
+      ogDescription: productPage.product?.seo?.og_description,
+      robots: productPage.product?.seo,
+    });
   } catch {
     // Keep fallback metadata when API is unavailable.
   }

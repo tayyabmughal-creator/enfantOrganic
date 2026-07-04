@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DashboardView from "./DashboardView";
 import AnalyticsView from "./AnalyticsView";
-import { StoreSettingsSection, SettingsPanel, Reports, AuditLogsPanel, IntegrationsView, PaymentGatewaysView, InventoryView, InsightsView, NewsletterPanel, PopupLeadsPanel, RegionsView, InstagramPostsPanel, PlaceholderModule } from "./OtherViews";
+import { StoreSettingsSection, SettingsPanel, Reports, AuditLogsPanel, IntegrationsView, PaymentGatewaysView, InventoryView, InsightsView, NewsletterPanel, PopupLeadsPanel, RegionsView, InstagramPostsPanel, NotificationHealthView, PlaceholderModule } from "./OtherViews";
 import { CrudPanel, CrudFormModal } from "./CrudViews";
 import DraftOrderComposer from "./DraftOrderComposer";
 import { AdminToast } from "./SharedUI";
@@ -76,6 +76,7 @@ const NAV_GROUPS = [
       { key: "cart_milestones",     label: "Cart Milestones",   icon: "gift",      endpoint: "/admin/cart-milestones/", desc: "Free-shipping and discount rewards unlocked by cart total." },
       { key: "staff",               label: "Staff",             icon: "users",     endpoint: "/admin/staff/",     desc: "Team accounts, roles, and permissions." },
       { key: "reviews",             label: "Reviews",           icon: "star",      endpoint: "/admin/reviews/",   desc: "Approve and moderate reviews." },
+      { key: "notifications",        label: "Notifications",     icon: "mail",      endpoint: "/admin/notification-health/", desc: "Email/SMS configuration health and recent delivery failures." },
       { key: "branding",            label: "Branding",          icon: "palette",   endpoint: "/admin/settings/",  desc: "Logo, colors, tagline, and store identity." },
       { key: "nav_settings",        label: "Navigation",        icon: "menu",      endpoint: "/admin/settings/",  desc: "Header nav links and utility menu." },
       { key: "footer_social",       label: "Footer & Social",   icon: "link",      endpoint: "/admin/settings/",  desc: "Footer content, social media, and contact info." },
@@ -125,6 +126,7 @@ const NAV_READ_CAPABILITY = {
   reports: "reports.view",
   audit_logs: "audit.view",
   reviews: "reviews.view",
+  notifications: "reviews.view",
   returns: "returns.view",
   shipping: "shipping.view",
   cart_milestones: "shipping.view",
@@ -160,6 +162,7 @@ const NAV_WRITE_CAPABILITY = {
   giftcards: "giftcards.edit",
   abandoned: "abandoned.edit",
   reviews: "reviews.edit",
+  notifications: null,
   returns: "returns.edit",
   shipping: "shipping.edit",
   cart_milestones: "shipping.edit",
@@ -197,9 +200,13 @@ const FIELD_CONFIGS = {
     ["origin_source_en","Origin EN","text"],["origin_source_ar","Origin AR","text"],
     ["organic_certification_name","Certification","text"],["shelf_life","Shelf life","text"],
     ["expiry_date","Expiry date","date"],["badge_en","Badge EN","text"],["badge_ar","Badge AR","text"],
-    ["review_count","Review count","number"],["rating","Rating","number"],
     ["seo_title_en","SEO title EN","text"],["seo_title_ar","SEO title AR","text"],
     ["seo_description_en","SEO description EN","textarea"],["seo_description_ar","SEO description AR","textarea"],
+    ["canonical_url","Canonical URL override","text"],
+    ["og_title_en","Open Graph title EN","text"],["og_title_ar","Open Graph title AR","text"],
+    ["og_description_en","Open Graph description EN","textarea"],["og_description_ar","Open Graph description AR","textarea"],
+    ["og_image","Open Graph image URL","text"],
+    ["meta_robots_index","Index in search","checkbox"],["meta_robots_follow","Follow links","checkbox"],
     ["shopify_meta","Shopify/extra meta JSON","json"],
     ["image","Image URL","text"],["image_file","Image File","file"],
     ["hover_image","Hover image URL","text"],["hover_image_file","Hover Image File","file"],
@@ -213,6 +220,13 @@ const FIELD_CONFIGS = {
   categories: [
     ["slug","Slug","text"],["name_en","Name EN","text"],["name_ar","Name AR","text"],
     ["description_en","Description EN","textarea"],["description_ar","Description AR","textarea"],
+    ["seo_title_en","SEO title EN","text"],["seo_title_ar","SEO title AR","text"],
+    ["seo_description_en","SEO description EN","textarea"],["seo_description_ar","SEO description AR","textarea"],
+    ["canonical_url","Canonical URL override","text"],
+    ["og_title_en","Open Graph title EN","text"],["og_title_ar","Open Graph title AR","text"],
+    ["og_description_en","Open Graph description EN","textarea"],["og_description_ar","Open Graph description AR","textarea"],
+    ["og_image","Open Graph image URL","text"],
+    ["meta_robots_index","Index in search","checkbox"],["meta_robots_follow","Follow links","checkbox"],
     ["image","Image URL","text"],["image_file","Image File","file"],["sort_order","Sort order","number"],
     ["products_info","Products in this category","category-products"],
   ],
@@ -282,6 +296,13 @@ const FIELD_CONFIGS = {
     ["body_en","Body EN","richtext"],["body_ar","Body AR","richtext"],
     ["image","Cover image URL","text"],["image_file","Cover image file","file"],
     ["category_en","Category EN","text"],["category_ar","Category AR","text"],
+    ["seo_title_en","SEO title EN","text"],["seo_title_ar","SEO title AR","text"],
+    ["seo_description_en","SEO description EN","textarea"],["seo_description_ar","SEO description AR","textarea"],
+    ["canonical_url","Canonical URL override","text"],
+    ["og_title_en","Open Graph title EN","text"],["og_title_ar","Open Graph title AR","text"],
+    ["og_description_en","Open Graph description EN","textarea"],["og_description_ar","Open Graph description AR","textarea"],
+    ["og_image","Open Graph image URL","text"],
+    ["meta_robots_index","Index in search","checkbox"],["meta_robots_follow","Follow links","checkbox"],
     ["published_at","Publish date","date"],["is_published","Published","checkbox"],
     ["sort_order","Sort order","number"],
   ],
@@ -292,6 +313,11 @@ const FIELD_CONFIGS = {
     ["body_en","Body EN","richtext"],["body_ar","Body AR","richtext"],
     ["seo_title_en","SEO title EN","text"],["seo_title_ar","SEO title AR","text"],
     ["seo_description_en","SEO description EN","textarea"],["seo_description_ar","SEO description AR","textarea"],
+    ["canonical_url","Canonical URL override","text"],
+    ["og_title_en","Open Graph title EN","text"],["og_title_ar","Open Graph title AR","text"],
+    ["og_description_en","Open Graph description EN","textarea"],["og_description_ar","Open Graph description AR","textarea"],
+    ["og_image","Open Graph image URL","text"],
+    ["meta_robots_index","Index in search","checkbox"],["meta_robots_follow","Follow links","checkbox"],
     ["is_published","Published","checkbox"],
   ],
   hero_cards: [
@@ -451,6 +477,7 @@ const FIELD_CONFIGS = {
     ["name_ar","Name AR","text"],
     ["region","Region ID","number"],
     ["fulfillment_regions","Fulfilment region IDs (comma-separated)","text"],
+    ["priority","Fulfilment priority","number"],
     ["active","Active","checkbox"],
   ],
   giftcards: [
@@ -482,20 +509,20 @@ const FIELD_CONFIGS = {
 };
 
 const CREATE_DEFAULTS = {
-  products:   { slug:"",name_en:"",name_ar:"",brand:"Enfant",unit:"",categories:[],cost_price:0,image:"",hover_image:"",dietary_tags:[],gallery:[],variants:[],details_en:[],details_ar:[],option_groups_en:[],option_groups_ar:[],seo_title_en:"",seo_title_ar:"",seo_description_en:"",seo_description_ar:"",shopify_meta:{},stock_quantity:0,rating:5,review_count:0,track_inventory:false,is_published:true,is_featured:false,sort_order:0 },
-  categories: { slug:"",name_en:"",name_ar:"",description_en:"",description_ar:"",image:"",sort_order:0 },
+  products:   { slug:"",name_en:"",name_ar:"",brand:"Enfant",unit:"",categories:[],cost_price:0,image:"",hover_image:"",dietary_tags:[],gallery:[],variants:[],details_en:[],details_ar:[],option_groups_en:[],option_groups_ar:[],seo_title_en:"",seo_title_ar:"",seo_description_en:"",seo_description_ar:"",canonical_url:"",og_title_en:"",og_title_ar:"",og_description_en:"",og_description_ar:"",og_image:"",meta_robots_index:true,meta_robots_follow:true,shopify_meta:{},stock_quantity:0,track_inventory:false,is_published:true,is_featured:false,sort_order:0 },
+  categories: { slug:"",name_en:"",name_ar:"",description_en:"",description_ar:"",seo_title_en:"",seo_title_ar:"",seo_description_en:"",seo_description_ar:"",canonical_url:"",og_title_en:"",og_title_ar:"",og_description_en:"",og_description_ar:"",og_image:"",meta_robots_index:true,meta_robots_follow:true,image:"",sort_order:0 },
   deals:      { code:"",description:"",discount_type:"fixed",value:0,minimum_subtotal:0,max_uses:"",starts_at:"",ends_at:"",is_active:true },
   customers:  { username:"",email:"",password:"",first_name:"",last_name:"",is_active:true,is_staff:false },
   payments:   { order:"",provider:"cod",provider_reference:"",amount:0,currency_code:"OMR",status:"pending",raw_response:{} },
   reviews:    { product:"",order:"",customer_name:"",rating:5,title:"",comment:"",images:[],is_verified_purchase:false,is_approved:false },
   shipping:   { region:"",city:"",area:"",min_order_value:0,max_order_value:"",shipping_fee:0,free_shipping_threshold:0,eta_min_days:"",eta_max_days:"",carrier_name:"",active:true },
   cart_milestones: { region:"",reward_type:"free_shipping",threshold:0,discount_value:0,label_en:"",label_ar:"",sort_order:0,is_active:true },
-  blog:       { slug:"",title_en:"",title_ar:"",excerpt_en:"",excerpt_ar:"",body_en:"",body_ar:"",image:"",category_en:"",category_ar:"",published_at:"",is_published:false,sort_order:0 },
-  pages:      { slug:"",region:"",title_en:"",title_ar:"",body_en:"",body_ar:"",seo_title_en:"",seo_title_ar:"",seo_description_en:"",seo_description_ar:"",is_published:true },
+  blog:       { slug:"",title_en:"",title_ar:"",excerpt_en:"",excerpt_ar:"",body_en:"",body_ar:"",image:"",category_en:"",category_ar:"",seo_title_en:"",seo_title_ar:"",seo_description_en:"",seo_description_ar:"",canonical_url:"",og_title_en:"",og_title_ar:"",og_description_en:"",og_description_ar:"",og_image:"",meta_robots_index:true,meta_robots_follow:true,published_at:"",is_published:false,sort_order:0 },
+  pages:      { slug:"",region:"",title_en:"",title_ar:"",body_en:"",body_ar:"",seo_title_en:"",seo_title_ar:"",seo_description_en:"",seo_description_ar:"",canonical_url:"",og_title_en:"",og_title_ar:"",og_description_en:"",og_description_ar:"",og_image:"",meta_robots_index:true,meta_robots_follow:true,is_published:true },
   hero_cards: { title_en:"",title_ar:"",eyebrow_en:"",eyebrow_ar:"",subtitle_en:"",subtitle_ar:"",cta_en:"Shop now",cta_ar:"تسوق الآن",href:"/collections",size:"small",accent:"soft",sort_order:0,is_visible:true,image:"",image_mobile:"" },
   taxes:      { label:"VAT",region:"",country_code:"",rate:0.05,is_inclusive:false,applies_to_shipping:true,is_active:true,effective_from:"",effective_to:"" },
   staff:      { email:"",username:"",password:"",first_name:"",last_name:"",role:"Manager",is_active:true,is_staff:true },
-  warehouses: { code:"",name_en:"",name_ar:"",region:"",fulfillment_regions:"",active:true },
+  warehouses: { code:"",name_en:"",name_ar:"",region:"",fulfillment_regions:"",priority:100,active:true },
   giftcards:  { code:"",initial_balance:0,remaining_balance:0,currency_code:"OMR",region:"",recipient_name:"",recipient_email:"",recipient_phone:"",sender_name:"",message:"",status:"active",expiry_date:"" },
 };
 
@@ -773,6 +800,7 @@ export default function AdminPanelClient() {
   const [inventoryThreshold, setInventoryThreshold] = useState(10);
   const [inventoryFocusSlug, setInventoryFocusSlug] = useState("");
   const [warehouseStocks, setWarehouseStocks] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
   const [demandAlerts, setDemandAlerts] = useState([]);
   const [auditFilters, setAuditFilters] = useState({ action: "", resource_type: "" });
   const [customersTab, setCustomersTab] = useState("list");
@@ -1051,14 +1079,16 @@ export default function AdminPanelClient() {
         setInventoryThreshold(Number(raw.inventory_health_threshold || 10));
       }
       if (screenKey === "inventory") {
-        const [settingsPayload, warehousePayload, demandPayload] = await Promise.all([
+        const [settingsPayload, stockPayload, warehousePayload, demandPayload] = await Promise.all([
           request("/admin/settings/"),
           request("/admin/product-stocks/?page_size=500"),
+          request("/admin/warehouses/?page_size=500"),
           request("/admin/back-in-stock-requests/?page_size=500"),
         ]);
         if (mySeq !== loadDataSeqRef.current) return;   // superseded during the inventory side-loads
         setInventoryThreshold(Number(settingsPayload?.inventory_low_stock_threshold || 10));
-        setWarehouseStocks(Array.isArray(warehousePayload?.results) ? warehousePayload.results : []);
+        setWarehouseStocks(Array.isArray(stockPayload?.results) ? stockPayload.results : []);
+        setWarehouses(Array.isArray(warehousePayload?.results) ? warehousePayload.results : []);
         setDemandAlerts(Array.isArray(demandPayload?.results) ? demandPayload.results : []);
       }
       if (raw && typeof raw === "object" && Array.isArray(raw.results)) {
@@ -1144,6 +1174,33 @@ export default function AdminPanelClient() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleSaveInventoryStock({ stockId, productId, warehouseId, quantity, reason }) {
+    const physicalQuantity = Number(quantity);
+    if (!Number.isFinite(physicalQuantity) || physicalQuantity < 0) {
+      throw new Error("Physical quantity must be zero or greater.");
+    }
+    const payload = {
+      quantity: Math.floor(physicalQuantity),
+      adjustment_reason: reason || "",
+    };
+    let path = "/admin/product-stocks/";
+    let method = "POST";
+    if (stockId) {
+      path = `/admin/product-stocks/${stockId}/`;
+      method = "PATCH";
+    } else {
+      payload.product = productId;
+      payload.warehouse = warehouseId;
+    }
+    const saved = await request(path, {
+      method,
+      body: JSON.stringify(payload),
+    });
+    showToast("Stock updated.", "success");
+    await loadScreen(active, { silent: true });
+    return saved;
   }
 
   async function handleDeleteOrder(order) {
@@ -1756,7 +1813,7 @@ export default function AdminPanelClient() {
         />
       );
     if (activeKey === "analytics")              return <AnalyticsView data={data} />;
-    if (activeKey === "inventory")              return <InventoryView rows={Array.isArray(data) ? data : []} threshold={inventoryThreshold} focusProductSlug={inventoryFocusSlug} warehouseStocks={warehouseStocks} demandAlerts={demandAlerts} />;
+    if (activeKey === "inventory")              return <InventoryView rows={Array.isArray(data) ? data : []} threshold={inventoryThreshold} focusProductSlug={inventoryFocusSlug} warehouseStocks={warehouseStocks} warehouses={warehouses} demandAlerts={demandAlerts} onSaveStock={handleSaveInventoryStock} />;
     if (activeKey === "customers") return (
       <div>
         <div className="admin-orders-section-tabs" style={{ marginBottom: 0 }}>
@@ -1782,6 +1839,7 @@ export default function AdminPanelClient() {
       </div>
     );
     if (activeKey === "newsletter")             return <NewsletterPanel data={data} />;
+    if (activeKey === "notifications")          return <NotificationHealthView data={data} />;
     if (activeKey === "popup_leads")            return <PopupLeadsPanel data={data} onDownload={(params) => downloadReport("newsletter", params)} canExport={canViewKey("reports")} />;
     if (activeKey === "reports")               return <Reports data={data} onDownload={downloadReport} onPreview={previewReport} />;
     if (activeKey === "audit_logs")            return <AuditLogsPanel rows={Array.isArray(data) ? data : []} filters={auditFilters} onFiltersChange={(patch) => setAuditFilters((prev) => ({ ...prev, ...patch }))} />;

@@ -20,7 +20,7 @@ class SMSProviderSendError(SMSProviderError):
     pass
 
 
-def _normalize_phone(value):
+def _normalize_phone(value, region_code=""):
     raw = str(value or "").strip()
     if not raw:
         return ""
@@ -29,6 +29,16 @@ def _normalize_phone(value):
         cleaned = f"+{cleaned[2:]}"
     if cleaned.startswith("+"):
         return f"+{cleaned[1:].lstrip('+')}"
+    digits = cleaned.lstrip("0")
+    region = str(region_code or "").strip().lower()
+    if region in {"om", "oman"} and len(digits) == 8:
+        return f"+968{digits}"
+    if region in {"ae", "uae", "united_arab_emirates"} and len(digits) in {8, 9}:
+        return f"+971{digits}"
+    if region in {"sa", "ksa", "saudi", "saudi_arabia"} and len(digits) in {9, 10}:
+        return f"+966{digits}"
+    if digits.startswith(("968", "971", "966")):
+        return f"+{digits}"
     return cleaned
 
 
@@ -260,7 +270,10 @@ def _provider_candidates(recipient, preferred_provider=""):
 
 
 def send_sms(recipient, body, *, locale="en", preferred_provider="", metadata=None):
-    normalized_recipient = _normalize_phone(recipient)
+    region_code = ""
+    if isinstance(metadata, dict):
+        region_code = metadata.get("region_code") or metadata.get("region") or ""
+    normalized_recipient = _normalize_phone(recipient, region_code=region_code)
     message_body = str(body or "").strip()
     if not normalized_recipient:
         return {

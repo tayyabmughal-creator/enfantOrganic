@@ -139,6 +139,19 @@ def _review_images(raw):
     return images
 
 
+def seo_payload(obj, locale, *, image=""):
+    return {
+        "title": localized(obj, "seo_title", locale),
+        "description": localized(obj, "seo_description", locale),
+        "canonical_url": getattr(obj, "canonical_url", "") or "",
+        "og_title": localized(obj, "og_title", locale),
+        "og_description": localized(obj, "og_description", locale),
+        "og_image": getattr(obj, "og_image", "") or image or "",
+        "index": bool(getattr(obj, "meta_robots_index", True)),
+        "follow": bool(getattr(obj, "meta_robots_follow", True)),
+    }
+
+
 class CartMilestoneSerializer(serializers.ModelSerializer):
     label = serializers.SerializerMethodField()
 
@@ -288,10 +301,11 @@ class CategorySerializer(serializers.ModelSerializer):
     description = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
     product_count = serializers.SerializerMethodField()
+    seo = serializers.SerializerMethodField()
 
     class Meta:
         model = Category
-        fields = ("slug", "name", "description", "image", "product_count")
+        fields = ("slug", "name", "description", "image", "product_count", "seo")
 
     def get_product_count(self, obj):
         # Populated only when the queryset is annotated (e.g. the nav menu);
@@ -307,6 +321,9 @@ class CategorySerializer(serializers.ModelSerializer):
 
     def get_description(self, obj):
         return localized(obj, "description", self.context.get("locale"))
+
+    def get_seo(self, obj):
+        return seo_payload(obj, self.context.get("locale"), image=self.get_image(obj))
 
 
 class TagSerializer(serializers.ModelSerializer):
@@ -495,6 +512,7 @@ class ProductDetailSerializer(ProductCardSerializer):
     stock_quantity = serializers.SerializerMethodField()
     seo_title = serializers.SerializerMethodField()
     seo_description = serializers.SerializerMethodField()
+    seo = serializers.SerializerMethodField()
 
     class Meta(ProductCardSerializer.Meta):
         fields = ProductCardSerializer.Meta.fields + (
@@ -516,6 +534,7 @@ class ProductDetailSerializer(ProductCardSerializer):
             "gallery",
             "seo_title",
             "seo_description",
+            "seo",
             "shopify_meta",
         )
 
@@ -586,6 +605,9 @@ class ProductDetailSerializer(ProductCardSerializer):
     def get_seo_description(self, obj):
         return localized(obj, "seo_description", self.context.get("locale"))
 
+    def get_seo(self, obj):
+        return seo_payload(obj, self.context.get("locale"), image=self.get_image(obj))
+
     def get_certification_file(self, obj):
         request = self.context.get("request")
         if not obj.organic_certification_file:
@@ -630,10 +652,11 @@ class BlogPostSerializer(serializers.ModelSerializer):
     title = serializers.SerializerMethodField()
     excerpt = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
+    seo = serializers.SerializerMethodField()
 
     class Meta:
         model = BlogPost
-        fields = ("slug", "title", "excerpt", "image", "published_at")
+        fields = ("slug", "title", "excerpt", "image", "published_at", "seo")
 
     def get_image(self, obj):
         request = self.context.get("request")
@@ -644,6 +667,9 @@ class BlogPostSerializer(serializers.ModelSerializer):
 
     def get_excerpt(self, obj):
         return localized(obj, "excerpt", self.context.get("locale"))
+
+    def get_seo(self, obj):
+        return seo_payload(obj, self.context.get("locale"), image=self.get_image(obj))
 
 
 class BlogPostDetailSerializer(BlogPostSerializer):
@@ -661,6 +687,7 @@ class CmsPageSerializer(serializers.ModelSerializer):
     body = serializers.SerializerMethodField()
     seo_title = serializers.SerializerMethodField()
     seo_description = serializers.SerializerMethodField()
+    seo = serializers.SerializerMethodField()
     region_code = serializers.SerializerMethodField()
 
     class Meta:
@@ -671,6 +698,7 @@ class CmsPageSerializer(serializers.ModelSerializer):
             "body",
             "seo_title",
             "seo_description",
+            "seo",
             "is_published",
             "region_code",
         )
@@ -686,6 +714,9 @@ class CmsPageSerializer(serializers.ModelSerializer):
 
     def get_seo_description(self, obj):
         return localized(obj, "seo_description", self.context.get("locale"))
+
+    def get_seo(self, obj):
+        return seo_payload(obj, self.context.get("locale"))
 
     def get_region_code(self, obj):
         return obj.region.code if obj.region_id else ""

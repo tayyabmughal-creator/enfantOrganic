@@ -48,14 +48,24 @@ export async function generateMetadata({ params, searchParams }) {
   try {
     const catalog = await getCatalogData(locale, region, filters);
     if (catalog?.hero?.title) {
-      title = `${catalog.hero.title} | Enfant Organics`;
+      title = catalog?.seo?.title || `${catalog.hero.title} | Enfant Organics`;
     }
     if (catalog?.hero?.subtitle) {
-      description = catalog.hero.subtitle;
+      description = catalog?.seo?.description || catalog.hero.subtitle;
     }
-    if (catalog?.products?.[0]?.image) {
-      image = catalog.products[0].image;
-    }
+    image = catalog?.seo?.og_image || catalog?.products?.[0]?.image || image;
+    return buildSeoMetadata({
+      locale,
+      region,
+      path: "/collections",
+      title,
+      description,
+      image,
+      canonicalUrl: catalog?.seo?.canonical_url,
+      ogTitle: catalog?.seo?.og_title,
+      ogDescription: catalog?.seo?.og_description,
+      robots: catalog?.seo,
+    });
   } catch {
     // Keep fallback metadata when API is unavailable.
   }

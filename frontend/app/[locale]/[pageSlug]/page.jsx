@@ -775,8 +775,8 @@ export async function generateMetadata({ params, searchParams }) {
     return {};
   }
 
-  const seoTitle = resolved.cmsPage?.seo_title;
-  const seoDescription = resolved.cmsPage?.seo_description;
+  const seoTitle = resolved.cmsPage?.seo?.title || resolved.cmsPage?.seo_title;
+  const seoDescription = resolved.cmsPage?.seo?.description || resolved.cmsPage?.seo_description;
   const title = seoTitle ? `${seoTitle} | Enfant Organics` : `${content.title} | Enfant Organics`;
   const fallbackDescription = isAr
     ? "معلومات ومتطلبات الشراء من إنفانت أورجانيك."
@@ -789,7 +789,11 @@ export async function generateMetadata({ params, searchParams }) {
     path: `/${pageSlug}`,
     title,
     description,
-    image: "/enfant/enfant-logo.png",
+    image: resolved.cmsPage?.seo?.og_image || "/enfant/enfant-logo.png",
+    canonicalUrl: resolved.cmsPage?.seo?.canonical_url,
+    ogTitle: resolved.cmsPage?.seo?.og_title,
+    ogDescription: resolved.cmsPage?.seo?.og_description,
+    robots: resolved.cmsPage?.seo,
   });
 }
 
