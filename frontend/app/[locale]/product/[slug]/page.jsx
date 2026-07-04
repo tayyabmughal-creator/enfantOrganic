@@ -35,8 +35,10 @@ export async function generateMetadata({ params, searchParams }) {
     if (productPage?.product?.name) {
       title = productPage.product?.seo?.title || productPage.product.seo_title || `${productPage.product.name} | Enfant Organics`;
     }
-    if (productPage?.product?.short_description) {
-      description = productPage.product?.seo?.description || productPage.product.seo_description || productPage.product.short_description;
+    const productDescription =
+      productPage.product?.seo?.description || productPage.product?.seo_description || productPage.product?.short_description;
+    if (productDescription) {
+      description = productDescription;
     }
     image = productPage.product?.seo?.og_image || productPage.product?.image || image;
     return buildSeoMetadata({

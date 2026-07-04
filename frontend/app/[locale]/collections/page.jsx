@@ -50,8 +50,9 @@ export async function generateMetadata({ params, searchParams }) {
     if (catalog?.hero?.title) {
       title = catalog?.seo?.title || `${catalog.hero.title} | Enfant Organics`;
     }
-    if (catalog?.hero?.subtitle) {
-      description = catalog?.seo?.description || catalog.hero.subtitle;
+    const catalogDescription = catalog?.seo?.description || catalog?.hero?.subtitle;
+    if (catalogDescription) {
+      description = catalogDescription;
     }
     image = catalog?.seo?.og_image || catalog?.products?.[0]?.image || image;
     return buildSeoMetadata({

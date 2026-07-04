@@ -29,8 +29,9 @@ export async function generateMetadata({ params, searchParams }) {
     if (post?.title) {
       title = post?.seo?.title || `${post.title} | Enfant Organics`;
     }
-    if (post?.excerpt) {
-      description = post?.seo?.description || post.excerpt;
+    const postDescription = post?.seo?.description || post?.excerpt;
+    if (postDescription) {
+      description = postDescription;
     }
     image = post?.seo?.og_image || post?.image || image;
     return buildSeoMetadata({
