@@ -4,7 +4,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from store.api_serializers.catalog import ProductCardSerializer
-from store.models import Category, Order, OrderItem, Product, ProductPrice, Region, SiteSettings
+from store.models import Category, CmsPage, Order, OrderItem, Product, ProductPrice, Region, SiteSettings
 
 
 def create_region(code, name, currency, *, is_default=False):
@@ -155,6 +155,38 @@ class StorefrontRegionBehaviorTests(TestCase):
         data = ProductCardSerializer(product, context={"locale": "en", "region": self.ae}).data
 
         self.assertIsNone(data["pricing"])
+
+    def test_cms_page_aliases_resolve_to_canonical_policy_pages(self):
+        CmsPage.objects.update_or_create(
+            slug="return-policy",
+            region=None,
+            defaults={
+                "title_en": "Return & Refund Policy",
+                "title_ar": "سياسة الإرجاع والاسترداد",
+                "body_en": "<p>Returns body</p>",
+                "body_ar": "<p>Returns body AR</p>",
+                "is_published": True,
+            },
+        )
+        CmsPage.objects.update_or_create(
+            slug="shipping-policy",
+            region=None,
+            defaults={
+                "title_en": "Shipping Policy",
+                "title_ar": "سياسة الشحن",
+                "body_en": "<p>Shipping body</p>",
+                "body_ar": "<p>Shipping body AR</p>",
+                "is_published": True,
+            },
+        )
+
+        returns = self.client.get("/api/pages/returns/", {"locale": "en", "region": "om"})
+        shipping = self.client.get("/api/pages/shipping/", {"locale": "en", "region": "om"})
+
+        self.assertEqual(returns.status_code, 200)
+        self.assertEqual(returns.data["slug"], "return-policy")
+        self.assertEqual(shipping.status_code, 200)
+        self.assertEqual(shipping.data["slug"], "shipping-policy")
 
     def test_home_filters_products_without_selected_region_price(self):
         oman_only = self.create_product("oman-only", show_in_new_arrivals=True)

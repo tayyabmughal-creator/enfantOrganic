@@ -388,18 +388,23 @@ class BlogDetailView(StorefrontContextMixin, APIView):
 
 class CmsPageDetailView(StorefrontContextMixin, APIView):
     serializer_class = CmsPageSerializer
+    PAGE_ALIASES = {
+        "returns": "return-policy",
+        "shipping": "shipping-policy",
+    }
 
     def get(self, request, slug):
         context = self.get_serializer_context()
         region = context["region"]
+        canonical_slug = self.PAGE_ALIASES.get(slug, slug)
         page = (
-            CmsPage.objects.filter(slug=slug, is_published=True, region=region)
+            CmsPage.objects.filter(slug=canonical_slug, is_published=True, region=region)
             .select_related("region")
             .first()
         )
         if not page:
             page = (
-                CmsPage.objects.filter(slug=slug, is_published=True, region__isnull=True)
+                CmsPage.objects.filter(slug=canonical_slug, is_published=True, region__isnull=True)
                 .select_related("region")
                 .first()
             )
