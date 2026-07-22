@@ -3992,10 +3992,13 @@ def _paymob_audit_snapshot(row):
         "enabled":        row.enabled,
         "integration_id": row.integration_id,
         "iframe_id":      row.iframe_id,
+        "apple_pay_integration_id": row.apple_pay_integration_id,
         "base_url":       row.base_url,
         "currency":       row.currency,
         "api_key_set":     bool((row.api_key or "").strip()),
         "hmac_secret_set": bool((row.hmac_secret or "").strip()),
+        "secret_key_set":  bool((row.secret_key or "").strip()),
+        "public_key_set":  bool((row.public_key or "").strip()),
     }
 
 
@@ -4035,6 +4038,9 @@ class AdminPaymobRegionConfigView(APIView):
             "has_integration_id": bool(cfg.get("integration_id")),
             "has_iframe_id":      bool(cfg.get("iframe_id")),
             "has_hmac_secret":    bool(cfg.get("hmac_secret")),
+            "has_secret_key":     bool(cfg.get("secret_key")),
+            "has_public_key":     bool(cfg.get("public_key")),
+            "has_apple_pay_integration_id": bool(cfg.get("apple_pay_integration_id")),
         }
         data["configured"] = configured
         data["available"] = bool(configured)

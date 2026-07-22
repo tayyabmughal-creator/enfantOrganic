@@ -172,10 +172,19 @@ def get_paymob_config(region_code=""):
     # region is implicitly enabled (env-driven), preserving existing behavior.
     enabled = bool(row.enabled) if row is not None else True
 
-    # Unified Checkout keys are account-level (one Paymob account), so they always
-    # resolve from the global env/DB regardless of region.
-    secret_key = _get(db, "paymob_secret_key", "PAYMOB_SECRET_KEY")
-    public_key = _get(db, "paymob_public_key", "PAYMOB_PUBLIC_KEY")
+    # Unified Checkout keys (secret/public) and the Apple Pay integration are per
+    # Paymob ACCOUNT, not global: a region running its own account (e.g. a
+    # dedicated UAE account on uae.paymob.com) has different keys than the default
+    # (Oman) account, so they must NOT cross regions. They resolve like the card
+    # integration — region row → per-region env — and only the default/Oman region
+    # (or a shared-account region borrowing Oman) inherits the global env/DB value.
+    secret_key = credential("secret_key", "PAYMOB_SECRET_KEY", "paymob_secret_key")
+    public_key = credential("public_key", "PAYMOB_PUBLIC_KEY", "paymob_public_key")
+    apple_pay_integration_id = credential(
+        "apple_pay_integration_id",
+        "PAYMOB_APPLE_PAY_INTEGRATION_ID",
+        "paymob_apple_pay_integration_id",
+    )
 
     return {
         "api_key":                   api_key,
@@ -187,7 +196,7 @@ def get_paymob_config(region_code=""):
         "currency":                  currency,
         "base_url":                  base_url,
         "enabled":                   enabled,
-        "apple_pay_integration_id":  _get(db, "paymob_apple_pay_integration_id",  "PAYMOB_APPLE_PAY_INTEGRATION_ID"),
+        "apple_pay_integration_id":  apple_pay_integration_id,
         "apple_pay_iframe_id":       _get(db, "paymob_apple_pay_iframe_id",       "PAYMOB_APPLE_PAY_IFRAME_ID"),
         "region_code":               (suffix or "").lower(),
     }

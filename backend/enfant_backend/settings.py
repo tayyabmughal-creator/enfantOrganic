@@ -381,6 +381,23 @@ PAYMOB_HMAC_SECRET_AE = os.getenv("PAYMOB_HMAC_SECRET_AE", "")
 PAYMOB_BASE_URL_AE = os.getenv("PAYMOB_BASE_URL_AE", "https://uae.paymob.com/api")
 PAYMOB_CURRENCY_AE = os.getenv("PAYMOB_CURRENCY_AE", "AED")
 
+# Per-region Unified Checkout keys + Apple Pay integration. Each Paymob account
+# (Oman / UAE / …) has its OWN secret/public keys and Apple Pay integration, so
+# these NEVER fall back to another region. The default (Oman) region also inherits
+# the global PAYMOB_SECRET_KEY / PAYMOB_PUBLIC_KEY / PAYMOB_APPLE_PAY_INTEGRATION_ID
+# above for backward compatibility.
+PAYMOB_SECRET_KEY_OM = os.getenv("PAYMOB_SECRET_KEY_OM", "")
+PAYMOB_PUBLIC_KEY_OM = os.getenv("PAYMOB_PUBLIC_KEY_OM", "")
+PAYMOB_APPLE_PAY_INTEGRATION_ID_OM = os.getenv("PAYMOB_APPLE_PAY_INTEGRATION_ID_OM", "")
+
+PAYMOB_SECRET_KEY_SA = os.getenv("PAYMOB_SECRET_KEY_SA", "")
+PAYMOB_PUBLIC_KEY_SA = os.getenv("PAYMOB_PUBLIC_KEY_SA", "")
+PAYMOB_APPLE_PAY_INTEGRATION_ID_SA = os.getenv("PAYMOB_APPLE_PAY_INTEGRATION_ID_SA", "")
+
+PAYMOB_SECRET_KEY_AE = os.getenv("PAYMOB_SECRET_KEY_AE", "")
+PAYMOB_PUBLIC_KEY_AE = os.getenv("PAYMOB_PUBLIC_KEY_AE", "")
+PAYMOB_APPLE_PAY_INTEGRATION_ID_AE = os.getenv("PAYMOB_APPLE_PAY_INTEGRATION_ID_AE", "")
+
 # Shared-account mode: the merchant has a single Paymob integration (Oman / OMR)
 # and wants every region (OM/SA/AE) to charge through it. When enabled, any region
 # without its own Paymob integration credentials borrows the global Oman ones, and

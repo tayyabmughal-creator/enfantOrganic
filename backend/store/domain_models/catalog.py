@@ -492,6 +492,13 @@ class PaymobRegionConfig(models.Model):
     hmac_secret    = models.CharField(max_length=200, blank=True, default="")
     base_url       = models.CharField(max_length=200, blank=True, default="")
     currency       = models.CharField(max_length=5,   blank=True, default="")
+    # Unified Checkout (Intention API) keys are per Paymob account. When a region
+    # runs its OWN Paymob account (e.g. a dedicated UAE account on uae.paymob.com),
+    # its secret/public keys and Apple Pay integration differ from the default
+    # (Oman) account, so they are stored per region and never cross accounts.
+    secret_key     = models.CharField(max_length=500, blank=True, default="")
+    public_key     = models.CharField(max_length=200, blank=True, default="")
+    apple_pay_integration_id = models.CharField(max_length=20, blank=True, default="")
 
     class Meta:
         verbose_name = "Paymob region config"

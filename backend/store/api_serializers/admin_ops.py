@@ -1209,13 +1209,18 @@ class AdminPaymobRegionConfigSerializer(serializers.ModelSerializer):
     region_label    = serializers.CharField(source="get_region_code_display", read_only=True)
     api_key_set     = serializers.SerializerMethodField(read_only=True)
     hmac_secret_set = serializers.SerializerMethodField(read_only=True)
+    secret_key_set  = serializers.SerializerMethodField(read_only=True)
+    public_key_set  = serializers.SerializerMethodField(read_only=True)
     # Secrets accepted on write, never echoed back.
     api_key     = serializers.CharField(write_only=True, required=False, allow_blank=True, default="")
     hmac_secret = serializers.CharField(write_only=True, required=False, allow_blank=True, default="")
+    secret_key  = serializers.CharField(write_only=True, required=False, allow_blank=True, default="")
+    public_key  = serializers.CharField(write_only=True, required=False, allow_blank=True, default="")
 
     # Credential fields whose blank values must NOT overwrite stored/env config.
     _BLANK_PRESERVING_FIELDS = (
         "api_key", "integration_id", "iframe_id", "hmac_secret", "base_url", "currency",
+        "secret_key", "public_key", "apple_pay_integration_id",
     )
 
     class Meta:
@@ -1226,12 +1231,17 @@ class AdminPaymobRegionConfigSerializer(serializers.ModelSerializer):
             "enabled",
             "integration_id",
             "iframe_id",
+            "apple_pay_integration_id",
             "base_url",
             "currency",
             "api_key",
             "hmac_secret",
+            "secret_key",
+            "public_key",
             "api_key_set",
             "hmac_secret_set",
+            "secret_key_set",
+            "public_key_set",
         )
 
     def get_api_key_set(self, obj):
@@ -1239,6 +1249,12 @@ class AdminPaymobRegionConfigSerializer(serializers.ModelSerializer):
 
     def get_hmac_secret_set(self, obj):
         return bool((obj.hmac_secret or "").strip())
+
+    def get_secret_key_set(self, obj):
+        return bool((obj.secret_key or "").strip())
+
+    def get_public_key_set(self, obj):
+        return bool((obj.public_key or "").strip())
 
     def _strip_blank_credentials(self, validated_data):
         """Drop blank credential fields so they don't overwrite existing values."""

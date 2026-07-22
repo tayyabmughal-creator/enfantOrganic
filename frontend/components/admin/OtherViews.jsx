@@ -2140,10 +2140,13 @@ const PAYMOB_REGIONS_META = [
 
 const PAYMOB_FIELDS = [
   { key: "api_key",        label: "API Key",        type: "password", secret: true,  hint: "Paymob Dashboard → Settings → Account Info → API Key" },
-  { key: "integration_id", label: "Integration ID", type: "text",                    hint: "Paymob → Developers → Payment Integrations — the numeric ID for this region" },
+  { key: "integration_id", label: "Integration ID (Card)", type: "text",             hint: "Paymob → Developers → Payment Integrations — the numeric MIGS-online card ID for this region" },
+  { key: "apple_pay_integration_id", label: "Apple Pay Integration ID", type: "text", hint: "Paymob → Developers → Payment Integrations — the numeric MIGS-online (APPLE PAY) ID. Leave blank if Apple Pay is not enabled." },
   { key: "iframe_id",      label: "iFrame ID",      type: "text",                    hint: "Paymob → Developers → iFrames — the numeric ID" },
   { key: "hmac_secret",    label: "HMAC Secret",    type: "password", secret: true,  hint: "Paymob → Settings → Account Info → HMAC — used to verify callbacks" },
-  { key: "base_url",       label: "API Base URL",   type: "text",                    hint: "Leave blank to use the default https://accept.paymob.com/api" },
+  { key: "secret_key",     label: "Secret Key (Unified Checkout)", type: "password", secret: true, hint: "Paymob → Settings → API keys → Secret key (xxx_sk_live_…). Required for MIGS integrations via Unified Checkout." },
+  { key: "public_key",     label: "Public Key (Unified Checkout)", type: "password", secret: true, hint: "Paymob → Settings → API keys → Public key (xxx_pk_live_…). Required alongside the Secret Key." },
+  { key: "base_url",       label: "API Base URL",   type: "text",                    hint: "Per-account host, e.g. https://oman.paymob.com/api or https://uae.paymob.com/api" },
   { key: "currency",       label: "Currency",       type: "text",                    hint: "Currency code for this region (e.g. OMR / SAR / AED)" },
 ];
 
@@ -2169,11 +2172,14 @@ function PaymobRegionCard({ region, canEdit, request, onSaved }) {
     setDraft({
       enabled: region.enabled !== false,
       integration_id: region.integration_id || "",
+      apple_pay_integration_id: region.apple_pay_integration_id || "",
       iframe_id: region.iframe_id || "",
       base_url: region.base_url || "",
       currency: region.currency || "",
       api_key: "",       // secrets are never prefilled
       hmac_secret: "",
+      secret_key: "",
+      public_key: "",
     });
     setOpen(true);
   }
@@ -2208,7 +2214,7 @@ function PaymobRegionCard({ region, canEdit, request, onSaved }) {
           <strong>Paymob · {meta.name || region.region_label}</strong>
           <span>Currency {region.resolved?.currency || meta.currency}. Requires a Paymob integration for this region.</span>
           <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
-            {["api_key", "integration_id", "iframe_id", "hmac_secret"].map((k) => (
+            {["api_key", "integration_id", "iframe_id", "hmac_secret", "secret_key", "public_key"].map((k) => (
               <span key={k} style={{ fontSize: "0.66rem", background: "var(--admin-surface-raised, #f3f4f6)", color: resolved[`has_${k === "api_key" ? "api_key" : k}`] ? "#13803a" : "var(--admin-muted)", padding: "1px 6px", borderRadius: 3, fontWeight: 600 }}>
                 {resolved[`has_${k}`] ? "✓" : "—"} {k.replace(/_/g, " ")}
               </span>
@@ -2228,7 +2234,11 @@ function PaymobRegionCard({ region, canEdit, request, onSaved }) {
             <label htmlFor={`paymob-enabled-${region.region_code}`} style={{ margin: 0 }}>Enabled for this region</label>
           </div>
           {PAYMOB_FIELDS.map((f) => {
-            const isSet = f.key === "api_key" ? region.api_key_set : f.key === "hmac_secret" ? region.hmac_secret_set : false;
+            const isSet = f.key === "api_key" ? region.api_key_set
+              : f.key === "hmac_secret" ? region.hmac_secret_set
+              : f.key === "secret_key" ? region.secret_key_set
+              : f.key === "public_key" ? region.public_key_set
+              : false;
             return (
               <div key={f.key} className="admin-iv-field">
                 <label>{f.label}{f.secret && isSet ? " (saved — leave blank to keep)" : ""}</label>
