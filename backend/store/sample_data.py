@@ -142,10 +142,10 @@ REGIONS = [
         "seller_phone": "+968 7760 1158",
         "seller_email": "sales@enfant-me.com",
         "require_map_pin": True,
-        # TEMP: Paymob disabled for UAE — COD only until UAE creds are live.
-        "payment_enabled_providers": [],
+        # UAE Paymob account is live (uae.paymob.com, dedicated AED integrations).
+        "payment_enabled_providers": ["paymob"],
         "default_payment_provider": "paymob",
-        "payment_mode": "sandbox",
+        "payment_mode": "live",
         "payment_supported_methods": {
             "cards": ["visa", "mastercard"],
             "wallets": ["apple_pay"],
