@@ -14,6 +14,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from ..models import Order, PaymentTransaction
+from ..services.abandoned_carts import recover_carts_for_order
 from ..services.invoice import ensure_paid_order_invoice
 from ..services.gift_cards import (
     GiftCardRedemptionError,
@@ -138,6 +139,14 @@ def _apply_webhook_update(provider_key, request, *, ignore_missing_order=False):
 
     if payment_changed:
         order.save(update_fields=["payment_status", "updated_at"])
+    if order.payment_status == Order.PAYMENT_PAID:
+        # The online order is now paid → clear its abandoned cart. At order
+        # creation the cart was intentionally left "abandoned" (unpaid online), so
+        # this is where a genuine online conversion recovers it.
+        try:
+            recover_carts_for_order(order)
+        except Exception:
+            logger.exception("Abandoned-cart recovery failed after paid webhook for order %s", merchant_order_id)
     if tx_status == PaymentTransaction.STATUS_PAID and order.payment_method == Order.PAYMENT_ONLINE:
         try:
             commit_reserved_inventory_for_order(order)

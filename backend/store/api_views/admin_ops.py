@@ -4134,20 +4134,31 @@ class AdminAbandonedCartListView(generics.ListAPIView):
         ghost_qs = AbandonedCart.objects.filter(
             status__in=[AbandonedCart.STATUS_ABANDONED, AbandonedCart.STATUS_CONTACTED]
         )
+        # A cart is only "recovered" by an order that actually CONVERTED: a paid
+        # order, or an offline method (COD / WhatsApp / bank transfer). An online
+        # order that is still unpaid (customer dropped off on the hosted payment
+        # page) must NOT clear the cart — that is the abandoned checkout we want to
+        # keep showing.
+        converted_order = Q(payment_status=Order.PAYMENT_PAID) | ~Q(
+            payment_method=Order.PAYMENT_ONLINE
+        )
         session_recovered = Exists(
             Order.objects.filter(
+                converted_order,
                 conversion_session_key=OuterRef("session_token"),
                 created_at__gte=OuterRef("abandoned_at"),
             )
         )
         email_recovered = Exists(
             Order.objects.filter(
+                converted_order,
                 customer_email=OuterRef("customer_email"),
                 created_at__gte=OuterRef("abandoned_at"),
             )
         )
         phone_recovered = Exists(
             Order.objects.filter(
+                converted_order,
                 customer_phone=OuterRef("customer_phone"),
                 created_at__gte=OuterRef("abandoned_at"),
             )
@@ -4404,7 +4415,13 @@ class AbandonedCartCreateView(APIView):
                 order_q |= Q(customer_email=customer_email, created_at__gte=cart.abandoned_at)
             if customer_phone:
                 order_q |= Q(customer_phone=customer_phone, created_at__gte=cart.abandoned_at)
-            already_ordered = Order.objects.filter(order_q).exists()
+            # Only a converted order (paid, or an offline COD / WhatsApp / bank
+            # transfer) recovers the cart. An unpaid online order still sitting at
+            # the hosted payment page must not flip the cart to recovered.
+            converted_order = Q(payment_status=Order.PAYMENT_PAID) | ~Q(
+                payment_method=Order.PAYMENT_ONLINE
+            )
+            already_ordered = Order.objects.filter(order_q).filter(converted_order).exists()
             new_status = (
                 AbandonedCart.STATUS_RECOVERED if already_ordered else AbandonedCart.STATUS_ABANDONED
             )

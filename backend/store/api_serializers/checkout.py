@@ -29,6 +29,7 @@ from ..models import (
     TaxRate,
 )
 from ..services import carrier_router
+from ..services.abandoned_carts import recover_carts_for_order
 from ..services.costing import resolve_order_item_cost
 from ..services.stock import StockError, ensure_region_stock_available, reserve_and_deduct_stock_for_item
 from .catalog import active_product_variants
@@ -1075,24 +1076,14 @@ class CheckoutCreateSerializer(serializers.Serializer):
             coupon.used_count += 1
             coupon.save(update_fields=["used_count"])
 
-        # Mark ALL matching abandoned carts as recovered so no ghost entries remain.
-        # 1. Match by session_token (exact session).
-        # 2. Always also match by email/phone — same customer may have abandoned on a
-        #    different device/session and that cart must also be cleared.
-        _recover_qs = AbandonedCart.objects.filter(
-            status__in=[AbandonedCart.STATUS_ABANDONED, AbandonedCart.STATUS_CONTACTED]
-        )
-        _recover_now = {"status": AbandonedCart.STATUS_RECOVERED, "recovered_at": timezone.now()}
-        if conversion_session_key:
-            _recover_qs.filter(session_token=conversion_session_key).update(**_recover_now)
-        # Always run email/phone recovery too — catches carts from other sessions/devices
-        _q = Q()
-        if order.customer_email:
-            _q |= Q(customer_email=order.customer_email)
-        if order.customer_phone:
-            _q |= Q(customer_phone=order.customer_phone)
-        if _q:
-            _recover_qs.filter(_q).update(**_recover_now)
+        # Clear matching abandoned carts — but ONLY for a genuinely converted order.
+        # An online order created here is still UNPAID: the customer is about to be
+        # redirected to the hosted payment page. Recovering the cart now would make
+        # anyone who abandons on that payment page instantly vanish from the
+        # abandoned list (the exact Shopify gap we are closing). recover_carts_for_order
+        # recovers only paid orders or offline methods (COD / WhatsApp / bank
+        # transfer); unpaid online orders are recovered later by the payment webhook.
+        recover_carts_for_order(order)
 
         if gift_card:
             if order.payment_method == Order.PAYMENT_ONLINE:

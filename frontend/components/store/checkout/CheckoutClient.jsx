@@ -320,7 +320,14 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
   const hasAutoAddressPrefillRef = useRef(false);
   const lastBeginCheckoutSignatureRef = useRef("");
   const lastPixelCheckoutSignatureRef = useRef("");
-  const abandonedCartSentRef = useRef(false);
+  // Abandoned-cart capture is progressive: it records the cart as soon as the
+  // checkout loads with items (contact optional), then enriches the same row as
+  // the customer types. `suppress` freezes capture once the customer submits an
+  // order (so the redirect to the payment page can't refresh abandoned_at to a
+  // time AFTER the order and create a ghost). `lastPayload` de-dupes identical
+  // re-sends (repeated tab toggles).
+  const abandonedCartSuppressRef = useRef(false);
+  const abandonedCartLastPayloadRef = useRef("");
 
   const [form, setForm] = useState({
     name: "",
@@ -721,25 +728,26 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     };
   }, [form.email, form.phone, form.name, cartItems, subtotal, regionCurrency, cartCurrency, region, locale]);
 
-  // Fire the abandoned-cart capture exactly once, reading the latest snapshot.
-  // keepalive:true lets the POST complete even if it is triggered while the page
-  // is reloading / closing / navigating away (a plain fetch would be aborted).
-  const flushAbandonedCart = useCallback(() => {
-    if (abandonedCartSentRef.current) return;
+  // Capture the abandoned cart from the latest snapshot. Contact info is OPTIONAL
+  // (Shopify-style): every checkout visit that has items is recorded, keyed by the
+  // persistent localStorage session_token, so the SAME row is upserted/enriched as
+  // the customer fills in email/phone. keepalive:true lets the POST complete even
+  // when triggered while the page is reloading / closing / navigating away.
+  const flushAbandonedCart = useCallback((opts = {}) => {
+    if (abandonedCartSuppressRef.current) return;
     const snap = abandonedCartSnapRef.current || {};
+    const items = snap.items || [];
+    // No items yet → nothing worth recording (avoids empty ghost rows).
+    if (!items.length) return;
     const email = (snap.email || "").trim();
     const phone = (snap.phone || "").trim();
-    const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-    const validPhone = phone.replace(/\D/g, "").length >= 8;
-    if (!validEmail && !validPhone) return;
-    abandonedCartSentRef.current = true;
     const url = `${API_BASE_URL}/abandoned-carts/`;
     const body = JSON.stringify({
       session_token: getOrCreateSessionKey() || `anon-${Date.now()}`,
       customer_email: email,
       customer_name: snap.name || "",
       customer_phone: phone,
-      cart_items: (snap.items || []).map((item) => ({
+      cart_items: items.map((item) => ({
         product_slug: item.slug || "",
         product_name: item.name || "",
         quantity: item.quantity || 1,
@@ -751,6 +759,10 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
       region: snap.region || "om",
       locale: snap.locale || "en",
     });
+    // Skip redundant identical re-sends (e.g. repeated tab toggles). `force` on
+    // leave/submit always sends the latest.
+    if (!opts.force && body === abandonedCartLastPayloadRef.current) return;
+    abandonedCartLastPayloadRef.current = body;
     const beacon = () => {
       try { navigator.sendBeacon?.(url, new Blob([body], { type: "application/json" })); } catch { /* ignore */ }
     };
@@ -766,22 +778,24 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     }
   }, []);
 
-  // Debounced capture: fires ~0.8 s after the user stops typing email OR phone.
+  // Debounced capture: fires ~0.8 s after the cart/contact snapshot changes. This
+  // records the cart on checkout mount (items present, no contact needed) and
+  // re-sends an enriched row as the customer types email/phone/name.
   useEffect(() => {
-    if (abandonedCartSentRef.current) return;
-    if (!form.email && !form.phone) return;
+    if (abandonedCartSuppressRef.current) return;
+    if (!cartItems.length) return;
     if (abandonedCartTimerRef.current) clearTimeout(abandonedCartTimerRef.current);
-    abandonedCartTimerRef.current = setTimeout(flushAbandonedCart, 800);
+    abandonedCartTimerRef.current = setTimeout(() => flushAbandonedCart(), 800);
     return () => { if (abandonedCartTimerRef.current) clearTimeout(abandonedCartTimerRef.current); };
-  }, [form.email, form.phone, flushAbandonedCart]);
+  }, [form.email, form.phone, form.name, cartItems, subtotal, flushAbandonedCart]);
 
-  // Safety net (Shopify-like): if the customer enters contact info then reloads,
-  // closes the tab, or navigates away before the debounce fires, capture on the
-  // way out. pagehide + visibilitychange:hidden are the reliable "leaving"
-  // signals; flushAbandonedCart's keepalive POST survives the unload.
+  // Safety net (Shopify-like): if the customer reloads, closes the tab, or
+  // navigates away before the debounce fires, capture on the way out — even with
+  // no contact info yet. pagehide + visibilitychange:hidden are the reliable
+  // "leaving" signals; flushAbandonedCart's keepalive POST survives the unload.
   useEffect(() => {
-    const onVisibility = () => { if (document.visibilityState === "hidden") flushAbandonedCart(); };
-    const onPageHide = () => flushAbandonedCart();
+    const onVisibility = () => { if (document.visibilityState === "hidden") flushAbandonedCart({ force: true }); };
+    const onPageHide = () => flushAbandonedCart({ force: true });
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pagehide", onPageHide);
     return () => {
@@ -1291,10 +1305,16 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
       return;
     }
     setSubmitting(true);
-    // Cancel abandoned-cart timer immediately — the customer is submitting an order.
-    // Prevents a race where the 1-second debounce fires during payment processing
-    // and creates a ghost "abandoned" record that can never be recovered.
-    abandonedCartSentRef.current = true;
+    // Capture the cart ONE last time before creating the order / redirecting to the
+    // hosted payment page, then FREEZE further captures. This records the cart just
+    // before the order (so order.created_at >= cart.abandoned_at). If the customer
+    // then abandons on the payment page the cart stays "abandoned" and remains
+    // visible; once the order is PAID the backend reconciliation flips it to
+    // "recovered". Freezing prevents the pagehide-on-redirect from refreshing
+    // abandoned_at to a time AFTER the order, which would create an unrecoverable
+    // ghost.
+    flushAbandonedCart({ force: true });
+    abandonedCartSuppressRef.current = true;
     if (abandonedCartTimerRef.current) clearTimeout(abandonedCartTimerRef.current);
     try {
       const pricingIsValid = await validateCouponCode();
