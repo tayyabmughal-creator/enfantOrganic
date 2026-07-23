@@ -345,6 +345,13 @@ PAYMOB_APPLE_PAY_IFRAME_ID = os.getenv("PAYMOB_APPLE_PAY_IFRAME_ID", "")
 PAYMOB_SECRET_KEY = os.getenv("PAYMOB_SECRET_KEY", "")
 PAYMOB_PUBLIC_KEY = os.getenv("PAYMOB_PUBLIC_KEY", "")
 PAYMOB_USE_UNIFIED_CHECKOUT = os.getenv("PAYMOB_USE_UNIFIED_CHECKOUT", "1")
+# Regions forced onto the legacy Accept/iframe flow even when Unified Checkout is
+# globally on. Use for a Paymob account whose integrations are NOT registered for
+# the Intention API (e.g. UAE MID 79577: integrations 118534/118806 work via the
+# legacy Accept API + iframe 43861 but the Intention API returns "Integration ID
+# does not exist"). Comma-separated region codes. Remove "ae" once Paymob enables
+# those integrations for Unified Checkout.
+PAYMOB_LEGACY_REGIONS = os.getenv("PAYMOB_LEGACY_REGIONS", "ae")
 # Public site base URL used to build Paymob notification/redirection callbacks.
 PAYMOB_PUBLIC_BASE_URL = (
     os.getenv("PAYMOB_PUBLIC_BASE_URL")

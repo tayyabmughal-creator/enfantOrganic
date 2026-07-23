@@ -234,11 +234,25 @@ def build_billing_data(order) -> dict:
     }
 
 
+def _paymob_legacy_regions() -> set:
+    """Region codes pinned to the legacy Accept/iframe flow (see settings)."""
+    raw = str(getattr(dj_settings, "PAYMOB_LEGACY_REGIONS", "") or "")
+    return {r.strip().lower() for r in raw.split(",") if r.strip()}
+
+
+def _region_forced_legacy(cfg) -> bool:
+    region_code = str(cfg.get("region_code") or "").strip().lower()
+    return bool(region_code) and region_code in _paymob_legacy_regions()
+
+
 def _unified_checkout_enabled(cfg) -> bool:
     """True when Unified Checkout is switched on AND the account-level secret +
     public keys are present. Used to route the flow to Paymob's hosted Unified
     Checkout (redirect) for hosted/MIGS integrations that don't support the
-    legacy embeddable iframe."""
+    legacy embeddable iframe. A region listed in PAYMOB_LEGACY_REGIONS is always
+    forced to legacy (its integrations are not registered for the Intention API)."""
+    if _region_forced_legacy(cfg):
+        return False
     flag = str(getattr(dj_settings, "PAYMOB_USE_UNIFIED_CHECKOUT", "") or "").strip().lower() in {
         "1", "true", "yes", "on",
     }
@@ -390,14 +404,20 @@ def initiate_apple_pay_payment(order) -> dict:
     if _unified_checkout_enabled(cfg):
         # Unified Checkout presents Apple Pay (and card) on its hosted page.
         return initiate_unified_checkout(order, cfg, region_code)
+    # Legacy Apple Pay needs a per-account Apple Pay iframe, but apple_pay_iframe_id
+    # resolves account-global. For a region pinned to legacy (e.g. UAE, whose
+    # integrations aren't registered for the Intention API and which has no valid
+    # per-region Apple Pay iframe), fall back to the standard legacy card iframe so
+    # an Apple Pay tap degrades gracefully to card instead of erroring.
+    if _region_forced_legacy(cfg):
+        return initiate_payment(order)
     apple_pay_integration_id = cfg["apple_pay_integration_id"]
     apple_pay_iframe_id = cfg["apple_pay_iframe_id"]
 
     if not apple_pay_integration_id or not apple_pay_iframe_id:
-        raise PaymobError(
-            "Paymob Apple Pay is not configured. "
-            "Set PAYMOB_APPLE_PAY_INTEGRATION_ID and PAYMOB_APPLE_PAY_IFRAME_ID."
-        )
+        # Honor the documented fallback: use the standard card flow when Apple Pay
+        # IDs are not configured for this region.
+        return initiate_payment(order)
 
     missing = [
         label for key, label in [
