@@ -857,6 +857,9 @@ class NotificationLog(models.Model):
     EVENT_PAYMENT_REVIEW = "payment_review"
     EVENT_LOW_STOCK = "low_stock"
     EVENT_SHIPMENT_UPDATE = "shipment_update"
+    # Staff-facing alert; kept separate from EVENT_ORDER_CREATED so the customer
+    # confirmation and the owner alert never collide in queries or dedup checks.
+    EVENT_ADMIN_NEW_ORDER = "admin_new_order"
 
     EVENT_CHOICES = (
         (EVENT_ORDER_CREATED, "Order created"),
@@ -870,6 +873,7 @@ class NotificationLog(models.Model):
         (EVENT_PAYMENT_REVIEW, "Payment review needed"),
         (EVENT_LOW_STOCK, "Low stock alert"),
         (EVENT_SHIPMENT_UPDATE, "Shipment update"),
+        (EVENT_ADMIN_NEW_ORDER, "New order (staff alert)"),
     )
 
     channel = models.CharField(max_length=20, choices=CHANNEL_CHOICES, default=CHANNEL_SYSTEM)

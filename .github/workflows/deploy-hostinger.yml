@@ -121,6 +121,8 @@ jobs:
             EMAIL_HOST_USER=${{ secrets.EMAIL_HOST_USER }}
             EMAIL_HOST_PASSWORD=${{ secrets.EMAIL_HOST_PASSWORD }}
             EMAIL_USE_TLS=${{ secrets.EMAIL_USE_TLS || 'True' }}
+            EMAIL_REQUIRE_SMTP=${{ secrets.EMAIL_REQUIRE_SMTP || '0' }}
+            ADMIN_ORDER_EMAIL=${{ secrets.ADMIN_ORDER_EMAIL }}
             PAYMOB_API_KEY=${{ secrets.PAYMOB_API_KEY }}
             PAYMOB_INTEGRATION_ID=${{ secrets.PAYMOB_INTEGRATION_ID }}
             PAYMOB_IFRAME_ID=${{ secrets.PAYMOB_IFRAME_ID }}
@@ -307,6 +309,8 @@ jobs:
             EMAIL_HOST_USER=${{ secrets.EMAIL_HOST_USER }}
             EMAIL_HOST_PASSWORD=${{ secrets.EMAIL_HOST_PASSWORD }}
             EMAIL_USE_TLS=${{ secrets.EMAIL_USE_TLS || 'True' }}
+            EMAIL_REQUIRE_SMTP=${{ secrets.EMAIL_REQUIRE_SMTP || '0' }}
+            ADMIN_ORDER_EMAIL=${{ secrets.ADMIN_ORDER_EMAIL }}
             PAYMOB_API_KEY=${{ secrets.PAYMOB_API_KEY }}
             PAYMOB_INTEGRATION_ID=${{ secrets.PAYMOB_INTEGRATION_ID }}
             PAYMOB_IFRAME_ID=${{ secrets.PAYMOB_IFRAME_ID }}

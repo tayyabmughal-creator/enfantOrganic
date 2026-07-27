@@ -7,7 +7,7 @@ from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 from django.utils import timezone
 
-from .models import Order
+from .models import Order, SiteSettings
 from .services.invoice import ensure_paid_order_invoice, generate_order_invoice
 
 logger = logging.getLogger(__name__)
@@ -113,6 +113,17 @@ def _tracking_url(order, locale):
     )
 
 
+def _support_email():
+    """Monitored inbox customers can actually reach.
+
+    DEFAULT_FROM_EMAIL is a send-only address on a domain with no mailbox, so
+    replies to it bounce; SiteSettings.contact_email is the real inbox.
+    """
+    site_settings = SiteSettings.objects.only("contact_email").first()
+    contact_email = str(getattr(site_settings, "contact_email", "") or "").strip()
+    return contact_email or str(getattr(settings, "DEFAULT_FROM_EMAIL", "") or "").strip()
+
+
 def _render_context(order, locale, template_key, extra_context=None):
     tax_label = order.tax_label or "VAT"
     status_label = Order.get_status_label(order.status, locale=locale)
@@ -126,7 +137,7 @@ def _render_context(order, locale, template_key, extra_context=None):
         "items": _order_items(order),
         "tax_label": tax_label,
         "site_name": "Enfant Organics",
-        "support_email": getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@enfantorganics.com"),
+        "support_email": _support_email(),
         "current_year": timezone.now().year,
         "tracking_url": _tracking_url(order, locale),
     }
@@ -177,11 +188,13 @@ def send_transactional_order_email(order, template_key, *, extra_context=None, a
         text_body = strip_tags(html_body)
     subject = _subject_for(template_key, locale, order)
 
+    support_email = context.get("support_email", "")
     email = EmailMultiAlternatives(
         subject=subject,
         body=text_body,
         from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@enfantorganics.com"),
         to=[order.customer_email],
+        reply_to=[support_email] if support_email else None,
     )
     email.attach_alternative(html_body, "text/html")
 
@@ -208,6 +221,73 @@ def send_payment_paid_email(order):
         TEMPLATE_PAYMENT_PAID,
         attach_invoice=True,
     )
+
+
+def _whatsapp_click_to_chat_url(order):
+    """wa.me link so staff can reply to the customer in one click.
+
+    Every order carries a phone number (email is optional), so this is the most
+    reliable way to reach the customer from the alert itself.
+    """
+    digits = "".join(ch for ch in str(order.customer_phone or "") if ch.isdigit())
+    if not digits:
+        return ""
+    return f"https://wa.me/{digits}"
+
+
+def _shipping_address_text(order):
+    parts = [
+        order.address_line_1,
+        order.address_line_2,
+        order.building,
+        order.apartment,
+        order.area,
+        order.city,
+        order.postcode,
+        order.country,
+    ]
+    return "\n".join(str(part).strip() for part in parts if str(part or "").strip())
+
+
+def send_admin_new_order_email(order, recipient):
+    """Alert the store owner/staff inbox that a new order landed.
+
+    Always English — this goes to staff, not the customer, so it deliberately
+    ignores the order locale.
+    """
+    recipient = str(recipient or "").strip()
+    if not recipient:
+        return False
+
+    context = _render_context(order, "en", "admin_new_order")
+    context.update(
+        {
+            "region_label": getattr(order.region, "name_en", "") or getattr(order.region, "code", "") or "—",
+            "whatsapp_url": _whatsapp_click_to_chat_url(order),
+            "shipping_address": _shipping_address_text(order),
+            "admin_url": f"{getattr(settings, 'FRONTEND_PUBLIC_URL', '').rstrip('/')}/admin",
+        }
+    )
+
+    html_body = render_to_string("emails/en/admin_new_order.html", context)
+    subject = (
+        f"New order {order.order_number} — {order.grand_total} {order.currency_code} "
+        f"({order.customer_name})"
+    )
+
+    email = EmailMultiAlternatives(
+        subject=subject,
+        body=strip_tags(html_body),
+        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@enfantorganics.com"),
+        to=[recipient],
+        reply_to=[order.customer_email] if order.customer_email else None,
+    )
+    email.attach_alternative(html_body, "text/html")
+
+    sent_count = email.send(fail_silently=False)
+    if not sent_count:
+        logger.warning("Admin new-order email not sent for order %s", order.order_number)
+    return bool(sent_count)
 
 
 def send_order_status_update_email(order):

@@ -15,12 +15,13 @@ from .emails import (
     TEMPLATE_REFUND_PROCESSED,
     TEMPLATE_REVIEW_REQUEST,
     TEMPLATE_RETURN_REQUESTED,
+    send_admin_new_order_email,
     send_order_confirmation_email,
     send_order_status_update_email,
     send_payment_paid_email,
     send_transactional_order_email,
 )
-from .models import NotificationLog, Order, PushDevice, WhatsAppLog
+from .models import NotificationLog, Order, PushDevice, SiteSettings, WhatsAppLog
 from .services.inventory_health import get_inventory_admin_email, inventory_health_summary
 from .services.sms_router import send_sms
 from .services.sms_templates import render_sms_template
@@ -588,6 +589,80 @@ def _dispatch_customer_whatsapp_event(order, event, *, extra_payload=None):
     )
 
 
+def _admin_order_recipient():
+    """Inbox that receives new-order alerts.
+
+    ADMIN_ORDER_EMAIL wins so ops can be routed without a DB change; otherwise
+    fall back to the admin-editable SiteSettings.contact_email.
+
+    Deliberately does NOT fall back to DEFAULT_FROM_EMAIL: the sending domain has
+    no mailbox, so that would bounce the alert into a black hole instead of
+    surfacing the misconfiguration.
+    """
+    site_settings = SiteSettings.objects.only("contact_email").first()
+    candidates = (
+        getattr(settings, "ADMIN_ORDER_EMAIL", ""),
+        getattr(settings, "ADMIN_EMAIL", ""),
+        getattr(site_settings, "contact_email", "") if site_settings else "",
+    )
+    for candidate in candidates:
+        recipient = str(candidate or "").strip()
+        if recipient:
+            return recipient
+    return ""
+
+
+def _dispatch_admin_order_email(order, event):
+    recipient = _admin_order_recipient()
+    if not recipient:
+        return _create_notification_log(
+            event=event,
+            channel=NotificationLog.CHANNEL_EMAIL,
+            recipient="admin",
+            order=order,
+            provider="smtp",
+            title=f"admin_alert {event} - {order.order_number}",
+            body=_event_log_body(event, order),
+            payload={"event": event, "audience": "admin"},
+            status=NotificationLog.STATUS_SKIPPED,
+            error_message="No admin order email configured (ADMIN_ORDER_EMAIL / SiteSettings.contact_email).",
+        )
+
+    if _notification_exists(event, NotificationLog.CHANNEL_EMAIL, recipient, order=order):
+        return None
+
+    payload = {
+        "event": event,
+        "audience": "admin",
+        "order_number": order.order_number,
+        "customer_name": order.customer_name,
+        "currency_code": order.currency_code,
+        "total_amount": str(order.grand_total),
+    }
+
+    try:
+        sent = bool(send_admin_new_order_email(order, recipient))
+        status = NotificationLog.STATUS_SENT if sent else NotificationLog.STATUS_FAILED
+        error_message = "" if sent else "Email provider did not confirm delivery."
+    except Exception as exc:
+        logger.exception("Admin new-order email failed for order=%s", order.order_number)
+        status = NotificationLog.STATUS_FAILED
+        error_message = str(exc)
+
+    return _create_notification_log(
+        event=event,
+        channel=NotificationLog.CHANNEL_EMAIL,
+        recipient=recipient,
+        order=order,
+        provider="smtp",
+        title=f"admin_alert {event} - {order.order_number}",
+        body=_event_log_body(event, order),
+        payload=payload,
+        status=status,
+        error_message=error_message,
+    )
+
+
 def _dispatch_admin_push(event, title, body, payload, *, order=None):
     recipient = "staff"
     if _notification_exists(event, NotificationLog.CHANNEL_PUSH, recipient, order=order):
@@ -682,6 +757,11 @@ def _dispatch_order_event(order_id, event, *, extra_payload=None):
         _dispatch_customer_sms_event(order, event, extra_payload=extra_payload)
     if event in WHATSAPP_EVENT_SET:
         _dispatch_customer_whatsapp_event(order, event, extra_payload=extra_payload)
+
+    # The owner must learn about a new order even when no staff push device is
+    # registered, so send an email alert alongside the push.
+    if event == NotificationLog.EVENT_ORDER_CREATED:
+        _dispatch_admin_order_email(order, NotificationLog.EVENT_ADMIN_NEW_ORDER)
 
     # Keep staff push awareness for core payment/order events.
     if event in {

@@ -277,6 +277,11 @@ EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True") == "True"
 
+# Store owner / operations inbox that receives the "new order" alert. Falls back
+# to SiteSettings.contact_email (admin-editable) when unset.
+ADMIN_ORDER_EMAIL = os.environ.get("ADMIN_ORDER_EMAIL", "").strip()
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", ADMIN_ORDER_EMAIL).strip()
+
 # In production a console/dummy/locmem backend means customer emails silently go
 # nowhere. Hard-fail only when EMAIL_REQUIRE_SMTP=1 (set it once real SMTP
 # credentials exist); until then boot with a loud warning so the storefront stays
