@@ -15,6 +15,7 @@ from .emails import (
     TEMPLATE_REFUND_PROCESSED,
     TEMPLATE_REVIEW_REQUEST,
     TEMPLATE_RETURN_REQUESTED,
+    _send_with_message_id,
     send_admin_new_order_email,
     send_order_confirmation_email,
     send_order_status_update_email,
@@ -106,10 +107,24 @@ def _get_notification_log(event, channel, recipient, *, order=None):
     return queryset.order_by("-created_at", "-id").first()
 
 
+# A log in any of these states has already been acted on, so re-dispatching it
+# would either duplicate a customer email or undo a deliberate skip.
+_ALREADY_HANDLED_STATUSES = NotificationLog.DISPATCHED_STATUSES | {
+    NotificationLog.STATUS_SKIPPED,
+    NotificationLog.STATUS_SKIPPED_NO_EMAIL,
+    NotificationLog.STATUS_SKIPPED_DRAFT_ORDER,
+}
+
+
 def _normalize_notification_status(status):
     allowed = {
         NotificationLog.STATUS_PENDING,
         NotificationLog.STATUS_SENT,
+        NotificationLog.STATUS_DELIVERED,
+        NotificationLog.STATUS_DEFERRED,
+        NotificationLog.STATUS_BOUNCED,
+        NotificationLog.STATUS_BLOCKED,
+        NotificationLog.STATUS_SPAM,
         NotificationLog.STATUS_FAILED,
         NotificationLog.STATUS_SKIPPED,
         NotificationLog.STATUS_SKIPPED_NO_EMAIL,
@@ -159,7 +174,7 @@ def _create_notification_log(
         title=resolved_title,
         body=resolved_body,
         payload=resolved_payload,
-        success=(status_key == NotificationLog.STATUS_SENT),
+        success=(status_key in NotificationLog.SUCCESS_STATUSES),
         error_message=str(error_message or ""),
     )
 
@@ -184,7 +199,7 @@ def _save_notification_log(
     update_fields = ["updated_at"]
     if status is not None:
         log.status = _normalize_notification_status(status)
-        log.success = log.status == NotificationLog.STATUS_SENT
+        log.success = log.status in NotificationLog.SUCCESS_STATUSES
         update_fields.extend(["status", "success"])
     if provider is not None:
         log.provider = provider
@@ -230,12 +245,7 @@ def _ensure_email_notification_log(order, event, *, status, payload=None):
         order=order,
     )
     if existing:
-        if existing.status in {
-            NotificationLog.STATUS_SENT,
-            NotificationLog.STATUS_SKIPPED,
-            NotificationLog.STATUS_SKIPPED_NO_EMAIL,
-            NotificationLog.STATUS_SKIPPED_DRAFT_ORDER,
-        } and status == NotificationLog.STATUS_PENDING:
+        if existing.status in _ALREADY_HANDLED_STATUSES and status == NotificationLog.STATUS_PENDING:
             return existing
         return _save_notification_log(
             existing,
@@ -258,17 +268,32 @@ def _ensure_email_notification_log(order, event, *, status, payload=None):
     )
 
 
+def _email_send_result(result):
+    """Normalise a send_* helper's return into (sent, error, status, message_id).
+
+    The helpers return the stamped Message-ID on success and "" on failure, but
+    tests patch them with plain booleans — so anything non-string is treated as
+    a bare success flag with no ID to correlate a webhook against.
+    """
+    message_id = result if isinstance(result, str) else ""
+    sent = bool(result)
+    return (
+        sent,
+        "" if sent else "Email provider did not confirm delivery.",
+        NotificationLog.STATUS_SENT if sent else NotificationLog.STATUS_FAILED,
+        message_id,
+    )
+
+
 def _send_customer_event_email(order, event):
     if not order.customer_email:
-        return False, "Customer email is not set.", NotificationLog.STATUS_SKIPPED_NO_EMAIL
+        return False, "Customer email is not set.", NotificationLog.STATUS_SKIPPED_NO_EMAIL, ""
 
     if event == NotificationLog.EVENT_ORDER_CREATED:
-        sent = bool(send_order_confirmation_email(order))
-        return sent, "" if sent else "Email provider did not confirm delivery.", NotificationLog.STATUS_SENT if sent else NotificationLog.STATUS_FAILED
+        return _email_send_result(send_order_confirmation_email(order))
 
     if event == NotificationLog.EVENT_PAYMENT_PAID:
-        sent = bool(send_payment_paid_email(order))
-        return sent, "" if sent else "Email provider did not confirm delivery.", NotificationLog.STATUS_SENT if sent else NotificationLog.STATUS_FAILED
+        return _email_send_result(send_payment_paid_email(order))
 
     if event in {
         NotificationLog.EVENT_ORDER_SHIPPED,
@@ -279,11 +304,9 @@ def _send_customer_event_email(order, event):
         NotificationLog.EVENT_RETURN_REQUESTED,
     }:
         template_key = EVENT_TEMPLATE_MAP.get(event)
-        sent = bool(send_transactional_order_email(order, template_key))
-        return sent, "" if sent else "Email provider did not confirm delivery.", NotificationLog.STATUS_SENT if sent else NotificationLog.STATUS_FAILED
+        return _email_send_result(send_transactional_order_email(order, template_key))
 
-    sent = bool(send_order_status_update_email(order))
-    return sent, "" if sent else "Email provider did not confirm delivery.", NotificationLog.STATUS_SENT if sent else NotificationLog.STATUS_FAILED
+    return _email_send_result(send_order_status_update_email(order))
 
 
 def _dispatch_customer_event(order, event, *, extra_payload=None):
@@ -305,16 +328,11 @@ def _dispatch_customer_event(order, event, *, extra_payload=None):
         status=NotificationLog.STATUS_PENDING,
         payload=payload,
     )
-    if log and log.status in {
-        NotificationLog.STATUS_SENT,
-        NotificationLog.STATUS_SKIPPED,
-        NotificationLog.STATUS_SKIPPED_NO_EMAIL,
-        NotificationLog.STATUS_SKIPPED_DRAFT_ORDER,
-    }:
+    if log and log.status in _ALREADY_HANDLED_STATUSES:
         return log
 
     try:
-        sent, send_error, send_status = _send_customer_event_email(order, event)
+        sent, send_error, send_status, message_id = _send_customer_event_email(order, event)
     except Exception as exc:
         logger.exception("Notification send failed for order=%s event=%s", order.order_number, event)
         attempt_count = (log.attempt_count if log else 0) + 1
@@ -344,6 +362,7 @@ def _dispatch_customer_event(order, event, *, extra_payload=None):
         log,
         status=resolved_status,
         provider="smtp",
+        provider_message_id=message_id,
         title=_event_log_title(event, order),
         body=_event_log_body(event, order),
         payload=payload,
@@ -640,10 +659,11 @@ def _dispatch_admin_order_email(order, event):
         "total_amount": str(order.grand_total),
     }
 
+    message_id = ""
     try:
-        sent = bool(send_admin_new_order_email(order, recipient))
-        status = NotificationLog.STATUS_SENT if sent else NotificationLog.STATUS_FAILED
-        error_message = "" if sent else "Email provider did not confirm delivery."
+        sent, error_message, status, message_id = _email_send_result(
+            send_admin_new_order_email(order, recipient)
+        )
     except Exception as exc:
         logger.exception("Admin new-order email failed for order=%s", order.order_number)
         status = NotificationLog.STATUS_FAILED
@@ -655,6 +675,7 @@ def _dispatch_admin_order_email(order, event):
         recipient=recipient,
         order=order,
         provider="smtp",
+        provider_message_id=message_id,
         title=f"admin_alert {event} - {order.order_number}",
         body=_event_log_body(event, order),
         payload=payload,
@@ -1002,13 +1023,15 @@ def send_admin_inventory_health_email():
         to=[recipient],
     )
     email.attach_alternative(html_body, "text/html")
-    sent = bool(email.send(fail_silently=False))
+    message_id = _send_with_message_id(email)
+    sent = bool(message_id)
 
     _create_notification_log(
         event=NotificationLog.EVENT_LOW_STOCK,
         channel=NotificationLog.CHANNEL_EMAIL,
         recipient=recipient,
         provider="smtp",
+        provider_message_id=message_id,
         title=subject,
         body=text_body,
         payload={

@@ -277,6 +277,11 @@ EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True") == "True"
 
+# Shared secret for the Brevo delivery-receipt webhook. Brevo does not sign its
+# webhooks, so this token (sent as ?token= or X-Brevo-Token) is the only thing
+# authenticating the caller. Unset means the endpoint refuses every request.
+BREVO_WEBHOOK_TOKEN = os.environ.get("BREVO_WEBHOOK_TOKEN", "").strip()
+
 # Store owner / operations inbox that receives the "new order" alert. Falls back
 # to SiteSettings.contact_email (admin-editable) when unset.
 ADMIN_ORDER_EMAIL = os.environ.get("ADMIN_ORDER_EMAIL", "").strip()

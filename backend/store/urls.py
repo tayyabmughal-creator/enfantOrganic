@@ -9,6 +9,7 @@ from .api_views.payments import (
     PaytabsWebhookView,
     ThawaniWebhookView,
 )
+from .api_views.brevo import BrevoWebhookView
 from .api_views.regions import RegionDetectView
 from .api_views.whatsapp import WhatsAppWebhookView
 from .api_views.storefront import BlogDetailView, BlogListView, CmsPageDetailView
@@ -152,6 +153,7 @@ urlpatterns = [
     path("notifications/devices/", PushDeviceRegisterView.as_view(), name="push-device-register"),
     path("notifications/devices/deactivate/", PushDeviceDeactivateView.as_view(), name="push-device-deactivate"),
     path("notifications/webhook/whatsapp/", WhatsAppWebhookView.as_view(), name="whatsapp-webhook"),
+    path("notifications/webhook/brevo/", BrevoWebhookView.as_view(), name="brevo-webhook"),
     path("admin/dashboard/", AdminDashboardView.as_view(), name="admin-dashboard"),
     path("admin/analytics/", AdminAnalyticsView.as_view(), name="admin-analytics"),
     path("admin/analytics/live-visitors/", AdminLiveVisitorsView.as_view(), name="admin-live-visitors"),

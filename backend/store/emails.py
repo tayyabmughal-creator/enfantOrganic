@@ -2,6 +2,7 @@ import logging
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
+from django.core.mail.message import make_msgid
 from django.template import TemplateDoesNotExist
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
@@ -173,9 +174,37 @@ def _attach_invoice_if_available(email, order):
         logger.exception("Failed to attach invoice PDF for order %s", order.order_number)
 
 
+def _message_id_domain():
+    """Right-hand side for generated Message-IDs — the sending domain.
+
+    Keeping it aligned with DEFAULT_FROM_EMAIL avoids handing receivers a
+    Message-ID whose domain has nothing to do with the envelope sender.
+    """
+    from_email = str(getattr(settings, "DEFAULT_FROM_EMAIL", "") or "")
+    _, _, domain = from_email.rpartition("@")
+    domain = domain.strip().rstrip(">").strip()
+    return domain or None
+
+
+def _send_with_message_id(email):
+    """Send and return the Message-ID we stamped, or "" when nothing was sent.
+
+    The ID must be fixed *before* send(): Django mints a fresh one inside
+    message() on every call, so reading it back afterwards would give us an ID
+    the provider never saw. Brevo echoes this exact value in its webhook events,
+    which is what lets a delivery receipt find its NotificationLog row later.
+    """
+    message_id = str(email.extra_headers.get("Message-ID") or "")
+    if not message_id:
+        message_id = make_msgid(domain=_message_id_domain())
+        email.extra_headers["Message-ID"] = message_id
+    return message_id if email.send(fail_silently=False) else ""
+
+
 def send_transactional_order_email(order, template_key, *, extra_context=None, attach_invoice=False):
+    """Returns the sent message's Message-ID (truthy) or "" — callers may bool() it."""
     if not order.customer_email:
-        return False
+        return ""
 
     locale = _locale(order)
     template_base = f"emails/{locale}/{template_key}"
@@ -201,10 +230,10 @@ def send_transactional_order_email(order, template_key, *, extra_context=None, a
     if attach_invoice:
         _attach_invoice_if_available(email, order)
 
-    sent_count = email.send(fail_silently=False)
-    if not sent_count:
+    message_id = _send_with_message_id(email)
+    if not message_id:
         logger.warning("Transactional email not sent for order %s (%s)", order.order_number, template_key)
-    return bool(sent_count)
+    return message_id
 
 
 def send_order_confirmation_email(order):
@@ -257,7 +286,7 @@ def send_admin_new_order_email(order, recipient):
     """
     recipient = str(recipient or "").strip()
     if not recipient:
-        return False
+        return ""
 
     context = _render_context(order, "en", "admin_new_order")
     context.update(
@@ -284,10 +313,10 @@ def send_admin_new_order_email(order, recipient):
     )
     email.attach_alternative(html_body, "text/html")
 
-    sent_count = email.send(fail_silently=False)
-    if not sent_count:
+    message_id = _send_with_message_id(email)
+    if not message_id:
         logger.warning("Admin new-order email not sent for order %s", order.order_number)
-    return bool(sent_count)
+    return message_id
 
 
 def send_order_status_update_email(order):

@@ -832,14 +832,62 @@ class NotificationLog(models.Model):
     STATUS_SKIPPED_NO_EMAIL = "skipped_no_email"
     STATUS_SKIPPED_DRAFT_ORDER = "skipped_draft_order"
 
+    # Provider-confirmed outcomes, set only by the Brevo webhook. "sent" means
+    # the relay accepted the message, which is NOT the same as delivery — Brevo
+    # can still reject it afterwards, so these statuses are the only ones that
+    # say anything true about what reached the recipient.
+    STATUS_DELIVERED = "delivered"
+    STATUS_DEFERRED = "deferred"
+    STATUS_BOUNCED = "bounced"
+    STATUS_BLOCKED = "blocked"
+    STATUS_SPAM = "spam"
+
     STATUS_CHOICES = (
         (STATUS_PENDING, "Pending"),
-        (STATUS_SENT, "Sent"),
+        (STATUS_SENT, "Sent (accepted by relay)"),
+        (STATUS_DELIVERED, "Delivered"),
+        (STATUS_DEFERRED, "Deferred (retrying)"),
+        (STATUS_BOUNCED, "Bounced"),
+        (STATUS_BLOCKED, "Blocked"),
+        (STATUS_SPAM, "Marked as spam"),
         (STATUS_FAILED, "Failed"),
         (STATUS_SKIPPED, "Skipped"),
         (STATUS_SKIPPED_NO_EMAIL, "Skipped (no customer email)"),
         (STATUS_SKIPPED_DRAFT_ORDER, "Skipped (draft order)"),
     )
+
+    # Statuses that mean "the recipient actually got it".
+    SUCCESS_STATUSES = frozenset({STATUS_SENT, STATUS_DELIVERED})
+
+    # "Already handed to the provider" — none of these may trigger a resend.
+    # Without the webhook statuses here, a receipt that upgraded a row to
+    # "delivered" would make the dedup check miss and mail the customer twice
+    # on the next retry.
+    DISPATCHED_STATUSES = frozenset(
+        {
+            STATUS_SENT,
+            STATUS_DELIVERED,
+            STATUS_DEFERRED,
+            STATUS_BOUNCED,
+            STATUS_BLOCKED,
+            STATUS_SPAM,
+        }
+    )
+
+    # Webhooks arrive out of order and can be replayed, so a receipt may only
+    # move a row forward. Ranks a delivered row above a deferred one, and keeps
+    # a hard failure (or a spam complaint) from being overwritten by a stale
+    # "delivered" that Brevo emitted seconds earlier.
+    STATUS_RANK = {
+        STATUS_PENDING: 0,
+        STATUS_SENT: 1,
+        STATUS_DEFERRED: 2,
+        STATUS_DELIVERED: 3,
+        STATUS_BOUNCED: 4,
+        STATUS_BLOCKED: 4,
+        STATUS_FAILED: 4,
+        STATUS_SPAM: 5,
+    }
 
     EVENT_ORDER_CREATED = "order_created"
     EVENT_PAYMENT_PAID = "payment_paid"
