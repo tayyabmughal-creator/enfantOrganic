@@ -71,12 +71,24 @@ const pwaRuntimeCaching = [
       cacheName: "navigation-network-only",
     },
   },
+  // Customer-specific and transactional traffic must never be served from a cache.
+  //
+  // Matched on pathname alone, with no origin test. The browser calls the API on
+  // a different host from the page (NEXT_PUBLIC_API_BASE_URL points at
+  // app.enfantorganic.com while pages come from om|ae|sa.enfantorganic.com), so
+  // the previous `sameOrigin &&` guard never matched a single API request and
+  // every order, account, auth, checkout and payment response fell through to
+  // the cross-origin NetworkFirst handler and sat in the cache for an hour.
+  //
+  // This predicate MUST stay self-contained: next-pwa stringifies it into sw.js,
+  // so any reference to an import or an outer constant becomes a ReferenceError
+  // in the service worker. Keep the regex literal inline and in sync with
+  // SENSITIVE_PATH_RE in lib/swCacheRules.js (asserted by swCacheRules.test.mjs).
   {
-    urlPattern: ({ sameOrigin, url }) =>
-      sameOrigin &&
-        /^\/(?:admin(?:\/|$)|(?:en|ar)\/(?:checkout|payment|account)(?:\/|$)|api\/(?:checkout|payments|auth|admin|account|orders|analytics)(?:\/|$))/i.test(
-          url.pathname,
-        ),
+    urlPattern: ({ url }) =>
+      /^\/(?:admin(?:\/|$)|(?:en|ar)\/(?:checkout|payment|account)(?:\/|$)|api\/(?:checkout|payments|auth|admin|account|orders|analytics)(?:\/|$))/i.test(
+        url.pathname,
+      ),
     handler: "NetworkOnly",
     options: {
       cacheName: "sensitive-network-only",
