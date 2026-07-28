@@ -41,7 +41,54 @@ function isLocalBrowserHostname(hostname) {
   return NON_BROWSER_API_HOSTS.has(String(hostname || "").toLowerCase());
 }
 
+/** Last two labels — good enough to spot siblings under our own domain. */
+function registrableSuffix(hostname) {
+  const labels = String(hostname || "")
+    .toLowerCase()
+    .split(".")
+    .filter(Boolean);
+  return labels.length >= 2 ? labels.slice(-2).join(".") : "";
+}
+
+/**
+ * True when the configured API host is a *sibling subdomain* of the page.
+ *
+ * Production serves pages from om|ae|sa.enfantorganic.com while
+ * NEXT_PUBLIC_API_BASE_URL points at app.enfantorganic.com, so every visitor
+ * pays a second DNS + TCP + TLS setup (measured ~350 ms cold) to reach a
+ * backend that the page's own origin already proxies at /api. Collapsing to
+ * same-origin removes that handshake and changes nothing else: the backend
+ * resolves region from the `?region=` query parameter and never reads a host
+ * or header, so responses are byte-identical either way (verified across
+ * om/ae/sa before this change).
+ *
+ * Deliberately scoped to siblings under one registrable domain — a genuinely
+ * separate backend on another domain is left alone. Uses a two-label
+ * comparison rather than the public suffix list, which is sufficient here and
+ * errs toward *not* rewriting when the shape is unfamiliar.
+ */
+export function isSiblingSubdomainApiBase(value, currentHostname) {
+  const current = String(currentHostname || "").toLowerCase();
+  if (!value || !current || isLocalBrowserHostname(current)) {
+    return false;
+  }
+  let apiHost;
+  try {
+    apiHost = new URL(value).hostname.toLowerCase();
+  } catch {
+    return false; // already relative — nothing to collapse
+  }
+  if (!apiHost || apiHost === current) {
+    return false; // same origin already
+  }
+  const suffix = registrableSuffix(current);
+  return suffix !== "" && suffix === registrableSuffix(apiHost);
+}
+
 export function shouldPreferSameOriginApiBase(value, currentHostname) {
+  if (isSiblingSubdomainApiBase(value, currentHostname)) {
+    return true;
+  }
   if (!isBrowserUnreachableApiBase(value)) {
     return false;
   }
