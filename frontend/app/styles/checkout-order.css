@@ -1566,7 +1566,11 @@
     gap: 8px;
   }
 
-  .checkout-fields--tight .checkout-field-span-2 {
+  .checkout-fields--tight .checkout-field-span-2,
+  /* Country holds values like "United Arab Emirates", which clip in a half
+     -width field at phone sizes. Give it (and the field after it) the full
+     row instead of shrinking the text below the 16px iOS needs to not zoom. */
+  .checkout-fields--tight .checkout-field-wide-sm {
     grid-column: 1 / -1;
   }
 
@@ -1841,7 +1845,16 @@
     flex-wrap: nowrap;
     justify-content: space-between;
     gap: 6px;
-    font-size: clamp(0.52rem, 2.55vw, 0.66rem);
+    font-size: clamp(0.46rem, 2.5vw, 0.66rem);
+  }
+
+  /* Reclaim side padding on the narrowest phones so the third badge isn't
+     clipped — measured at 320px, where it was just over the edge. */
+  @media (max-width: 430px) {
+    .order-summary-card .checkout-trust {
+      padding: 0 10px 10px;
+      gap: 5px;
+    }
   }
 
   .order-summary-card .checkout-trust-item {

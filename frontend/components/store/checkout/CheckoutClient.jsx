@@ -512,7 +512,6 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         labelAr: "الدفع الإلكتروني",
         description: `Secure payment via ${onlineProviderLabel}`,
         descriptionAr: `دفع آمن عبر ${onlineProviderLabel}`,
-        badge: onlineProviderLabel,
       });
     }
     return list;
@@ -1757,12 +1756,12 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                     <span className="label-optional">*</span>
                     <input name="city" value={form.city} onChange={updateField} required autoComplete="address-level2" placeholder={isAr ? "مثال: مسقط" : "e.g. Muscat"} />
                   </label>
-                  <label>
+                  <label className="checkout-field-wide-sm">
                     {isAr ? "البلد" : "Country"}
                     <span className="label-optional">*</span>
                     <input name="country" value={form.country} onChange={updateField} required autoComplete="country-name" />
                   </label>
-                  <label>
+                  <label className="checkout-field-wide-sm">
                     {isAr ? "ملاحظات التوصيل" : "Delivery notes"}
                     <input
                       name="location_notes"
@@ -2189,7 +2188,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                 </span>
                 <span className="checkout-trust-item">
                   <Icon name="truck" size={14} className="trust-icon" />
-                  {isAr ? "شحن خلال 1-2 يوم" : "1-2 days shipping"}
+                  {isAr ? "التوصيل خلال 1-2 يوم" : "Delivery in 1-2 days"}
                 </span>
                 <span className="checkout-trust-item">
                   <Icon name="check" size={14} className="trust-icon" />
