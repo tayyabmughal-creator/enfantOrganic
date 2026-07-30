@@ -258,15 +258,25 @@
 
 /* ── Labels ────────────────────────────────── */
 
+/* Two columns so the required asterisk sits beside its label instead of
+   being auto-placed onto a row of its own — that cost a full line of height
+   on every required field. Controls span both columns. */
 .checkout-form label {
   display: grid;
-  gap: 5px;
+  grid-template-columns: 1fr auto;
+  gap: 4px 0;
   margin-bottom: 0;
   color: var(--text);
   font-size: 0.76rem;
   font-weight: 700;
   letter-spacing: 0.008em;
   line-height: 1.3;
+}
+
+.checkout-form label > input,
+.checkout-form label > select,
+.checkout-form label > textarea {
+  grid-column: 1 / -1;
 }
 
 .checkout-form label .label-optional {
@@ -1809,10 +1819,19 @@
     display: grid;
   }
 
+  .checkout-page {
+    gap: 10px;
+  }
+
+  .checkout-grid {
+    gap: 10px;
+  }
+
   /* The trust row lives after the (hidden) desktop submit button; keep it
      tucked inside the summary card instead of floating above the form. */
   .order-summary-card .checkout-trust {
-    padding: 0 16px 12px;
+    padding: 0 14px 10px;
+    font-size: 0.64rem;
     /* Keep it one wrapping row — the ≤430px rule stacks it into three lines,
        which is exactly the vertical space this redesign is reclaiming. */
     flex-direction: row;
@@ -1838,6 +1857,57 @@
     gap: 8px;
     padding-bottom: 0;
     margin-bottom: 0;
+  }
+
+  .checkout-title {
+    font-size: 1.15rem;
+  }
+
+  /* The stepper never actually advances — it's the same three static pills
+     from first paint to submit. On a phone that's ~50px of pure decoration
+     between the shopper and the first input. */
+  .checkout-steps {
+    display: none;
+  }
+
+  /* Flatten the card-in-a-card: the outer panel only wrapped the sub-cards,
+     so its padding and border doubled up on every edge. */
+  .form-card.checkout-panel {
+    padding: 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    gap: 10px;
+  }
+
+  .checkout-sub-card {
+    gap: 8px;
+  }
+
+  .checkout-sub-card-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    font-size: 0.78rem;
+  }
+
+  .checkout-fields {
+    gap: 8px;
+  }
+
+  .checkout-form label {
+    gap: 3px 0;
+  }
+
+  .checkout-location-block {
+    margin: 2px 0 0;
+    gap: 8px;
+  }
+
+  /* The pin is draggable and the GPS button is the primary path — the
+     instruction line underneath wraps to two lines for little benefit. */
+  .map-address-help {
+    display: none;
   }
 
   /* Lat/lng readout is engineering detail; the "Location set" pill already
