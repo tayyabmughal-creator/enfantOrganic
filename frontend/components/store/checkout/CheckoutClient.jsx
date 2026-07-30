@@ -367,6 +367,9 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
   const [error, setError] = useState("");
   const [paymentRecovery, setPaymentRecovery] = useState(null);
   const [applePayAvailable, setApplePayAvailable] = useState(false);
+  // Mobile only: the order summary starts collapsed so the form is reachable
+  // without a long scroll. Desktop keeps it permanently expanded via CSS.
+  const [summaryOpen, setSummaryOpen] = useState(false);
 
   useEffect(() => {
     if (!PAYMOB_APPLE_PAY_INTEGRATION_ID) return;
@@ -1499,6 +1502,15 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     }
   }
 
+  // The submit button is a sticky bottom bar on mobile, so a submission error
+  // rendered inside the form can land off-screen. Bring it into view.
+  useEffect(() => {
+    if (!error || typeof document === "undefined") return;
+    // The map-pin branch already scrolls to the location block — don't fight it.
+    if (mapPinRequired && !locationProvided) return;
+    document.getElementById("checkout-error")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [error, mapPinRequired, locationProvided]);
+
   const submitLabel = useMemo(() => {
     if (submitting) {
       if (form.payment_method === "online") return isAr ? "جارٍ التحضير..." : "Preparing payment...";
@@ -1507,6 +1519,16 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     if (form.payment_method === "online") return isAr ? "المتابعة للدفع" : "Continue to Payment";
     return isAr ? "تقديم الطلب" : "Place Order";
   }, [submitting, form.payment_method, isAr]);
+
+  // Headline amount shown on the collapsed mobile summary bar and the sticky
+  // bottom CTA — mirrors whatever the grand-total row renders.
+  const summaryTotalLabel = useMemo(
+    () =>
+      couponPreview?.valid
+        ? previewMoney(couponPreview.final_total)
+        : formatMoney(summaryPricing, locale),
+    [couponPreview, previewMoney, summaryPricing, locale],
+  );
 
   return (
     <section className="checkout-page section-shell">
@@ -1712,7 +1734,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                   </div>
                 </div>
 
-                <div className="checkout-fields checkout-fields--2">
+                <div className="checkout-fields checkout-fields--2 checkout-fields--tight">
                   <label className="checkout-field-span-2">
                     {isAr ? "عنوان الشارع" : "Street address"}
                     <span className="label-optional">*</span>
@@ -1753,7 +1775,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
 
                 <details className="checkout-disclosure">
                   <summary>{isAr ? "تفاصيل إضافية (اختياري)" : "Additional details (optional)"}</summary>
-                  <div className="checkout-fields checkout-fields--2">
+                  <div className="checkout-fields checkout-fields--2 checkout-fields--tight">
                     <label>
                       {isAr ? "سطر العنوان 2" : "Address line 2"}
                       <input name="address_line_2" value={form.address_line_2} onChange={updateField} autoComplete="address-line2" />
@@ -1913,7 +1935,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                 </div>
               ) : null}
 
-              {error ? <p className="form-error">{error}</p> : null}
+              {error ? <p className="form-error" id="checkout-error">{error}</p> : null}
               {paymentRecovery ? (
                 <div style={{ display: "grid", gap: "8px" }}>
                   <a
@@ -1925,22 +1947,31 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                 </div>
               ) : null}
 
-              <button
-                type="submit"
-                className="primary-action full-width checkout-form-submit--mobile"
-                disabled={submitting || cartItems.length === 0 || currencyMismatch || repricingInFlight}
-              >
-                {submitting ? <span className="btn-spinner" /> : null}
-                {submitLabel}
-              </button>
             </div>
           </form>
 
-          <aside className="order-summary-card">
+          <aside className={`order-summary-card ${summaryOpen ? "is-summary-open" : ""}`}>
+            {/* Mobile-only accordion trigger; hidden on desktop where the
+                summary is always expanded. */}
+            <button
+              type="button"
+              className="order-summary-toggle"
+              aria-expanded={summaryOpen}
+              aria-controls="order-summary-body"
+              onClick={() => setSummaryOpen((open) => !open)}
+            >
+              <span className="order-summary-toggle-label">
+                {isAr ? "ملخص الطلب" : "Order summary"}
+                <Icon name="chevronDown" size={16} className="order-summary-toggle-chevron" />
+              </span>
+              <span className="order-summary-toggle-total">{summaryTotalLabel}</span>
+            </button>
+
             <h2 className="order-summary-heading">
               {isAr ? "ملخص الطلب" : "Order Summary"}
             </h2>
 
+            <div className="order-summary-body" id="order-summary-body">
             <div className="summary-lines">
               {cartItems.map((item) => (
                 <div key={item.lineId} className="summary-line">
@@ -2138,6 +2169,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                 </div>
               )}
             </div>
+            </div>
 
             <button
               type="submit"
@@ -2166,6 +2198,24 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
               </div>
             ) : null}
           </aside>
+
+          {/* Mobile-only sticky CTA. Lives outside <form> so no ancestor can
+              turn it into a containing block; it submits via form= instead. */}
+          <div className="checkout-mobile-cta">
+            <div className="checkout-mobile-cta-total">
+              <span>{isAr ? "الإجمالي" : "Total"}</span>
+              <strong>{summaryTotalLabel}</strong>
+            </div>
+            <button
+              type="submit"
+              form="checkout-form"
+              className="primary-action checkout-form-submit--mobile"
+              disabled={submitting || cartItems.length === 0 || currencyMismatch || repricingInFlight}
+            >
+              {submitting ? <span className="btn-spinner" /> : null}
+              {submitLabel}
+            </button>
+          </div>
         </div>
       )}
     </section>

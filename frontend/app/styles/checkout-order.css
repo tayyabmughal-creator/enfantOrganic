@@ -1547,6 +1547,17 @@
     grid-column: auto;
   }
 
+  /* Short address fields stay side-by-side on phones — halves the number of
+     rows a shopper has to scroll past. Long fields keep their full-width span. */
+  .checkout-fields--tight {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .checkout-fields--tight .checkout-field-span-2 {
+    grid-column: 1 / -1;
+  }
+
   .checkout-hero {
     flex-direction: column;
     align-items: stretch;
@@ -1704,6 +1715,214 @@
     gap: 10px;
     flex-direction: column;
     align-items: center;
+  }
+}
+
+/* =============================================
+   Mobile checkout: collapsible summary + sticky CTA
+   Goal: get the shopper to the first input without scrolling, and keep the
+   order button reachable at all times.
+   ============================================= */
+
+/* ── Collapsible order summary ─────────────── */
+
+/* Desktop default: the accordion trigger doesn't exist, the body is plain. */
+.order-summary-toggle {
+  display: none;
+}
+
+.order-summary-body {
+  display: grid;
+  gap: 10px;
+}
+
+/* ── Sticky mobile CTA ─────────────────────── */
+
+.checkout-mobile-cta {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  /* The toggle replaces the static heading on small screens. */
+  .order-summary-heading {
+    display: none;
+  }
+
+  .order-summary-card {
+    padding: 0;
+    gap: 0;
+    overflow: hidden;
+    /* Sits above the form; keep it visually flush and compact. */
+    border-radius: 16px;
+  }
+
+  .order-summary-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    min-height: 52px;
+    padding: 12px 16px;
+    border: 0;
+    background: transparent;
+    color: var(--brand-dark);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  .order-summary-toggle-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9rem;
+    font-weight: 750;
+    letter-spacing: -0.01em;
+  }
+
+  .order-summary-toggle-chevron {
+    flex-shrink: 0;
+    transition: transform 220ms ease;
+  }
+
+  .order-summary-card.is-summary-open .order-summary-toggle-chevron {
+    transform: rotate(180deg);
+  }
+
+  .order-summary-toggle-total {
+    font-size: 1.02rem;
+    font-weight: 800;
+    color: var(--text);
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+  }
+
+  .order-summary-body {
+    display: none;
+    padding: 0 16px 14px;
+    border-top: 1px solid rgba(96, 122, 66, 0.14);
+  }
+
+  .order-summary-card.is-summary-open .order-summary-body {
+    display: grid;
+  }
+
+  /* The trust row lives after the (hidden) desktop submit button; keep it
+     tucked inside the summary card instead of floating above the form. */
+  .order-summary-card .checkout-trust {
+    padding: 0 16px 12px;
+    /* Keep it one wrapping row — the ≤430px rule stacks it into three lines,
+       which is exactly the vertical space this redesign is reclaiming. */
+    flex-direction: row;
+    gap: 12px;
+  }
+
+  /* Sub-card subtitles are pure decoration on a phone — each one costs a
+     line of scroll on a page the shopper wants to get through fast. */
+  .checkout-sub-card-head p {
+    display: none;
+  }
+
+  .checkout-sub-card-head {
+    padding-bottom: 0;
+    margin-bottom: 0;
+  }
+
+  .checkout-eyebrow {
+    display: none;
+  }
+
+  .checkout-hero {
+    gap: 8px;
+    padding-bottom: 0;
+    margin-bottom: 0;
+  }
+
+  /* Lat/lng readout is engineering detail; the "Location set" pill already
+     tells the shopper what they need to know. */
+  .map-coordinates {
+    display: none;
+  }
+
+  .checkout-map-canvas {
+    height: 190px;
+  }
+
+  /* Clear the fixed CTA bar so the last field is never trapped underneath. */
+  .checkout-page.section-shell {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .checkout-mobile-cta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    /* Above the floating WhatsApp bubble (40) and the header (35), below the
+       cart drawer backdrop (50) so overlays still cover it. */
+    z-index: 45;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(20px) saturate(1.2);
+    -webkit-backdrop-filter: blur(20px) saturate(1.2);
+    border-top: 1px solid rgba(223, 231, 214, 0.7);
+    box-shadow: 0 -8px 28px rgba(25, 24, 23, 0.08);
+  }
+
+  .checkout-mobile-cta-total {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.15;
+  }
+
+  .checkout-mobile-cta-total span {
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-soft);
+  }
+
+  .checkout-mobile-cta-total strong {
+    font-size: 1.02rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  .primary-action.checkout-form-submit--mobile {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+    padding: 0 16px;
+  }
+
+  /* The floating WhatsApp bubble is only lifted below 640px in overlays.css;
+     the CTA bar starts at 860px, so raise it across the whole range. */
+  body:has(.checkout-mobile-cta) .floating-whatsapp {
+    bottom: calc(90px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* On very narrow phones two columns get cramped — fall back to one. */
+@media (max-width: 359px) {
+  .checkout-fields--tight {
+    grid-template-columns: 1fr;
+  }
+
+  /* Give the CTA the full bar width so a long label ("Continue to Payment")
+     stays on one line; the total is already on the summary bar above. */
+  .checkout-mobile-cta-total {
+    display: none;
   }
 }
 
