@@ -260,10 +260,12 @@
 
 /* Two columns so the required asterisk sits beside its label instead of
    being auto-placed onto a row of its own — that cost a full line of height
-   on every required field. Controls span both columns. */
+   on every required field. The text column is auto and the asterisk column
+   takes the slack, so the "*" hugs the label ("Full name *") rather than
+   being pushed to the far edge. Controls span both columns. */
 .checkout-form label {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 4px 0;
   margin-bottom: 0;
   color: var(--text);
@@ -1828,14 +1830,28 @@
   }
 
   /* The trust row lives after the (hidden) desktop submit button; keep it
-     tucked inside the summary card instead of floating above the form. */
+     tucked inside the summary card instead of floating above the form.
+     It must stay on ONE line — wrapping to two (or the ≤430px rule's three)
+     is exactly the vertical space this redesign is reclaiming. The font
+     scales with the viewport so all three fit from 320px up without
+     truncating, and the icons are dropped to buy that room back. */
   .order-summary-card .checkout-trust {
     padding: 0 14px 10px;
-    font-size: 0.64rem;
-    /* Keep it one wrapping row — the ≤430px rule stacks it into three lines,
-       which is exactly the vertical space this redesign is reclaiming. */
     flex-direction: row;
-    gap: 12px;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    gap: 6px;
+    font-size: clamp(0.52rem, 2.55vw, 0.66rem);
+  }
+
+  .order-summary-card .checkout-trust-item {
+    font-size: inherit;
+    white-space: nowrap;
+  }
+
+  .order-summary-card .checkout-trust-item svg,
+  .order-summary-card .checkout-trust-item .trust-icon {
+    display: none;
   }
 
   /* Sub-card subtitles are pure decoration on a phone — each one costs a

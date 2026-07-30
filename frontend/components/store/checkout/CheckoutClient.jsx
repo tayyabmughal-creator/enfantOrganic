@@ -2189,7 +2189,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                 </span>
                 <span className="checkout-trust-item">
                   <Icon name="truck" size={14} className="trust-icon" />
-                  {isAr ? "توصيل سريع" : "Fast delivery"}
+                  {isAr ? "شحن خلال 1-2 يوم" : "1-2 days shipping"}
                 </span>
                 <span className="checkout-trust-item">
                   <Icon name="check" size={14} className="trust-icon" />
