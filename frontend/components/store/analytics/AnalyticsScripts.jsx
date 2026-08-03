@@ -9,6 +9,11 @@ import {
   ensureDataLayer,
   getConsentState,
 } from "@/lib/analytics";
+import {
+  buildMetaEventId,
+  isRelayableMetaEvent,
+  relayMetaEvent,
+} from "@/lib/metaCapi";
 
 const GTM_SCRIPT_ID = "enfant-gtm-script";
 const GA4_SCRIPT_ID = "enfant-ga4-script";
@@ -23,11 +28,25 @@ const ENV_SNAPCHAT_PIXEL_ID = String(process.env.NEXT_PUBLIC_SNAPCHAT_PIXEL_ID |
 const ENV_TIKTOK_PIXEL_ID = String(process.env.NEXT_PUBLIC_TIKTOK_PIXEL_ID || "").trim();
 
 // Shared helper — import this wherever you need to fire Meta Pixel events.
-// eventID in params enables Conversions API server-side deduplication.
-export function fbqTrack(event, params) {
+//
+// Besides firing the Pixel, this relays the event to our backend for
+// server-side delivery through the Conversions API. Both copies carry the same
+// event_id, which is what tells Meta they are one conversion and not two.
+//
+// The ID is minted here rather than at each call site precisely so the two
+// copies cannot drift apart: a mismatched pair would be counted twice, and
+// double-counted purchases train Meta's optimiser on volume that never existed.
+//
+// capiOptions carries what the Pixel cannot: { userData, regionCode }. Purchase
+// is never relayed from the browser — the server sends it from the order record
+// so its value cannot be forged.
+export function fbqTrack(event, params, capiOptions = {}) {
+  const { event_id: providedId, ...rest } = params || {};
+  const eventID =
+    providedId || (isRelayableMetaEvent(event) ? buildMetaEventId(event) : "");
+
   if (typeof window !== "undefined" && typeof window.fbq === "function") {
     if (params) {
-      const { event_id: eventID, ...rest } = params;
       if (eventID) {
         window.fbq("track", event, rest, { eventID });
       } else {
@@ -37,6 +56,40 @@ export function fbqTrack(event, params) {
       window.fbq("track", event);
     }
   }
+
+  if (eventID) {
+    relayMetaEvent(event, {
+      eventId: eventID,
+      customData: rest,
+      userData: capiOptions.userData || {},
+      regionCode: capiOptions.regionCode || "",
+    });
+  }
+}
+
+/**
+ * Attach known customer details to the Pixel as manual advanced matching.
+ *
+ * Events Manager flagged this dataset for having none (2026-08-02): without it
+ * Meta cannot tie a visitor to a real account, so attribution and targeting
+ * both suffer. Meta hashes these values in the browser before they are sent —
+ * we pass them raw on purpose, since pre-hashing here would break that.
+ *
+ * Re-calling init with the same pixel ID updates the matching data rather than
+ * registering a second pixel.
+ */
+export function setMetaAdvancedMatching(userData) {
+  if (typeof window === "undefined" || typeof window.fbq !== "function") return;
+  // The pixel ID is admin-managed and only known to this module, so it is read
+  // back from where loadMetaPixel recorded it. That keeps callers — checkout in
+  // particular — from having to plumb site settings through just to do this.
+  const pixelId = window.__metaPrimaryPixelId || "";
+  if (!pixelId || !userData) return;
+  const payload = Object.fromEntries(
+    Object.entries(userData).filter(([, value]) => value),
+  );
+  if (Object.keys(payload).length === 0) return;
+  window.fbq("init", pixelId, payload);
 }
 
 // Shared helper for Snapchat Pixel events.
@@ -124,6 +177,9 @@ function loadMetaPixel(pixelId) {
     window.fbq("init", pixelId);
     window.__metaPixelIds.add(pixelId);
   }
+  // Remembered so setMetaAdvancedMatching() can re-init with customer details
+  // once checkout knows them, without every caller needing site settings.
+  window.__metaPrimaryPixelId = window.__metaPrimaryPixelId || pixelId;
 }
 
 // Adapted from the official TikTok Pixel snippet: builds the ttq command queue

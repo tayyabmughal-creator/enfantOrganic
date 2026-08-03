@@ -13,6 +13,7 @@ from .models import (
     InstagramPost,
     CustomerAddress,
     NewsletterSubscription,
+    MetaCapiEvent,
     NotificationLog,
     WhatsAppLog,
     Order,
@@ -212,6 +213,15 @@ class SiteSettingsAdmin(admin.ModelAdmin):
         ("Thawani", {"fields": ("thawani_publishable_key", "thawani_secret_key", "thawani_webhook_secret", "thawani_base_url"), "classes": ("collapse",)}),
         ("OmanNet", {"fields": ("omannet_merchant_id", "omannet_access_code", "omannet_sha_request", "omannet_sha_response", "omannet_webhook_secret"), "classes": ("collapse",)}),
         ("Social Pixels", {"fields": ("facebook_pixel_id", "tiktok_pixel_id", "instagram_access_token", "snapchat_pixel_id", "pinterest_tag_id", "twitter_pixel_id"), "classes": ("collapse",)}),
+        ("Meta Conversions API", {
+            "fields": ("meta_capi_enabled", "meta_capi_dataset_id", "meta_capi_access_token", "meta_capi_test_event_code"),
+            "classes": ("collapse",),
+            "description": (
+                "Server-side events, sent alongside the browser Pixel and deduplicated by event ID. "
+                "While a test event code is set, events appear only in Events Manager → Test Events "
+                "and are NOT counted as real conversions — clear the field to go live."
+            ),
+        }),
         ("Marketing Tools", {"fields": ("ga4_measurement_id", "gtm_container_id", "google_ads_conversion_id", "klaviyo_public_key", "mailchimp_api_key", "whatsapp_cloud_phone_id", "zendesk_key"), "classes": ("collapse",)}),
         ("Apps", {"fields": ("expo_push_token", "cloudinary_cloud_name", "cloudinary_api_key", "cloudinary_api_secret", "algolia_app_id", "algolia_api_key", "zapier_webhook_url", "stripe_publishable_key", "stripe_secret_key", "shippo_api_token"), "classes": ("collapse",)}),
     )
@@ -1135,3 +1145,48 @@ class AbandonedCartAdmin(admin.ModelAdmin):
     list_filter = ("status", "currency_code", "abandoned_at")
     search_fields = ("customer_email", "customer_name", "customer_phone", "session_token")
     readonly_fields = ("session_token", "abandoned_at", "updated_at")
+
+
+@admin.register(MetaCapiEvent)
+class MetaCapiEventAdmin(admin.ModelAdmin):
+    """
+    Read-only delivery receipts for server-side Meta events.
+
+    Events Manager only keeps a rolling window and never reports events we
+    failed to send at all, so this is the only place a silent CAPI outage
+    becomes visible. Nothing here is editable: rewriting a receipt would just
+    hide the problem it exists to expose.
+    """
+
+    list_display = (
+        "event_name",
+        "status",
+        "match_field_count",
+        "order",
+        "attempts",
+        "created_at",
+        "sent_at",
+    )
+    list_filter = ("event_name", "status", "created_at")
+    search_fields = ("event_id", "order__order_number", "error_message")
+    readonly_fields = (
+        "event_name",
+        "event_id",
+        "status",
+        "order",
+        "event_source_url",
+        "test_event_code",
+        "match_field_count",
+        "attempts",
+        "response_body",
+        "error_message",
+        "created_at",
+        "sent_at",
+    )
+    date_hierarchy = "created_at"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False

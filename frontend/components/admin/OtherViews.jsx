@@ -565,10 +565,14 @@ const INTEGRATIONS_BY_CATEGORY = {
       name: "Meta / Facebook",
       abbr: "f",
       color: "#1877F2",
-      desc: "Facebook Pixel for event tracking, Facebook Shops catalog sync, and dynamic product ads targeting.",
+      desc: "Facebook Pixel for event tracking, Facebook Shops catalog sync, and dynamic product ads targeting. The Conversions API sends the same events from our server, so they survive ad blockers and iOS tracking prevention.",
       fields: [
         { key: "facebook_pixel_id", label: "Pixel ID",         placeholder: "123456789012345",  hint: "Events Manager → Pixels → your pixel ID" },
         { key: "facebook_app_id",   label: "App ID (optional)", placeholder: "987654321012345", hint: "Meta App Dashboard → App settings → Basic" },
+        { key: "meta_capi_enabled", label: "Conversions API — send server-side events", type: "toggle", hint: "Turn on once the access token below is saved. Events are deduplicated against the browser Pixel by event ID." },
+        { key: "meta_capi_access_token", label: "Conversions API Access Token", type: "password", placeholder: "EAAG...", hint: "Events Manager → your dataset → Settings → Conversions API → Generate access token" },
+        { key: "meta_capi_dataset_id", label: "Dataset ID (optional)", placeholder: "Same as Pixel ID", hint: "Leave blank to reuse the Pixel ID above — only set this if Meta split your dataset from the pixel" },
+        { key: "meta_capi_test_event_code", label: "Test Event Code", placeholder: "TEST12345", hint: "While this is set, events only appear in Events Manager → Test Events and do NOT count as real conversions. CLEAR IT to go live. Meta issues a new code each time you open the Test Events tab." },
       ],
     },
     {
@@ -802,7 +806,11 @@ export function IntegrationsView({ category, data, canEdit, onPatch }) {
     setSaving(true);
     try {
       const fields = {};
-      (integration.fields || []).forEach((f) => { fields[f.key] = form[f.key] || ""; });
+      (integration.fields || []).forEach((f) => {
+        // Toggles must stay booleans — coercing false to "" makes the API
+        // reject the save instead of turning the feature off.
+        fields[f.key] = f.type === "toggle" ? Boolean(form[f.key]) : form[f.key] || "";
+      });
       await onPatch(fields);
       closeForm();
     } finally {
@@ -815,7 +823,14 @@ export function IntegrationsView({ category, data, canEdit, onPatch }) {
     setSaving(true);
     try {
       const fields = {};
-      (integration.fields || []).forEach((f) => { fields[f.key] = ""; });
+      (integration.fields || []).forEach((f) => {
+        fields[f.key] = f.type === "toggle" ? false : "";
+      });
+      // A blank never erases a stored secret (the API preserves it), so ask
+      // explicitly — otherwise "Disconnect" would leave the token behind.
+      (integration.fields || [])
+        .filter((f) => f.type === "password")
+        .forEach((f) => { fields[`clear_${f.key}`] = true; });
       await onPatch(fields);
     } finally {
       setSaving(false);
@@ -908,15 +923,31 @@ export function IntegrationsView({ category, data, canEdit, onPatch }) {
                     {integration.fields.map((field) => (
                       <label key={field.key} className="admin-iv-field">
                         <span className="admin-iv-field-label">{field.label}</span>
-                        <input
-                          type="text"
-                          className="admin-input"
-                          value={form[field.key] || ""}
-                          placeholder={field.placeholder}
-                          autoComplete="off"
-                          spellCheck={false}
-                          onChange={(e) => setForm({ ...form, [field.key]: e.target.value })}
-                        />
+                        {field.type === "toggle" ? (
+                          <input
+                            type="checkbox"
+                            checked={Boolean(form[field.key])}
+                            onChange={(e) => setForm({ ...form, [field.key]: e.target.checked })}
+                            style={{ width: 16, height: 16, alignSelf: "flex-start" }}
+                          />
+                        ) : (
+                          <input
+                            type={field.type === "password" ? "password" : "text"}
+                            className="admin-input"
+                            value={form[field.key] || ""}
+                            // A stored secret is never sent back to the browser,
+                            // so show that one is saved instead of an empty box
+                            // the client might mistake for "not configured".
+                            placeholder={
+                              field.type === "password" && form[`${field.key}_set`]
+                                ? "•••••••• saved — type to replace"
+                                : field.placeholder
+                            }
+                            autoComplete="off"
+                            spellCheck={false}
+                            onChange={(e) => setForm({ ...form, [field.key]: e.target.value })}
+                          />
+                        )}
                         {field.hint && <span className="admin-iv-field-hint">↗ {field.hint}</span>}
                       </label>
                     ))}

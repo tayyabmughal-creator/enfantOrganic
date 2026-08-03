@@ -962,6 +962,15 @@ class AdminSiteSettingsSerializer(serializers.ModelSerializer):
         "omannet_webhook_secret",
     )
 
+    # The Meta CAPI token can post conversions to the client's dataset, so it
+    # gets the same treatment as a payment credential: never echoed back to the
+    # browser, and a blank save never wipes the stored value.
+    MARKETING_SECRET_FIELDS = ("meta_capi_access_token",)
+
+    clear_meta_capi_access_token = serializers.BooleanField(
+        write_only=True, required=False, default=False
+    )
+
     paymob_api_key = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
     paymob_hmac_secret = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
     paymob_integration_id = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
@@ -990,7 +999,7 @@ class AdminSiteSettingsSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        for field in self.PAYMENT_PROVIDER_SECRET_FIELDS:
+        for field in (*self.PAYMENT_PROVIDER_SECRET_FIELDS, *self.MARKETING_SECRET_FIELDS):
             data.pop(field, None)
             data[f"{field}_set"] = bool(str(getattr(instance, field, "") or "").strip())
         return data
@@ -1174,7 +1183,11 @@ class AdminSiteSettingsSerializer(serializers.ModelSerializer):
 
     def _apply_secret_directives(self, validated_data, *, creating):
         """Honor clear_* flags and never overwrite a stored secret with a blank."""
-        for field in (*self.PAYMOB_SECRET_FIELDS, *self.PAYMENT_PROVIDER_SECRET_FIELDS):
+        for field in (
+            *self.PAYMOB_SECRET_FIELDS,
+            *self.PAYMENT_PROVIDER_SECRET_FIELDS,
+            *self.MARKETING_SECRET_FIELDS,
+        ):
             if validated_data.pop(f"clear_{field}", False):
                 validated_data[field] = ""
                 continue

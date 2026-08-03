@@ -220,6 +220,15 @@ REST_FRAMEWORK = {
 # Admin CSV export cap — prevent mass data exfiltration in one request.
 ADMIN_CSV_MAX_ROWS = int(os.getenv("ADMIN_CSV_MAX_ROWS", "10000"))
 
+# Meta Conversions API. These are the fallback for a fresh environment; the
+# SiteSettings row takes precedence so the client can rotate the token or change
+# the test event code from the admin panel without a redeploy. The access token
+# must only ever come from the environment or the DB — never the storefront.
+META_CAPI_ACCESS_TOKEN = os.getenv("META_CAPI_ACCESS_TOKEN", "")
+META_CAPI_DATASET_ID = os.getenv("META_CAPI_DATASET_ID", "")
+META_CAPI_TEST_EVENT_CODE = os.getenv("META_CAPI_TEST_EVENT_CODE", "")
+META_CAPI_ENABLED = os.getenv("META_CAPI_ENABLED", "0").strip().lower() in {"1", "true", "yes"}
+
 if "test" in sys.argv:
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["order_lookup"] = "10000/hour"
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["auth"] = "10000/min"

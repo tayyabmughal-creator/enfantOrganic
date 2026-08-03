@@ -1,5 +1,6 @@
 import logging
 from celery import shared_task
+from celery.exceptions import MaxRetriesExceededError, Retry
 from django.core.management import call_command
 
 from .models import Order
@@ -49,6 +50,74 @@ def generate_order_shipment_async(order_id):
             create_order_shipment(order)
     except Exception:
         logger.exception("Async shipment creation failed for order=%s", order_id)
+
+def _retry_capi(task, error_message):
+    """
+    Back off and retry a failed CAPI delivery.
+
+    Meta accepts an event for up to 7 days, so a slow exponential backoff is
+    safe and far better than dropping a conversion because Graph blipped.
+    """
+    retries = int(getattr(task.request, "retries", 0))
+    raise task.retry(
+        exc=RuntimeError(error_message or "Meta CAPI delivery failed"),
+        countdown=min(300, 30 * (2 ** retries)),
+        max_retries=task.max_retries,
+    )
+
+
+@shared_task(bind=True, max_retries=3)
+def send_meta_purchase_event_async(self, order_id):
+    """
+    Relay the server-side Purchase to Meta.
+
+    Runs out-of-band because checkout must never wait on, or fail because of, an
+    ad-platform call. Retries only on transport failures — ``send_event`` already
+    swallows those and records them, so we re-read the log row to decide.
+    """
+    try:
+        from .services.meta_capi import send_purchase_for_order
+
+        order = Order.objects.filter(pk=order_id).select_related("region").first()
+        if not order:
+            logger.warning("Meta CAPI purchase skipped — order=%s not found", order_id)
+            return
+
+        log = send_purchase_for_order(order)
+        if log.status == log.STATUS_FAILED:
+            _retry_capi(self, log.error_message)
+    except Retry:
+        # Celery's own control-flow signal — must reach the worker, not the
+        # blanket handler below, or the retry is silently cancelled.
+        raise
+    except MaxRetriesExceededError:
+        logger.error("Meta CAPI purchase gave up after retries for order=%s", order_id)
+    except Exception:
+        logger.exception("Meta CAPI purchase task crashed for order=%s", order_id)
+
+
+@shared_task(bind=True, max_retries=3)
+def send_meta_capi_event_async(self, payload):
+    """
+    Relay a browser-originated funnel event (ViewContent, AddToCart, ...).
+
+    The storefront POSTs these to /api/analytics/meta-event/ with the same
+    event_id its Pixel used; the view attaches the request's IP and user agent
+    before enqueuing, since those must come from the server, not the client.
+    """
+    try:
+        from .services.meta_capi import send_event
+
+        log = send_event(**payload)
+        if log.status == log.STATUS_FAILED:
+            _retry_capi(self, log.error_message)
+    except Retry:
+        raise
+    except MaxRetriesExceededError:
+        logger.error("Meta CAPI event gave up after retries: %s", payload.get("event_id"))
+    except Exception:
+        logger.exception("Meta CAPI event task crashed: %s", payload.get("event_id"))
+
 
 @shared_task
 def clear_expired_sessions():

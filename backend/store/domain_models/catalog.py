@@ -376,6 +376,26 @@ class SiteSettings(models.Model):
     pinterest_tag_id = models.CharField(max_length=50, blank=True, default="")
     twitter_pixel_id = models.CharField(max_length=50, blank=True, default="")
 
+    # Meta Conversions API (server-side events)
+    # The dataset ID is normally identical to facebook_pixel_id; the separate
+    # field exists because Meta lets a dataset outlive the pixel it started as.
+    meta_capi_enabled = models.BooleanField(default=False)
+    meta_capi_dataset_id = models.CharField(
+        max_length=50, blank=True, default="",
+        help_text="Leave blank to reuse the Facebook Pixel ID.",
+    )
+    meta_capi_access_token = models.TextField(
+        blank=True, default="",
+        help_text="System User token from Events Manager. Never exposed to the storefront.",
+    )
+    # Meta issues a fresh test code every time the Test Events tab is opened, so
+    # this has to be editable by the client — hardcoding it means a redeploy
+    # every time they want to test. Blank = events count as live traffic.
+    meta_capi_test_event_code = models.CharField(
+        max_length=50, blank=True, default="",
+        help_text="Set while verifying in Events Manager → Test Events. CLEAR IT to go live.",
+    )
+
     # Analytics & Ads
     google_analytics_id = models.CharField(max_length=30, blank=True, default="")
     google_ads_id = models.CharField(max_length=30, blank=True, default="")

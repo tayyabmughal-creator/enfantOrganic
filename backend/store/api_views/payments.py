@@ -173,6 +173,18 @@ def _apply_webhook_update(provider_key, request, *, ignore_missing_order=False):
     if order.payment_status == Order.PAYMENT_PAID:
         from ..tasks import generate_order_invoice_async
         generate_order_invoice_async.delay(order.id)
+        # An online order only becomes a real conversion here. The browser Pixel
+        # fires on the thank-you page, which the customer may never reach if the
+        # provider redirect breaks — this is the copy that survives that.
+        try:
+            from ..services.meta_capi import enqueue_purchase_event
+            enqueue_purchase_event(order)
+        except Exception:
+            logger.exception(
+                "Meta CAPI purchase enqueue failed after %s paid webhook for order %s",
+                provider_key,
+                merchant_order_id,
+            )
     elif tx_status in {
         PaymentTransaction.STATUS_REFUNDED,
         PaymentTransaction.STATUS_FAILED,

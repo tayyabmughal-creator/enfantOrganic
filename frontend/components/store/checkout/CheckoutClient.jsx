@@ -6,7 +6,13 @@ import { useRouter } from "next/navigation";
 import { useStore } from "@/components/store/cart/StoreProvider";
 import Icon from "@/components/icons/Icon";
 import { buildAnalyticsItems, buildTikTokContents, pushDataLayerEvent } from "@/lib/analytics";
-import { fbqTrack, snaptrTrack, ttqTrack } from "@/components/store/analytics/AnalyticsScripts";
+import {
+  fbqTrack,
+  setMetaAdvancedMatching,
+  snaptrTrack,
+  ttqTrack,
+} from "@/components/store/analytics/AnalyticsScripts";
+import { buildMetaUserData, getFbc, getFbp } from "@/lib/metaCapi";
 import { getAttributionSnapshot, getOrCreateSessionKey, trackEvent } from "@/lib/eventTracking";
 import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
 import { API_BASE_URL as CONFIG_API_BASE_URL, CUSTOMER_TOKEN_KEY, safeRedirectUrl } from "@/lib/config";
@@ -1213,6 +1219,45 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     };
   }, []);
 
+  // Identity for the Meta events fired from this page. Sent to our own backend,
+  // which hashes it before anything reaches Meta — nothing leaves the browser
+  // unhashed except over our own origin.
+  const checkoutUserData = useMemo(
+    () =>
+      buildMetaUserData({
+        name: form.name,
+        email: form.email,
+        phone: form.phone,
+        city: form.city,
+        postcode: form.postcode,
+        country: form.country,
+      }),
+    [form.city, form.country, form.email, form.name, form.phone, form.postcode],
+  );
+
+  const checkoutUserDataRef = useRef(checkoutUserData);
+  checkoutUserDataRef.current = checkoutUserData;
+
+  // Manual advanced matching — the second Events Manager error the client
+  // reported. Meta hashes these in the browser itself, so they are passed raw.
+  // Debounced via the effect's own dependencies: it only re-runs when a
+  // matching field actually settles on a new value, not on every keystroke of
+  // an unrelated field.
+  useEffect(() => {
+    // Wait for at least one strong identifier — re-initialising the pixel with
+    // only a city name buys nothing and just adds noise.
+    if (!checkoutUserData.email && !checkoutUserData.phone) return;
+    setMetaAdvancedMatching({
+      em: checkoutUserData.email || "",
+      ph: checkoutUserData.phone || "",
+      fn: checkoutUserData.first_name || "",
+      ln: checkoutUserData.last_name || "",
+      ct: checkoutUserData.city || "",
+      zp: checkoutUserData.postcode || "",
+      country: checkoutUserData.country || "",
+    });
+  }, [checkoutUserData]);
+
   useEffect(() => {
     if (!analyticsItems.length) {
       return;
@@ -1228,13 +1273,21 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     if (signature !== lastPixelCheckoutSignatureRef.current) {
       lastPixelCheckoutSignatureRef.current = signature;
       const eventID = `initiate-checkout-${region || "default"}-${Date.now()}`;
-      fbqTrack("InitiateCheckout", {
-        content_ids: analyticsItems.map((i) => i.item_id),
-        num_items: analyticsItems.reduce((s, i) => s + (i.quantity || 1), 0),
-        value: checkoutValue,
-        currency: checkoutCurrency,
-        event_id: eventID,
-      });
+      fbqTrack(
+        "InitiateCheckout",
+        {
+          content_ids: analyticsItems.map((i) => i.item_id),
+          num_items: analyticsItems.reduce((s, i) => s + (i.quantity || 1), 0),
+          value: checkoutValue,
+          currency: checkoutCurrency,
+          event_id: eventID,
+        },
+        // Whatever the customer has typed so far — often just a returning
+        // shopper's prefilled email, which is still a real match signal. Read
+        // through a ref so typing in the form doesn't re-run this effect; the
+        // event itself is gated on the cart signature, not on identity.
+        { userData: checkoutUserDataRef.current, regionCode: region },
+      );
       snaptrTrack("START_CHECKOUT", {
         item_ids: analyticsItems.map((i) => i.item_id),
         number_items: analyticsItems.reduce((s, i) => s + (i.quantity || 1), 0),
@@ -1356,6 +1409,15 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         notes: form.notes,
         items: checkoutItemsPayload(),
         analytics: getAttributionSnapshot({ regionCode: region }),
+        // Meta click identifiers, stored on the order so the server-side
+        // Purchase carries the same identity the Pixel had. Needed because an
+        // online-payment customer may never return to the thank-you page where
+        // the browser Purchase fires. The URL goes as-is: the storefront
+        // geo-redirects to om./ae./sa., and rewriting the host here would stop
+        // it matching what the Pixel reported.
+        meta_fbp: getFbp(),
+        meta_fbc: getFbc(),
+        meta_event_source_url: typeof window !== "undefined" ? window.location.href : "",
       };
 
       const orderValue = asNumber(couponPreview?.final_total ?? subtotal);
@@ -1392,12 +1454,19 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
       });
 
       // Meta AddPaymentInfo — fires when the customer submits with a payment method chosen.
-      fbqTrack("AddPaymentInfo", {
-        content_ids: analyticsItems.map((i) => i.item_id),
-        content_type: "product",
-        value: orderValue + shippingAmount + taxAmount,
-        currency: currencyCode,
-      });
+      // This is the richest point in the funnel for identity: the form is fully
+      // filled, so the server copy can carry email, phone, name and address and
+      // reach a far better match quality than the Pixel alone.
+      fbqTrack(
+        "AddPaymentInfo",
+        {
+          content_ids: analyticsItems.map((i) => i.item_id),
+          content_type: "product",
+          value: orderValue + shippingAmount + taxAmount,
+          currency: currencyCode,
+        },
+        { userData: checkoutUserData, regionCode: region },
+      );
 
       // TikTok AddPaymentInfo — same trigger and totals as the Meta event.
       ttqTrack("AddPaymentInfo", {

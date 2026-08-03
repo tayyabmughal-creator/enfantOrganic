@@ -24,6 +24,7 @@ from .commerce import (
     AbandonedCart,
     AdminAuditLog,
     AnalyticsEvent,
+    MetaCapiEvent,
     Coupon,
     CustomerAddress,
     BackInStockRequest,
@@ -45,6 +46,7 @@ from .commerce import (
 __all__ = [
     "AbandonedCart",
     "AnalyticsEvent",
+    "MetaCapiEvent",
     "CartMilestone",
     "CmsPage",
     "BlogPost",

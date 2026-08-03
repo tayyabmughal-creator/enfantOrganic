@@ -10,6 +10,7 @@ from .api_views.payments import (
     ThawaniWebhookView,
 )
 from .api_views.brevo import BrevoWebhookView
+from .api_views.meta_capi import MetaCapiEventView
 from .api_views.regions import RegionDetectView
 from .api_views.whatsapp import WhatsAppWebhookView
 from .api_views.storefront import BlogDetailView, BlogListView, CmsPageDetailView
@@ -255,4 +256,5 @@ urlpatterns = [
     path("admin/abandoned-carts/<int:pk>/", AdminAbandonedCartDetailView.as_view(), name="admin-abandoned-cart-detail"),
     path("abandoned-carts/", AbandonedCartCreateView.as_view(), name="abandoned-cart-create"),
     path("analytics/event/", AnalyticsEventCreateView.as_view(), name="analytics-event-create"),
+    path("analytics/meta-event/", MetaCapiEventView.as_view(), name="analytics-meta-event"),
 ]

@@ -199,6 +199,20 @@ class Order(models.Model):
     conversion_session_key = models.CharField(max_length=64, blank=True, default="", db_index=True)
     conversion_attribution = models.JSONField(default=dict, blank=True)
 
+    # Meta Conversions API context, captured at checkout so the server-side
+    # Purchase event can be sent later (after a payment redirect, or from a
+    # Celery worker) with the same identity signals the browser pixel had.
+    # fbp/fbc come from the browser's cookies; IP and user agent are taken from
+    # the request server-side and are never trusted from the client payload.
+    # event_source_url is stored verbatim because the storefront geo-redirects
+    # to om./ae./sa. subdomains — sending a normalised www. URL here would not
+    # match what the pixel reported and weakens deduplication.
+    meta_fbp = models.CharField(max_length=128, blank=True, default="")
+    meta_fbc = models.CharField(max_length=255, blank=True, default="")
+    meta_client_ip = models.GenericIPAddressField(null=True, blank=True)
+    meta_client_user_agent = models.TextField(blank=True, default="")
+    meta_event_source_url = models.CharField(max_length=500, blank=True, default="")
+
     coupon_code = models.CharField(max_length=40, blank=True)
     discount_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     gift_card_code = models.CharField(max_length=32, blank=True)
@@ -1230,6 +1244,62 @@ class AnalyticsEvent(models.Model):
 
     def __str__(self):
         return f"{self.event_type} — {self.session_key[:8]} ({self.created_at})"
+
+
+class MetaCapiEvent(models.Model):
+    """
+    Delivery receipt for one server-side Meta Conversions API event.
+
+    Meta's Events Manager only shows a rolling window and says nothing about
+    events we failed to send at all, so without this table a silent CAPI outage
+    is invisible — the same class of false positive that made NotificationLog
+    necessary for email. ``event_id`` is unique so a retry, a double webhook, or
+    a customer refreshing the thank-you page cannot send the same conversion
+    twice; duplicate Purchases would teach Meta's optimiser from inflated data.
+    """
+
+    STATUS_PENDING = "pending"
+    STATUS_SENT = "sent"
+    STATUS_FAILED = "failed"
+    STATUS_SKIPPED = "skipped"
+
+    STATUS_CHOICES = (
+        (STATUS_PENDING, "Pending"),
+        (STATUS_SENT, "Sent"),
+        (STATUS_FAILED, "Failed"),
+        (STATUS_SKIPPED, "Skipped"),
+    )
+
+    event_name = models.CharField(max_length=40, db_index=True)
+    event_id = models.CharField(max_length=128, unique=True)
+    status = models.CharField(
+        max_length=16, choices=STATUS_CHOICES, default=STATUS_PENDING, db_index=True
+    )
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="meta_capi_events",
+    )
+    event_source_url = models.CharField(max_length=500, blank=True, default="")
+    test_event_code = models.CharField(max_length=50, blank=True, default="")
+    # How many of the user_data identity fields we managed to fill. Meta's match
+    # quality is driven almost entirely by this, so it is worth being able to
+    # chart it rather than guessing why attribution is poor.
+    match_field_count = models.PositiveSmallIntegerField(default=0)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    response_body = models.TextField(blank=True, default="")
+    error_message = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [models.Index(fields=["event_name", "status", "created_at"])]
+
+    def __str__(self):
+        return f"{self.event_name} — {self.status} ({self.event_id})"
 
 
 class AbandonedCart(models.Model):
