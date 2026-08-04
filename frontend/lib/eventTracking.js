@@ -17,7 +17,10 @@ import { readStoredRegion, regionFromSearchParams } from "./regionResolver.js";
 
 const SESSION_KEY = "enfant-session-id";
 const ATTRIBUTION_KEY = "enfant-attribution";
-const LOCALIZED_STOREFRONT_PATH = /^\/(en|ar)(?=\/|$)/i;
+// Matches both the current /en-om form and the legacy bare /en form. Without the
+// optional region suffix this stopped matching every storefront URL, which would
+// silently kill page-view tracking for all pixels.
+const LOCALIZED_STOREFRONT_PATH = /^\/(en|ar)(-(om|ae|sa))?(?=\/|$)/i;
 const UTM_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"];
 
 function inferSource({ utmSource = "", utmMedium = "", utmCampaign = "", utmContent = "", referrer = "", fbclid = "" } = {}) {

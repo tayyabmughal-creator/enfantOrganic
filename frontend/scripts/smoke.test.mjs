@@ -122,6 +122,11 @@ test("safeRedirectUrl allows the Oman Paymob iframe origin", () => {
 });
 
 test("page view tracking only runs on localized storefront routes", () => {
+  // Current URL shape — these are what every real pageview looks like now.
+  assert.equal(shouldTrackStorefrontPageView("/en-om"), true);
+  assert.equal(shouldTrackStorefrontPageView("/ar-sa/product/baby-oil"), true);
+  assert.equal(shouldTrackStorefrontPageView("/en-ae/collections"), true);
+  // Legacy shape still matches so redirected traffic is not dropped.
   assert.equal(shouldTrackStorefrontPageView("/en"), true);
   assert.equal(shouldTrackStorefrontPageView("/ar/products/baby-oil"), true);
   assert.equal(shouldTrackStorefrontPageView("/admin"), false);
@@ -137,4 +142,20 @@ test("page view dedupe key ignores region-only query churn", () => {
     buildPageViewTrackingKey("/en/products", new URLSearchParams("utm_source=instagram&region=ae")),
     "/en/products?utm_source=instagram",
   );
+});
+
+test("no page compares the raw locale param against a normalized locale", async () => {
+  // The route segment is now "en-om", while normalizeLocale() returns "en", so any
+  // surviving `localeParam !== <normalized>` guard calls notFound() on every request.
+  // Two of these were missed during the URL-scheme migration and took checkout and
+  // track-order down in production, so the pattern is now banned outright — the
+  // [locale] layout is what validates the segment.
+  const { execFileSync } = await import("node:child_process");
+  let hits = "";
+  try {
+    hits = execFileSync("grep", ["-rn", "localeParam !==", "app"], { encoding: "utf8" });
+  } catch {
+    hits = ""; // grep exits 1 when there are no matches
+  }
+  assert.equal(hits.trim(), "", `stale locale guard(s) found:\n${hits}`);
 });

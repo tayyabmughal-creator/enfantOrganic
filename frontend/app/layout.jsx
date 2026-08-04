@@ -55,7 +55,8 @@ function detectLocaleFromNextUrl(nextUrlHeaderValue) {
   const pathname = value.startsWith("http")
     ? new URL(value).pathname
     : value;
-  const match = pathname.match(/^\/(en|ar)(?=\/|$)/i);
+  // Accepts the current /en-om segment as well as the legacy bare /en form.
+  const match = pathname.match(/^\/(en|ar)(-(om|ae|sa))?(?=\/|$)/i);
   return normalizeLocale(match?.[1]?.toLowerCase());
 }
 

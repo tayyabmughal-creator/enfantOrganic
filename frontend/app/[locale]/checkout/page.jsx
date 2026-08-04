@@ -1,4 +1,3 @@
-import { notFound } from "next/navigation";
 
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import CheckoutClient from "@/components/store/checkout/CheckoutClient";
@@ -23,9 +22,6 @@ export default async function CheckoutPage({ params, searchParams }) {
   const resolvedSearchParams = await searchParams;
   const normalizedLocale = normalizeLocale(localeParam);
 
-  if (localeParam !== normalizedLocale) {
-    notFound();
-  }
 
   const region = resolveServerRegion(resolvedSearchParams);
   const navigation = await getNavigationData(normalizedLocale, region);

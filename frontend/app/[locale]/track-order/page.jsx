@@ -1,4 +1,3 @@
-import { notFound } from "next/navigation";
 
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import TrackOrderClient from "@/components/store/order/TrackOrderClient";
@@ -23,9 +22,6 @@ export default async function TrackOrderPage({ params, searchParams }) {
   const resolvedSearchParams = await searchParams;
   const normalizedLocale = normalizeLocale(localeParam);
 
-  if (localeParam !== normalizedLocale) {
-    notFound();
-  }
 
   const region = resolveServerRegion(resolvedSearchParams);
   const navigation = await getNavigationData(normalizedLocale, region);
