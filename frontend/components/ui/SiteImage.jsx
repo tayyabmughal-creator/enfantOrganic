@@ -1,28 +1,7 @@
 import NextImage from "next/image";
 
-// Must stay in sync with images.remotePatterns in next.config.mjs — a host missing
-// here quietly drops to a raw <img> and loses next/image optimisation entirely.
-const OPTIMIZED_HOSTNAMES = [
-  "www.enfantorganic.com",
-  "app.enfantorganic.com",
-  "om.enfantorganic.com",
-  "ae.enfantorganic.com",
-  "sa.enfantorganic.com",
-  "127.0.0.1",
-  "localhost",
-];
-
-function isOptimizable(src) {
-  if (!src || typeof src !== "string") return false;
-  // Relative paths → Next.js handles them natively
-  if (!src.startsWith("http://") && !src.startsWith("https://")) return true;
-  try {
-    const { hostname } = new URL(src);
-    return OPTIMIZED_HOSTNAMES.includes(hostname);
-  } catch {
-    return false;
-  }
-}
+// Shared with the <picture>-based hero, which cannot use next/image directly.
+import { isOptimizable } from "@/lib/imageOptimizer";
 
 /**
  * Drop-in replacement for <img> that uses next/image for known domains.

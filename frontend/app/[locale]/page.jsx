@@ -2,6 +2,7 @@ import Link from "next/link";
 
 export const revalidate = 120; // 2 minutes — admin changes reflect quickly
 
+import ArtDirectedImage from "@/components/ui/ArtDirectedImage";
 import SiteImage from "@/components/ui/SiteImage";
 import Icon from "@/components/icons/Icon";
 import JsonLd from "@/components/seo/JsonLd";
@@ -165,18 +166,14 @@ export default async function LocalizedHomePage({ params, searchParams }) {
                 href={buildStorePath(locale, heroPrimary.href || "/collections", region)}
                 className="offer-primary"
               >
-                <picture>
-                  {heroPrimary.image_mobile ? (
-                    <source media="(max-width: 639px)" srcSet={heroPrimary.image_mobile} />
-                  ) : null}
-                  <img
-                    src={heroPrimary.image}
-                    alt={heroPrimary.title}
-                    className="offer-primary-img"
-                    loading="eager"
-                    fetchPriority="high"
-                  />
-                </picture>
+                <ArtDirectedImage
+                  src={heroPrimary.image}
+                  mobileSrc={heroPrimary.image_mobile}
+                  alt={heroPrimary.title}
+                  className="offer-primary-img"
+                  priority
+                  sizes="(max-width: 900px) 100vw, 60vw"
+                />
                 <div className="offer-copy">
                   {heroPrimary.eyebrow ? (
                     <span className="offer-eyebrow">
@@ -197,17 +194,13 @@ export default async function LocalizedHomePage({ params, searchParams }) {
                 href={buildStorePath(locale, heroSecondary.href || "/collections", region)}
                 className={`offer-secondary${heroLastIsSecondary ? " offer-last-odd" : ""}`}
               >
-                <picture>
-                  {heroSecondary.image_mobile ? (
-                    <source media="(max-width: 639px)" srcSet={heroSecondary.image_mobile} />
-                  ) : null}
-                  <img
-                    src={heroSecondary.image}
-                    alt={heroSecondary.title}
-                    className="offer-secondary-img"
-                    loading="eager"
-                  />
-                </picture>
+                <ArtDirectedImage
+                  src={heroSecondary.image}
+                  mobileSrc={heroSecondary.image_mobile}
+                  alt={heroSecondary.title}
+                  className="offer-secondary-img"
+                  sizes="(max-width: 900px) 100vw, 40vw"
+                />
                 <div className="offer-secondary-copy">
                   {heroSecondary.eyebrow ? (
                     <span className="offer-secondary-eyebrow">
@@ -234,12 +227,13 @@ export default async function LocalizedHomePage({ params, searchParams }) {
                   className={`offer-tile${idx === heroLastOddChipIdx ? " offer-last-odd" : ""}`}
                 >
                   <div className="offer-tile-img">
-                    <picture>
-                      {card.image_mobile ? (
-                        <source media="(max-width: 639px)" srcSet={card.image_mobile} />
-                      ) : null}
-                      <img src={card.image} alt={card.title} loading="lazy" />
-                    </picture>
+                    <ArtDirectedImage
+                      src={card.image}
+                      mobileSrc={card.image_mobile}
+                      alt={card.title}
+                      sizes="(max-width: 639px) 50vw, 25vw"
+                      mobileSizes="50vw"
+                    />
                   </div>
                   <div className="offer-tile-body">
                     {card.eyebrow ? (

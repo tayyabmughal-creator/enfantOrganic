@@ -164,12 +164,15 @@ function ProductCard({ locale, product, region }) {
             sizes="(max-width: 639px) 50vw, (max-width: 1023px) 33vw, 25vw"
           />
           {hoverImage ? (
-            <img
+            <SiteImage
               src={hoverImage}
               alt=""
               aria-hidden="true"
+              width={600}
+              height={600}
               loading="lazy"
               className="product-card-image-secondary"
+              sizes="(max-width: 639px) 50vw, (max-width: 1023px) 33vw, 25vw"
             />
           ) : null}
           {isOutOfStock ? (
