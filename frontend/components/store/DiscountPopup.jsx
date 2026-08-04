@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { ANALYTICS_CONSENT_EVENT, CONSENT_STATES, getConsentState } from "@/lib/analytics";
 import { API_BASE_URL } from "@/lib/config";
+import SiteImage from "@/components/ui/SiteImage";
 
 const DISCOUNT_POPUP_SESSION_KEY = "enfant-discount-popup-dismissed";
 
@@ -199,7 +200,7 @@ export default function DiscountPopup({ locale = "en", navigation }) {
           {status ? <span className={`discount-popup-status is-${status.type}`}>{status.message}</span> : null}
         </div>
         <div className="discount-popup-media">
-          <img src={image} alt="" loading="lazy" />
+          <SiteImage src={image} alt="" width={600} height={600} loading="lazy" sizes="(max-width: 700px) 100vw, 400px" />
         </div>
       </section>
     </div>

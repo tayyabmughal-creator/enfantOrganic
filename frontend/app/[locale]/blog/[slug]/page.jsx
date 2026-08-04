@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 export const revalidate = 120; // 2 minutes — admin changes reflect quickly
 
 import JsonLd from "@/components/seo/JsonLd";
+import SiteImage from "@/components/ui/SiteImage";
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import { ApiError, getBlogBySlug, getNavigationData } from "@/lib/api";
 import { resolveServerRegion } from "@/lib/regionResolver";
@@ -140,7 +141,7 @@ export default async function BlogDetailPage({ params, searchParams }) {
 
           {post.image ? (
             <div className="blog-detail-image">
-              <img src={post.image} alt={post.title} />
+              <SiteImage src={post.image} alt={post.title} width={1200} height={630} priority sizes="(max-width: 900px) 100vw, 800px" />
             </div>
           ) : null}
 

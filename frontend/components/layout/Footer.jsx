@@ -1,6 +1,7 @@
 import { uiText } from "@/lib/storefront";
 import { resolveNavigationHref } from "@/lib/navigationLinks";
 import FooterCurrencyChips from "./FooterCurrencyChips";
+import SiteImage from "@/components/ui/SiteImage";
 
 const SOCIAL_ICONS = {
   facebook_url:  { label: "Facebook",  svg: "M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" },
@@ -41,7 +42,7 @@ export default function Footer({ locale, navigation }) {
       <div className="container footer-panel">
         <div className="footer-column footer-brand">
           <div className="footer-brand-lockup">
-            <img src={logoSrc} alt={s.brand_name || "Enfant Organics"} className="footer-logo" />
+            <SiteImage src={logoSrc} alt={s.brand_name || "Enfant Organics"} width={140} height={96} loading="lazy" className="footer-logo" />
             <div>
               <h4>{(s.brand_name || "ENFANT ORGANICS").toUpperCase()}</h4>
               <span>{tagline}</span>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import Icon from "@/components/icons/Icon";
+import SiteImage from "@/components/ui/SiteImage";
 import { useStore } from "@/components/store/cart/StoreProvider";
 import { buildAnalyticsItem, pushDataLayerEvent } from "@/lib/analytics";
 import { fbqTrack, snaptrTrack, ttqTrack } from "@/components/store/analytics/AnalyticsScripts";
@@ -566,7 +567,15 @@ export default function ProductDetailClient({ locale, product, region }) {
         <div className={`gallery-layout ${galleryImages.length === 1 ? "is-single" : ""}`}>
           <div className="main-product-image-shell">
             <div className={`main-product-image ${galleryImages.length === 1 ? "is-single" : ""}`}>
-              <img src={selectedImage} alt={product.name} />
+              {/* LCP element on product pages — must not be lazy. */}
+              <SiteImage
+                src={selectedImage}
+                alt={product.name}
+                width={900}
+                height={900}
+                priority
+                sizes="(max-width: 900px) 100vw, 50vw"
+              />
             </div>
             <div className="image-zoom-hint">
               <Icon name="search" size={14} />
@@ -582,7 +591,7 @@ export default function ProductDetailClient({ locale, product, region }) {
                   className={`thumb-button ${selectedImage === image ? "is-active" : ""}`}
                   onClick={() => setSelectedImage(image)}
                 >
-                  <img src={image} alt={product.name} loading="lazy" />
+                  <SiteImage src={image} alt={product.name} width={120} height={120} loading="lazy" sizes="120px" />
                 </button>
               ))}
             </div>
@@ -931,7 +940,7 @@ export default function ProductDetailClient({ locale, product, region }) {
                                 {Array.isArray(review.images) && review.images.length ? (
                                   <div className="product-review-images" aria-label={isAr ? "صور المراجعة" : "Review photos"}>
                                     {review.images.map((image) => (
-                                      <img key={image} src={image} alt="" loading="lazy" />
+                                      <SiteImage key={image} src={image} alt="" width={96} height={96} loading="lazy" sizes="96px" />
                                     ))}
                                   </div>
                                 ) : null}

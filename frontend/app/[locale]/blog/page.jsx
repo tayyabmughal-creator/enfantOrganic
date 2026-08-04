@@ -3,6 +3,7 @@ import Link from "next/link";
 export const revalidate = 120; // 2 minutes — admin changes reflect quickly
 
 import StorefrontShell from "@/components/layout/StorefrontShell";
+import SiteImage from "@/components/ui/SiteImage";
 import { getBlogList, getNavigationData } from "@/lib/api";
 import { resolveServerRegion } from "@/lib/regionResolver";
 import { buildSeoMetadata } from "@/lib/seo";
@@ -70,7 +71,7 @@ export default async function BlogIndexPage({ params, searchParams }) {
                 className="blog-card"
               >
                 <div className="blog-card-image">
-                  <img src={post.image} alt={post.title} loading="lazy" />
+                  <SiteImage src={post.image} alt={post.title} width={800} height={450} loading="lazy" sizes="(max-width: 639px) 100vw, 33vw" />
                 </div>
                 <div className="blog-card-body">
                   <span className="blog-date">{post.published_at}</span>
