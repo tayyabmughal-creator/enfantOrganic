@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useStore } from "@/components/store/cart/StoreProvider";
+import SiteImage from "@/components/ui/SiteImage";
 import Icon from "@/components/icons/Icon";
 import { buildAnalyticsItems, buildTikTokContents, pushDataLayerEvent } from "@/lib/analytics";
 import {
@@ -2043,7 +2044,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
             <div className="summary-lines">
               {cartItems.map((item) => (
                 <div key={item.lineId} className="summary-line">
-                  <img src={item.image} alt={item.name} />
+                  <SiteImage src={item.image} alt={item.name} width={120} height={120} loading="lazy" sizes="120px" />
                   <div>
                     <strong>{item.name}</strong>
                     {item.selectedOptionsText ? <span>{item.selectedOptionsText}</span> : null}

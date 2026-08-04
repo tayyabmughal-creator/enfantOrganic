@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 import Icon from "@/components/icons/Icon";
+import SiteImage from "@/components/ui/SiteImage";
 import CartApplePayButton from "@/components/store/cart/CartApplePayButton";
 import { useStore } from "@/components/store/cart/StoreProvider";
 import { useLocale } from "@/contexts/LocaleContext";
@@ -197,7 +198,7 @@ function CartDrawerInner() {
               cartItems.map((item) => (
                 <article key={item.lineId} className="cart-line-item">
                   <div className="cart-line-media">
-                    <img src={item.image} alt={item.name} />
+                    <SiteImage src={item.image} alt={item.name} width={120} height={120} loading="lazy" sizes="120px" />
                   </div>
                   <div className="cart-line-copy">
                     <strong>{item.name}</strong>

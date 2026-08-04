@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 
 import Icon from "@/components/icons/Icon";
+import SiteImage from "@/components/ui/SiteImage";
 import { useStore } from "@/components/store/cart/StoreProvider";
 import {
   fetchWishlistItems,
@@ -311,7 +312,7 @@ export default function WishlistClient({ locale, region }) {
                         </span>
                       ) : null}
                     </div>
-                    <img src={product.image} alt={product.name} loading="lazy" />
+                    <SiteImage src={product.image} alt={product.name} width={600} height={600} loading="lazy" sizes="(max-width: 639px) 50vw, 25vw" />
                   </Link>
                   <div className="wishlist-card-body">
                     {chips.length ? (
