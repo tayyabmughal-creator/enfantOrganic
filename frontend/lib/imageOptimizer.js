@@ -17,9 +17,41 @@ export const DEVICE_WIDTHS = [390, 640, 750, 828, 1080, 1200, 1920];
 
 const DEFAULT_QUALITY = 82;
 
+// /media is served by Django, not by Next.js. The optimizer resolves a relative
+// src against its own origin, where that path does not exist, so a root-relative
+// media path comes back as HTTP 400 and the image renders broken. Product images
+// arrive absolute from the API but *variant* images arrive relative, which is why
+// only variant products were affected.
+const EXTERNALLY_SERVED_PREFIX = "/media/";
+
+function siteOrigin() {
+  // Read from the env rather than window.location so server and client render the
+  // identical URL and hydration stays consistent.
+  const raw = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "";
+  return String(raw).replace(/\/+$/, "");
+}
+
+/**
+ * Absolutises paths the optimizer cannot resolve on its own.
+ *
+ * Next's own public assets (/enfant, /icons, …) stay relative — those it serves
+ * itself and they optimise correctly today.
+ */
+export function resolveImageSrc(src) {
+  if (!src || typeof src !== "string" || !src.startsWith(EXTERNALLY_SERVED_PREFIX)) {
+    return src;
+  }
+  const origin = siteOrigin();
+  // With no configured origin, leaving the path relative is the safe outcome:
+  // isOptimizable then declines it and the browser resolves it as a plain <img>.
+  return origin ? `${origin}${src}` : src;
+}
+
 export function isOptimizable(src) {
   if (!src || typeof src !== "string") return false;
-  // Relative paths are always served by this app, so the optimizer can handle them.
+  // A media path with no configured origin cannot be optimised — see resolveImageSrc.
+  if (src.startsWith(EXTERNALLY_SERVED_PREFIX)) return false;
+  // Next.js serves its own public assets, so those are always optimisable.
   if (!src.startsWith("http://") && !src.startsWith("https://")) return true;
   try {
     return OPTIMIZED_HOSTNAMES.includes(new URL(src).hostname);
@@ -37,14 +69,16 @@ export function isOptimizable(src) {
  * cause of a 22s LCP on mobile.
  */
 export function buildOptimizedSrc(src, width, quality = DEFAULT_QUALITY) {
-  if (!isOptimizable(src)) return src;
-  return `/_next/image?url=${encodeURIComponent(src)}&w=${width}&q=${quality}`;
+  const resolved = resolveImageSrc(src);
+  if (!isOptimizable(resolved)) return resolved;
+  return `/_next/image?url=${encodeURIComponent(resolved)}&w=${width}&q=${quality}`;
 }
 
 export function buildOptimizedSrcSet(src, widths = DEVICE_WIDTHS, quality = DEFAULT_QUALITY) {
-  if (!isOptimizable(src)) return undefined;
+  const resolved = resolveImageSrc(src);
+  if (!isOptimizable(resolved)) return undefined;
   return widths
     .filter((width) => DEVICE_WIDTHS.includes(width))
-    .map((width) => `${buildOptimizedSrc(src, width, quality)} ${width}w`)
+    .map((width) => `${buildOptimizedSrc(resolved, width, quality)} ${width}w`)
     .join(", ");
 }

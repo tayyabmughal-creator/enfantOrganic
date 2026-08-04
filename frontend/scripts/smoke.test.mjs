@@ -11,6 +11,7 @@ import {
   replaceRegionInPath,
 } from "../lib/storefront-core/routing.js";
 import { resolveLegacyShopifyPath } from "../lib/legacyRedirects.js";
+import { buildOptimizedSrc, isOptimizable, resolveImageSrc } from "../lib/imageOptimizer.js";
 import {
   isBrowserUnreachableApiBase,
   safeRedirectUrl,
@@ -158,4 +159,27 @@ test("no page compares the raw locale param against a normalized locale", async 
     hits = ""; // grep exits 1 when there are no matches
   }
   assert.equal(hits.trim(), "", `stale locale guard(s) found:\n${hits}`);
+});
+
+test("root-relative media paths are absolutised before the optimizer sees them", () => {
+  // Product images arrive absolute from the API but variant images arrive
+  // root-relative. /media is served by Django, not Next, so the optimizer cannot
+  // resolve a relative path and answers 400 — which rendered variant products
+  // with a broken main image.
+  const base = process.env.NEXT_PUBLIC_APP_URL || "";
+  const variantPath = "/media/products/gallery/img-44.webp";
+
+  if (base) {
+    assert.equal(resolveImageSrc(variantPath), `${base.replace(/\/+$/, "")}${variantPath}`);
+    assert.ok(buildOptimizedSrc(variantPath, 828).startsWith("/_next/image?url=http"));
+  } else {
+    // With no configured origin the path must stay relative so the browser can
+    // resolve it as a plain <img> rather than 400 through the optimizer.
+    assert.equal(resolveImageSrc(variantPath), variantPath);
+    assert.equal(isOptimizable(variantPath), false);
+  }
+
+  // Next's own public assets must keep working relative.
+  assert.equal(resolveImageSrc("/enfant/enfant-logo.png"), "/enfant/enfant-logo.png");
+  assert.equal(isOptimizable("/enfant/enfant-logo.png"), true);
 });

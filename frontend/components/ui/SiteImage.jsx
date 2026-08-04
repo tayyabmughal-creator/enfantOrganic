@@ -1,7 +1,7 @@
 import NextImage from "next/image";
 
 // Shared with the <picture>-based hero, which cannot use next/image directly.
-import { isOptimizable } from "@/lib/imageOptimizer";
+import { isOptimizable, resolveImageSrc } from "@/lib/imageOptimizer";
 
 /**
  * Drop-in replacement for <img> that uses next/image for known domains.
@@ -17,8 +17,12 @@ import { isOptimizable } from "@/lib/imageOptimizer";
 export default function SiteImage({ src, alt = "", fill, sizes, width, height, priority, loading, className, style, quality, ...rest }) {
   if (!src) return null;
 
-  if (isOptimizable(src)) {
-    const props = { src, alt, className, style, quality: quality || 82, ...rest };
+  // Variant images come back from the API as root-relative /media paths, which the
+  // optimizer cannot resolve on its own — see resolveImageSrc.
+  const resolved = resolveImageSrc(src);
+
+  if (isOptimizable(resolved)) {
+    const props = { src: resolved, alt, className, style, quality: quality || 82, ...rest };
     if (fill) {
       props.fill = true;
       if (sizes) props.sizes = sizes;
@@ -37,7 +41,7 @@ export default function SiteImage({ src, alt = "", fill, sizes, width, height, p
   // Fallback: unknown domain — render plain img so image is never blank
   return (
     <img
-      src={src}
+      src={resolved}
       alt={alt}
       width={width}
       height={height}
