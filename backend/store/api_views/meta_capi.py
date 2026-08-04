@@ -46,6 +46,7 @@ class MetaCapiEventView(APIView):
         event_id: "<same id the Pixel used>",
         event_source_url: "<window.location.href>",
         fbp / fbc: "<_fbp / _fbc cookie values>",
+        external_id: "<storefront session id, used when the visitor is a guest>",
         user_data: { email, phone, first_name, last_name, city, postcode, country },
         custom_data: { currency, value, content_ids, contents, num_items },
     }
@@ -91,8 +92,15 @@ class MetaCapiEventView(APIView):
             postcode=raw_user.get("postcode", ""),
             country=raw_user.get("country", ""),
             region_code=str(request.data.get("region_code") or "").strip().lower(),
+            # A signed-in user is the stronger, non-forgeable identity, so it wins.
+            # Otherwise fall back to the storefront's session id: Meta needs at
+            # least one matching key or it drops the event for attribution, and on
+            # browse events there is nothing else to offer. It is hashed downstream,
+            # so the raw value never reaches Meta.
             external_id=(
-                str(request.user.pk) if request.user and request.user.is_authenticated else ""
+                str(request.user.pk)
+                if request.user and request.user.is_authenticated
+                else str(request.data.get("external_id") or "").strip()[:128]
             ),
             fbp=str(request.data.get("fbp") or "").strip()[:128],
             fbc=str(request.data.get("fbc") or "").strip()[:255],

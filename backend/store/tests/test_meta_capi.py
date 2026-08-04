@@ -11,6 +11,7 @@ import hashlib
 from decimal import Decimal
 from unittest.mock import patch
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
@@ -351,6 +352,48 @@ class MetaCapiRelayEndpointTests(TestCase):
         # claim any IP it liked.
         self.assertEqual(payload["user_data"]["client_ip_address"], "203.0.113.9")
         self.assertEqual(payload["user_data"]["client_user_agent"], "Mozilla/5.0 (iPhone)")
+
+    def test_guest_browse_event_still_carries_a_matching_key(self):
+        # Meta counts only matching keys (em/ph/fbp/external_id/...) — client_ip_address
+        # and client_user_agent do not qualify. A guest viewing a product has no
+        # email yet, and `_fbp` is absent whenever the Pixel is blocked, which is
+        # exactly the traffic CAPI exists to recover. Without external_id these
+        # events were rejected for attribution.
+        with patch("store.api_views.meta_capi.send_meta_capi_event_async.delay") as delay:
+            response = self.client.post(
+                self.url,
+                {
+                    "event_name": "ViewContent",
+                    "event_id": "view-content-1",
+                    "external_id": "session-abc-123",
+                },
+                content_type="application/json",
+                HTTP_USER_AGENT="Mozilla/5.0 (iPhone)",
+                HTTP_X_FORWARDED_FOR="203.0.113.9",
+            )
+
+        self.assertEqual(response.status_code, 202)
+        user_data = delay.call_args.args[0]["user_data"]
+        self.assertEqual(user_data["external_id"], [sha256("session-abc-123")])
+        matching_keys = {"em", "ph", "fn", "ln", "ct", "zp", "country", "external_id", "fbp", "fbc"}
+        self.assertTrue(matching_keys & set(user_data))
+
+    def test_session_external_id_never_overrides_a_signed_in_user(self):
+        user = get_user_model().objects.create_user(username="shopper", password="pw12345!")
+        self.client.force_login(user)
+        with patch("store.api_views.meta_capi.send_meta_capi_event_async.delay") as delay:
+            self.client.post(
+                self.url,
+                {
+                    "event_name": "ViewContent",
+                    "event_id": "view-content-2",
+                    "external_id": "spoofed-session",
+                },
+                content_type="application/json",
+            )
+
+        user_data = delay.call_args.args[0]["user_data"]
+        self.assertEqual(user_data["external_id"], [sha256(str(user.pk))])
 
     def test_purchase_cannot_be_relayed_through_the_open_endpoint(self):
         # Purchase is sent from the order record instead, so nobody can post a

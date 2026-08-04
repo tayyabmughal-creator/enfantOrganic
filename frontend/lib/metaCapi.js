@@ -14,6 +14,7 @@
  */
 
 import { API_BASE_URL } from "./config.js";
+import { getOrCreateSessionKey } from "./eventTracking.js";
 
 // Purchase is absent on purpose: it is sent from the order record server-side,
 // so a value cannot be forged by anyone posting to the open relay endpoint.
@@ -94,6 +95,14 @@ export function relayMetaEvent(eventName, { eventId, customData = {}, userData =
     event_source_url: window.location.href,
     fbp: getFbp(),
     fbc: getFbc(),
+    // Meta requires at least one *matching* key per event; client_ip_address and
+    // client_user_agent do not count. On ViewContent/AddToCart there is no email
+    // or phone yet, and `_fbp` only exists once the Pixel has run — so for anyone
+    // blocking the Pixel (precisely the traffic CAPI exists to recover) the event
+    // arrived with no identifier at all and Meta rejected it for attribution.
+    // The storefront's own session id is a stable, first-party identifier and is
+    // hashed server-side before it reaches Meta.
+    external_id: getOrCreateSessionKey(),
     region_code: regionCode,
     user_data: userData,
     custom_data: customData,
