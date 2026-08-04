@@ -68,7 +68,7 @@ jobs:
           username: ${{ steps.ssh_target.outputs.user }}
           key: ${{ secrets.HOSTINGER_SSH_KEY }}
           port: ${{ steps.ssh_target.outputs.port }}
-          timeout: 2m
+          timeout: 10m
           command_timeout: 5m
           script: |
             set -e
@@ -99,7 +99,7 @@ jobs:
           username: ${{ steps.ssh_target.outputs.user }}
           key: ${{ secrets.HOSTINGER_SSH_KEY }}
           port: ${{ steps.ssh_target.outputs.port }}
-          timeout: 2m
+          timeout: 10m
           command_timeout: 20m
           script: |
             set -e
@@ -138,7 +138,7 @@ jobs:
           username: ${{ steps.ssh_target.outputs.user }}
           key: ${{ secrets.HOSTINGER_SSH_KEY }}
           port: ${{ steps.ssh_target.outputs.port }}
-          timeout: 2m
+          timeout: 10m
           command_timeout: 20m
           script_stop: false
           script: |
@@ -332,7 +332,7 @@ jobs:
           username: ${{ steps.ssh_target.outputs.user }}
           key: ${{ secrets.HOSTINGER_SSH_KEY }}
           port: ${{ steps.ssh_target.outputs.port }}
-          timeout: 2m
+          timeout: 10m
           command_timeout: 5m
           script: |
             set -e
@@ -363,7 +363,7 @@ jobs:
           username: ${{ steps.ssh_target.outputs.user }}
           key: ${{ secrets.HOSTINGER_SSH_KEY }}
           port: ${{ steps.ssh_target.outputs.port }}
-          timeout: 2m
+          timeout: 10m
           command_timeout: 20m
           script: |
             set -e
@@ -402,7 +402,7 @@ jobs:
           username: ${{ steps.ssh_target.outputs.user }}
           key: ${{ secrets.HOSTINGER_SSH_KEY }}
           port: ${{ steps.ssh_target.outputs.port }}
-          timeout: 2m
+          timeout: 10m
           command_timeout: 20m
           script_stop: false
           script: |
