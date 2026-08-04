@@ -140,7 +140,15 @@ function findSelectedVariant(variants, selectedOptions) {
   );
 }
 
-function getCompatibleValues(variants, groupName, selectedOptions) {
+function getCompatibleValues(variants, groupName, selectedOptions, groupValues = []) {
+  // Plenty of products carry a descriptive option group — "Size: 500 ml" — with no
+  // variants behind it. Deriving availability from an empty variant list marked
+  // every such value unavailable, which rendered the only size faded and struck
+  // through. With nothing to be incompatible with, every value stays selectable.
+  if (!Array.isArray(variants) || !variants.length) {
+    return new Set(groupValues);
+  }
+
   return new Set(
     variants
       .filter((v) =>
@@ -657,7 +665,7 @@ export default function ProductDetailClient({ locale, product, region }) {
           {/* Purchase Meta */}
           <div className="product-purchase-meta">
             {optionGroups.map((group) => {
-              const compatible = getCompatibleValues(variants, group.name, selectedOptions);
+              const compatible = getCompatibleValues(variants, group.name, selectedOptions, group.values);
               return (
                 <div key={group.name} className="summary-block product-option-block">
                   <h4>{group.name}</h4>
