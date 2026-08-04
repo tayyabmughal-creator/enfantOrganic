@@ -55,6 +55,30 @@ jobs:
           [ -n "$deploy_path" ] || { echo "FATAL: HOSTINGER_DEPLOY_PATH is empty."; exit 1; }
           { echo "host=$ssh_host"; echo "port=$ssh_port"; echo "user=$ssh_user"; echo "deploy_path=$deploy_path"; } >> "$GITHUB_OUTPUT"
 
+      # scp only adds and overwrites — it never removes files deleted from the repo.
+      # Orphans therefore accumulated on the server and kept being compiled into
+      # builds: a deleted app/[locale]/loading.jsx survived and silently
+      # reintroduced soft 404s long after it was gone from git. Uploading into a
+      # staging directory and mirroring it across with --delete makes the server
+      # tree match the commit exactly.
+      - name: Reset upload staging
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ steps.ssh_target.outputs.host }}
+          username: ${{ steps.ssh_target.outputs.user }}
+          key: ${{ secrets.HOSTINGER_SSH_KEY }}
+          port: ${{ steps.ssh_target.outputs.port }}
+          timeout: 2m
+          command_timeout: 5m
+          script: |
+            set -e
+            command -v rsync >/dev/null 2>&1 || { echo "FATAL: rsync is required on the server."; exit 1; }
+            staging="${{ steps.ssh_target.outputs.deploy_path }}/.deploy-staging"
+            # Wipe first: a staging dir left over from a previous run would still
+            # hold files that have since been deleted, defeating the whole point.
+            rm -rf "$staging"
+            mkdir -p "$staging"
+
       - name: Upload project to server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -63,10 +87,49 @@ jobs:
           key: ${{ secrets.HOSTINGER_SSH_KEY }}
           port: ${{ steps.ssh_target.outputs.port }}
           source: "backend,frontend,deploy,scripts,docker-compose.prod.yml,.env.production.example"
-          target: ${{ steps.ssh_target.outputs.deploy_path }}
+          target: ${{ steps.ssh_target.outputs.deploy_path }}/.deploy-staging
           overwrite: true
           timeout: 10m
           command_timeout: 45m
+
+      - name: Mirror staged tree into the deploy path
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ steps.ssh_target.outputs.host }}
+          username: ${{ steps.ssh_target.outputs.user }}
+          key: ${{ secrets.HOSTINGER_SSH_KEY }}
+          port: ${{ steps.ssh_target.outputs.port }}
+          timeout: 2m
+          command_timeout: 20m
+          script: |
+            set -e
+            deploy_path="${{ steps.ssh_target.outputs.deploy_path }}"
+            staging="$deploy_path/.deploy-staging"
+
+            # --delete is pointed ONLY at these four repo-owned directories. The
+            # deploy path is the deploy user's home and also holds Images/,
+            # backups/, products_export_1.csv and the user's own dotfiles — none of
+            # which are uploaded, so mirroring the whole path would destroy them.
+            for dir in backend frontend deploy scripts; do
+              if [ ! -d "$staging/$dir" ]; then
+                echo "FATAL: $dir missing from upload — refusing to sync a partial tree."
+                exit 1
+              fi
+            done
+
+            for dir in backend frontend deploy scripts; do
+              rsync -a --delete "$staging/$dir/" "$deploy_path/$dir/"
+              echo "synced $dir"
+            done
+
+            for file in docker-compose.prod.yml .env.production.example; do
+              if [ -f "$staging/$file" ]; then
+                cp -f "$staging/$file" "$deploy_path/$file"
+                echo "copied $file"
+              fi
+            done
+
+            rm -rf "$staging"
 
       - name: Run deployment on server
         uses: appleboy/ssh-action@v1.2.0
@@ -256,6 +319,30 @@ jobs:
           [ -n "$deploy_path" ] || { echo "FATAL: HOSTINGER_DEPLOY_PATH is empty."; exit 1; }
           { echo "host=$ssh_host"; echo "port=$ssh_port"; echo "user=$ssh_user"; echo "deploy_path=$deploy_path"; } >> "$GITHUB_OUTPUT"
 
+      # scp only adds and overwrites — it never removes files deleted from the repo.
+      # Orphans therefore accumulated on the server and kept being compiled into
+      # builds: a deleted app/[locale]/loading.jsx survived and silently
+      # reintroduced soft 404s long after it was gone from git. Uploading into a
+      # staging directory and mirroring it across with --delete makes the server
+      # tree match the commit exactly.
+      - name: Reset upload staging
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ steps.ssh_target.outputs.host }}
+          username: ${{ steps.ssh_target.outputs.user }}
+          key: ${{ secrets.HOSTINGER_SSH_KEY }}
+          port: ${{ steps.ssh_target.outputs.port }}
+          timeout: 2m
+          command_timeout: 5m
+          script: |
+            set -e
+            command -v rsync >/dev/null 2>&1 || { echo "FATAL: rsync is required on the server."; exit 1; }
+            staging="${{ steps.ssh_target.outputs.deploy_path }}/.deploy-staging"
+            # Wipe first: a staging dir left over from a previous run would still
+            # hold files that have since been deleted, defeating the whole point.
+            rm -rf "$staging"
+            mkdir -p "$staging"
+
       - name: Upload project to server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -264,10 +351,49 @@ jobs:
           key: ${{ secrets.HOSTINGER_SSH_KEY }}
           port: ${{ steps.ssh_target.outputs.port }}
           source: "backend,frontend,deploy,scripts,docker-compose.prod.yml,.env.production.example"
-          target: ${{ steps.ssh_target.outputs.deploy_path }}
+          target: ${{ steps.ssh_target.outputs.deploy_path }}/.deploy-staging
           overwrite: true
           timeout: 10m
           command_timeout: 45m
+
+      - name: Mirror staged tree into the deploy path
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ steps.ssh_target.outputs.host }}
+          username: ${{ steps.ssh_target.outputs.user }}
+          key: ${{ secrets.HOSTINGER_SSH_KEY }}
+          port: ${{ steps.ssh_target.outputs.port }}
+          timeout: 2m
+          command_timeout: 20m
+          script: |
+            set -e
+            deploy_path="${{ steps.ssh_target.outputs.deploy_path }}"
+            staging="$deploy_path/.deploy-staging"
+
+            # --delete is pointed ONLY at these four repo-owned directories. The
+            # deploy path is the deploy user's home and also holds Images/,
+            # backups/, products_export_1.csv and the user's own dotfiles — none of
+            # which are uploaded, so mirroring the whole path would destroy them.
+            for dir in backend frontend deploy scripts; do
+              if [ ! -d "$staging/$dir" ]; then
+                echo "FATAL: $dir missing from upload — refusing to sync a partial tree."
+                exit 1
+              fi
+            done
+
+            for dir in backend frontend deploy scripts; do
+              rsync -a --delete "$staging/$dir/" "$deploy_path/$dir/"
+              echo "synced $dir"
+            done
+
+            for file in docker-compose.prod.yml .env.production.example; do
+              if [ -f "$staging/$file" ]; then
+                cp -f "$staging/$file" "$deploy_path/$file"
+                echo "copied $file"
+              fi
+            done
+
+            rm -rf "$staging"
 
       - name: Run deployment on server
         uses: appleboy/ssh-action@v1.2.0
