@@ -19,6 +19,25 @@
   animation: skeleton-pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+/* ── Bidi isolation for Latin content inside the Arabic (RTL) layout ─────────
+   Money, measurements and admin-entered option values are formatted in Latin
+   ("OMR 20", "280 ml", "3 Packs/ 60 Sheets"). Under the Arabic RTL base
+   direction the leading number is reordered to the end, so these rendered as
+   "20 OMR", "ml 280" and "Packs/ 60 Sheets 3".
+
+   `plaintext` resolves each element from its own first strong character rather
+   than from the page direction, so Latin values read left-to-right while any
+   Arabic value in the same slot still reads right-to-left. Element position in
+   the surrounding layout is unaffected and continues to mirror. */
+.announcement-copy,
+.product-feature-pill,
+.option-pill,
+.ms-msg,
+.ms-pin-label,
+.cart-line-copy > * {
+  unicode-bidi: plaintext;
+}
+
 /* Force Western/Latin digits (0–9) everywhere — even in Arabic locale.
    Without this, browsers may render numbers as Eastern Arabic (٠–٩) which
    the brand does not use. */
