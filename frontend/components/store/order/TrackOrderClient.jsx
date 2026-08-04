@@ -49,7 +49,7 @@ export default function TrackOrderClient({ locale, region }) {
       }
       saveOrderLookupToken(data.order_number, t);
       router.push(
-        `${buildStorePath(locale, `/thank-you/${data.order_number}`, region)}&t=${encodeURIComponent(t)}`,
+        `${buildStorePath(locale, `/thank-you/${data.order_number}`, region)}?t=${encodeURIComponent(t)}`,
       );
     } catch (err) {
       setError(err.message || "Order not found.");
@@ -91,8 +91,8 @@ export default function TrackOrderClient({ locale, region }) {
       }
 
       const suffix = cleanToken
-        ? `&t=${encodeURIComponent(cleanToken)}`
-        : `&email_or_phone=${encodeURIComponent(cleanEmailOrPhone)}`;
+        ? `?t=${encodeURIComponent(cleanToken)}`
+        : `?email_or_phone=${encodeURIComponent(cleanEmailOrPhone)}`;
       router.push(`${buildStorePath(locale, `/thank-you/${data.order_number}`, region)}${suffix}`);
     } catch (err) {
       setError(err.message || "Order not found.");

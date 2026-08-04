@@ -234,7 +234,7 @@ export default function AccountClient({ locale, region }) {
                     </strong>
                     <div className="order-row-actions">
                       <a
-                        href={`${buildStorePath(locale, `/thank-you/${order.order_number}`, region)}&email_or_phone=${encodeURIComponent(profile.email || "")}`}
+                        href={`${buildStorePath(locale, `/thank-you/${order.order_number}`, region)}?email_or_phone=${encodeURIComponent(profile.email || "")}`}
                         className="order-view-link"
                       >
                         {isAr ? "عرض" : "View"}

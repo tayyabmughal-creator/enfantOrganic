@@ -1,100 +1,151 @@
 import { NextResponse } from "next/server";
 
+import { resolveLegacyShopifyPath } from "@/lib/legacyRedirects";
 import { getLocaleDir } from "@/lib/seo";
-import { normalizeLocale } from "@/lib/storefront";
+import {
+  DEFAULT_LOCALE,
+  DEFAULT_REGION,
+  SUPPORTED_REGIONS,
+  buildStorePath,
+  formatLocaleRegion,
+  normalizeLocale,
+  parseLocaleRegionFromPath,
+} from "@/lib/storefront";
 
-const LOCALE_PATTERN = /^\/(en|ar)(?=\/|$)/i;
 const LOCALE_COOKIE = "enfant-locale";
 const REGION_COOKIE = "enfant-region";
-const SUPPORTED_REGIONS = ["om", "ae", "sa"];
-const WWW_HOSTS = new Set(["www.enfantorganic.com", "enfantorganic.com", "app.enfantorganic.com"]);
 
-const IP_COUNTRY_TO_REGION = { OM: "om", AE: "ae", SA: "sa" };
+// www is the single canonical host: one domain means one authority pool, and the
+// brand's inbound links from the Shopify era all point here.
+const CANONICAL_HOST = "www.enfantorganic.com";
+const REGION_SUBDOMAIN = /^(om|ae|sa)\.enfantorganic\.com$/i;
+const NON_CANONICAL_HOSTS = /^(enfantorganic\.com|app\.enfantorganic\.com)$/i;
+
+// Routes that are not part of the localized storefront and must pass through untouched.
+const PASSTHROUGH = /^\/(api|_next|django-admin|admin|checkout\/return|offline|manifest\.webmanifest)(\/|$)/;
 
 function pickRegion(raw) {
-  const v = String(raw || "").toLowerCase().trim();
-  return SUPPORTED_REGIONS.includes(v) ? v : "";
+  const value = String(raw || "").toLowerCase().trim();
+  return SUPPORTED_REGIONS.includes(value) ? value : "";
 }
 
-async function detectRegionFromIp(ip) {
-  if (!ip || ip === "127.0.0.1" || ip === "::1") return "";
-  try {
-    const res = await fetch(
-      `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,countryCode`,
-      { signal: AbortSignal.timeout(1500) },
-    );
-    if (!res.ok) return "";
-    const data = await res.json();
-    if (data?.status !== "success") return "";
-    return IP_COUNTRY_TO_REGION[data?.countryCode] || "";
-  } catch {
-    return "";
-  }
+function regionForRedirect(request) {
+  return (
+    pickRegion(request.nextUrl.searchParams.get("region")) ||
+    pickRegion(request.cookies.get(REGION_COOKIE)?.value) ||
+    DEFAULT_REGION
+  );
+}
+
+function localeForRedirect(request, fallback) {
+  const cookieLocale = request.cookies.get(LOCALE_COOKIE)?.value;
+  return normalizeLocale(cookieLocale || fallback || DEFAULT_LOCALE);
+}
+
+function redirectTo(request, pathWithQuery, status) {
+  const target = new URL(pathWithQuery, `https://${CANONICAL_HOST}`);
+  // Region now lives in the path segment; a leftover query param would only
+  // create a second URL for identical content.
+  target.searchParams.delete("region");
+  return NextResponse.redirect(target, { status });
 }
 
 export async function middleware(request) {
-  const requestHeaders = new Headers(request.headers);
   const hostname = (request.headers.get("host") || "").split(":")[0];
-  const pathname = request.nextUrl.pathname;
+  const { pathname, search } = request.nextUrl;
 
-  // ── Locale ──────────────────────────────────────────────────────────────
-  const cookieLocale = request.cookies.get(LOCALE_COOKIE)?.value;
-  const urlMatch = pathname.match(LOCALE_PATTERN);
-  const locale = normalizeLocale(cookieLocale || urlMatch?.[1]?.toLowerCase());
+  if (PASSTHROUGH.test(pathname)) {
+    return NextResponse.next();
+  }
+
+  const isLocalHost = /^(localhost|127\.0\.0\.1|\[::1\])$/i.test(hostname);
+
+  // ── Non-canonical hosts → 301 to www ─────────────────────────────────────
+  // The region subdomains carried real content until now, so their region is
+  // folded into the destination path rather than dropped.
+  if (!isLocalHost) {
+    const subdomainMatch = hostname.match(REGION_SUBDOMAIN);
+    if (subdomainMatch) {
+      const subRegion = subdomainMatch[1].toLowerCase();
+      const parsed = parseLocaleRegionFromPath(pathname);
+      const rest = parsed ? pathname.split("/").slice(2).join("/") : pathname.replace(/^\//, "");
+      const locale = parsed ? parsed.locale : localeForRedirect(request);
+      return redirectTo(request, `${buildStorePath(locale, `/${rest}`, subRegion)}${search}`, 301);
+    }
+
+    if (NON_CANONICAL_HOSTS.test(hostname)) {
+      return redirectTo(request, `${pathname}${search}`, 301);
+    }
+  }
+
+  // ── Legacy Shopify URLs → 301 ────────────────────────────────────────────
+  const legacyTarget = resolveLegacyShopifyPath(pathname, regionForRedirect(request));
+  if (legacyTarget) {
+    return redirectTo(request, legacyTarget, 301);
+  }
+
+  const parsed = parseLocaleRegionFromPath(pathname);
+
+  // ── Root → the visitor's storefront ──────────────────────────────────────
+  // 302, not 301: the destination depends on a saved preference, and x-default
+  // points at /en-om which stays directly crawlable.
+  if (pathname === "/") {
+    const locale = localeForRedirect(request);
+    return redirectTo(request, `${buildStorePath(locale, "", regionForRedirect(request))}${search}`, 302);
+  }
+
+  // ── Legacy bare-locale paths (/en/…, /ar/…) → 301 ────────────────────────
+  if (parsed && !parsed.canonical) {
+    const rest = pathname.split("/").slice(2).join("/");
+    return redirectTo(
+      request,
+      `${buildStorePath(parsed.locale, `/${rest}`, regionForRedirect(request))}${search}`,
+      301,
+    );
+  }
+
+  // Anything that is not a storefront path falls through to Next's own 404.
+  if (!parsed) {
+    return NextResponse.next();
+  }
+
+  // ── Canonical /{locale}-{region}/… ───────────────────────────────────────
+  // Region comes from the URL and only the URL — never from IP or cookie — so
+  // every visitor and crawler sees identical content at a given address.
+  const { locale, region } = parsed;
+  const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-enfant-locale", locale);
   requestHeaders.set("x-enfant-dir", getLocaleDir(locale));
+  requestHeaders.set("x-enfant-region", region);
 
-  // ── Region ──────────────────────────────────────────────────────────────
-  // nginxRegion: set by host nginx when request arrives via om/ae/sa subdomain
-  const nginxRegion = pickRegion(request.headers.get("x-region"));
-  const urlRegion = pickRegion(request.nextUrl.searchParams.get("region"));
-  const cookieRegion = pickRegion(request.cookies.get(REGION_COOKIE)?.value);
-  const activeRegion = nginxRegion || urlRegion || cookieRegion || "om";
-  requestHeaders.set("x-enfant-region", activeRegion);
-
-  // ── www / apex → region-subdomain redirect ───────────────────────────────
-  // Skips admin and Next.js internals.
-  const isAdminPath = /^\/(django-admin|_next)/.test(pathname);
-  const isWww = WWW_HOSTS.has(hostname);
-
-  if (isWww && !isAdminPath) {
-    let redirectRegion = urlRegion || cookieRegion;
-    if (!redirectRegion) {
-      const clientIp =
-        request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-        request.headers.get("x-real-ip") ||
-        "";
-      redirectRegion = await detectRegionFromIp(clientIp) || "om";
+  const response = (() => {
+    // Page components still read the region from searchParams; inject it internally
+    // so the public URL stays clean without touching every page.
+    if (request.nextUrl.searchParams.get("region") !== region) {
+      const url = request.nextUrl.clone();
+      url.searchParams.set("region", region);
+      return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
     }
-    const redirectUrl = new URL(
-      `https://${redirectRegion}.enfantorganic.com${pathname}${request.nextUrl.search}`
-    );
-    redirectUrl.searchParams.delete("region");
-    const response = NextResponse.redirect(redirectUrl, { status: 302 });
-    response.cookies.set(REGION_COOKIE, redirectRegion, {
-      path: "/",
-      domain: ".enfantorganic.com",
-      maxAge: 60 * 60 * 24 * 365,
-      sameSite: "lax",
-      secure: true,
-    });
-    return response;
-  }
+    return NextResponse.next({ request: { headers: requestHeaders } });
+  })();
 
-  // ── Subdomain: inject ?region= so existing page code works unchanged ─────
-  // Host nginx sets X-Region; we rewrite the URL internally so every server
-  // component receives the correct region via searchParams — no page changes needed.
-  if (nginxRegion && urlRegion !== nginxRegion) {
-    const url = request.nextUrl.clone();
-    url.searchParams.set("region", nginxRegion);
-    return NextResponse.rewrite(url, {
-      request: { headers: requestHeaders },
-    });
-  }
-
-  return NextResponse.next({
-    request: { headers: requestHeaders },
+  // Remember the pair so / and legacy links can land the visitor back here.
+  response.cookies.set(REGION_COOKIE, region, {
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+    sameSite: "lax",
   });
+  response.cookies.set(LOCALE_COOKIE, locale, {
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+    sameSite: "lax",
+  });
+  // Same URL, same HTML for everyone — but the cookie above varies future
+  // redirects, so keep caches from mixing visitors up.
+  response.headers.set("Vary", "Cookie");
+  response.headers.set("x-enfant-locale-region", formatLocaleRegion(locale, region));
+
+  return response;
 }
 
 export const config = {

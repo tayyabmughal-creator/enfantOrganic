@@ -1,75 +1,126 @@
 "use client";
 
-import { Suspense, useEffect } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 
-import {
-  regionFromSearchParams,
-  resolveBrowserRegion,
-  saveSelectedRegion,
-  urlWithRegion,
-} from "@/lib/regionResolver";
-import { normalizeLocale } from "@/lib/storefront";
+import { detectBackendRegion, saveSelectedRegion } from "@/lib/regionResolver";
+import { normalizeLocale, parseLocaleRegionFromPath, replaceRegionInPath } from "@/lib/storefront";
 
-const LOCALIZED_STOREFRONT_PATH = /^\/(en|ar)(?=\/|$)/i;
+const DISMISS_KEY = "enfant-region-suggestion-dismissed";
 
-const REGION_SUBDOMAIN = /^(om|ae|sa)\.enfantorganic\.com$/;
+const REGION_LABELS = {
+  om: { en: "Oman", ar: "عُمان" },
+  ae: { en: "United Arab Emirates", ar: "الإمارات العربية المتحدة" },
+  sa: { en: "Saudi Arabia", ar: "السعودية" },
+};
 
-function RegionResolverInner() {
+function copy(locale, currentRegion, suggestedRegion) {
+  const isAr = locale === "ar";
+  const current = REGION_LABELS[currentRegion]?.[isAr ? "ar" : "en"] || currentRegion;
+  const suggested = REGION_LABELS[suggestedRegion]?.[isAr ? "ar" : "en"] || suggestedRegion;
+
+  return isAr
+    ? {
+        message: `أنت تتصفح متجر ${current}. هل تريد الانتقال إلى متجر ${suggested}؟`,
+        confirm: `انتقل إلى ${suggested}`,
+        dismiss: "البقاء هنا",
+      }
+    : {
+        message: `You're viewing the ${current} store. Switch to ${suggested} for local prices and delivery?`,
+        confirm: `Go to ${suggested}`,
+        dismiss: "Stay here",
+      };
+}
+
+/**
+ * Suggests the visitor's own storefront — it never redirects.
+ *
+ * The previous version rewrote the URL from the detected region, which meant
+ * Googlebot (crawling from the US) only ever reached the Oman store and the AE
+ * and SA variants could not be indexed at all. Region now comes from the URL
+ * alone, so every visitor and crawler sees the same content at a given address
+ * and the choice stays with the user.
+ */
+function RegionSuggestionInner() {
   const pathname = usePathname();
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const [suggestion, setSuggestion] = useState(null);
+
+  const parsed = parseLocaleRegionFromPath(pathname);
+  const currentRegion = parsed?.region || "";
+  const locale = normalizeLocale(parsed?.locale);
 
   useEffect(() => {
-    const localeMatch = pathname?.match(LOCALIZED_STOREFRONT_PATH);
-    if (!localeMatch) {
+    if (!parsed?.canonical) {
       return undefined;
     }
 
-    // If on a region subdomain, that always wins — no localStorage fallback needed.
-    const hostname = typeof window !== "undefined" ? window.location.hostname : "";
-    const subdomainMatch = hostname.match(REGION_SUBDOMAIN);
-    if (subdomainMatch) {
-      const subRegion = subdomainMatch[1];
-      saveSelectedRegion(subRegion);
-      const urlRegion = regionFromSearchParams(searchParams);
-      if (urlRegion !== subRegion) {
-        const target = urlWithRegion(pathname, searchParams, subRegion);
-        router.replace(target, { scroll: false });
-      }
-      return undefined;
+    let dismissed = false;
+    try {
+      dismissed = window.sessionStorage.getItem(DISMISS_KEY) === "1";
+    } catch {
+      // Session storage is unavailable in some private/embedded contexts.
     }
-
-    const urlRegion = regionFromSearchParams(searchParams);
-    if (urlRegion) {
-      saveSelectedRegion(urlRegion);
+    if (dismissed) {
       return undefined;
     }
 
     let cancelled = false;
-    const locale = normalizeLocale(localeMatch[1]?.toLowerCase());
-
-    resolveBrowserRegion({ searchParams, locale }).then((region) => {
-      if (cancelled) {
-        return;
+    detectBackendRegion({ locale }).then((detected) => {
+      if (!cancelled && detected && detected !== currentRegion) {
+        setSuggestion(detected);
       }
-      const target = urlWithRegion(pathname, searchParams, region);
-      router.replace(target, { scroll: false });
-      router.refresh();
     });
 
     return () => {
       cancelled = true;
     };
-  }, [pathname, router, searchParams]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, currentRegion, locale, parsed?.canonical]);
 
-  return null;
+  const dismiss = useCallback(() => {
+    setSuggestion(null);
+    try {
+      window.sessionStorage.setItem(DISMISS_KEY, "1");
+    } catch {
+      // Non-fatal: the banner simply reappears next navigation.
+    }
+  }, []);
+
+  const accept = useCallback(() => {
+    if (!suggestion) {
+      return;
+    }
+    saveSelectedRegion(suggestion);
+    setSuggestion(null);
+    router.push(replaceRegionInPath(pathname, suggestion));
+  }, [pathname, router, suggestion]);
+
+  if (!suggestion) {
+    return null;
+  }
+
+  const text = copy(locale, currentRegion, suggestion);
+
+  return (
+    <div className="region-suggestion" role="region" aria-live="polite">
+      <p className="region-suggestion__message">{text.message}</p>
+      <div className="region-suggestion__actions">
+        <button type="button" className="region-suggestion__confirm" onClick={accept}>
+          {text.confirm}
+        </button>
+        <button type="button" className="region-suggestion__dismiss" onClick={dismiss}>
+          {text.dismiss}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export default function RegionResolver() {
   return (
     <Suspense fallback={null}>
-      <RegionResolverInner />
+      <RegionSuggestionInner />
     </Suspense>
   );
 }

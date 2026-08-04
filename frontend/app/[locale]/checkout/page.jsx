@@ -5,6 +5,18 @@ import CheckoutClient from "@/components/store/checkout/CheckoutClient";
 import { getNavigationData } from "@/lib/api";
 import { resolveServerRegion } from "@/lib/regionResolver";
 import { normalizeLocale, normalizeRegion } from "@/lib/storefront";
+import { buildPrivatePageMetadata } from "@/lib/seo";
+
+export async function generateMetadata({ params, searchParams }) {
+  const { locale: localeParam } = await params;
+  return buildPrivatePageMetadata({
+    locale: normalizeLocale(localeParam),
+    region: resolveServerRegion(await searchParams),
+    path: "/checkout",
+    title: "Checkout | Enfant Organics",
+    titleAr: "إتمام الشراء | إنفانت أورجانيك",
+  });
+}
 
 export default async function CheckoutPage({ params, searchParams }) {
   const { locale: localeParam } = await params;

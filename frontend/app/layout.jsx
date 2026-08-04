@@ -21,8 +21,14 @@ const notoArabic = Noto_Sans_Arabic({
 });
 
 export const metadata = {
-  title: "Enfant Organics",
-  description: "Regional bilingual baby-care storefront built with Next.js and Django.",
+  // Every storefront route sets its own title and description; these are only the
+  // last-resort defaults. They must still read as brand copy — the previous
+  // developer-facing placeholder was being served live on any page that did not
+  // define its own metadata.
+  // No title template here: page titles already carry the "| Enfant Organics" suffix.
+  title: "Enfant Organics | Natural Baby Care Essentials",
+  description:
+    "Certified organic baby care — gentle shampoos, lotions, and bath essentials, dermatologically tested for sensitive skin. Delivered across Oman, the UAE, and Saudi Arabia.",
   metadataBase: new URL(getBaseUrl()),
   manifest: "/manifest.webmanifest",
   icons: {

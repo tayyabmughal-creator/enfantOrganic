@@ -13,6 +13,7 @@ import {
   normalizeLocale,
   normalizeRegion,
   replaceLocaleInPath,
+  replaceRegionInPath,
   uiText,
 } from "@/lib/storefront";
 import { resolveNavigationHref } from "@/lib/navigationLinks";
@@ -169,20 +170,17 @@ function HeaderInner({ navigation }) {
     setOptimisticRegion(normalizedRegion);
     void refreshCartPricing(locale, normalizedRegion);
 
-    // On production subdomains, navigate to the correct regional subdomain.
-    // On local dev (localhost), fall back to query param.
-    const currentHost = typeof window !== "undefined" ? window.location.hostname : "";
-    const isProductionDomain = currentHost.endsWith(".enfantorganic.com") || currentHost === "enfantorganic.com";
-    if (isProductionDomain) {
-      window.location.href = `https://${normalizedRegion}.enfantorganic.com${pathname}`;
-    } else {
-      const updated = new URLSearchParams(params.toString());
-      updated.set("region", normalizedRegion);
-      startRegionTransition(() => {
-        router.replace(`${pathname}?${updated.toString()}`, { scroll: false });
-        router.refresh();
-      });
-    }
+    // Region is part of the path segment, so switching store is an ordinary
+    // in-app navigation on every host — no subdomain hop, no full page reload,
+    // and no ?region= duplicate of the same content.
+    const query = params.toString();
+    startRegionTransition(() => {
+      router.replace(
+        `${replaceRegionInPath(pathname, normalizedRegion)}${query ? `?${query}` : ""}`,
+        { scroll: false },
+      );
+      router.refresh();
+    });
   };
 
   const changeLocale = (nextLocale) => {
@@ -196,11 +194,15 @@ function HeaderInner({ navigation }) {
     //    body, product names from the API) re-renders in the new locale.
     //    useTransition keeps the existing UI on screen during the fetch —
     //    no blank screen, no scroll jump.
+    // Region rides in the path segment now, so it must not be re-added as a query
+    // param — that would give the same content a second URL. Other params (search,
+    // category) are preserved.
     const updated = new URLSearchParams(params.toString());
-    updated.set("region", region);
+    updated.delete("region");
+    const query = updated.toString();
     startLocaleTransition(() => {
       router.replace(
-        `${replaceLocaleInPath(pathname, normalizedLocale)}?${updated.toString()}`,
+        `${replaceLocaleInPath(pathname, normalizedLocale)}${query ? `?${query}` : ""}`,
         { scroll: false },
       );
     });
@@ -253,7 +255,7 @@ function HeaderInner({ navigation }) {
                   .map((category) => (
                     <Link
                       key={category.slug}
-                      href={`${buildStorePath(locale, "/collections", region)}&category=${category.slug}`}
+                      href={`${buildStorePath(locale, "/collections", region)}?category=${category.slug}`}
                       className="dropdown-link dropdown-link-media"
                       onClick={closeMobileNavigation}
                     >
@@ -440,7 +442,7 @@ function HeaderInner({ navigation }) {
                     trackSearchEvent(term);
                     closeSearchModal();
                     router.push(
-                      `${buildStorePath(locale, "/collections", region)}&search=${encodeURIComponent(term)}`,
+                      `${buildStorePath(locale, "/collections", region)}?search=${encodeURIComponent(term)}`,
                     );
                   }
                 }}
@@ -513,7 +515,7 @@ function HeaderInner({ navigation }) {
                     trackSearchEvent(term);
                     closeSearchModal();
                     router.push(
-                      `${buildStorePath(locale, "/collections", region)}&search=${encodeURIComponent(term)}`,
+                      `${buildStorePath(locale, "/collections", region)}?search=${encodeURIComponent(term)}`,
                     );
                   }}>
                     {searchUiText.submitToCatalog}

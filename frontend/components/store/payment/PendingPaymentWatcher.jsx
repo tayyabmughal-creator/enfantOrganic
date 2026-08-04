@@ -35,7 +35,7 @@ export default function PendingPaymentWatcher({
     } else if (emailOrPhone) {
       params.set("email_or_phone", emailOrPhone);
     }
-    return `${buildStorePath(locale, "/payment/success", region)}&${params.toString()}`;
+    return `${buildStorePath(locale, "/payment/success", region)}?${params.toString()}`;
   }, [effectiveLookupToken, emailOrPhone, locale, orderNumber, region]);
   const failedUrl = useMemo(() => {
     const params = new URLSearchParams({ order_number: orderNumber });
@@ -44,7 +44,7 @@ export default function PendingPaymentWatcher({
     } else if (emailOrPhone) {
       params.set("email_or_phone", emailOrPhone);
     }
-    return `${buildStorePath(locale, "/payment/failed", region)}&${params.toString()}`;
+    return `${buildStorePath(locale, "/payment/failed", region)}?${params.toString()}`;
   }, [effectiveLookupToken, emailOrPhone, locale, orderNumber, region]);
 
   useEffect(() => {

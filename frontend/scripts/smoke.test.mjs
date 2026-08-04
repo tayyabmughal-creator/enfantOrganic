@@ -6,7 +6,11 @@ import {
   isRtl,
   normalizeLocale,
   normalizeRegion,
+  parseLocaleRegion,
+  replaceLocaleInPath,
+  replaceRegionInPath,
 } from "../lib/storefront-core/routing.js";
+import { resolveLegacyShopifyPath } from "../lib/legacyRedirects.js";
 import {
   isBrowserUnreachableApiBase,
   safeRedirectUrl,
@@ -32,10 +36,52 @@ test("isRtl is true for Arabic", () => {
   assert.equal(isRtl("en"), false);
 });
 
-test("buildStorePath includes locale and region", () => {
-  const path = buildStorePath("ar", "/checkout", "ae");
-  assert.match(path, /^\/ar\/checkout/);
-  assert.match(path, /region=ae/);
+test("buildStorePath puts locale and region in one path segment", () => {
+  assert.equal(buildStorePath("ar", "/checkout", "ae"), "/ar-ae/checkout");
+  assert.equal(buildStorePath("en", "", "om"), "/en-om");
+  assert.equal(buildStorePath("en", "/", "sa"), "/en-sa");
+  // Region must not leak back into the query — that would give identical content
+  // two addresses and split the canonical signal.
+  assert.ok(!buildStorePath("ar", "/checkout", "ae").includes("region="));
+});
+
+test("normalizeLocale reads the combined segment", () => {
+  assert.equal(normalizeLocale("ar-sa"), "ar");
+  assert.equal(normalizeLocale("en-ae"), "en");
+  assert.equal(normalizeLocale("nonsense"), "en");
+});
+
+test("normalizeRegion reads the combined segment", () => {
+  assert.equal(normalizeRegion("ar-sa"), "sa");
+  assert.equal(normalizeRegion("ae"), "ae");
+});
+
+test("parseLocaleRegion distinguishes canonical from legacy segments", () => {
+  assert.deepEqual(parseLocaleRegion("en-ae"), { locale: "en", region: "ae", canonical: true });
+  // Legacy bare locale still parses so middleware can 301 it, but is not canonical.
+  assert.equal(parseLocaleRegion("en").canonical, false);
+  assert.equal(parseLocaleRegion("collections"), null);
+  assert.equal(parseLocaleRegion("en-us"), null);
+});
+
+test("replaceLocaleInPath keeps the region and vice versa", () => {
+  assert.equal(replaceLocaleInPath("/en-ae/product/x", "ar"), "/ar-ae/product/x");
+  assert.equal(replaceRegionInPath("/en-ae/product/x", "sa"), "/en-sa/product/x");
+  assert.equal(replaceLocaleInPath("/en-om", "ar"), "/ar-om");
+});
+
+test("legacy Shopify paths map onto current URLs", () => {
+  assert.equal(
+    resolveLegacyShopifyPath("/en/products/baby-lotion", "ae"),
+    "/en-ae/product/baby-lotion",
+  );
+  assert.equal(resolveLegacyShopifyPath("/products/baby-lotion", "om"), "/en-om/product/baby-lotion");
+  assert.equal(resolveLegacyShopifyPath("/en/pages/about-us", "om"), "/en-om/about-us");
+  assert.equal(resolveLegacyShopifyPath("/collections/all", "sa"), "/en-sa/collections");
+  assert.equal(resolveLegacyShopifyPath("/ar/collections/wipes", "om"), "/ar-om/collections?category=wipes");
+  // Current URLs must not be caught by the legacy rules.
+  assert.equal(resolveLegacyShopifyPath("/en-om/product/baby-lotion", "om"), null);
+  assert.equal(resolveLegacyShopifyPath("/en-om/collections", "om"), null);
 });
 
 test("loopback and internal API hosts are not browser reachable", () => {

@@ -1,17 +1,33 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 
 export const revalidate = 120; // 2 minutes — admin changes reflect quickly
 
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import { getBlogList, getNavigationData } from "@/lib/api";
 import { resolveServerRegion } from "@/lib/regionResolver";
+import { buildSeoMetadata } from "@/lib/seo";
 import { buildStorePath, normalizeLocale, normalizeRegion } from "@/lib/storefront";
+
+export async function generateMetadata({ params, searchParams }) {
+  const { locale: localeParam } = await params;
+  const locale = normalizeLocale(localeParam);
+  const region = resolveServerRegion(await searchParams);
+  const isAr = locale === "ar";
+
+  return buildSeoMetadata({
+    locale,
+    region,
+    path: "/blog",
+    title: isAr ? "المدونة | إنفانت أورجانيك" : "Baby Care Blog | Enfant Organics",
+    description: isAr
+      ? "نصائح العناية بالطفل وصحة البشرة الحساسة من خبراء إنفانت أورجانيك."
+      : "Baby-care guidance from Enfant Organics — gentle skincare, bath routines, and sensitive-skin advice for new parents.",
+  });
+}
 
 export default async function BlogIndexPage({ params, searchParams }) {
   const { locale: localeParam } = await params;
   const locale = normalizeLocale(localeParam);
-  if (localeParam !== locale) notFound();
 
   const resolvedSearchParams = await searchParams;
   const region = resolveServerRegion(resolvedSearchParams);

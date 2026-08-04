@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import PaymentOrderLink from "@/components/store/payment/PaymentOrderLink";
@@ -7,11 +6,22 @@ import PaymentSuccessCartFinalizer from "@/components/store/payment/PaymentSucce
 import { getNavigationData } from "@/lib/api";
 import { resolveServerRegion } from "@/lib/regionResolver";
 import { buildStorePath, normalizeLocale, normalizeRegion } from "@/lib/storefront";
+import { buildPrivatePageMetadata } from "@/lib/seo";
+
+export async function generateMetadata({ params, searchParams }) {
+  const { locale: localeParam } = await params;
+  return buildPrivatePageMetadata({
+    locale: normalizeLocale(localeParam),
+    region: resolveServerRegion(await searchParams),
+    path: "/payment/success",
+    title: "Payment Confirmed | Enfant Organics",
+    titleAr: "تم تأكيد الدفع | إنفانت أورجانيك",
+  });
+}
 
 export default async function PaymentSuccessPage({ params, searchParams }) {
   const { locale: localeParam } = await params;
   const locale = normalizeLocale(localeParam);
-  if (localeParam !== locale) notFound();
 
   const resolvedSearchParams = await searchParams;
   const region = resolveServerRegion(resolvedSearchParams);

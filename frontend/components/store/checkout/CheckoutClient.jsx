@@ -1550,8 +1550,8 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
       // fall back to email_or_phone for older API responses that don't yet
       // include the token.
       const trackingParam = data.lookup_token
-        ? `&t=${encodeURIComponent(data.lookup_token)}`
-        : `&email_or_phone=${encodeURIComponent(form.email || form.phone)}`;
+        ? `?t=${encodeURIComponent(data.lookup_token)}`
+        : `?email_or_phone=${encodeURIComponent(form.email || form.phone)}`;
       router.push(`${buildStorePath(locale, `/thank-you/${data.order_number}`, region)}${trackingParam}`);
     } catch (err) {
       if (createdOrderContext) {
@@ -2007,7 +2007,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
               {paymentRecovery ? (
                 <div style={{ display: "grid", gap: "8px" }}>
                   <a
-                    href={`${buildStorePath(locale, "/payment/failed", region)}&order_number=${encodeURIComponent(paymentRecovery.orderNumber)}${paymentRecovery.lookupToken ? `&lookup_token=${encodeURIComponent(paymentRecovery.lookupToken)}` : ""}${paymentRecovery.provider ? `&provider=${encodeURIComponent(paymentRecovery.provider)}` : ""}`}
+                    href={`${buildStorePath(locale, "/payment/failed", region)}?order_number=${encodeURIComponent(paymentRecovery.orderNumber)}${paymentRecovery.lookupToken ? `&lookup_token=${encodeURIComponent(paymentRecovery.lookupToken)}` : ""}${paymentRecovery.provider ? `&provider=${encodeURIComponent(paymentRecovery.provider)}` : ""}`}
                     className="secondary-action"
                   >
                     {isAr ? "إعادة محاولة الدفع لهذا الطلب" : "Retry payment for this order"}

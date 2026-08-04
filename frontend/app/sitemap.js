@@ -25,16 +25,26 @@ const STATIC_PAGE_SLUGS = [
   "terms",
 ];
 
-function pushEntry(entries, locale, path, region, priority = 0.6, changeFrequency = "weekly") {
-  const alternates = buildAlternates(locale, path, region);
+const LISTING_PATHS = [
+  { path: "/collections", priority: 0.9, changeFrequency: "daily" },
+  { path: "/best-sellers", priority: 0.8, changeFrequency: "daily" },
+  { path: "/new-arrivals", priority: 0.8, changeFrequency: "daily" },
+  { path: "/blog", priority: 0.7, changeFrequency: "weekly" },
+];
+
+/**
+ * `lastModified` is deliberately omitted unless the API gives us a real date.
+ * Stamping every URL with "now" on each crawl is a signal Google learns to
+ * distrust, which is worse than sending no date at all.
+ */
+function pushEntry(entries, locale, region, path, { priority, changeFrequency, lastModified }) {
+  const { languages } = buildAlternates(locale, path, region);
   entries.push({
     url: toAbsoluteUrl(buildLocalizedPath(locale, path, region)),
-    lastModified: new Date(),
     changeFrequency,
     priority,
-    alternates: {
-      languages: alternates.languages,
-    },
+    ...(lastModified ? { lastModified } : {}),
+    alternates: { languages },
   });
 }
 
@@ -47,12 +57,12 @@ async function getCatalogAndBlogSlugs(locale, region) {
     const productSlugs = Array.isArray(catalog?.products)
       ? [...new Set(catalog.products.map((item) => item.slug).filter(Boolean))]
       : [];
-    const blogSlugs = Array.isArray(blogPosts)
-      ? [...new Set(blogPosts.map((item) => item.slug).filter(Boolean))]
+    const posts = Array.isArray(blogPosts)
+      ? blogPosts.filter((item) => item?.slug)
       : [];
-    return { productSlugs, blogSlugs };
+    return { productSlugs, posts };
   } catch {
-    return { productSlugs: [], blogSlugs: [] };
+    return { productSlugs: [], posts: [] };
   }
 }
 
@@ -61,22 +71,34 @@ export default async function sitemap() {
 
   for (const region of SUPPORTED_SEO_REGIONS) {
     for (const locale of SUPPORTED_SEO_LOCALES) {
-      pushEntry(entries, locale, "", region, 1, "daily");
-      pushEntry(entries, locale, "/collections", region, 0.9, "daily");
-      pushEntry(entries, locale, "/blog", region, 0.7, "weekly");
+      pushEntry(entries, locale, region, "", { priority: 1, changeFrequency: "daily" });
+
+      for (const { path, priority, changeFrequency } of LISTING_PATHS) {
+        pushEntry(entries, locale, region, path, { priority, changeFrequency });
+      }
 
       for (const slug of STATIC_PAGE_SLUGS) {
-        pushEntry(entries, locale, `/${slug}`, region, 0.4, "monthly");
+        pushEntry(entries, locale, region, `/${slug}`, {
+          priority: 0.4,
+          changeFrequency: "monthly",
+        });
       }
 
-      const { productSlugs, blogSlugs } = await getCatalogAndBlogSlugs(locale, region);
+      const { productSlugs, posts } = await getCatalogAndBlogSlugs(locale, region);
 
       for (const slug of productSlugs) {
-        pushEntry(entries, locale, `/product/${slug}`, region, 0.8, "daily");
+        pushEntry(entries, locale, region, `/product/${slug}`, {
+          priority: 0.8,
+          changeFrequency: "daily",
+        });
       }
 
-      for (const slug of blogSlugs) {
-        pushEntry(entries, locale, `/blog/${slug}`, region, 0.6, "weekly");
+      for (const post of posts) {
+        pushEntry(entries, locale, region, `/blog/${post.slug}`, {
+          priority: 0.6,
+          changeFrequency: "weekly",
+          lastModified: post.published_at ? new Date(post.published_at) : undefined,
+        });
       }
     }
   }

@@ -1,7 +1,13 @@
 import NextImage from "next/image";
 
+// Must stay in sync with images.remotePatterns in next.config.mjs — a host missing
+// here quietly drops to a raw <img> and loses next/image optimisation entirely.
 const OPTIMIZED_HOSTNAMES = [
+  "www.enfantorganic.com",
   "app.enfantorganic.com",
+  "om.enfantorganic.com",
+  "ae.enfantorganic.com",
+  "sa.enfantorganic.com",
   "127.0.0.1",
   "localhost",
 ];

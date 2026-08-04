@@ -1,4 +1,4 @@
-import { normalizeLocale, normalizeRegion } from "@/lib/storefront-core/routing";
+import { buildStorePath, normalizeLocale, normalizeRegion } from "@/lib/storefront-core/routing";
 
 const PLACEHOLDER_ROUTE_MAP = {
   "#about": "/about",
@@ -27,7 +27,7 @@ export function resolveNavigationHref(href, { locale = "en", region = "om" } = {
   const rawHref = String(href || "").trim();
 
   if (!rawHref) {
-    return `/${normalizedLocale}?region=${normalizedRegion}`;
+    return buildStorePath(normalizedLocale, "", normalizedRegion);
   }
 
   if (isExternalHref(rawHref)) {
@@ -55,17 +55,13 @@ export function resolveNavigationHref(href, { locale = "en", region = "om" } = {
     query = pathnameWithQuery.slice(queryIndex + 1);
   }
 
-  const hasLocalePrefix = /^\/(en|ar)(\/|$)/i.test(pathname);
-  const localizedPath = hasLocalePrefix
-    ? pathname
-    : `/${normalizedLocale}${pathname === "/" ? "" : pathname}`;
+  // Admin-managed hrefs may arrive bare (/collections), legacy-prefixed (/en/collections)
+  // or already current (/en-om/collections). Strip any existing prefix and re-apply the
+  // active one so every nav link lands on the current region/locale variant.
+  const withoutPrefix = pathname.replace(/^\/(en|ar)(-(om|ae|sa))?(?=\/|$)/i, "");
+  const localizedPath = buildStorePath(normalizedLocale, withoutPrefix, normalizedRegion);
 
-  const params = new URLSearchParams(query);
-  if (!params.has("region")) {
-    params.set("region", normalizedRegion);
-  }
-
-  const queryString = params.toString();
+  const queryString = new URLSearchParams(query).toString();
   return `${localizedPath}${queryString ? `?${queryString}` : ""}${hash}`;
 }
 

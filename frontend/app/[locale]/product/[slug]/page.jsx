@@ -7,6 +7,7 @@ import JsonLd from "@/components/seo/JsonLd";
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import ProductDetailClient from "@/components/store/product/ProductDetailClient";
 import { ApiError, getNavigationData, getProductBySlug } from "@/lib/api";
+import { toPlainText } from "@/lib/safeHtml";
 import { resolveServerRegion } from "@/lib/regionResolver";
 import { buildSeoMetadata, buildLocalizedPath, toAbsoluteUrl, SITE_NAME } from "@/lib/seo";
 import { normalizeLocale, normalizeRegion, uiText } from "@/lib/storefront";
@@ -38,7 +39,9 @@ export async function generateMetadata({ params, searchParams }) {
     const productDescription =
       productPage.product?.seo?.description || productPage.product?.seo_description || productPage.product?.short_description;
     if (productDescription) {
-      description = productDescription;
+      // Descriptions come from a rich-text admin field; a meta description has to be
+      // plain text and short enough that Google shows it rather than rewriting it.
+      description = toPlainText(productDescription, { maxLength: 160 });
     }
     image = productPage.product?.seo?.og_image || productPage.product?.image || image;
     return buildSeoMetadata({
@@ -53,8 +56,16 @@ export async function generateMetadata({ params, searchParams }) {
       ogDescription: productPage.product?.seo?.og_description,
       robots: productPage.product?.seo,
     });
-  } catch {
-    // Keep fallback metadata when API is unavailable.
+  } catch (error) {
+    // A missing product has to 404 here rather than in the page body: `loading.jsx`
+    // makes this route stream, so by the time the body runs the 200 shell has
+    // already been flushed and notFound() can no longer set the status. Metadata
+    // resolves before the first flush, so this is the last point a real 404 is
+    // still possible.
+    if (error instanceof ApiError && error.status === 404) {
+      notFound();
+    }
+    // Any other failure (API down) keeps the fallback metadata below.
   }
 
   return buildSeoMetadata({
@@ -70,10 +81,6 @@ export async function generateMetadata({ params, searchParams }) {
 export default async function LocalizedProductPage({ params, searchParams }) {
   const { locale: localeParam, slug } = await params;
   const locale = normalizeLocale(localeParam);
-
-  if (localeParam !== locale) {
-    notFound();
-  }
 
   const resolvedSearchParams = await searchParams;
   const region = resolveServerRegion(resolvedSearchParams);
@@ -99,17 +106,32 @@ export default async function LocalizedProductPage({ params, searchParams }) {
   const t = uiText(locale);
   const canonicalUrl = toAbsoluteUrl(buildLocalizedPath(locale, `/product/${slug}`, region));
   const product = productPage.product;
+  const reviewCount = Number(product.review_count) || 0;
   const productJsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
     name: product.name,
     image: (Array.isArray(product.gallery) && product.gallery.length ? product.gallery : [product.image]).filter(Boolean),
-    description: product.description || product.short_description || "",
-    sku: product.slug,
+    // schema.org wants plain text here — the rich-text description would otherwise
+    // ship its markup, and any editor cruft in it, into the structured data.
+    description: toPlainText(product.description || product.short_description || ""),
+    sku: product.sku || product.slug,
     brand: {
       "@type": "Brand",
       name: product.brand || product.vendor || SITE_NAME,
     },
+    // Only claim ratings when real approved reviews back them. The model defaults
+    // to 5.0 with a count of zero, and publishing that would be a fabricated
+    // rating under Google's review-snippet policy.
+    ...(reviewCount > 0 && product.rating
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: String(product.rating),
+            reviewCount: String(reviewCount),
+          },
+        }
+      : {}),
     offers: {
       "@type": "Offer",
       url: canonicalUrl,

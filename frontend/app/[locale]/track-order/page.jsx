@@ -5,6 +5,18 @@ import TrackOrderClient from "@/components/store/order/TrackOrderClient";
 import { getNavigationData } from "@/lib/api";
 import { resolveServerRegion } from "@/lib/regionResolver";
 import { normalizeLocale, normalizeRegion } from "@/lib/storefront";
+import { buildPrivatePageMetadata } from "@/lib/seo";
+
+export async function generateMetadata({ params, searchParams }) {
+  const { locale: localeParam } = await params;
+  return buildPrivatePageMetadata({
+    locale: normalizeLocale(localeParam),
+    region: resolveServerRegion(await searchParams),
+    path: "/track-order",
+    title: "Track Your Order | Enfant Organics",
+    titleAr: "تتبع طلبك | إنفانت أورجانيك",
+  });
+}
 
 export default async function TrackOrderPage({ params, searchParams }) {
   const { locale: localeParam } = await params;

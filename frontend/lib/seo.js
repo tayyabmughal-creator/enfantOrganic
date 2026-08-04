@@ -1,11 +1,16 @@
-import { normalizeLocale, normalizeRegion, isRtl } from "@/lib/storefront";
+import { buildStorePath, normalizeLocale, normalizeRegion, isRtl } from "@/lib/storefront";
 
-const DEFAULT_BASE_URL = "http://localhost:3001";
+const DEFAULT_BASE_URL = "https://www.enfantorganic.com";
 const DEFAULT_IMAGE_PATH = "/enfant/enfant-logo.png";
 
 export const SITE_NAME = "Enfant Organics";
 export const SUPPORTED_SEO_LOCALES = ["en", "ar"];
 export const SUPPORTED_SEO_REGIONS = ["om", "ae", "sa"];
+
+// x-default gets the English Oman variant: Oman is the home market and English is
+// the wider-reach language, so it is the safest landing for unmatched locales.
+const XDEFAULT_LOCALE = "en";
+const XDEFAULT_REGION = "om";
 
 function trimTrailingSlash(value) {
   return String(value || "").replace(/\/+$/, "");
@@ -26,26 +31,38 @@ export function toAbsoluteUrl(path) {
 }
 
 export function buildLocalizedPath(locale, path = "", region = "om") {
-  const normalizedLocale = normalizeLocale(locale);
-  const normalizedRegion = normalizeRegion(region);
-  const cleanPath = path
-    ? (String(path).startsWith("/") ? String(path) : `/${String(path)}`)
-    : "";
-  return `/${normalizedLocale}${cleanPath}?region=${normalizedRegion}`;
+  return buildStorePath(locale, path, region);
 }
 
+/**
+ * Self-canonical plus the full reciprocal hreflang cluster.
+ *
+ * Every region/language variant of a page lists all six siblings (including
+ * itself) and an x-default. Reciprocity is required — if a variant omits one of
+ * its siblings, Google discards annotations for the whole cluster, which is what
+ * previously left the AE and SA stores unable to rank in their own markets.
+ */
 export function buildAlternates(locale, path = "", region = "om") {
   const canonical = toAbsoluteUrl(buildLocalizedPath(locale, path, region));
-  const languages = {
-    en: toAbsoluteUrl(buildLocalizedPath("en", path, region)),
-    ar: toAbsoluteUrl(buildLocalizedPath("ar", path, region)),
-    "x-default": toAbsoluteUrl(buildLocalizedPath("en", path, region)),
-  };
+
+  const languages = {};
+  for (const seoRegion of SUPPORTED_SEO_REGIONS) {
+    for (const seoLocale of SUPPORTED_SEO_LOCALES) {
+      // hreflang wants ISO 639-1 language + ISO 3166-1 alpha-2 region: en-OM, ar-SA, …
+      languages[`${seoLocale}-${seoRegion.toUpperCase()}`] = toAbsoluteUrl(
+        buildLocalizedPath(seoLocale, path, seoRegion),
+      );
+    }
+  }
+  languages["x-default"] = toAbsoluteUrl(
+    buildLocalizedPath(XDEFAULT_LOCALE, path, XDEFAULT_REGION),
+  );
+
   return { canonical, languages };
 }
 
-function getOgLocale(locale) {
-  return normalizeLocale(locale) === "ar" ? "ar_SA" : "en_US";
+function getOgLocale(locale, region) {
+  return `${normalizeLocale(locale)}_${normalizeRegion(region).toUpperCase()}`;
 }
 
 export function getLocaleDir(locale) {
@@ -93,7 +110,7 @@ export function buildSeoMetadata({
       type,
       url: alternates.canonical,
       siteName: SITE_NAME,
-      locale: getOgLocale(normalizedLocale),
+      locale: getOgLocale(normalizedLocale, normalizedRegion),
       images: [
         {
           url: imageUrl,
@@ -114,4 +131,22 @@ export function buildSeoMetadata({
     };
   }
   return metadata;
+}
+
+/**
+ * Metadata for account, cart, and post-checkout pages.
+ *
+ * These are per-visitor, have no search value, and in the case of order pages can
+ * expose order details, so they are explicitly noindex rather than relying on
+ * robots.txt alone — a disallowed URL can still be indexed from external links.
+ */
+export function buildPrivatePageMetadata({ locale, region, path, title, titleAr }) {
+  return buildSeoMetadata({
+    locale,
+    region,
+    path,
+    title: normalizeLocale(locale) === "ar" ? titleAr : title,
+    description: "",
+    robots: { index: false, follow: false },
+  });
 }

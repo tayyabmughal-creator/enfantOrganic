@@ -5,7 +5,7 @@ export const revalidate = 120; // 2 minutes — admin changes reflect quickly
 
 import JsonLd from "@/components/seo/JsonLd";
 import StorefrontShell from "@/components/layout/StorefrontShell";
-import { getBlogBySlug, getNavigationData } from "@/lib/api";
+import { ApiError, getBlogBySlug, getNavigationData } from "@/lib/api";
 import { resolveServerRegion } from "@/lib/regionResolver";
 import { hasHtml, sanitizeHtml } from "@/lib/safeHtml";
 import { buildSeoMetadata, buildLocalizedPath, toAbsoluteUrl } from "@/lib/seo";
@@ -47,8 +47,13 @@ export async function generateMetadata({ params, searchParams }) {
       robots: post?.seo,
       type: "article",
     });
-  } catch {
-    // Keep fallback metadata when API is unavailable.
+  } catch (error) {
+    // Unknown posts must 404 here — this route streams, so once the body runs the
+    // 200 shell is already flushed and notFound() can no longer set the status.
+    if (error instanceof ApiError && error.status === 404) {
+      notFound();
+    }
+    // Any other failure (API down) keeps the fallback metadata below.
   }
 
   return buildSeoMetadata({
@@ -65,7 +70,6 @@ export async function generateMetadata({ params, searchParams }) {
 export default async function BlogDetailPage({ params, searchParams }) {
   const { locale: localeParam, slug } = await params;
   const locale = normalizeLocale(localeParam);
-  if (localeParam !== locale) notFound();
 
   const resolvedSearchParams = await searchParams;
   const region = resolveServerRegion(resolvedSearchParams);

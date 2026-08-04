@@ -21,7 +21,14 @@ const nextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
   images: {
     remotePatterns: [
+      // www is the canonical host and is where media URLs are now built from.
+      // app/om/ae/sa stay listed so images stored with an older absolute URL keep
+      // going through the optimizer instead of silently falling back to raw <img>.
+      { protocol: "https", hostname: "www.enfantorganic.com" },
       { protocol: "https", hostname: "app.enfantorganic.com" },
+      { protocol: "https", hostname: "om.enfantorganic.com" },
+      { protocol: "https", hostname: "ae.enfantorganic.com" },
+      { protocol: "https", hostname: "sa.enfantorganic.com" },
       { protocol: "http",  hostname: "127.0.0.1" },
       { protocol: "http",  hostname: "localhost" },
     ],

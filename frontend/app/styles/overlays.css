@@ -1183,3 +1183,79 @@
     right: auto;
   }
 }
+
+/* ── Region suggestion bar ───────────────────────────────────────────────── */
+/* Shown when the visitor's detected country differs from the store in the URL.
+   Suggestion only — the region never changes without an explicit click, so the
+   URL stays the single source of truth for what is served. */
+.region-suggestion {
+  position: fixed;
+  inset-inline: 16px;
+  bottom: 16px;
+  z-index: 60;
+  margin-inline: auto;
+  max-width: 560px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.region-suggestion__message {
+  margin: 0;
+  flex: 1 1 240px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.region-suggestion__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.region-suggestion__confirm,
+.region-suggestion__dismiss {
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 9px 16px;
+  white-space: nowrap;
+}
+
+.region-suggestion__confirm {
+  border: 1px solid var(--brand-dark);
+  background: var(--brand-dark);
+  color: #fff;
+}
+
+.region-suggestion__dismiss {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-soft);
+}
+
+.region-suggestion__confirm:focus-visible,
+.region-suggestion__dismiss:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+@media (max-width: 520px) {
+  .region-suggestion {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .region-suggestion__actions {
+    justify-content: flex-end;
+  }
+}

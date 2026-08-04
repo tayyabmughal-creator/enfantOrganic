@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 
 export const revalidate = 120; // 2 minutes — admin changes reflect quickly
 
@@ -58,10 +57,6 @@ export async function generateMetadata({ params, searchParams }) {
 export default async function LocalizedHomePage({ params, searchParams }) {
   const { locale: localeParam } = await params;
   const locale = normalizeLocale(localeParam);
-
-  if (localeParam !== locale) {
-    notFound();
-  }
 
   const resolvedSearchParams = await searchParams;
   const region = resolveServerRegion(resolvedSearchParams);
@@ -125,21 +120,40 @@ export default async function LocalizedHomePage({ params, searchParams }) {
         : "You can continue shopping or explore another collection.",
     },
   };
+  const homeUrl = toAbsoluteUrl(buildLocalizedPath(locale, "", region));
   const organizationJsonLd = {
     "@context": "https://schema.org",
     "@type": "Organization",
     name: SITE_NAME,
-    url: toAbsoluteUrl(buildLocalizedPath(locale, "", region)),
+    url: homeUrl,
     logo: toAbsoluteUrl("/enfant/enfant-logo.png"),
     email: navigation?.current_region?.contact_email || undefined,
     telephone: navigation?.current_region?.contact_phone || undefined,
     sameAs: ["https://www.instagram.com/enfant_middle_east/"],
+  };
+  // Declares the site itself and its search endpoint, which is what makes a
+  // sitelinks search box eligible in results.
+  const websiteJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: SITE_NAME,
+    url: homeUrl,
+    inLanguage: locale === "ar" ? "ar" : "en",
+    potentialAction: {
+      "@type": "SearchAction",
+      target: {
+        "@type": "EntryPoint",
+        urlTemplate: `${toAbsoluteUrl(buildLocalizedPath(locale, "/collections", region))}?search={search_term_string}`,
+      },
+      "query-input": "required name=search_term_string",
+    },
   };
 
   return (
     <StorefrontShell locale={locale} navigation={navigation}>
       <h1 className="visually-hidden">{isAr ? "متجر إنفانت أورجانيك" : "Enfant Organic Store"}</h1>
       <JsonLd data={organizationJsonLd} />
+      <JsonLd data={websiteJsonLd} />
       {heroShowcaseEmpty ? null : (
       <section className="section container">
         <div className="offers-showcase">

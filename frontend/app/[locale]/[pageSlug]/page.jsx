@@ -771,8 +771,11 @@ export async function generateMetadata({ params, searchParams }) {
   const content = resolved.content;
   const isAr = locale === "ar";
 
+  // 404 here rather than in the page body: this route streams, so once the body
+  // runs the 200 shell is already flushed and notFound() can no longer set the
+  // status. Returning {} instead used to leave unknown slugs answering 200.
   if (!content) {
-    return {};
+    notFound();
   }
 
   const seoTitle = resolved.cmsPage?.seo?.title || resolved.cmsPage?.seo_title;
@@ -801,10 +804,6 @@ export default async function StaticPage({ params, searchParams }) {
   const { locale: localeParam, pageSlug } = await params;
   const resolvedSearchParams = await searchParams;
   const locale = normalizeLocale(localeParam);
-
-  if (localeParam !== locale) {
-    notFound();
-  }
 
   const region = resolveServerRegion(resolvedSearchParams);
   const [navigation, resolved] = await Promise.all([

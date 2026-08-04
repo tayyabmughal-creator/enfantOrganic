@@ -1,4 +1,3 @@
-import { notFound } from "next/navigation";
 import Link from "next/link";
 
 import StorefrontShell from "@/components/layout/StorefrontShell";
@@ -6,7 +5,19 @@ import PurchaseEventTracker from "@/components/store/analytics/PurchaseEventTrac
 import { getNavigationData } from "@/lib/api";
 import { API_BASE_URL } from "@/lib/config";
 import { resolveServerRegion } from "@/lib/regionResolver";
+import { buildPrivatePageMetadata } from "@/lib/seo";
 import { buildStorePath, normalizeLocale, normalizeRegion, formatMoney } from "@/lib/storefront";
+
+export async function generateMetadata({ params, searchParams }) {
+  const { locale: localeParam, orderNumber } = await params;
+  return buildPrivatePageMetadata({
+    locale: normalizeLocale(localeParam),
+    region: resolveServerRegion(await searchParams),
+    path: `/thank-you/${orderNumber}`,
+    title: "Order Confirmed | Enfant Organics",
+    titleAr: "تم تأكيد الطلب | إنفانت أورجانيك",
+  });
+}
 
 async function getOrder(orderNumber, { lookupToken = "", emailOrPhone = "", region = "om" } = {}) {
   const params = new URLSearchParams();
@@ -62,8 +73,6 @@ export default async function ThankYouPage({ params, searchParams }) {
   const { locale: localeParam, orderNumber } = await params;
   const resolvedSearchParams = await searchParams;
   const locale = normalizeLocale(localeParam);
-
-  if (localeParam !== locale) notFound();
 
   const isAr = locale === "ar";
   const requestedRegion = resolveServerRegion(resolvedSearchParams);

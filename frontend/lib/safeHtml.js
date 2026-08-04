@@ -26,6 +26,42 @@ export function hasHtml(value = "") {
   return /<[a-z][\s\S]*>/i.test(String(value || ""));
 }
 
+const NAMED_ENTITIES = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  "#39": "'",
+  apos: "'",
+  nbsp: " ",
+};
+
+/**
+ * Flattens rich text to plain text for schema.org fields.
+ *
+ * Product descriptions are authored in a rich-text admin and arrive as HTML.
+ * schema.org expects plain text, and shipping markup verbatim has leaked editor
+ * artefacts (stray class names from pasted content) straight into the structured
+ * data, which invalidates the rich result.
+ */
+export function toPlainText(value = "", { maxLength = 5000 } = {}) {
+  const text = String(value || "")
+    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<\/(p|div|li|h[1-6])>/gi, " ")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&([a-z]+|#\d+);/gi, (match, entity) => {
+      const key = String(entity).toLowerCase();
+      if (key in NAMED_ENTITIES) return NAMED_ENTITIES[key];
+      if (key.startsWith("#")) return String.fromCharCode(Number(key.slice(1)));
+      return match;
+    })
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1).trimEnd()}…` : text;
+}
+
 function escapeAttr(value = "") {
   return String(value)
     .replace(/&/g, "&amp;")

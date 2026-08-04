@@ -310,7 +310,7 @@ function CartApplePayButtonInner() {
                     </p>
                     {paymentRecovery ? (
                       <a
-                        href={`${buildStorePath(locale, "/payment/failed", region)}&order_number=${encodeURIComponent(paymentRecovery.orderNumber)}${paymentRecovery.lookupToken ? `&lookup_token=${encodeURIComponent(paymentRecovery.lookupToken)}` : ""}&provider=${encodeURIComponent(paymentRecovery.provider)}`}
+                        href={`${buildStorePath(locale, "/payment/failed", region)}?order_number=${encodeURIComponent(paymentRecovery.orderNumber)}${paymentRecovery.lookupToken ? `&lookup_token=${encodeURIComponent(paymentRecovery.lookupToken)}` : ""}&provider=${encodeURIComponent(paymentRecovery.provider)}`}
                         className="secondary-action"
                       >
                         {isAr ? "إعادة محاولة الدفع" : "Retry Payment"}

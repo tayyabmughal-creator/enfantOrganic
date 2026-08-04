@@ -1,4 +1,3 @@
-import { notFound } from "next/navigation";
 
 export const revalidate = 120; // 2 minutes — admin changes reflect quickly
 
@@ -41,10 +40,6 @@ export async function generateMetadata({ params, searchParams }) {
 export default async function BestSellersPage({ params, searchParams }) {
   const { locale: localeParam } = await params;
   const locale = normalizeLocale(localeParam);
-
-  if (localeParam !== locale) {
-    notFound();
-  }
 
   const resolvedSearchParams = await searchParams;
   const region = resolveServerRegion(resolvedSearchParams);

@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { saveSelectedRegion } from "@/lib/regionResolver";
+import { replaceRegionInPath } from "@/lib/storefront";
 
 export default function FooterCurrencyChips({ regions, currentRegionCode }) {
   const pathname = usePathname();
@@ -11,15 +12,14 @@ export default function FooterCurrencyChips({ regions, currentRegionCode }) {
   function changeRegion(code) {
     if (code === currentRegionCode) return;
     saveSelectedRegion(code);
-    const currentHost = typeof window !== "undefined" ? window.location.hostname : "";
-    const isProduction = currentHost.endsWith(".enfantorganic.com") || currentHost === "enfantorganic.com";
-    if (isProduction) {
-      window.location.href = `https://${code}.enfantorganic.com${pathname}`;
-    } else {
-      const updated = new URLSearchParams(params.toString());
-      updated.set("region", code);
-      router.replace(`${pathname}?${updated.toString()}`, { scroll: false });
-    }
+    // Region lives in the path, so this is a plain in-app navigation on every
+    // host — no subdomain hop and no ?region= duplicate of the same content.
+    const query = params.toString();
+    router.replace(
+      `${replaceRegionInPath(pathname, code)}${query ? `?${query}` : ""}`,
+      { scroll: false },
+    );
+    router.refresh();
   }
 
   return (
