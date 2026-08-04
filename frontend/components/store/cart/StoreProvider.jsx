@@ -264,14 +264,21 @@ export default function StoreProvider({ children }) {
             region: product.pricing?.region_code || "",
             ecommerce: { currency: atcCurrency, value: atcValue, items: [item] },
           });
-          fbqTrack("AddToCart", {
-            content_ids: [item.item_id],
-            content_name: item.item_name,
-            content_type: "product",
-            value: atcValue,
-            currency: atcCurrency,
-            event_id: eventID,
-          });
+          fbqTrack(
+            "AddToCart",
+            {
+              content_ids: [item.item_id],
+              content_name: item.item_name,
+              content_type: "product",
+              value: atcValue,
+              currency: atcCurrency,
+              event_id: eventID,
+            },
+            // Same reason as ViewContent: the region is the only customer
+            // information a pre-checkout event can offer, and the server maps it
+            // to `country`.
+            { regionCode: product.pricing?.region_code || "" },
+          );
           snaptrTrack("ADD_CART", {
             item_ids: [item.item_id],
             item_category: item.item_category || "",

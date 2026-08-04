@@ -83,6 +83,8 @@ class MetaCapiEventView(APIView):
         raw_user = request.data.get("user_data")
         raw_user = raw_user if isinstance(raw_user, dict) else {}
 
+        region_code = str(request.data.get("region_code") or "").strip().lower()
+
         user_data = build_user_data(
             email=raw_user.get("email", ""),
             phone=raw_user.get("phone", ""),
@@ -90,8 +92,14 @@ class MetaCapiEventView(APIView):
             last_name=raw_user.get("last_name", ""),
             city=raw_user.get("city", ""),
             postcode=raw_user.get("postcode", ""),
-            country=raw_user.get("country", ""),
-            region_code=str(request.data.get("region_code") or "").strip().lower(),
+            # Fall back to the storefront region. om/ae/sa are ISO 3166-1 alpha-2
+            # codes, and a visitor on a regional store is in that market by
+            # definition — so country is knowable on every event, including browse
+            # events that have no checkout details yet. Events Manager asks
+            # specifically for this class of key, which fbp and external_id alone
+            # do not appear to satisfy.
+            country=raw_user.get("country") or region_code,
+            region_code=region_code,
             # A signed-in user is the stronger, non-forgeable identity, so it wins.
             # Otherwise fall back to the storefront's session id: Meta needs at
             # least one matching key or it drops the event for attribution, and on

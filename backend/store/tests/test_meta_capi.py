@@ -378,6 +378,41 @@ class MetaCapiRelayEndpointTests(TestCase):
         matching_keys = {"em", "ph", "fn", "ln", "ct", "zp", "country", "external_id", "fbp", "fbc"}
         self.assertTrue(matching_keys & set(user_data))
 
+    def test_region_supplies_country_when_no_checkout_details_exist(self):
+        # Events Manager asks specifically for customer-information keys (email,
+        # phone, city, state, zip, country); fbp and external_id alone did not
+        # clear the warning. A visitor on a regional store is in that market by
+        # definition, so country is knowable even on a browse event.
+        with patch("store.api_views.meta_capi.send_meta_capi_event_async.delay") as delay:
+            self.client.post(
+                self.url,
+                {
+                    "event_name": "AddToCart",
+                    "event_id": "add-to-cart-region-1",
+                    "region_code": "ae",
+                },
+                content_type="application/json",
+            )
+
+        user_data = delay.call_args.args[0]["user_data"]
+        self.assertEqual(user_data["country"], [sha256("ae")])
+
+    def test_explicit_country_beats_the_region_fallback(self):
+        with patch("store.api_views.meta_capi.send_meta_capi_event_async.delay") as delay:
+            self.client.post(
+                self.url,
+                {
+                    "event_name": "AddToCart",
+                    "event_id": "add-to-cart-region-2",
+                    "region_code": "ae",
+                    "user_data": {"country": "om"},
+                },
+                content_type="application/json",
+            )
+
+        user_data = delay.call_args.args[0]["user_data"]
+        self.assertEqual(user_data["country"], [sha256("om")])
+
     def test_session_external_id_never_overrides_a_signed_in_user(self):
         user = get_user_model().objects.create_user(username="shopper", password="pw12345!")
         self.client.force_login(user)

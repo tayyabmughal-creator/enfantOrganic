@@ -379,14 +379,21 @@ export default function ProductDetailClient({ locale, product, region }) {
         number_items: 1,
       });
       // Meta ViewContent — value/currency from the same pricing source as the other events.
-      fbqTrack("ViewContent", {
-        content_ids: [product.slug],
-        content_name: product.name_en || product.name || "",
-        content_type: "product",
-        content_category: item?.item_category || "",
-        value: Number(product.pricing?.amount || 0),
-        currency: product.pricing?.currency_code || "",
-      });
+      fbqTrack(
+        "ViewContent",
+        {
+          content_ids: [product.slug],
+          content_name: product.name_en || product.name || "",
+          content_type: "product",
+          content_category: item?.item_category || "",
+          value: Number(product.pricing?.amount || 0),
+          currency: product.pricing?.currency_code || "",
+        },
+        // A browse event has no checkout details, so the region is the only
+        // customer-information key available — the server turns it into `country`.
+        // Without it Meta reported these events as having no user_data at all.
+        { regionCode: product.pricing?.region_code || region || "" },
+      );
       // TikTok ViewContent.
       ttqTrack("ViewContent", {
         contents: [
