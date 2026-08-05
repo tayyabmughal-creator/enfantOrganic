@@ -803,6 +803,8 @@ export default function AdminPanelClient() {
   const [warehouses, setWarehouses] = useState([]);
   const [demandAlerts, setDemandAlerts] = useState([]);
   const [auditFilters, setAuditFilters] = useState({ action: "", resource_type: "" });
+  // "" | "xlsx" | "zip" — which catalogue export is currently downloading.
+  const [productExportBusy, setProductExportBusy] = useState("");
   const [customersTab, setCustomersTab] = useState("list");
 
   const capabilitySet = useMemo(() => new Set(adminMe?.capabilities || []), [adminMe]);
@@ -1502,8 +1504,6 @@ export default function AdminPanelClient() {
       showToast(err.message, "error");
     }
   }
-
-  const [productExportBusy, setProductExportBusy] = useState("");
 
   /**
    * Catalogue export. `withImages` streams a zip holding products.xlsx plus one

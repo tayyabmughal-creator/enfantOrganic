@@ -24,6 +24,7 @@ export would take the web worker down with it.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
@@ -61,6 +62,8 @@ ROLE_VARIANT = "variant"
 ROLE_CERTIFICATE = "certificate"
 
 _UNSAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
+# path -> md5, so a file shared by several products is only ever read once.
+_DIGEST_CACHE: dict = {}
 
 
 # ---------------------------------------------------------------------------
@@ -155,12 +158,36 @@ def _strip_media_prefix(path: str) -> str | None:
     return None
 
 
+def _local_media_file(relative) -> Path | None:
+    """Resolve a media-relative path, refusing anything that escapes MEDIA_ROOT.
+
+    These values are admin-editable, so a ``../..`` in a gallery entry must not
+    be able to pull arbitrary server files into a customer-facing export.
+    """
+    root = _media_root().resolve()
+    try:
+        candidate = (root / str(relative)).resolve()
+    except (OSError, ValueError):
+        return None
+    if candidate != root and root not in candidate.parents:
+        return None
+    return candidate if candidate.is_file() else None
+
+
 def _resolve_source(raw) -> ImagePlan | None:
     """Turn a stored image reference into a local path or a remote URL.
 
     Handles every shape the catalogue actually uses: ``ImageField`` files,
     ``/media/...`` URLs, absolute URLs pointing back at our own domain, bare
     storage-relative paths, and third-party CDN links left over from Shopify.
+
+    A ``/media`` path that exists on disk is always taken from disk, whatever
+    host the URL names. Products routinely store the same file both as an
+    ``ImageField`` and as an absolute URL, and matching the URL's host against
+    our configured domains got that wrong whenever the two disagreed (the
+    backend knows itself as ``enfhantorganic.itwing.cloud`` while the images are
+    written as ``www.enfantorganic.com``) — the file was then re-downloaded over
+    the network and landed in the export twice.
     """
     if raw is None:
         return None
@@ -169,8 +196,8 @@ def _resolve_source(raw) -> ImagePlan | None:
     if hasattr(raw, "name") and hasattr(raw, "storage"):
         if not raw.name:
             return None
-        candidate = _media_root() / str(raw.name)
-        if candidate.is_file():
+        candidate = _local_media_file(raw.name)
+        if candidate:
             return ImagePlan(role="", source=str(raw.name), kind="local", local_path=candidate)
         try:
             url = raw.url
@@ -188,24 +215,18 @@ def _resolve_source(raw) -> ImagePlan | None:
         value = "https:" + value
 
     if value.startswith("http://") or value.startswith("https://"):
-        parsed = urlparse(value)
-        own_hosts = set()
-        for setting_name in ("MEDIA_HOST_URL", "FRONTEND_PUBLIC_URL"):
-            host = urlparse(str(getattr(settings, setting_name, "") or "")).netloc
-            if host:
-                own_hosts.add(host)
-        relative = _strip_media_prefix(unquote(parsed.path))
-        if relative is not None and (not own_hosts or parsed.netloc in own_hosts):
-            candidate = _media_root() / relative
-            if candidate.is_file():
+        relative = _strip_media_prefix(unquote(urlparse(value).path))
+        if relative is not None:
+            candidate = _local_media_file(relative)
+            if candidate:
                 return ImagePlan(role="", source=value, kind="local", local_path=candidate)
         return ImagePlan(role="", source=value, kind="remote", remote_url=value)
 
     relative = _strip_media_prefix(unquote(value))
     if relative is None:
         relative = unquote(value).lstrip("/")
-    candidate = _media_root() / relative
-    if candidate.is_file():
+    candidate = _local_media_file(relative)
+    if candidate:
         return ImagePlan(role="", source=value, kind="local", local_path=candidate)
     return ImagePlan(role="", source=value, kind="missing", note="file not found on disk")
 
@@ -224,8 +245,33 @@ def _variant_images(product):
             yield variant["image"]
 
 
+def _content_digest(path: Path) -> str:
+    """MD5 of a media file, cached per path for the life of the process.
+
+    Not a security hash — it only answers "are these two files the same
+    picture?", which the storage paths cannot: the admin gallery widget saves
+    its own copy under a fresh random name, so one photo can sit on disk two or
+    three times under names that share nothing.
+    """
+    cached = _DIGEST_CACHE.get(path)
+    if cached is not None:
+        return cached
+    digest = hashlib.md5()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(FILE_COPY_CHUNK_BYTES), b""):
+            digest.update(block)
+    value = digest.hexdigest()
+    _DIGEST_CACHE[path] = value
+    return value
+
+
 def plan_product_images(product, *, include_remote=True) -> list[ImagePlan]:
-    """Every distinct image attached to ``product``, in display order."""
+    """Every distinct image attached to ``product``, in display order.
+
+    De-duplication runs on file content, not on the stored reference, and is
+    scoped to the product — the same photo shared by two products belongs in
+    both folders, but it must not appear twice inside one.
+    """
     raw_sources = [(ROLE_MAIN, product.image_file), (ROLE_MAIN, product.image),
                    (ROLE_HOVER, product.hover_image_file), (ROLE_HOVER, product.hover_image)]
     for row in product.gallery_images.all():
@@ -243,7 +289,13 @@ def plan_product_images(product, *, include_remote=True) -> list[ImagePlan]:
         plan = _resolve_source(raw)
         if plan is None:
             continue
-        key = str(plan.local_path) if plan.kind == "local" else (plan.remote_url or plan.source)
+        if plan.kind == "local" and plan.local_path:
+            try:
+                key = f"md5:{_content_digest(plan.local_path)}"
+            except OSError:
+                key = str(plan.local_path)
+        else:
+            key = plan.remote_url or plan.source
         if key in seen:
             continue
         seen.add(key)
@@ -684,6 +736,9 @@ def iter_export_zip(
                             plan.size_bytes = plan.local_path.stat().st_size
                             info = zipfile.ZipInfo(arcname, date_time=timezone.localtime().timetuple()[:6])
                             info.compress_type = zipfile.ZIP_STORED
+                            # Without this the entries carry mode 0, and some
+                            # extractors then produce unreadable files.
+                            info.external_attr = 0o644 << 16
                             with archive.open(info, "w") as target, plan.local_path.open("rb") as source:
                                 shutil.copyfileobj(source, target, FILE_COPY_CHUNK_BYTES)
                             plan.status = "exported"

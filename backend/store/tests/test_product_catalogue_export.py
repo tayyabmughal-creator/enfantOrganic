@@ -16,11 +16,23 @@ from store.services.admin_roles import ROLE_MANAGER, ROLE_MARKETING, ensure_defa
 
 User = get_user_model()
 
-# A 1x1 GIF — small enough to keep the fixtures cheap, real enough for ImageField.
-PIXEL_GIF = (
-    b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!"
-    b"\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;"
-)
+def pixel_gif(colour=b"\xff\xff\xff"):
+    """A 1x1 GIF — cheap fixture, real enough for ImageField.
+
+    The colour is a parameter because the exporter de-duplicates on file
+    content: fixtures that are meant to be three separate images have to
+    actually differ byte for byte.
+    """
+    return (
+        b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00" + colour + b"!"
+        b"\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;"
+    )
+
+
+MAIN_GIF = pixel_gif(b"\xff\xff\xff")
+HOVER_GIF = pixel_gif(b"\xff\x00\x00")
+GALLERY_GIF = pixel_gif(b"\x00\x00\xff")
+ALL_GIFS = {MAIN_GIF, HOVER_GIF, GALLERY_GIF}
 
 
 class ProductExportTestBase(TestCase):
@@ -65,8 +77,8 @@ class ProductExportTestBase(TestCase):
             description_en="Gentle daily lotion.",
             cost_price="1.250",
             stock_quantity=42,
-            image_file=SimpleUploadedFile("main.gif", PIXEL_GIF, content_type="image/gif"),
-            hover_image_file=SimpleUploadedFile("hover.gif", PIXEL_GIF, content_type="image/gif"),
+            image_file=SimpleUploadedFile("main.gif", MAIN_GIF, content_type="image/gif"),
+            hover_image_file=SimpleUploadedFile("hover.gif", HOVER_GIF, content_type="image/gif"),
             variants=[{"id": "v1", "sku": "LBL-250", "title_en": "250 ml", "price": "4.900",
                        "options": {"Size": "250 ml"}, "stock_quantity": 12}],
         )
@@ -75,7 +87,7 @@ class ProductExportTestBase(TestCase):
         ProductPrice.objects.create(product=self.product, region=self.ae, price="46.000")
         ProductGalleryImage.objects.create(
             product=self.product,
-            image_file=SimpleUploadedFile("gallery-1.gif", PIXEL_GIF, content_type="image/gif"),
+            image_file=SimpleUploadedFile("gallery-1.gif", GALLERY_GIF, content_type="image/gif"),
             sort_order=1,
         )
 
@@ -109,6 +121,43 @@ class ProductImagePlanTests(ProductExportTestBase):
         plans = product_export.plan_product_images(self.product)
         local_paths = [str(plan.local_path) for plan in plans if plan.local_path]
         self.assertEqual(len(local_paths), len(set(local_paths)))
+
+    @override_settings(
+        MEDIA_HOST_URL="https://enfhantorganic.itwing.cloud",
+        FRONTEND_PUBLIC_URL="https://enfhantorganic.itwing.cloud",
+    )
+    def test_absolute_media_url_on_another_host_still_resolves_to_the_local_file(self):
+        # Production stores image URLs as www.enfantorganic.com while the backend
+        # knows itself by a different domain. Matching on host re-downloaded the
+        # file over the network and shipped it twice.
+        self.product.image = f"https://www.enfantorganic.com{self.product.image_file.url}"
+        self.product.save(update_fields=["image"])
+
+        plans = product_export.plan_product_images(self.product)
+        self.assertEqual([p.kind for p in plans], ["local", "local", "local"])
+        self.assertEqual(len([p for p in plans if p.role == product_export.ROLE_MAIN]), 1)
+
+    def test_the_same_picture_saved_under_two_names_is_exported_once(self):
+        # The gallery uploader writes its own copy under a random name, so
+        # identical bytes can sit on disk under names that share nothing.
+        ProductGalleryImage.objects.create(
+            product=self.product,
+            image_file=SimpleUploadedFile("duplicate-a1b2c3d4.gif", MAIN_GIF, content_type="image/gif"),
+            sort_order=2,
+        )
+        plans = product_export.plan_product_images(self.product)
+        # Still main + hover + gallery — the fourth file is the main image again.
+        self.assertEqual(len(plans), 3, [p.source for p in plans])
+        self.assertEqual([p.role for p in plans], ["main", "hover", "gallery"])
+
+    def test_media_path_cannot_escape_media_root(self):
+        self.product.gallery = ["/media/../../../../etc/passwd"]
+        self.product.save(update_fields=["gallery"])
+        escaped = [
+            p for p in product_export.plan_product_images(self.product)
+            if p.source.endswith("etc/passwd")
+        ]
+        self.assertEqual([p.kind for p in escaped], ["missing"])
 
     def test_remote_url_is_marked_remote_and_can_be_skipped(self):
         self.product.gallery = ["https://cdn.shopify.com/s/files/example.png"]
@@ -225,8 +274,7 @@ class ProductExportZipTests(ProductExportTestBase):
         self.assertEqual(len(image_names), 3)
         self.assertEqual(result.images_exported, 3)
         self.assertEqual(result.images_failed, 0)
-        for name in image_names:
-            self.assertEqual(archive.read(name), PIXEL_GIF)
+        self.assertEqual({archive.read(name) for name in image_names}, ALL_GIFS)
 
         # The workbook inside the zip must agree with what was actually written.
         workbook = openpyxl.load_workbook(io.BytesIO(archive.read("catalogue/products.xlsx")))
