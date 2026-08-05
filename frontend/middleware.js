@@ -13,7 +13,14 @@ import {
 } from "@/lib/storefront";
 
 const LOCALE_COOKIE = "enfant-locale";
-const REGION_COOKIE = "enfant-region";
+// Renamed on purpose. `enfant-region` is unusable as a preference: the
+// om./ae./sa. middleware wrote it at `.enfantorganic.com`, for a year, with a
+// hardcoded `"om"` default for anyone arriving at www or the apex without one.
+// Those cookies are still in returning visitors' browsers, they outrank a
+// host-only cookie of the same name, and their value records no choice the
+// visitor ever made — so the name is retired rather than reused.
+const REGION_COOKIE = "enfant-store-region";
+const LEGACY_REGION_COOKIE = "enfant-region";
 
 // www is the single canonical host: one domain means one authority pool, and the
 // brand's inbound links from the Shopify era all point here.
@@ -43,25 +50,20 @@ function localeForRedirect(request, fallback) {
 }
 
 /**
- * Expire the `.enfantorganic.com`-scoped preference cookies left by the
- * om./ae./sa. subdomain era.
+ * Expire the retired `enfant-region` cookie at both scopes.
  *
- * They still arrive alongside the host-only cookies the site writes now, under
- * the same names, and a duplicate name resolves to whichever the browser sends
- * first — the domain-scoped one. So a returning UAE shopper kept being
- * redirected to the Oman store off a cookie written months ago, no matter what
- * the current visit said. Cleared on every response, including redirects: a
- * visitor whose first request is `/` is redirected off this value before any
- * page has had the chance to correct it.
+ * The domain-scoped original is the one that pinned returning visitors to
+ * Oman; the host-only copy is what the interim code wrote while it still
+ * shared the name. Cleared on every response, redirects included — a visitor
+ * whose first request is `/` gets redirected before any page could clear it.
  */
-function clearLegacyDomainCookies(response) {
-  for (const name of [REGION_COOKIE, LOCALE_COOKIE]) {
-    response.cookies.set(name, "", {
-      domain: `.${CANONICAL_HOST.replace(/^www\./, "")}`,
-      path: "/",
-      maxAge: 0,
-    });
-  }
+function clearLegacyRegionCookie(response) {
+  response.cookies.set(LEGACY_REGION_COOKIE, "", {
+    domain: `.${CANONICAL_HOST.replace(/^www\./, "")}`,
+    path: "/",
+    maxAge: 0,
+  });
+  response.cookies.set(LEGACY_REGION_COOKIE, "", { path: "/", maxAge: 0 });
   return response;
 }
 
@@ -70,7 +72,7 @@ function redirectTo(request, pathWithQuery, status) {
   // Region now lives in the path segment; a leftover query param would only
   // create a second URL for identical content.
   target.searchParams.delete("region");
-  return clearLegacyDomainCookies(NextResponse.redirect(target, { status }));
+  return clearLegacyRegionCookie(NextResponse.redirect(target, { status }));
 }
 
 export async function middleware(request) {
@@ -152,7 +154,7 @@ export async function middleware(request) {
     return NextResponse.next({ request: { headers: requestHeaders } });
   })();
 
-  clearLegacyDomainCookies(response);
+  clearLegacyRegionCookie(response);
 
   // Remember the pair so / and legacy links can land the visitor back here.
   response.cookies.set(REGION_COOKIE, region, {
