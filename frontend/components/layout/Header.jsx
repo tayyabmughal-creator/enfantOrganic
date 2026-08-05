@@ -12,6 +12,7 @@ import {
   buildStorePath,
   normalizeLocale,
   normalizeRegion,
+  parseLocaleRegionFromPath,
   replaceLocaleInPath,
   replaceRegionInPath,
   uiText,
@@ -82,13 +83,21 @@ function HeaderInner({ navigation }) {
     setOptimisticRegion(region);
   }, [region]);
 
-  // Persist whatever the URL actually resolved to. This used to key off
-  // `?region=`, which the browser URL no longer carries — so the stored region
+  // Persist only a region the URL actually states. This used to key off
+  // `?region=`, which the browser URL no longer carries, so the stored region
   // and its cookie stayed frozen at whatever they were before the move to
-  // /{locale}-{region}, and everything falling back to them read Oman.
+  // /{locale}-{region} — and everything falling back to them read Oman.
+  //
+  // Deliberately not `region`: that one carries a default when nothing states a
+  // region, and writing a default back would record it as a choice the visitor
+  // made. A new visitor with empty storage, mid-hydration on a path not yet
+  // settled, would pin themselves to Oman that way.
   useEffect(() => {
-    saveSelectedRegion(region);
-  }, [region]);
+    const parsed = parseLocaleRegionFromPath(pathname);
+    if (parsed?.canonical) {
+      saveSelectedRegion(parsed.region);
+    }
+  }, [pathname]);
 
   useEffect(() => {
     if (!searchOpen) {
