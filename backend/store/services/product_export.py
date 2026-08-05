@@ -18,8 +18,8 @@ The same builder backs three entry points so the structure never drifts:
 * ``GET /api/admin/products/export/?images=0`` streams only the workbook.
 
 Images are streamed into the archive one at a time and never all held in
-memory — the local media tree is ~800 MB, so anything that buffers the whole
-export would take the web worker down with it.
+memory — the media tree runs to hundreds of megabytes, so anything that buffers
+the whole export would take the web worker down with it.
 """
 
 from __future__ import annotations
@@ -62,7 +62,10 @@ ROLE_VARIANT = "variant"
 ROLE_CERTIFICATE = "certificate"
 
 _UNSAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
-# path -> md5, so a file shared by several products is only ever read once.
+# (path, size, mtime) -> md5, so a file shared by several products is only read
+# once. Keyed on stat as well as path: a worker process outlives many exports,
+# and media replaced in place under an existing name must not return a stale
+# digest.
 _DIGEST_CACHE: dict = {}
 
 
@@ -253,7 +256,9 @@ def _content_digest(path: Path) -> str:
     its own copy under a fresh random name, so one photo can sit on disk two or
     three times under names that share nothing.
     """
-    cached = _DIGEST_CACHE.get(path)
+    stat = path.stat()
+    key = (str(path), stat.st_size, stat.st_mtime_ns)
+    cached = _DIGEST_CACHE.get(key)
     if cached is not None:
         return cached
     digest = hashlib.md5()
@@ -261,7 +266,7 @@ def _content_digest(path: Path) -> str:
         for block in iter(lambda: handle.read(FILE_COPY_CHUNK_BYTES), b""):
             digest.update(block)
     value = digest.hexdigest()
-    _DIGEST_CACHE[path] = value
+    _DIGEST_CACHE[key] = value
     return value
 
 

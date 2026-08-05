@@ -122,12 +122,22 @@ which resolve to the same file on disk:
 | Bare storage path | `products/gallery/lotion-a1b2c3d4.jpg` |
 | External CDN (leftover Shopify) | `https://cdn.shopify.com/s/files/…` |
 
-All five are resolved before anything is written, and de-duplicated — a product
-whose `gallery` JSON repeats its main image does not get the file twice.
+A `/media` path that exists on disk is always taken from disk, whatever host the
+URL names — the backend knows itself as `enfhantorganic.itwing.cloud` while the
+images are stored as `www.enfantorganic.com`, and matching on host used to make
+the exporter re-download files it already had.
+
+De-duplication compares **file content**, not the stored reference, because the
+admin gallery uploader saves its own copy under a fresh random name — one photo
+can sit on disk two or three times under names that share nothing. It is scoped
+per product: a photo used by two products lands in both folders, but never twice
+inside one. Precedence is main → hover → gallery → variant → certificate.
+
 External URLs are downloaded (25 MB cap, 20 s timeout) unless `--no-remote` /
 `?remote=0` is passed. Anything that cannot be fetched is listed in
 `images-not-exported.txt` and marked in the Images sheet rather than aborting
-the run.
+the run. Media paths are resolved through a MEDIA_ROOT containment check, so an
+admin-entered `../..` cannot pull server files into the export.
 
 ---
 
