@@ -88,13 +88,19 @@ services:
       WHATSAPP_TEMPLATE_ORDER_SHIPPED: ${WHATSAPP_TEMPLATE_ORDER_SHIPPED}
       WHATSAPP_TEMPLATE_ORDER_DELIVERED: ${WHATSAPP_TEMPLATE_ORDER_DELIVERED}
       WHATSAPP_TEMPLATE_REFUND_PROCESSED: ${WHATSAPP_TEMPLATE_REFUND_PROCESSED}
+    # --timeout must outlast the longest streaming response. The catalogue
+    # export (/api/admin/products/export/) ships every product image in one zip
+    # — several hundred MB — and gunicorn's arbiter kills a sync worker that has
+    # not returned to its accept loop within the timeout, which would cut the
+    # download off mid-file. Requests are buffered by nginx in front, so the
+    # longer window does not expose slow-client attacks.
     command: >
       sh -c "python manage.py migrate &&
              python manage.py collectstatic --noinput &&
              python manage.py ensure_hero_promo_cards &&
              python manage.py update_hero_promo_images_v2 &&
              python manage.py ensure_regional_product_prices &&
-             gunicorn enfant_backend.wsgi:application --bind 0.0.0.0:8000 --workers ${GUNICORN_WORKERS:-3} --timeout ${GUNICORN_TIMEOUT:-60}"
+             gunicorn enfant_backend.wsgi:application --bind 0.0.0.0:8000 --workers ${GUNICORN_WORKERS:-3} --timeout ${GUNICORN_TIMEOUT:-900}"
     volumes:
       - media-data:/app/media
       - static-data:/app/staticfiles

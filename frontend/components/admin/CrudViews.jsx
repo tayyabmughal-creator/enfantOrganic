@@ -18,6 +18,8 @@ export function CrudPanel({
   onDelete,
   onDownloadInvoice,
   onBulkStatusChange,
+  onExportProducts,
+  productExportBusy,
   titleFor,
   metaFor,
   labelFor,
@@ -39,11 +41,16 @@ export function CrudPanel({
           <h3>{activeKey === "deals" ? "Promotions" : activeKey === "blog" ? "Blog Articles" : activeKey === "draft_orders" ? "Draft Orders" : activeKey.charAt(0).toUpperCase() + activeKey.slice(1)}</h3>
           <span>{rows.length} record{rows.length === 1 ? "" : "s"}{totalPages > 1 ? ` · Page ${page} of ${totalPages}` : ""}</span>
         </div>
-        {canCreate ? (
-          <button type="button" className="admin-btn-primary" onClick={onCreate}>
-            + {activeKey === "draft_orders" ? "Create order" : activeKey === "blog" ? "New article" : `Add ${activeKey === "deals" ? "deal" : activeKey.slice(0, -1)}`}
-          </button>
-        ) : null}
+        <div className="admin-panel-head-actions">
+          {onExportProducts ? (
+            <ProductExportControls onExport={onExportProducts} busy={productExportBusy} />
+          ) : null}
+          {canCreate ? (
+            <button type="button" className="admin-btn-primary" onClick={onCreate}>
+              + {activeKey === "draft_orders" ? "Create order" : activeKey === "blog" ? "New article" : `Add ${activeKey === "deals" ? "deal" : activeKey.slice(0, -1)}`}
+            </button>
+          ) : null}
+        </div>
       </div>
       {onSearchChange ? (
         <div className="admin-search-bar">
@@ -165,6 +172,52 @@ export function CrudPanel({
         </div>
       ) : null}
     </section>
+  );
+}
+
+/**
+ * Catalogue export for the Products module.
+ *
+ * Two deliberately separate buttons rather than a format dropdown: the data-only
+ * file comes back in seconds, while the full export carries every product image
+ * and runs into hundreds of megabytes, so the difference has to be obvious
+ * before the click, not after it.
+ */
+function ProductExportControls({ onExport, busy }) {
+  const [publishedOnly, setPublishedOnly] = useState(false);
+  const isBusy = Boolean(busy);
+  return (
+    <div className="admin-export-controls">
+      <label className="admin-export-toggle" title="Leave off to include products that are hidden from the storefront.">
+        <input
+          type="checkbox"
+          checked={publishedOnly}
+          disabled={isBusy}
+          onChange={(e) => setPublishedOnly(e.target.checked)}
+        />
+        <span>Published only</span>
+      </label>
+      <button
+        type="button"
+        className="admin-btn-sm"
+        disabled={isBusy}
+        onClick={() => onExport({ withImages: false, publishedOnly })}
+        title="Excel workbook with every product field, prices per region, stock, variants and reviews."
+      >
+        <Icon name="download" size={14} />
+        {busy === "xlsx" ? "Preparing…" : "Export data (Excel)"}
+      </button>
+      <button
+        type="button"
+        className="admin-btn-primary"
+        disabled={isBusy}
+        onClick={() => onExport({ withImages: true, publishedOnly })}
+        title="ZIP: products.xlsx plus one image folder per product. Large download — keep this tab open."
+      >
+        <Icon name="download" size={14} />
+        {busy === "zip" ? "Building ZIP…" : "Export data + images (ZIP)"}
+      </button>
+    </div>
   );
 }
 

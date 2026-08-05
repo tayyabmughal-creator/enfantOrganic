@@ -2391,6 +2391,103 @@ class AdminProductGalleryUploadView(AdminCapabilityMixin, APIView):
         return Response({"urls": urls})
 
 
+class AdminProductExportView(AdminCapabilityMixin, APIView):
+    """Download the whole catalogue: Excel workbook, optionally with images.
+
+    ``?images=0`` returns just ``products.xlsx``. Otherwise a zip streams back
+    holding the workbook plus ``images/<row>-<slug>/…`` — one folder per
+    product. The zip is generated chunk by chunk rather than assembled in
+    memory: the media tree is hundreds of megabytes and buffering it would take
+    the worker down.
+    """
+
+    admin_read_capabilities = (CAP_PRODUCTS_VIEW,)
+    admin_write_capabilities = (CAP_PRODUCTS_EDIT,)
+
+    @staticmethod
+    def _flag(request, name, default=True):
+        raw = request.query_params.get(name)
+        if raw is None or raw == "":
+            return default
+        return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+    @extend_schema(responses={200: bytes})
+    def get(self, request):
+        from django.http import StreamingHttpResponse
+
+        from ..services import product_export
+
+        include_images = self._flag(request, "images", True)
+        include_remote = self._flag(request, "remote", True)
+        include_unpublished = not self._flag(request, "published_only", False)
+
+        products = list(product_export.export_queryset(include_unpublished=include_unpublished))
+        plans = product_export.build_plans(
+            products, include_images=include_images, include_remote=include_remote
+        )
+        base_name = product_export.export_base_name()
+        export_options = {
+            "images included": "yes" if include_images else "no",
+            "remote images downloaded": "yes" if include_remote else "no",
+            "unpublished products included": "yes" if include_unpublished else "no",
+        }
+
+        self._log_export(
+            request,
+            products=len(products),
+            images=sum(len(v) for v in plans.values()) if include_images else 0,
+            include_images=include_images,
+        )
+
+        if not include_images:
+            workbook = product_export.build_workbook(products, plans, options=export_options)
+            response = HttpResponse(
+                product_export.workbook_bytes(workbook),
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+            response["Content-Disposition"] = f'attachment; filename="{base_name}.xlsx"'
+            response["X-Export-Products"] = str(len(products))
+            return response
+
+        result = product_export.ExportResult()
+        stream = product_export.iter_export_zip(
+            products,
+            plans,
+            root_name=base_name,
+            include_images=True,
+            result=result,
+            options=export_options,
+        )
+        response = StreamingHttpResponse(
+            (chunk for chunk in stream if chunk),
+            content_type="application/zip",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{base_name}.zip"'
+        response["X-Export-Products"] = str(len(products))
+        # Buffering proxies would defeat the point of streaming this.
+        response["Cache-Control"] = "no-store"
+        response["X-Accel-Buffering"] = "no"
+        return response
+
+    def _log_export(self, request, *, products, images, include_images):
+        try:
+            AdminAuditLog.objects.create(
+                actor=request.user if getattr(request.user, "pk", None) else None,
+                action="export",
+                resource_type="product",
+                resource_id="catalogue-export",
+                after_snapshot={
+                    "products": products,
+                    "images_planned": images,
+                    "format": "zip" if include_images else "xlsx",
+                },
+                ip_address=(request.META.get("REMOTE_ADDR") or "")[:45],
+                user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:255],
+            )
+        except Exception:
+            logger.exception("Failed to write audit log for product catalogue export")
+
+
 class AdminCategoryListCreateView(StaffListCreateView):
     admin_read_capabilities = (CAP_CATEGORIES_VIEW,)
     admin_write_capabilities = (CAP_CATEGORIES_EDIT,)

@@ -86,6 +86,13 @@ customers_export*.csv
 *-review-export.csv.xlsx
 *-review-export*.xlsx
 
+# Catalogue exports from `manage.py export_products` — the folder carries every
+# product image (hundreds of MB) and is a handoff artifact, not source.
+exports/
+backend/exports/
+enfant-products-export-*/
+enfant-products-export-*.zip
+
 # Production data dumps — never commit
 prod_data.json
 prod_db.dump

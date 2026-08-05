@@ -1503,6 +1503,63 @@ export default function AdminPanelClient() {
     }
   }
 
+  const [productExportBusy, setProductExportBusy] = useState("");
+
+  /**
+   * Catalogue export. `withImages` streams a zip holding products.xlsx plus one
+   * image folder per product — it can run for minutes and weigh hundreds of MB,
+   * so the button stays disabled and labelled until the whole body has arrived.
+   */
+  async function exportProducts({ withImages = true, publishedOnly = false } = {}) {
+    if (!canViewKey("products")) {
+      showToast("You do not have permission to export products.", "error");
+      return;
+    }
+    const kind = withImages ? "zip" : "xlsx";
+    if (productExportBusy) return;
+    setProductExportBusy(kind);
+    showToast(
+      withImages
+        ? "Preparing the catalogue export (data + images). This can take a few minutes — keep this tab open."
+        : "Preparing the product data file…",
+      "info",
+    );
+    try {
+      const qs = new URLSearchParams({
+        images: withImages ? "1" : "0",
+        published_only: publishedOnly ? "1" : "0",
+      }).toString();
+      const res = await fetch(`${API_BASE}/admin/products/export/?${qs}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        let detail = "Product export failed";
+        try {
+          const payload = await res.json();
+          detail = payload?.detail || detail;
+        } catch {}
+        throw new Error(detail);
+      }
+      const blob = await res.blob();
+      const stamp = new Date().toISOString().slice(0, 10);
+      const href = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = href;
+      a.download = `enfant-products-export-${stamp}.${kind}`;
+      a.click();
+      window.URL.revokeObjectURL(href);
+      const count = res.headers.get("X-Export-Products");
+      showToast(
+        `Catalogue exported${count ? ` — ${count} products` : ""}${withImages ? " with images" : ""}.`,
+        "success",
+      );
+    } catch (err) {
+      showToast(err.message, "error");
+    } finally {
+      setProductExportBusy("");
+    }
+  }
+
   async function previewReport(type, params = {}) {
     if (!canViewKey("reports")) {
       throw new Error("You do not have permission to view reports.");
@@ -1867,6 +1924,8 @@ export default function AdminPanelClient() {
         onEdit={activeKey === "draft_orders" ? openDraftOrderEditor : openDetail}
         onDelete={deleteRecord}
         onDownloadInvoice={downloadOrderInvoice}
+        onExportProducts={activeKey === "products" && canViewKey("products") ? exportProducts : undefined}
+        productExportBusy={productExportBusy}
         onBulkStatusChange={activeKey === "orders" ? async (orderNumbers, newStatus) => {
           await Promise.all(
             orderNumbers.map((num) =>

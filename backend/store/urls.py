@@ -66,6 +66,7 @@ from .views import (
     AdminProductStockDetailView,
     AdminProductStockListCreateView,
     AdminProductDetailView,
+    AdminProductExportView,
     AdminProductGalleryUploadView,
     AdminProductListCreateView,
     AdminRegionListCreateView,
@@ -165,6 +166,8 @@ urlpatterns = [
     path("admin/newsletter-subscribers/", AdminNewsletterSubscriberListView.as_view(), name="admin-newsletter-subscribers"),
     path("admin/reports/<str:report_type>/", ReportCsvView.as_view(), name="admin-report"),
     path("admin/products/", AdminProductListCreateView.as_view(), name="admin-products"),
+    # Must precede the <slug> detail route, otherwise "export" is read as a slug.
+    path("admin/products/export/", AdminProductExportView.as_view(), name="admin-product-export"),
     path("admin/products/<slug:slug>/gallery/", AdminProductGalleryUploadView.as_view(), name="admin-product-gallery-upload"),
     path("admin/products/<slug:slug>/", AdminProductDetailView.as_view(), name="admin-product-detail"),
     path("admin/categories/", AdminCategoryListCreateView.as_view(), name="admin-categories"),

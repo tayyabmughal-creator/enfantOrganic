@@ -581,6 +581,64 @@
   font-size: 13px;
 }
 
+.admin-panel-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* ─── Catalogue export (Products module) ──────────────────────────────────── */
+
+.admin-export-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.admin-export-controls .admin-btn-sm,
+.admin-export-controls .admin-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.admin-export-controls button[disabled] {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.admin-export-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: #6f7a66;
+  cursor: pointer;
+  user-select: none;
+}
+
+.admin-export-toggle input {
+  accent-color: #2f5d3f;
+  cursor: pointer;
+}
+
+@media (max-width: 720px) {
+  .admin-panel-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-panel-head-actions,
+  .admin-export-controls {
+    justify-content: flex-start;
+  }
+}
+
 /* ─── KPI grid ────────────────────────────────────────────────────────────── */
 
 .admin-kpi-grid {
