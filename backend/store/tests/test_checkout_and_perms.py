@@ -755,6 +755,36 @@ class CheckoutAndPermsTestCase(TestCase):
         self.coupon.refresh_from_db()
         self.assertEqual(self.coupon.used_count, 0)
 
+    def test_gift_card_endpoint_attributes_a_coupon_failure_to_the_coupon(self):
+        """
+        Both endpoints evaluate coupon and gift card together, coupon first, so
+        a bad coupon can fail a gift card Apply. The caller has to be able to
+        tell whose fault it was, or it shows "Coupon is not active yet." under
+        the gift card field — about a code the customer never typed there.
+        """
+        self.coupon.starts_at = timezone.now() + timedelta(days=1)
+        self.coupon.save(update_fields=["starts_at"])
+
+        payload = self.coupon_validation_payload()
+        payload["gift_card_code"] = "SOME-GIFT-CARD"
+
+        response = self.api_client.post("/api/gift-cards/validate/", payload, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["valid"])
+        self.assertEqual(response.data["error"], "Coupon is not active yet.")
+        self.assertEqual(response.data["error_field"], "coupon_code")
+
+    def test_gift_card_endpoint_blames_the_gift_card_when_the_coupon_is_fine(self):
+        payload = self.coupon_validation_payload(coupon_code="")
+        payload["gift_card_code"] = "NOT-A-REAL-CARD"
+
+        response = self.api_client.post("/api/gift-cards/validate/", payload, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["valid"])
+        self.assertEqual(response.data["error_field"], "gift_card_code")
+
     def _setup_milestones(self):
         # Subtotal in these tests is 5.00 (2 x 2.50); both rewards unlock at 4.00.
         CartMilestone.objects.create(

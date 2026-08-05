@@ -881,7 +881,17 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
           // couponPreview so shipping/totals don't flash to "—" mid-keystroke.
           if (!silent) {
             setCouponPreview(null);
-            setCouponMessage(data.error || data.message || (isAr ? "الكوبون غير صالح." : "Coupon is not valid."));
+            const text =
+              data.error || data.message || (isAr ? "الكوبون غير صالح." : "Coupon is not valid.");
+            // Mirror of the gift card path: this endpoint validates both, so the
+            // failure can belong to the gift card field instead.
+            if (data.error_field === "gift_card_code") {
+              setGiftCardMessage(text);
+              setCouponMessage("");
+              setActiveDiscountField("gift_card");
+            } else {
+              setCouponMessage(text);
+            }
           }
           return false;
         }
@@ -968,9 +978,18 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         const data = await readJson(response, { isAr });
         if (!response.ok || !data.valid) {
           setCouponPreview(null);
-          setGiftCardMessage(
-            data.error || data.message || (isAr ? "بطاقة الهدية غير صالحة." : "Gift card is not valid."),
-          );
+          const text =
+            data.error || data.message || (isAr ? "بطاقة الهدية غير صالحة." : "Gift card is not valid.");
+          // The endpoint checks the coupon too, so the failure may be about a
+          // code in the *other* field. Showing it here blamed the gift card for
+          // a coupon the customer had not touched.
+          if (data.error_field === "coupon_code") {
+            setCouponMessage(text);
+            setGiftCardMessage("");
+            setActiveDiscountField("coupon");
+          } else {
+            setGiftCardMessage(text);
+          }
           return false;
         }
         setCouponPreview(data);
@@ -2164,7 +2183,10 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                   onClick={() => setActiveDiscountField("coupon")}
                 >
                   <span>{isAr ? "كوبون" : "Coupon"}</span>
-                  {form.coupon_code ? (
+                  {/* Only when the server actually accepted it. Keyed off the
+                      typed text, this read "Added" over a rejected code — the
+                      badge sat next to its own error message. */}
+                  {couponPreview?.coupon_code ? (
                     <span className="checkout-discount-tab-badge">{isAr ? "مضاف" : "Added"}</span>
                   ) : null}
                 </button>
@@ -2176,7 +2198,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                   onClick={() => setActiveDiscountField("gift_card")}
                 >
                   <span>{isAr ? "بطاقة هدية" : "Gift card"}</span>
-                  {form.gift_card_code ? (
+                  {couponPreview?.gift_card_code ? (
                     <span className="checkout-discount-tab-badge">{isAr ? "مضاف" : "Added"}</span>
                   ) : null}
                 </button>

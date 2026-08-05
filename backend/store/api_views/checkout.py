@@ -29,6 +29,22 @@ def validation_error_message(error):
     return str(detail)
 
 
+def validation_error_field(error):
+    """
+    Which input the message belongs under.
+
+    Both endpoints evaluate the coupon and the gift card together, because the
+    totals depend on both, and the coupon is checked first. Without this the
+    caller cannot tell the two apart, so pressing Apply on a gift card while a
+    bad coupon sat in the other field showed "Coupon is not active yet." under
+    the gift card — an error about a code the customer had not touched.
+    """
+    detail = getattr(error, "detail", error)
+    if isinstance(detail, dict):
+        return str(next(iter(detail.keys()), "")) or ""
+    return ""
+
+
 def _capture_meta_capi_context(order, request):
     """
     Persist the Meta identity signals for this checkout, then queue the Purchase.
@@ -118,6 +134,7 @@ class CouponValidationView(APIView):
                     "final_total": None,
                     "message": "",
                     "error": validation_error_message(error),
+                    "error_field": validation_error_field(error),
                 }
             )
 
@@ -142,5 +159,6 @@ class GiftCardValidationView(APIView):
                     "final_total": None,
                     "message": "",
                     "error": validation_error_message(error),
+                    "error_field": validation_error_field(error),
                 }
             )

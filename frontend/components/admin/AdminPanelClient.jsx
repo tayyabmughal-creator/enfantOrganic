@@ -234,8 +234,8 @@ const FIELD_CONFIGS = {
     ["code","Code","text"],["description","Description","textarea"],
     ["discount_type","Discount type","select",[["percentage","Percentage"],["fixed","Fixed amount"],["free_shipping","Free shipping"]]],
     ["value","Value","number"],["minimum_subtotal","Minimum subtotal","number"],
-    ["max_uses","Usage limit","number"],["starts_at","Starts at","datetime-local"],
-    ["ends_at","Ends at","datetime-local"],["is_active","Active","checkbox"],
+    ["max_uses","Usage limit","number"],["starts_at","Starts at (your local time)","datetime-local"],
+    ["ends_at","Ends at (your local time)","datetime-local"],["is_active","Active","checkbox"],
   ],
   orders: [
     ["sales_channel","Sales channel","select",SALES_CHANNEL],
@@ -492,7 +492,7 @@ const FIELD_CONFIGS = {
     ["sender_name","Sender name","text"],
     ["message","Message","textarea"],
     ["status","Status","select",[["active","Active"],["redeemed","Redeemed"],["expired","Expired"],["cancelled","Cancelled"]]],
-    ["expiry_date","Expiry date","datetime-local"],
+    ["expiry_date","Expiry date (your local time)","datetime-local"],
   ],
   abandoned: [
     ["customer_name","Customer name","text"],
@@ -609,13 +609,39 @@ function statusTone(value = "") {
   return "neutral";
 }
 
+/**
+ * A `datetime-local` input has no timezone — it shows and returns plain wall
+ * clock time. The API stores UTC, so both directions need converting.
+ *
+ * Neither was. The API's UTC string was sliced to 16 chars and dropped into the
+ * input as if it were local, and the input's naive value was posted back for
+ * Django (TIME_ZONE="UTC") to read as UTC. A coupon set to start "now" was
+ * therefore stored ahead by exactly the author's UTC offset — ECDT, created
+ * 12:11 UTC from UTC+5, got starts_at 17:11 UTC and told every customer
+ * "Coupon is not active yet." for five hours.
+ */
+function utcToLocalInput(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value).slice(0, 16);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 16);
+}
+
+function localInputToUtc(value) {
+  // A "YYYY-MM-DDTHH:mm" string with no offset is parsed as local time, which
+  // is exactly what the picker meant.
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toISOString();
+}
+
 function stringify(value, type) {
   if (type === "gallery") return Array.isArray(value) ? value : [];
   if (type === "product-variants") return Array.isArray(value) ? value : [];
   if (type === "option-groups") return Array.isArray(value) ? value : [];
   if (type === "categories-select") return Array.isArray(value) ? value : [];
   if (type === "json") return typeof value === "string" ? value : JSON.stringify(value ?? [], null, 2);
-  if (type === "datetime-local" && value) return String(value).slice(0, 16);
+  if (type === "datetime-local" && value) return utcToLocalInput(value);
   if (type === "date" && value) return String(value).slice(0, 10);
   return value ?? "";
 }
@@ -752,6 +778,7 @@ function buildPayload(editor, key, mode) {
       else if (type === "categories-select") { const ids = Array.isArray(v) ? v : []; ids.forEach((id) => fd.append(k, id)); if (ids.length === 0) fd.append(k, ""); }
       else if (k === "product_slugs") { const slugs = Array.isArray(v) ? v : []; slugs.forEach((slug) => fd.append(k, slug)); if (slugs.length === 0) fd.append(k, ""); }
       else if (v instanceof File) fd.append(k, v);
+      else if (type === "datetime-local" && v) fd.append(k, localInputToUtc(v));
       else fd.append(k, v);
     }
     return fd;
@@ -765,6 +792,7 @@ function buildPayload(editor, key, mode) {
     else if (type === "json" || type === "gallery") payload[k] = typeof v === "string" ? JSON.parse(v || "null") : v;
     else if (type === "categories-select") payload[k] = Array.isArray(v) ? v : [];
     else if (k === "product_slugs") payload[k] = Array.isArray(v) ? v : [];
+    else if (type === "datetime-local" && v) payload[k] = localInputToUtc(v);
     else payload[k] = v;
   }
   return payload;
