@@ -18,6 +18,7 @@ import {
 } from "@/lib/storefront";
 import { resolveNavigationHref } from "@/lib/navigationLinks";
 import { saveSelectedRegion } from "@/lib/regionResolver";
+import { useRegionCode } from "@/lib/useRegionCode";
 import { pushDataLayerEvent } from "@/lib/analytics";
 import { fbqTrack, snaptrTrack, ttqTrack } from "@/components/store/analytics/AnalyticsScripts";
 import { API_BASE_URL as CONFIG_API_BASE_URL } from "@/lib/config";
@@ -49,7 +50,9 @@ function HeaderInner({ navigation }) {
   const [isRegionPending, startRegionTransition] = useTransition();
 
   const t = uiText(locale);
-  const region = normalizeRegion(searchParams.get("region") || navigation.current_region.code);
+  // The path segment first, the server's own answer second. `?region=` is not
+  // in the browser URL, so reading it alone would report Oman everywhere.
+  const region = normalizeRegion(useRegionCode() || navigation.current_region.code);
   const [optimisticRegion, setOptimisticRegion] = useState(region);
   const params = useMemo(() => new URLSearchParams(searchParams.toString()), [searchParams]);
   const activeLocale = locale;
@@ -79,12 +82,13 @@ function HeaderInner({ navigation }) {
     setOptimisticRegion(region);
   }, [region]);
 
+  // Persist whatever the URL actually resolved to. This used to key off
+  // `?region=`, which the browser URL no longer carries — so the stored region
+  // and its cookie stayed frozen at whatever they were before the move to
+  // /{locale}-{region}, and everything falling back to them read Oman.
   useEffect(() => {
-    const urlRegion = searchParams.get("region");
-    if (urlRegion) {
-      saveSelectedRegion(urlRegion);
-    }
-  }, [searchParams]);
+    saveSelectedRegion(region);
+  }, [region]);
 
   useEffect(() => {
     if (!searchOpen) {

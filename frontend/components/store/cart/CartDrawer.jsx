@@ -1,7 +1,6 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 import Icon from "@/components/icons/Icon";
@@ -9,7 +8,8 @@ import SiteImage from "@/components/ui/SiteImage";
 import CartApplePayButton from "@/components/store/cart/CartApplePayButton";
 import { useStore } from "@/components/store/cart/StoreProvider";
 import { useLocale } from "@/contexts/LocaleContext";
-import { buildStorePath, formatMoney, normalizeRegion, uiText } from "@/lib/storefront";
+import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
+import { useRegionCode } from "@/lib/useRegionCode";
 import { API_BASE_URL } from "@/lib/config";
 
 function TruckIcon() {
@@ -131,8 +131,9 @@ function MilestoneBar({ subtotal, milestones, currency, locale }) {
 }
 
 function CartDrawerInner() {
-  const searchParams = useSearchParams();
-  const region = normalizeRegion(searchParams.get("region") || "om");
+  // Never from `?region=` alone — the browser URL has no such param, so that
+  // read priced every UAE and Saudi cart in OMR. See useRegionCode().
+  const region = useRegionCode();
   const { locale } = useLocale();
   const t = uiText(locale);
   const { cartItems, closeCart, drawerOpen, refreshCartPricing, removeItem, subtotal, updateQuantity } = useStore();

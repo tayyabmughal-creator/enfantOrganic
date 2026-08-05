@@ -6,6 +6,7 @@ import {
   buildTikTokContents,
   isPurchaseTrackable,
 } from "../lib/analytics.js";
+import { resolveTrackingRegionCode } from "../lib/eventTracking.js";
 
 // ─── buildTikTokContents ─────────────────────────────────────────────────────
 
@@ -99,4 +100,31 @@ test("buildAnalyticsItem derives unit price and quantity", () => {
 test("buildAnalyticsItem returns null for unidentifiable input", () => {
   assert.equal(buildAnalyticsItem({}), null);
   assert.equal(buildAnalyticsItem(null), null);
+});
+
+// ─── resolveTrackingRegionCode ───────────────────────────────────────────────
+//
+// Regression guard for the /{locale}-{region} move: middleware injects
+// `?region=` by rewriting internally, which server components see and the
+// browser URL never does. Reading the query param alone reported every UAE and
+// Saudi visitor as Oman.
+
+test("resolveTrackingRegionCode reads the region from the path segment", () => {
+  assert.equal(resolveTrackingRegionCode(null, "/en-ae/product/baby-oil"), "ae");
+  assert.equal(resolveTrackingRegionCode(null, "/ar-sa/checkout"), "sa");
+  assert.equal(resolveTrackingRegionCode(null, "/en-om"), "om");
+});
+
+test("resolveTrackingRegionCode prefers the path over a stale ?region=", () => {
+  const params = new URLSearchParams({ region: "om" });
+  assert.equal(resolveTrackingRegionCode(params, "/en-ae/product/baby-oil"), "ae");
+});
+
+test("resolveTrackingRegionCode falls back to ?region= on the legacy bare path", () => {
+  const params = new URLSearchParams({ region: "sa" });
+  assert.equal(resolveTrackingRegionCode(params, "/en/product/baby-oil"), "sa");
+});
+
+test("resolveTrackingRegionCode defaults to Oman with nothing to go on", () => {
+  assert.equal(resolveTrackingRegionCode(null, ""), "om");
 });

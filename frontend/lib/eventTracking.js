@@ -14,6 +14,7 @@
 
 import { API_BASE_URL } from "./config.js";
 import { readStoredRegion, regionFromSearchParams } from "./regionResolver.js";
+import { parseLocaleRegionFromPath } from "./storefront-core/routing.js";
 
 const SESSION_KEY = "enfant-session-id";
 const ATTRIBUTION_KEY = "enfant-attribution";
@@ -191,8 +192,23 @@ export function buildPageViewTrackingKey(pathname = "", searchParamsLike = "") {
   return `${pathname || ""}?${query}`;
 }
 
-export function resolveTrackingRegionCode(searchParams) {
-  return regionFromSearchParams(searchParams) || readStoredRegion() || "om";
+/**
+ * The region to stamp on analytics events, resolved from what the browser can
+ * actually see.
+ *
+ * `pathname` leads: middleware injects `?region=` for server components only,
+ * so on the client the path segment is the sole reliable carrier. Without it
+ * every UAE and Saudi page view was recorded — and reported to Meta as
+ * `country` — as Oman.
+ */
+export function resolveTrackingRegionCode(searchParams, pathname = "") {
+  const parsed = parseLocaleRegionFromPath(pathname);
+  return (
+    (parsed?.canonical ? parsed.region : "")
+    || regionFromSearchParams(searchParams)
+    || readStoredRegion()
+    || "om"
+  );
 }
 
 /**

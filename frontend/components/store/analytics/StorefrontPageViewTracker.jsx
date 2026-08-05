@@ -27,7 +27,7 @@ function StorefrontPageViewTrackerInner() {
 
     lastTrackedKeyRef.current = trackingKey;
     trackEvent("page_view", {
-      regionCode: resolveTrackingRegionCode(searchParams),
+      regionCode: resolveTrackingRegionCode(searchParams, pathname),
     });
   }, [pathname, searchParams]);
 

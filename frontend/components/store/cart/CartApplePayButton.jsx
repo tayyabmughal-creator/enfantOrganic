@@ -1,13 +1,14 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 import Icon from "@/components/icons/Icon";
 import { useStore } from "@/components/store/cart/StoreProvider";
 import { useLocale } from "@/contexts/LocaleContext";
 import { API_BASE_URL, safeRedirectUrl } from "@/lib/config";
-import { buildStorePath, formatMoney, normalizeRegion, uiText } from "@/lib/storefront";
+import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
+import { useRegionCode } from "@/lib/useRegionCode";
 import { saveOrderLookupToken } from "@/lib/orderLookupToken";
 
 const PAYMOB_APPLE_PAY_INTEGRATION_ID = process.env.NEXT_PUBLIC_PAYMOB_APPLE_PAY_INTEGRATION_ID || "";
@@ -28,9 +29,11 @@ function canUseApplePay() {
 }
 
 function CartApplePayButtonInner() {
-  const searchParams = useSearchParams();
   const { locale } = useLocale();
-  const region = normalizeRegion(searchParams.get("region") || "om");
+  // This region goes straight into the order payload below, so reading it from
+  // `?region=` — absent in the browser URL — placed UAE and Saudi Apple Pay
+  // orders as Omani ones, priced in OMR. See useRegionCode().
+  const region = useRegionCode();
   const isAr = locale === "ar";
 
   const { cartItems, subtotal, closeCart } = useStore();
