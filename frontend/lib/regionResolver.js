@@ -47,9 +47,13 @@ export function saveSelectedRegion(region) {
   }
   try {
     window.localStorage.setItem(SELECTED_REGION_STORAGE_KEY, normalized);
+    // That risk was real: the om./ae./sa. era wrote this cookie at
+    // .enfantorganic.com, and returning visitors still carry it. Duplicates of
+    // one name resolve to whichever the browser sends first — the domain-scoped
+    // one — so it has to go before the host-only cookie below means anything.
+    document.cookie = "enfant-region=; domain=.enfantorganic.com; path=/; max-age=0";
     // Host-only cookie, matching what middleware writes — everything now lives on the
-    // single www host, so a shared .enfantorganic.com cookie would only risk a second
-    // cookie of the same name shadowing this one.
+    // single www host.
     document.cookie = `enfant-region=${normalized}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
   } catch {
     // Storage can be unavailable in private browsing or embedded contexts.

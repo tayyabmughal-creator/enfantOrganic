@@ -42,12 +42,35 @@ function localeForRedirect(request, fallback) {
   return normalizeLocale(cookieLocale || fallback || DEFAULT_LOCALE);
 }
 
+/**
+ * Expire the `.enfantorganic.com`-scoped preference cookies left by the
+ * om./ae./sa. subdomain era.
+ *
+ * They still arrive alongside the host-only cookies the site writes now, under
+ * the same names, and a duplicate name resolves to whichever the browser sends
+ * first — the domain-scoped one. So a returning UAE shopper kept being
+ * redirected to the Oman store off a cookie written months ago, no matter what
+ * the current visit said. Cleared on every response, including redirects: a
+ * visitor whose first request is `/` is redirected off this value before any
+ * page has had the chance to correct it.
+ */
+function clearLegacyDomainCookies(response) {
+  for (const name of [REGION_COOKIE, LOCALE_COOKIE]) {
+    response.cookies.set(name, "", {
+      domain: `.${CANONICAL_HOST.replace(/^www\./, "")}`,
+      path: "/",
+      maxAge: 0,
+    });
+  }
+  return response;
+}
+
 function redirectTo(request, pathWithQuery, status) {
   const target = new URL(pathWithQuery, `https://${CANONICAL_HOST}`);
   // Region now lives in the path segment; a leftover query param would only
   // create a second URL for identical content.
   target.searchParams.delete("region");
-  return NextResponse.redirect(target, { status });
+  return clearLegacyDomainCookies(NextResponse.redirect(target, { status }));
 }
 
 export async function middleware(request) {
@@ -128,6 +151,8 @@ export async function middleware(request) {
     }
     return NextResponse.next({ request: { headers: requestHeaders } });
   })();
+
+  clearLegacyDomainCookies(response);
 
   // Remember the pair so / and legacy links can land the visitor back here.
   response.cookies.set(REGION_COOKIE, region, {
