@@ -14,6 +14,9 @@ import {
   isRelayableMetaEvent,
   relayMetaEvent,
 } from "@/lib/metaCapi";
+import { getOrCreateSessionKey } from "@/lib/eventTracking";
+import { readStoredRegion } from "@/lib/regionResolver";
+import { DEFAULT_REGION, parseLocaleRegionFromPath } from "@/lib/storefront-core/routing";
 
 const GTM_SCRIPT_ID = "enfant-gtm-script";
 const GA4_SCRIPT_ID = "enfant-ga4-script";
@@ -68,6 +71,35 @@ export function fbqTrack(event, params, capiOptions = {}) {
 }
 
 /**
+ * The matching data every visitor has, from the first page view onwards.
+ *
+ * Events Manager's "Set up manual advanced matching" error is raised when the
+ * Pixel is initialised with no matching parameters at all. Checkout supplies
+ * email and phone, but that is a fraction of a percent of page views, so the
+ * dataset still counted as having none. These two are knowable on every visit
+ * and neither is PII:
+ *
+ * - `external_id` — the storefront's own anonymous session id, the same value
+ *   the CAPI relay sends, so the browser and server copies of an event describe
+ *   the same visitor.
+ * - `country` — om/ae/sa are ISO 3166-1 alpha-2 codes and a visitor on a
+ *   regional store is in that market by definition.
+ *
+ * Read from `window.location` rather than taken as an argument because the
+ * Pixel loads from an effect that must not re-run on every navigation.
+ */
+function baselineMetaMatching() {
+  if (typeof window === "undefined") return {};
+  const parsed = parseLocaleRegionFromPath(window.location.pathname);
+  const data = {
+    external_id: getOrCreateSessionKey(),
+    country: parsed?.region || readStoredRegion() || DEFAULT_REGION,
+  };
+  // Storage can be blocked, and then there is no session id to send.
+  return Object.fromEntries(Object.entries(data).filter(([, value]) => value));
+}
+
+/**
  * Attach known customer details to the Pixel as manual advanced matching.
  *
  * Events Manager flagged this dataset for having none (2026-08-02): without it
@@ -76,7 +108,9 @@ export function fbqTrack(event, params, capiOptions = {}) {
  * we pass them raw on purpose, since pre-hashing here would break that.
  *
  * Re-calling init with the same pixel ID updates the matching data rather than
- * registering a second pixel.
+ * registering a second pixel. It *replaces* it, though, so the baseline is
+ * merged back in — otherwise identifying a customer at checkout would drop the
+ * external_id that ties their events to the server-side copies.
  */
 export function setMetaAdvancedMatching(userData) {
   if (typeof window === "undefined" || typeof window.fbq !== "function") return;
@@ -89,7 +123,7 @@ export function setMetaAdvancedMatching(userData) {
     Object.entries(userData).filter(([, value]) => value),
   );
   if (Object.keys(payload).length === 0) return;
-  window.fbq("init", pixelId, payload);
+  window.fbq("init", pixelId, { ...baselineMetaMatching(), ...payload });
 }
 
 // Shared helper for Snapchat Pixel events.
@@ -174,7 +208,10 @@ function loadMetaPixel(pixelId) {
     // explicitly by our code; the Events Manager toggle alone is not enough —
     // its config is CDN-cached and kept firing after being switched off.
     window.fbq("set", "autoConfig", false, pixelId);
-    window.fbq("init", pixelId);
+    // Initialised *with* matching data, not bare: a pixel that never receives
+    // any is what Events Manager reports as "no manual advanced matching set
+    // up", and every event fired before checkout would carry none.
+    window.fbq("init", pixelId, baselineMetaMatching());
     window.__metaPixelIds.add(pixelId);
   }
   // Remembered so setMetaAdvancedMatching() can re-init with customer details
