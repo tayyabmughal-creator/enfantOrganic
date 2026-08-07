@@ -2702,6 +2702,36 @@ class CheckoutAndPermsTestCase(TestCase):
         PAYMOB_IFRAME_ID="2002",
         PAYMOB_HMAC_SECRET="hmac-secret",
     )
+    def test_payment_initiate_paymob_backward_compatibility(self):
+        self.region.payment_enabled_providers = ["paymob"]
+        self.region.default_payment_provider = "paymob"
+        self.region.save(update_fields=["payment_enabled_providers", "default_payment_provider"])
+        order = self._create_online_order(self.region)
+
+        with patch(
+            "store.services.payment_router.paymob.initiate_payment",
+            return_value={
+                "payment_key": "mock-key",
+                "iframe_url": "https://accept.paymob.com/iframe?payment_token=mock-key",
+                "paymob_order_id": "pm-order-123",
+            },
+        ) as mocked_paymob:
+            response = self.api_client.post(
+                "/api/payments/initiate/",
+                {"order_number": order.order_number, "lookup_token": order.lookup_token},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["paymob_order_id"], "pm-order-123")
+        self.assertEqual(response.data["provider"], "paymob")
+        mocked_paymob.assert_called_once()
+
+        tx = PaymentTransaction.objects.filter(order=order, provider="paymob").first()
+        self.assertIsNotNone(tx)
+        self.assertEqual(tx.provider_reference, "pm-order-123")
+        self.assertEqual(tx.status, PaymentTransaction.STATUS_PENDING)
+
     def test_paymob_retries_under_a_fresh_reference_when_paymob_says_duplicate(self):
         """
         Paymob refuses a repeated merchant_order_id with 422 {"message":"duplicate"}.
@@ -2741,36 +2771,6 @@ class CheckoutAndPermsTestCase(TestCase):
             paymob.order_number_from_reference("EO-20260807-0001"), "EO-20260807-0001"
         )
         self.assertEqual(paymob.order_number_from_reference("EO-2026-0001"), "EO-2026-0001")
-
-    def test_payment_initiate_paymob_backward_compatibility(self):
-        self.region.payment_enabled_providers = ["paymob"]
-        self.region.default_payment_provider = "paymob"
-        self.region.save(update_fields=["payment_enabled_providers", "default_payment_provider"])
-        order = self._create_online_order(self.region)
-
-        with patch(
-            "store.services.payment_router.paymob.initiate_payment",
-            return_value={
-                "payment_key": "mock-key",
-                "iframe_url": "https://accept.paymob.com/iframe?payment_token=mock-key",
-                "paymob_order_id": "pm-order-123",
-            },
-        ) as mocked_paymob:
-            response = self.api_client.post(
-                "/api/payments/initiate/",
-                {"order_number": order.order_number, "lookup_token": order.lookup_token},
-                format="json",
-            )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["paymob_order_id"], "pm-order-123")
-        self.assertEqual(response.data["provider"], "paymob")
-        mocked_paymob.assert_called_once()
-
-        tx = PaymentTransaction.objects.filter(order=order, provider="paymob").first()
-        self.assertIsNotNone(tx)
-        self.assertEqual(tx.provider_reference, "pm-order-123")
-        self.assertEqual(tx.status, PaymentTransaction.STATUS_PENDING)
 
     @override_settings(
         PAYMOB_API_KEY="paymob-key",
