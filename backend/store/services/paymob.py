@@ -40,6 +40,20 @@ _RETRY_SUFFIX = re.compile(r"-r\d+$")
 MAX_REFERENCE_ATTEMPTS = 25
 
 
+def _is_duplicate_reference(response):
+    """
+    Paymob says "this reference is taken" in more than one way.
+
+    Legacy /ecommerce/orders answers 422 {"message":"duplicate"}; the Intention
+    API answers 400 {"merchant_order_id":"An Order with ref: … already exists"}.
+    Matching only the first phrasing left Oman still unable to retry.
+    """
+    if response.status_code not in (400, 409, 422):
+        return False
+    body = (response.text or "").lower()
+    return "duplicate" in body or "already exists" in body
+
+
 def payment_reference(order_number, attempt=1):
     """The reference sent to Paymob for a given attempt at one order."""
     base = str(order_number)
@@ -167,7 +181,7 @@ def create_paymob_order(auth_token: str, amount_cents: int, currency: str, merch
             },
             timeout=30,
         )
-        if response.status_code == 422 and "duplicate" in response.text.lower():
+        if _is_duplicate_reference(response):
             raise PaymobDuplicateReference(merchant_order_id)
         response.raise_for_status()
         paymob_order_id = response.json().get("id")
@@ -378,7 +392,7 @@ def initiate_unified_checkout(order, cfg=None, region_code=None) -> dict:
                 json=build_body(reference),
                 timeout=30,
             )
-            if resp.status_code in (400, 422) and "duplicate" in resp.text.lower():
+            if _is_duplicate_reference(resp):
                 logger.info(
                     "Paymob special_reference %s already used, trying the next one (order=%s)",
                     reference, order.order_number,

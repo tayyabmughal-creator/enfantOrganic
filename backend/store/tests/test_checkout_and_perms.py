@@ -2757,6 +2757,31 @@ class CheckoutAndPermsTestCase(TestCase):
         self.assertEqual(result, "pm-order-999")
         self.assertEqual(seen, ["EO-20260807-0001", "EO-20260807-0001-r2"])
 
+    def test_paymob_recognises_both_duplicate_phrasings(self):
+        """
+        Legacy /ecommerce/orders answers 422 {"message":"duplicate"}; the
+        Intention API answers 400 {"merchant_order_id":"An Order with ref: …
+        already exists"}. Matching only the first left Oman unable to retry.
+        """
+        from store.services import paymob
+
+        class FakeResponse:
+            def __init__(self, status_code, text):
+                self.status_code = status_code
+                self.text = text
+
+        self.assertTrue(
+            paymob._is_duplicate_reference(FakeResponse(422, '{"message":"duplicate"}'))
+        )
+        self.assertTrue(
+            paymob._is_duplicate_reference(
+                FakeResponse(400, '{"merchant_order_id":"An Order with ref: EO-1 already exists"}')
+            )
+        )
+        # A real failure must still be raised rather than retried away.
+        self.assertFalse(paymob._is_duplicate_reference(FakeResponse(400, '{"detail":"bad amount"}')))
+        self.assertFalse(paymob._is_duplicate_reference(FakeResponse(500, "duplicate")))
+
     def test_webhook_reference_maps_back_to_the_order(self):
         from store.services import paymob
 
