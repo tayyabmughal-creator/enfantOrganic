@@ -2702,6 +2702,46 @@ class CheckoutAndPermsTestCase(TestCase):
         PAYMOB_IFRAME_ID="2002",
         PAYMOB_HMAC_SECRET="hmac-secret",
     )
+    def test_paymob_retries_under_a_fresh_reference_when_paymob_says_duplicate(self):
+        """
+        Paymob refuses a repeated merchant_order_id with 422 {"message":"duplicate"}.
+        We sent the bare order number, so the first attempt consumed it and every
+        retry of an unpaid order 500'd — a declined card left the customer with
+        no way to pay.
+        """
+        from store.services import paymob
+
+        seen = []
+
+        def fake_create(auth_token, amount_cents, currency, merchant_order_id, cfg=None):
+            seen.append(merchant_order_id)
+            if not merchant_order_id.endswith("-r2"):
+                raise paymob.PaymobDuplicateReference(merchant_order_id)
+            return "pm-order-999"
+
+        with patch("store.services.paymob.create_paymob_order", side_effect=fake_create):
+            result = paymob._create_order_with_fresh_reference(
+                "tok", 71393, "AED", "EO-20260807-0001", {}
+            )
+
+        self.assertEqual(result, "pm-order-999")
+        self.assertEqual(seen, ["EO-20260807-0001", "EO-20260807-0001-r2"])
+
+    def test_webhook_reference_maps_back_to_the_order(self):
+        from store.services import paymob
+
+        self.assertEqual(
+            paymob.order_number_from_reference("EO-20260807-0001-r2"), "EO-20260807-0001"
+        )
+        self.assertEqual(
+            paymob.order_number_from_reference("EO-20260807-0001-r17"), "EO-20260807-0001"
+        )
+        # A first attempt carries no suffix, and a hyphen that is not ours stays.
+        self.assertEqual(
+            paymob.order_number_from_reference("EO-20260807-0001"), "EO-20260807-0001"
+        )
+        self.assertEqual(paymob.order_number_from_reference("EO-2026-0001"), "EO-2026-0001")
+
     def test_payment_initiate_paymob_backward_compatibility(self):
         self.region.payment_enabled_providers = ["paymob"]
         self.region.default_payment_provider = "paymob"

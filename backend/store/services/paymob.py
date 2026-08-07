@@ -16,6 +16,7 @@ No Paymob credentials are ever exposed to the frontend.
 import hashlib
 import hmac as _hmac
 import logging
+import re
 from decimal import Decimal, ROUND_HALF_UP
 
 import requests
@@ -24,6 +25,35 @@ from django.conf import settings as dj_settings
 from .payment_config import get_paymob_config
 
 logger = logging.getLogger(__name__)
+
+# Paymob refuses a second order under a reference it has already seen — 422
+# {"message":"duplicate"} on the legacy /ecommerce/orders, and the same for
+# special_reference on the Intention API. We used the order number verbatim, so
+# every retry of an unpaid order failed: the customer's first attempt handed
+# back an iframe, and a card decline, a closed tab or a reload left them unable
+# to pay at all. Retries therefore carry a "-rN" suffix, which the webhook
+# strips again to find the order.
+_RETRY_SUFFIX = re.compile(r"-r\d+$")
+
+# Enough to outlast any realistic run of abandoned attempts on one order,
+# while still bounding the calls we make to Paymob.
+MAX_REFERENCE_ATTEMPTS = 25
+
+
+def payment_reference(order_number, attempt=1):
+    """The reference sent to Paymob for a given attempt at one order."""
+    base = str(order_number)
+    return base if attempt <= 1 else f"{base}-r{attempt}"
+
+
+def order_number_from_reference(reference):
+    """
+    Recover our order number from whatever Paymob echoes back.
+
+    Webhooks quote the reference we sent, so a retry arrives as
+    "EO-20260807-0001-r2" and would not match any order without this.
+    """
+    return _RETRY_SUFFIX.sub("", str(reference or "").strip())
 
 # Fields used to compute the HMAC for Paymob transaction callbacks.
 # The order is mandatory — Paymob concatenates them in this exact sequence.
@@ -53,6 +83,10 @@ _HMAC_FIELDS = [
 
 class PaymobError(Exception):
     """Raised when a Paymob API call fails or is misconfigured."""
+
+
+class PaymobDuplicateReference(PaymobError):
+    """Paymob already holds an order under this reference — retry under a new one."""
 
 
 # Currencies with 3 decimal places (1 unit = 1000 minor units). Paymob expects
@@ -133,13 +167,19 @@ def create_paymob_order(auth_token: str, amount_cents: int, currency: str, merch
             },
             timeout=30,
         )
+        if response.status_code == 422 and "duplicate" in response.text.lower():
+            raise PaymobDuplicateReference(merchant_order_id)
         response.raise_for_status()
         paymob_order_id = response.json().get("id")
         if not paymob_order_id:
             raise PaymobError("Paymob order response did not contain an order ID.")
         return str(paymob_order_id)
     except requests.RequestException as exc:
-        logger.error("Paymob create order failed for %s: %s", merchant_order_id, exc)
+        # Paymob puts the reason in the body, never in the status line. Without
+        # it a 422 says nothing at all, which is what made a plain "duplicate"
+        # look like a broken UAE account.
+        body = getattr(exc.response, "text", "")[:500] if exc.response is not None else ""
+        logger.error("Paymob create order failed for %s: %s %s", merchant_order_id, exc, body)
         raise PaymobError(f"Paymob order creation failed: {exc}") from exc
 
 
@@ -296,44 +336,64 @@ def initiate_unified_checkout(order, cfg=None, region_code=None) -> dict:
 
     amount_cents, currency = _charge_amount_and_currency(order, cfg)
     billing = build_billing_data(order)
-    special_reference = str(order.order_number)
-    body = {
-        "amount": amount_cents,
-        "currency": currency,
-        "payment_methods": payment_methods,
-        "items": [{
-            "name": special_reference,
+
+    def build_body(special_reference):
+        body = {
             "amount": amount_cents,
-            "description": f"Order {special_reference}",
-            "quantity": 1,
-        }],
-        "billing_data": billing,
-        "customer": {
-            "first_name": billing["first_name"],
-            "last_name": billing["last_name"],
-            "email": billing["email"],
-        },
-        "special_reference": special_reference,
-    }
-    pub_base = str(getattr(dj_settings, "PAYMOB_PUBLIC_BASE_URL", "") or "").rstrip("/")
-    if pub_base:
-        body["notification_url"] = f"{pub_base}/api/payments/webhook/"
-        body["redirection_url"] = f"{pub_base}/checkout/return"
+            "currency": currency,
+            "payment_methods": payment_methods,
+            "items": [{
+                "name": special_reference,
+                "amount": amount_cents,
+                "description": f"Order {special_reference}",
+                "quantity": 1,
+            }],
+            "billing_data": billing,
+            "customer": {
+                "first_name": billing["first_name"],
+                "last_name": billing["last_name"],
+                "email": billing["email"],
+            },
+            "special_reference": special_reference,
+        }
+        pub_base = str(getattr(dj_settings, "PAYMOB_PUBLIC_BASE_URL", "") or "").rstrip("/")
+        if pub_base:
+            body["notification_url"] = f"{pub_base}/api/payments/webhook/"
+            body["redirection_url"] = f"{pub_base}/checkout/return"
+        return body
 
     base = cfg["base_url"].rstrip("/")
     root = base[:-4] if base.endswith("/api") else base  # /v1/intention lives on the root host
 
-    try:
-        resp = requests.post(
-            f"{root}/v1/intention/",
-            headers={"Authorization": f"Token {cfg['secret_key']}", "Content-Type": "application/json"},
-            json=body,
-            timeout=30,
+    # special_reference is unique per Paymob account, exactly like the legacy
+    # merchant_order_id, so a second attempt at the same order is rejected and
+    # the customer is stranded on an unpaid order. Step past what is taken.
+    resp = None
+    for attempt in range(1, MAX_REFERENCE_ATTEMPTS + 1):
+        reference = payment_reference(order.order_number, attempt)
+        try:
+            resp = requests.post(
+                f"{root}/v1/intention/",
+                headers={"Authorization": f"Token {cfg['secret_key']}", "Content-Type": "application/json"},
+                json=build_body(reference),
+                timeout=30,
+            )
+            if resp.status_code in (400, 422) and "duplicate" in resp.text.lower():
+                logger.info(
+                    "Paymob special_reference %s already used, trying the next one (order=%s)",
+                    reference, order.order_number,
+                )
+                continue
+            resp.raise_for_status()
+            break
+        except requests.RequestException as exc:
+            body_text = getattr(exc.response, "text", "")[:500] if exc.response is not None else ""
+            logger.error("Paymob intention request failed: %s %s", exc, body_text)
+            raise PaymobError(f"Paymob Unified Checkout initiation failed: {exc}") from exc
+    else:
+        raise PaymobError(
+            f"Paymob rejected {MAX_REFERENCE_ATTEMPTS} references as duplicates for order {order.order_number}."
         )
-        resp.raise_for_status()
-    except requests.RequestException as exc:
-        logger.error("Paymob intention request failed: %s", exc)
-        raise PaymobError(f"Paymob Unified Checkout initiation failed: {exc}") from exc
 
     data = resp.json()
     client_secret = data.get("client_secret", "")
@@ -353,6 +413,29 @@ def initiate_unified_checkout(order, cfg=None, region_code=None) -> dict:
     }
 
 
+def _create_order_with_fresh_reference(auth_token, amount_cents, currency, order_number, cfg):
+    """
+    Register the order with Paymob, stepping the reference past anything it
+    already holds.
+
+    We cannot know which references Paymob has seen — attempts fail on their
+    side, and the merchant may also have created orders by hand — so this asks
+    rather than counts, and only ever moves forward.
+    """
+    for attempt in range(1, MAX_REFERENCE_ATTEMPTS + 1):
+        reference = payment_reference(order_number, attempt)
+        try:
+            return create_paymob_order(auth_token, amount_cents, currency, reference, cfg=cfg)
+        except PaymobDuplicateReference:
+            logger.info(
+                "Paymob reference %s already used, trying the next one (order=%s)",
+                reference, order_number,
+            )
+    raise PaymobError(
+        f"Paymob rejected {MAX_REFERENCE_ATTEMPTS} references as duplicates for order {order_number}."
+    )
+
+
 def initiate_payment(order) -> dict:
     """
     Full Paymob initiation flow for a given Order.
@@ -370,7 +453,9 @@ def initiate_payment(order) -> dict:
     amount_cents, currency = _charge_amount_and_currency(order, cfg)
 
     auth_token = get_auth_token(cfg)
-    paymob_order_id = create_paymob_order(auth_token, amount_cents, currency, order.order_number, cfg=cfg)
+    paymob_order_id = _create_order_with_fresh_reference(
+        auth_token, amount_cents, currency, order.order_number, cfg
+    )
     billing_data = build_billing_data(order)
     payment_key = create_payment_key(auth_token, amount_cents, currency, paymob_order_id, billing_data, cfg=cfg)
 
@@ -436,7 +521,9 @@ def initiate_apple_pay_payment(order) -> dict:
     amount_cents, currency = _charge_amount_and_currency(order, cfg)
 
     auth_token = get_auth_token(cfg)
-    paymob_order_id = create_paymob_order(auth_token, amount_cents, currency, order.order_number, cfg=cfg)
+    paymob_order_id = _create_order_with_fresh_reference(
+        auth_token, amount_cents, currency, order.order_number, cfg
+    )
     billing_data = build_billing_data(order)
     payment_key = create_payment_key(
         auth_token,

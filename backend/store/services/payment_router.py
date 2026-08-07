@@ -113,7 +113,11 @@ class PaymobPaymentProvider(BasePaymentProvider):
             raise PaymentProviderError("Invalid payload.", code="invalid_payload", http_status=400)
 
         order_payload = payload.get("order", {})
-        merchant_order_id = order_payload.get("merchant_order_id", "") if isinstance(order_payload, dict) else ""
+        raw_reference = order_payload.get("merchant_order_id", "") if isinstance(order_payload, dict) else ""
+        # Retries are sent under "<order number>-rN" because Paymob refuses a
+        # repeated reference. Strip that back off or the payment lands with no
+        # order to mark paid.
+        merchant_order_id = paymob.order_number_from_reference(raw_reference)
 
         # Resolve the order's region to pick the correct per-region HMAC secret.
         # merchant_order_id only selects which secret to use; the HMAC then
