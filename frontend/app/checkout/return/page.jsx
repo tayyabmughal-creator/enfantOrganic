@@ -61,10 +61,13 @@ export default async function CheckoutReturnPage({ searchParams }) {
     destination = "failed";
   }
 
-  // buildStorePath already appends ?region=…; layer the order reference on with &.
+  // buildStorePath used to append ?region=…, so the reference was layered on
+  // with "&". Region moved into the path segment and the "&" stayed, producing
+  // "/en-om/payment/success&merchant_order_id=…" — the reference became part of
+  // the path and the page could not read it.
   const base = buildStorePath(locale, `/payment/${destination}`, region);
   const target = orderNumber
-    ? `${base}&merchant_order_id=${encodeURIComponent(orderNumber)}`
+    ? `${base}?merchant_order_id=${encodeURIComponent(orderNumber)}`
     : base;
 
   redirect(target);
