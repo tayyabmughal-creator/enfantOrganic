@@ -9,6 +9,7 @@ Endpoints:
 import logging
 import secrets
 
+from django.db import transaction
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -69,7 +70,19 @@ def _validate_customer_payment_access(order, request):
     return None
 
 
+@transaction.atomic
 def _apply_webhook_update(provider_key, request, *, ignore_missing_order=False):
+    """
+    Apply one provider callback to the order.
+
+    Atomic is not optional here: this locks the order with select_for_update to
+    keep a duplicate callback from double-applying, and Django raises
+    TransactionManagementError for that outside a transaction. ATOMIC_REQUESTS
+    is off, so without this decorator every callback that passed HMAC died with
+    a 500 before it could mark anything paid — the customer was charged and the
+    order stayed unpaid. It also belongs in one transaction on its own merits:
+    the order and its PaymentTransaction must move together.
+    """
     try:
         webhook_data = verify_webhook(provider_key, request)
     except PaymentProviderError as exc:
