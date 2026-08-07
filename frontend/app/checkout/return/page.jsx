@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 
-import { resolveServerRegion } from "@/lib/regionResolver";
+import { regionFromSearchParams } from "@/lib/regionResolver";
 import { buildStorePath, normalizeLocale, normalizeRegion } from "@/lib/storefront";
 
 // Paymob "Transaction response callback" target.
@@ -18,6 +18,10 @@ import { buildStorePath, normalizeLocale, normalizeRegion } from "@/lib/storefro
 // query params, so order state must never be derived from them.
 
 const LOCALE_COOKIE = "enfant-locale";
+const REGION_COOKIE = "enfant-store-region";
+// Retries reach Paymob as "<order number>-rN" because it refuses a repeated
+// reference, and it quotes that straight back here.
+const RETRY_SUFFIX = /-r\d+$/;
 
 function isTrue(value) {
   return String(value ?? "").trim().toLowerCase() === "true";
@@ -28,13 +32,21 @@ export default async function CheckoutReturnPage({ searchParams }) {
   const cookieStore = await cookies();
 
   const locale = normalizeLocale(cookieStore.get(LOCALE_COOKIE)?.value || "en");
-  const region = resolveServerRegion(sp);
+  // Paymob sends the customer back with transaction params and nothing else, so
+  // `?region=` is absent and resolveServerRegion alone answered Oman for
+  // everyone — a UAE shopper finished paying and landed in the Omani store,
+  // which then became their stored region. The cookie is what the storefront
+  // they were actually shopping wrote, so it leads.
+  const region = normalizeRegion(
+    regionFromSearchParams(sp) || cookieStore.get(REGION_COOKIE)?.value || "",
+  );
 
   // merchant_order_id is the value we set as Paymob's merchant_order_id, i.e.
   // our own order_number. Fall back through the other names Paymob/legacy flows
   // may use so the destination page can still surface a reference.
-  const orderNumber =
-    sp.merchant_order_id || sp.order_number || sp.order || sp.cart_id || "";
+  const orderNumber = String(
+    sp.merchant_order_id || sp.order_number || sp.order || sp.cart_id || "",
+  ).replace(RETRY_SUFFIX, "");
 
   const success = isTrue(sp.success);
   const pending = isTrue(sp.pending);
