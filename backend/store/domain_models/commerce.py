@@ -1,11 +1,16 @@
 import secrets
 
-from django.db import models
+from django.db import IntegrityError, models, transaction
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from .catalog import Product, Region
+
+# Retries for a concurrent claim on the same order number. Small on purpose:
+# each attempt re-reads the highest number, so contention resolves in one or two
+# rounds, and anything beyond that is a real fault worth surfacing.
+ORDER_NUMBER_MAX_ATTEMPTS = 5
 
 
 class Order(models.Model):
@@ -287,6 +292,39 @@ class Order(models.Model):
     def __str__(self):
         return self.order_number or f"Order #{self.pk}"
 
+    @staticmethod
+    def _allocate_order_number():
+        """
+        Next free sequence number for today, taken from the highest one issued.
+
+        This used to count the day's orders and add one, which silently breaks
+        the moment a gap appears — delete one order and the count no longer
+        matches the highest suffix, so the next checkout regenerates a number
+        that already exists. The unique constraint then rejects it and *every*
+        checkout for the rest of that day fails with a 500, whatever the payment
+        method. It had already happened on ten separate days before anyone
+        connected the two.
+
+        Ordering by order_number is safe here: the prefix is fixed width and the
+        sequence is zero-padded, so string order is numeric order.
+        """
+        prefix = f"EO-{timezone.localdate().strftime('%Y%m%d')}"
+        latest = (
+            Order.objects.filter(order_number__startswith=prefix)
+            .order_by("-order_number")
+            .values_list("order_number", flat=True)
+            .first()
+        )
+        next_sequence = 1
+        if latest:
+            try:
+                next_sequence = int(latest.rsplit("-", 1)[1]) + 1
+            except (IndexError, ValueError):
+                # A hand-edited number we cannot parse: fall back to counting
+                # rather than refusing the order.
+                next_sequence = Order.objects.filter(order_number__startswith=prefix).count() + 1
+        return f"{prefix}-{next_sequence:04d}"
+
     def save(self, *args, **kwargs):
         is_create = self.pk is None
         previous_status = None
@@ -319,11 +357,9 @@ class Order(models.Model):
                 update_fields.add("refunded_at")
                 kwargs["update_fields"] = list(update_fields)
 
-        if not self.order_number:
-            today = timezone.localdate().strftime("%Y%m%d")
-            prefix = f"EO-{today}"
-            count_today = Order.objects.filter(order_number__startswith=prefix).count() + 1
-            self.order_number = f"{prefix}-{count_today:04d}"
+        generated_order_number = not self.order_number
+        if generated_order_number:
+            self.order_number = self._allocate_order_number()
         if not self.customer_snapshot:
             self.customer_snapshot = {
                 "name": self.customer_name,
@@ -354,7 +390,23 @@ class Order(models.Model):
             self.invoice_access_token = secrets.token_urlsafe(24)
         if not self.lookup_token:
             self.lookup_token = secrets.token_urlsafe(24)
-        super().save(*args, **kwargs)
+
+        if is_create and generated_order_number:
+            # Two checkouts landing together read the same highest number and
+            # would both try to claim it. Each attempt gets its own savepoint
+            # because in Postgres an IntegrityError aborts the transaction, so
+            # the retry could not run otherwise.
+            for attempt in range(ORDER_NUMBER_MAX_ATTEMPTS):
+                try:
+                    with transaction.atomic():
+                        super().save(*args, **kwargs)
+                    break
+                except IntegrityError:
+                    if attempt == ORDER_NUMBER_MAX_ATTEMPTS - 1:
+                        raise
+                    self.order_number = self._allocate_order_number()
+        else:
+            super().save(*args, **kwargs)
 
         status_changed = is_create or previous_status != self.status
         actor = getattr(self, "_status_actor", None)
