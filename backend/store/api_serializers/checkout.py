@@ -34,6 +34,18 @@ from ..services.costing import resolve_order_item_cost
 from ..services.stock import StockError, ensure_region_stock_available, reserve_and_deduct_stock_for_item
 from .catalog import active_product_variants
 
+# What a customer may choose at checkout. Deliberately narrower than
+# Order.PAYMENT_METHOD_CHOICES: bank transfer was withdrawn on 2026-08-09 but
+# remains a valid stored value, because orders already placed on it still have
+# to render in the admin, on invoices and on the thank-you page. Keeping the
+# model choice while closing the endpoint means a stale checkout page cannot
+# place an order the client no longer fulfils.
+CUSTOMER_PAYMENT_METHODS = [
+    Order.PAYMENT_COD,
+    Order.PAYMENT_ONLINE,
+    Order.PAYMENT_WHATSAPP,
+]
+
 logger = logging.getLogger(__name__)
 
 MONEY_QUANTIZER = Decimal("0.01")
@@ -763,7 +775,7 @@ class CheckoutCreateSerializer(serializers.Serializer):
     locale = serializers.CharField(max_length=8, default="en")
     customer = CheckoutCustomerSerializer()
     payment_method = serializers.ChoiceField(
-        choices=[choice[0] for choice in Order.PAYMENT_METHOD_CHOICES],
+        choices=CUSTOMER_PAYMENT_METHODS,
         default=Order.PAYMENT_COD,
     )
     notes = serializers.CharField(required=False, allow_blank=True)

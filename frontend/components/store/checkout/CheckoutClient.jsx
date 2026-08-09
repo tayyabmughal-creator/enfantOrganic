@@ -66,14 +66,12 @@ const BASE_PAYMENT_METHODS = [
     description: "Place order and confirm via WhatsApp",
     descriptionAr: "اطلب وأكد عبر واتساب",
   },
-  {
-    value: "bank_transfer",
-    label: "Bank Transfer",
-    labelAr: "تحويل بنكي",
-    description: "Transfer to our bank account — details sent after order",
-    descriptionAr: "حوّل إلى حسابنا البنكي — التفاصيل تُرسل بعد الطلب",
-  },
 ];
+
+// Bank transfer was withdrawn from checkout on 2026-08-09. The value stays a
+// valid Order.payment_method — orders already placed on it must keep rendering
+// in the admin, on invoices and on the thank-you page — it is simply no longer
+// offered to customers.
 
 const GATEWAY_PROVIDER_LABELS = {
   paytabs: "PayTabs",

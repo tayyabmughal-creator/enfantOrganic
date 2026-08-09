@@ -11,6 +11,7 @@ accumulated gaps on ten separate days before the symptom was traced back here.
 from decimal import Decimal
 
 from django.test import TestCase
+from rest_framework.test import APIClient
 
 from store.models import Order, Region
 
@@ -112,3 +113,40 @@ class OrderNumberAllocationTests(TestCase):
 
         self.assertNotEqual(clash.order_number, existing.order_number)
         self.assertEqual(Order.objects.count(), 2)
+
+
+class WithdrawnPaymentMethodTests(TestCase):
+    """
+    Bank transfer was withdrawn from checkout on 2026-08-09. It stays a valid
+    stored value so existing orders keep rendering, but the endpoint must not
+    accept a new one — a stale checkout page should not be able to place an
+    order the client no longer fulfils.
+    """
+
+    def test_bank_transfer_is_rejected_by_the_checkout_endpoint(self):
+        response = APIClient().post(
+            "/api/checkout/",
+            {
+                "region": "om",
+                "locale": "en",
+                "customer": {
+                    "name": "Buyer",
+                    "phone": "96812345678",
+                    "address_line_1": "Street 1",
+                    "city": "Muscat",
+                    "country": "Oman",
+                },
+                "payment_method": "bank_transfer",
+                "items": [{"slug": "whatever", "quantity": 1}],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("payment_method", response.data)
+
+    def test_bank_transfer_remains_a_valid_stored_value(self):
+        self.assertIn(
+            Order.PAYMENT_BANK_TRANSFER,
+            [choice[0] for choice in Order.PAYMENT_METHOD_CHOICES],
+        )
