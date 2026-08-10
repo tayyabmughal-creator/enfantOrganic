@@ -270,3 +270,52 @@ class AdminReviewAdminTestCase(TestCase):
         response = self.client_api.post("/api/admin/reviews/images/", {}, format="multipart")
 
         self.assertEqual(response.status_code, 400)
+
+
+class SelfReferralTestCase(TestCase):
+    """Our own domains and our payment gateway were being counted as traffic sources."""
+
+    def test_our_own_domains_are_not_a_traffic_source(self):
+        for referrer in (
+            "https://om.enfantorganic.com/en",
+            "https://www.enfantorganic.com/",
+            "https://enfantorganic.com",
+            "https://app.enfantorganic.com/x",
+            "https://enfant-me.com/",
+        ):
+            self.assertEqual(normalize_traffic_source({"referrer": referrer}), "Direct", referrer)
+
+    def test_returning_from_the_payment_gateway_is_not_a_traffic_source(self):
+        # This one was stealing credit: the customer arrived from somewhere, paid,
+        # and came back — and the order was filed under Paymob.
+        self.assertEqual(
+            normalize_traffic_source({"referrer": "https://om.checkout.paymob.com/x"}), "Direct",
+        )
+
+    def test_a_source_named_as_our_own_host_is_also_direct(self):
+        self.assertEqual(normalize_traffic_source({"source": "om.enfantorganic.com"}), "Direct")
+
+    def test_a_real_campaign_still_wins_over_an_internal_referrer(self):
+        source = normalize_traffic_source(
+            {"referrer": "https://www.enfantorganic.com/", "utm_source": "ig", "utm_medium": "paid"},
+        )
+        self.assertEqual(source, "Instagram")
+
+    def test_a_genuine_external_source_keeps_its_name(self):
+        # The tracker records the host in `source`; only that names the bucket.
+        self.assertEqual(normalize_traffic_source({"source": "linktr.ee"}), "linktr.ee")
+        self.assertEqual(normalize_traffic_source({"source": "duckduckgo.com"}), "duckduckgo.com")
+
+    def test_the_whatsapp_link_shortener_is_recognised(self):
+        self.assertEqual(normalize_traffic_source({"referrer": "https://l.wl.co/abc"}), "WhatsApp")
+
+    def test_a_lookalike_domain_is_not_treated_as_ours(self):
+        # Suffix matching must not swallow a domain that merely ends the same way.
+        self.assertEqual(
+            normalize_traffic_source({"source": "notenfantorganic.com"}),
+            "notenfantorganic.com",
+        )
+        self.assertEqual(
+            normalize_traffic_source({"source": "myenfant-me.com"}),
+            "myenfant-me.com",
+        )

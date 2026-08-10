@@ -1535,6 +1535,35 @@ class AdminDashboardView(APIView):
         )
 
 
+# Hosts that are us, or a step in our own checkout. A visitor bouncing off one of
+# these has not arrived from anywhere — treating them as a source invents traffic
+# and, worse, takes the credit off whoever actually sent the customer: someone who
+# arrived from Instagram, paid, and came back was being filed under the payment
+# gateway. The old regional subdomains are here because they redirect to www and
+# still show up as referrers long after the move.
+INTERNAL_REFERRER_HOSTS = (
+    "enfantorganic.com",
+    "enfant-me.com",
+    "enfantorganics.com",
+)
+CHECKOUT_REFERRER_HOSTS = (
+    "paymob.com",
+    "thawani.om",
+    "paytabs.com",
+)
+
+
+def _is_internal_referrer(referrer):
+    host = str(referrer or "").strip().lower()
+    if not host:
+        return False
+    host = host.split("//")[-1].split("/")[0].split(":")[0]
+    return any(
+        host == known or host.endswith(f".{known}")
+        for known in INTERNAL_REFERRER_HOSTS + CHECKOUT_REFERRER_HOSTS
+    )
+
+
 def normalize_traffic_source(metadata):
     """Name the platform a visit or an order came from.
 
@@ -1566,8 +1595,12 @@ def normalize_traffic_source(metadata):
         return "Snapchat"
     if "google" in joined:
         return "Google"
-    if "whatsapp" in joined:
+    if "whatsapp" in joined or "l.wl.co" in joined:
         return "WhatsApp"
+    # Checked last so a real campaign tag still wins: an Instagram ad that happens
+    # to bounce through our own domain is still Instagram.
+    if _is_internal_referrer(raw_source) or _is_internal_referrer((metadata or {}).get("referrer")):
+        return "Direct"
     return raw_source or "Direct"
 
 
