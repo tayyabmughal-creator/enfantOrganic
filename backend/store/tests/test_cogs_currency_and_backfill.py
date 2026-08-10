@@ -8,7 +8,11 @@ from rest_framework.test import APIClient
 from store.api_views.admin_ops import build_cogs_report_rows
 from store.models import Order, OrderItem, Product, Region
 from store.services.admin_roles import ROLE_MANAGER, ensure_default_admin_roles
-from store.services.costing import backfill_missing_order_item_costs, resolve_order_item_cost
+from store.services.costing import (
+    backfill_missing_order_item_costs,
+    repair_foreign_currency_costs,
+    resolve_order_item_cost,
+)
 
 User = get_user_model()
 
@@ -193,3 +197,67 @@ class CogsBackfillTestCase(TestCase):
 
         self.assertEqual(result["updated"], 1)
         self.assertEqual(item.unit_cost_price, Decimal("0"))
+
+
+class ForeignCurrencyCostRepairTestCase(TestCase):
+    """Costs captured before conversion existed sat in an AED row denominated in OMR."""
+
+    def setUp(self):
+        self.oman = _region("om", "Oman", "OMR", Decimal("1.000000"), is_default=True)
+        self.uae = _region("ae", "UAE", "AED", Decimal("9.550000"))
+        self.product = Product.objects.create(
+            slug="wash", name_en="Wash", name_ar="غسول", cost_price=Decimal("1.630"), is_published=True,
+        )
+
+    def _item(self, region, currency, fx, unit_cost):
+        order = Order.objects.create(
+            region=region, customer_name="B", customer_email="b@example.com", customer_phone="1",
+            address_line_1="a", city="c", country="c",
+            subtotal=Decimal("56.35"), shipping_total=Decimal("0.00"), grand_total=Decimal("56.35"),
+            currency_code=currency, fx_rate_snapshot=fx,
+            status=Order.STATUS_PAID, payment_status=Order.PAYMENT_PAID,
+        )
+        return OrderItem.objects.create(
+            order=order, product=self.product, product_slug=self.product.slug,
+            product_name=self.product.name_en, quantity=1,
+            unit_price=Decimal("56.35"), line_total=Decimal("56.35"),
+            unit_cost_price=unit_cost, line_cost_total=unit_cost,
+        )
+
+    def test_an_aed_line_holding_an_omr_cost_is_re_denominated(self):
+        item = self._item(self.uae, "AED", Decimal("9.55"), Decimal("1.630"))
+
+        result = repair_foreign_currency_costs()
+        item.refresh_from_db()
+
+        self.assertEqual(result["repaired"], 1)
+        self.assertEqual(item.unit_cost_price, Decimal("15.567"))  # 1.630 x 9.55
+        self.assertTrue(item.cost_is_estimated)
+
+    def test_base_currency_lines_are_left_alone(self):
+        item = self._item(self.oman, "OMR", Decimal("1"), Decimal("1.630"))
+
+        result = repair_foreign_currency_costs()
+        item.refresh_from_db()
+
+        self.assertEqual(result["repaired"], 0)
+        self.assertEqual(item.unit_cost_price, Decimal("1.630"))
+
+    def test_running_it_twice_does_not_convert_twice(self):
+        item = self._item(self.uae, "AED", Decimal("9.55"), Decimal("1.630"))
+
+        repair_foreign_currency_costs()
+        second = repair_foreign_currency_costs()
+        item.refresh_from_db()
+
+        self.assertEqual(second["repaired"], 0)
+        self.assertEqual(item.unit_cost_price, Decimal("15.567"))
+
+    def test_dry_run_writes_nothing(self):
+        item = self._item(self.uae, "AED", Decimal("9.55"), Decimal("1.630"))
+
+        result = repair_foreign_currency_costs(dry_run=True)
+        item.refresh_from_db()
+
+        self.assertEqual(result["repaired"], 1)
+        self.assertEqual(item.unit_cost_price, Decimal("1.630"))

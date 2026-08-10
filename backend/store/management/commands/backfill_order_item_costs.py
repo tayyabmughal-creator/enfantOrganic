@@ -2,7 +2,10 @@ from django.core.management.base import BaseCommand
 from django.utils.dateparse import parse_date
 
 from store.domain_models.commerce import OrderItem
-from store.services.costing import backfill_missing_order_item_costs
+from store.services.costing import (
+    backfill_missing_order_item_costs,
+    repair_foreign_currency_costs,
+)
 
 
 class Command(BaseCommand):
@@ -22,6 +25,14 @@ class Command(BaseCommand):
             type=str,
             default="",
             help="Only touch items on orders created on or after this date (YYYY-MM-DD).",
+        )
+        parser.add_argument(
+            "--repair-foreign-currency",
+            action="store_true",
+            help=(
+                "Also re-denominate costs on AED/SAR orders that were captured in "
+                "the base currency before costs were converted at capture time."
+            ),
         )
 
     def handle(self, *args, **options):
@@ -52,6 +63,15 @@ class Command(BaseCommand):
             )
             for slug, name in sorted(result["missing_products"].items(), key=lambda row: row[1]):
                 self.stdout.write(f"  · {name}  ({slug})")
+
+        if options["repair_foreign_currency"]:
+            repair = repair_foreign_currency_costs(queryset=queryset, dry_run=dry_run)
+            repaired_verb = "would be re-denominated" if dry_run else "re-denominated"
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"{repair['repaired']} item(s) on non-base-currency orders {repaired_verb}."
+                )
+            )
 
         if dry_run:
             self.stdout.write(self.style.NOTICE("Dry run — nothing was written."))

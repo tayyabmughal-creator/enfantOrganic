@@ -198,3 +198,68 @@ def backfill_missing_order_item_costs(*, queryset=None, dry_run=False):
         "missing_products": missing_products,
         "dry_run": dry_run,
     }
+
+
+def repair_foreign_currency_costs(*, queryset=None, dry_run=False):
+    """Re-denominate costs that were captured in the base currency by mistake.
+
+    Before costs were converted at capture time, an order priced in AED or SAR
+    stored its cost in OMR. The figure understated itself by the FX rate and
+    inflated the gross profit sitting next to it. The stored number is in the
+    wrong unit and cannot be rescued by arithmetic alone — the product's current
+    cost, converted properly, is the best available truth — so these lines are
+    recomputed and marked estimated.
+
+    Recomputing from the same source each time makes this safe to run twice.
+    """
+    from ..domain_models.commerce import OrderItem
+    from ..domain_models.catalog import Region
+
+    base_currency = "OMR"
+    default_region = Region.objects.filter(is_default=True).first()
+    if default_region:
+        base_currency = (default_region.currency_code or base_currency).upper()
+
+    items = queryset if queryset is not None else OrderItem.objects.all()
+    items = items.exclude(order__currency_code=base_currency).select_related("product", "order")
+
+    repaired = 0
+    skipped = 0
+
+    for item in items.iterator(chunk_size=500):
+        product = item.product
+        order = item.order
+        if product is None or order is None:
+            skipped += 1
+            continue
+
+        fx_rate = order.fx_rate_snapshot
+        if fx_rate is None:
+            fx_rate = getattr(order.region, "fx_rate", None)
+        if resolve_fx_rate(fx_rate) == Decimal("1"):
+            skipped += 1
+            continue
+
+        snapshot = resolve_order_item_cost(
+            product,
+            quantity=item.quantity,
+            variant_snapshot=item.price_snapshot.get("variant") if isinstance(item.price_snapshot, dict) else None,
+            variant_id=item.sku,
+            fx_rate=fx_rate,
+        )
+        if snapshot["unit_cost_price"] <= 0:
+            skipped += 1
+            continue
+        if item.unit_cost_price == snapshot["unit_cost_price"]:
+            continue
+
+        repaired += 1
+        if dry_run:
+            continue
+
+        item.unit_cost_price = snapshot["unit_cost_price"]
+        item.line_cost_total = snapshot["line_cost_total"]
+        item.cost_is_estimated = True
+        item.save(update_fields=["unit_cost_price", "line_cost_total", "cost_is_estimated"])
+
+    return {"repaired": repaired, "skipped": skipped, "dry_run": dry_run}
