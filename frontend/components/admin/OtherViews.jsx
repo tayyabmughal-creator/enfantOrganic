@@ -1688,6 +1688,9 @@ export function RegionsView({ rows, request, onSaved }) {
   const [thresholdError, setThresholdError] = useState({});
 
   const [editingWhatsapp, setEditingWhatsapp] = useState({});
+  const [editingEta, setEditingEta] = useState({});
+  const [savingEta, setSavingEta] = useState({});
+  const [etaError, setEtaError] = useState({});
   const [savingWhatsapp, setSavingWhatsapp] = useState({});
   const [whatsappError, setWhatsappError] = useState({});
 
@@ -1740,6 +1743,34 @@ export function RegionsView({ rows, request, onSaved }) {
       setWhatsappError((e) => ({ ...e, [code]: "Save failed — try again" }));
     } finally {
       setSavingWhatsapp((s) => ({ ...s, [code]: false }));
+    }
+  }
+
+  async function saveDeliveryEta(code, minValue, maxValue) {
+    const min = String(minValue || "").trim() === "" ? null : Number(minValue);
+    const max = String(maxValue || "").trim() === "" ? null : Number(maxValue);
+    const invalid = [min, max].some((v) => v !== null && (!Number.isInteger(v) || v < 0 || v > 60));
+    if (invalid) {
+      setEtaError((e) => ({ ...e, [code]: "Enter whole days between 0 and 60, or leave blank" }));
+      return;
+    }
+    if (min !== null && max !== null && min > max) {
+      setEtaError((e) => ({ ...e, [code]: "The earliest day cannot be after the latest" }));
+      return;
+    }
+    setSavingEta((s) => ({ ...s, [code]: true }));
+    setEtaError((e) => ({ ...e, [code]: null }));
+    try {
+      await request(`/admin/regions/${code}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ delivery_eta_min_days: min, delivery_eta_max_days: max }),
+      });
+      setEditingEta((e) => ({ ...e, [code]: undefined }));
+      onSaved?.();
+    } catch {
+      setEtaError((e) => ({ ...e, [code]: "Save failed — try again" }));
+    } finally {
+      setSavingEta((s) => ({ ...s, [code]: false }));
     }
   }
 
@@ -1827,6 +1858,9 @@ export function RegionsView({ rows, request, onSaved }) {
         const isEditingWa = editingWhatsapp[code] !== undefined;
         const isSavingWa = savingWhatsapp[code];
         const waError = whatsappError[code];
+        const isEditingEta = editingEta[code] !== undefined;
+        const isSavingEta = savingEta[code];
+        const etaErr = etaError[code];
         const isEditingFx = editingFx[code] !== undefined;
         const isSavingFx = savingFx[code];
         const fxErr = fxError[code];
@@ -1947,6 +1981,66 @@ export function RegionsView({ rows, request, onSaved }) {
                       <button
                         className="admin-btn admin-btn-xs admin-btn-ghost"
                         onClick={() => setEditingWhatsapp((s) => ({ ...s, [code]: true }))}
+                      >
+                        Edit
+                      </button>
+                    )}
+                  </span>
+                )}
+              </div>
+
+              {/* Delivery promise — what the product page and checkout tell the
+                  shopper. Blank keeps the generic "fast shipping" wording. */}
+              <div className="admin-settings-row admin-threshold-row">
+                <strong>Delivery estimate</strong>
+                {isEditingEta ? (
+                  <span className="admin-threshold-edit">
+                    <input
+                      type="number" min="0" max="60" step="1"
+                      className="admin-threshold-input"
+                      defaultValue={region.delivery_eta_min_days ?? ""}
+                      placeholder="from"
+                      autoFocus
+                    />
+                    <span className="admin-threshold-currency">to</span>
+                    <input
+                      type="number" min="0" max="60" step="1"
+                      className="admin-threshold-input"
+                      defaultValue={region.delivery_eta_max_days ?? ""}
+                      placeholder="to"
+                    />
+                    <span className="admin-threshold-currency">days</span>
+                    <button
+                      className="admin-btn admin-btn-xs admin-btn-primary"
+                      disabled={isSavingEta}
+                      onClick={(e) => {
+                        const inputs = e.target.closest(".admin-threshold-edit").querySelectorAll("input");
+                        saveDeliveryEta(code, inputs[0].value, inputs[1].value);
+                      }}
+                    >
+                      {isSavingEta ? "Saving…" : "Save"}
+                    </button>
+                    <button
+                      className="admin-btn admin-btn-xs"
+                      onClick={() => setEditingEta((s) => ({ ...s, [code]: undefined }))}
+                    >
+                      Cancel
+                    </button>
+                    {etaErr && <span className="admin-threshold-error">{etaErr}</span>}
+                  </span>
+                ) : (
+                  <span className="admin-threshold-display">
+                    <span>
+                      {region.delivery_eta_max_days
+                        ? (region.delivery_eta_min_days && region.delivery_eta_min_days !== region.delivery_eta_max_days
+                            ? `${region.delivery_eta_min_days}-${region.delivery_eta_max_days} days`
+                            : `${region.delivery_eta_max_days} days`)
+                        : "Not shown"}
+                    </span>
+                    {request && (
+                      <button
+                        className="admin-btn admin-btn-xs admin-btn-ghost"
+                        onClick={() => setEditingEta((s) => ({ ...s, [code]: true }))}
                       >
                         Edit
                       </button>

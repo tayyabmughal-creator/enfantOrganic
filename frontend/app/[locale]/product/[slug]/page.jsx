@@ -181,7 +181,15 @@ export default async function LocalizedProductPage({ params, searchParams }) {
         ))}
       </section>
       <section className="section container">
-        <ProductDetailClient locale={locale} product={productPage.product} region={region} />
+        <ProductDetailClient
+          locale={locale}
+          product={productPage.product}
+          region={region}
+          deliveryEta={{
+            min: navigation?.current_region?.delivery_eta_min_days ?? null,
+            max: navigation?.current_region?.delivery_eta_max_days ?? null,
+          }}
+        />
       </section>
       <section className="section container">
         <div className="section-heading">

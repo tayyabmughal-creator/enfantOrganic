@@ -559,6 +559,13 @@ def calculate_shipping_quote(region, subtotal, coupon=None, *, city="", area="")
             eta_min_days = None
             eta_max_days = None
 
+    # A shipping rule can state its own lead time, but there are none configured,
+    # so checkout showed no delivery estimate at all. The region's own promise is
+    # the fallback — it is the one an admin can actually set.
+    if eta_min_days is None and eta_max_days is None:
+        eta_min_days = getattr(region, "delivery_eta_min_days", None)
+        eta_max_days = getattr(region, "delivery_eta_max_days", None)
+
     shipping_total = Decimal("0.00")
     if free_threshold <= 0 or subtotal < free_threshold:
         shipping_total = base_shipping_fee

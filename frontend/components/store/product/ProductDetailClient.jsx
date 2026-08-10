@@ -193,7 +193,7 @@ function StarRating({ rating = 5, size = 16 }) {
   );
 }
 
-export default function ProductDetailClient({ locale, product, region }) {
+export default function ProductDetailClient({ locale, product, region, deliveryEta }) {
   const { addItem, flyToCart } = useStore();
   const addBtnRef = useRef(null);
   const router = useRouter();
@@ -245,8 +245,18 @@ export default function ProductDetailClient({ locale, product, region }) {
     { icon: "check", label: product.organic_certification_name || (isAr ? "عناية موثوقة يوميًا" : "Trusted everyday care") },
   ];
 
+  // The market's own delivery promise when the admin has set one; otherwise the
+  // generic wording, rather than inventing a lead time nobody committed to.
+  const etaMin = Number(deliveryEta?.min) || 0;
+  const etaMax = Number(deliveryEta?.max) || 0;
+  const deliveryCopy = etaMax > 0
+    ? (isAr
+        ? (etaMin && etaMin !== etaMax ? `التوصيل خلال ${etaMin}-${etaMax} يوم` : `التوصيل خلال ${etaMax} يوم`)
+        : (etaMin && etaMin !== etaMax ? `Delivery in ${etaMin}-${etaMax} days` : `Delivery in ${etaMax} days`))
+    : t.freeShipping;
+
   const trustFeatures = [
-    { icon: "truck", title: isAr ? "شحن سريع" : "Fast shipping", copy: t.freeShipping },
+    { icon: "truck", title: isAr ? "شحن سريع" : "Fast shipping", copy: deliveryCopy },
     { icon: "check", title: isAr ? "منتج أصلي" : "Original product", copy: t.originalProducts },
     { icon: "shield", title: isAr ? "دفع آمن" : "Secure payment", copy: t.securePayment },
   ];

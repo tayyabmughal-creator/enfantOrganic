@@ -184,6 +184,8 @@ class RegionSerializer(serializers.ModelSerializer):
             "locale_code",
             "shipping_threshold",
             "whatsapp_phone",
+            "delivery_eta_min_days",
+            "delivery_eta_max_days",
             "contact_email",
             "shipping_fee",
             "free_shipping_threshold",

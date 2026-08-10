@@ -1,13 +1,15 @@
 import json
 import re
 import tempfile
+from decimal import Decimal
 from pathlib import Path
 
 from django.conf import settings
 from django.core.management import call_command
 from django.test import TestCase
+from rest_framework.test import APIClient
 
-from store.models import CmsPage
+from store.models import CmsPage, Product, ProductPrice, Region
 
 
 class SeedCmsPagesTestCase(TestCase):
@@ -76,3 +78,50 @@ class SeedCmsPagesTestCase(TestCase):
                 re.fullmatch(r"[\sA-Za-z0-9<>/\"'=,\.\-–—:;&%\(\)\+!\?]+", row["body_ar"]),
                 f"{slug} has an English Arabic body",
             )
+
+
+class DeliveryEstimateTestCase(TestCase):
+    """Checkout showed no delivery estimate: it came only from shipping rules,
+    and there are none configured."""
+
+    def setUp(self):
+        self.client_api = APIClient()
+        self.region = Region.objects.create(
+            code="om", name_en="Oman", name_ar="عمان", currency_code="OMR",
+            fx_rate=Decimal("1.000000"), is_active=True, is_default=True,
+            shipping_fee=Decimal("2.00"), shipping_threshold=Decimal("0.00"),
+            contact_phone="12345678", address_en="Test Address",
+        )
+        self.product = Product.objects.create(
+            slug="lotion", name_en="Lotion", name_ar="لوشن", is_published=True, track_inventory=False,
+        )
+        ProductPrice.objects.create(product=self.product, region=self.region, price=Decimal("5.000"))
+
+    def _preview(self):
+        response = self.client_api.post(
+            "/api/coupons/validate/",
+            {
+                "region": "om",
+                "coupon_code": "",
+                "items": [{"slug": "lotion", "quantity": 1}],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        return response.data
+
+    def test_the_regions_promise_is_used_when_no_shipping_rule_states_one(self):
+        self.region.delivery_eta_min_days = 1
+        self.region.delivery_eta_max_days = 2
+        self.region.save(update_fields=["delivery_eta_min_days", "delivery_eta_max_days"])
+
+        data = self._preview()
+
+        self.assertEqual(data["eta_min_days"], 1)
+        self.assertEqual(data["eta_max_days"], 2)
+
+    def test_no_promise_set_shows_no_estimate(self):
+        data = self._preview()
+
+        self.assertIsNone(data["eta_min_days"])
+        self.assertIsNone(data["eta_max_days"])

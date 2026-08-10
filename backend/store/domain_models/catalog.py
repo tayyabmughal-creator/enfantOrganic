@@ -79,6 +79,11 @@ class Region(OrderedModel):
     seller_email = models.EmailField(blank=True)
     is_default = models.BooleanField(default=False)
     whatsapp_phone = models.CharField(max_length=32, blank=True)
+    # The delivery promise shown on the product page and at checkout. Left unset,
+    # those places keep their generic "fast shipping" wording rather than inventing
+    # a lead time the market cannot keep.
+    delivery_eta_min_days = models.PositiveSmallIntegerField(null=True, blank=True)
+    delivery_eta_max_days = models.PositiveSmallIntegerField(null=True, blank=True)
     shipping_fee = models.DecimalField(max_digits=10, decimal_places=2, default=2.00)
     free_shipping_threshold = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     require_map_pin = models.BooleanField(default=False)
