@@ -1,5 +1,5 @@
 from django.db import transaction
-from django.db.models import F, Q, Sum
+from django.db.models import Case, F, IntegerField, Q, Sum, Value, When
 
 from ..models import ProductStock, Warehouse
 from ..notifications import notify_admins_low_stock
@@ -66,20 +66,54 @@ def get_region_available_stock(product, region):
     return int(sum(stock.available_quantity for stock in stocks))
 
 
-def filter_products_fulfillable_for_region(queryset, region):
+def region_in_stock_product_ids(region):
+    """Ids of products a region's active warehouses can actually ship right now.
+
+    Returns None when stock cannot narrow anything down — no region, or a region
+    with no warehouses — so callers can treat every product as shippable.
+    """
     if not region:
-        return queryset
+        return None
     warehouses = list(get_region_warehouses(region).values_list("id", flat=True))
     if not warehouses:
-        return queryset
-
-    in_stock_ids = set(
+        return None
+    return set(
         ProductStock.objects.filter(
             warehouse_id__in=warehouses,
             warehouse__active=True,
             quantity__gt=F("reserved_quantity"),
         ).values_list("product_id", flat=True)
     )
+
+
+def sort_out_of_stock_last_for_region(queryset, region):
+    """Push what the region cannot ship to the end of the list, without hiding it.
+
+    Out-of-stock products used to be filtered out of the catalogue entirely, which
+    is why a freshly created product — one with no stock rows yet — was published,
+    priced, categorised, and still invisible everywhere including search, while the
+    admin panel showed it perfectly. Stock is a label on a product, not a reason to
+    deny it exists: the card renders "Out of stock" and checkout still refuses the
+    sale via ensure_region_stock_available.
+    """
+    in_stock_ids = region_in_stock_product_ids(region)
+    if in_stock_ids is None:
+        return queryset
+    return queryset.annotate(
+        region_out_of_stock=Case(
+            When(track_inventory=False, then=Value(0)),
+            When(pk__in=in_stock_ids, then=Value(0)),
+            default=Value(1),
+            output_field=IntegerField(),
+        )
+    )
+
+
+def filter_products_fulfillable_for_region(queryset, region):
+    """Hard filter — only for places that must not offer an unshippable product."""
+    in_stock_ids = region_in_stock_product_ids(region)
+    if in_stock_ids is None:
+        return queryset
     return queryset.filter(Q(track_inventory=False) | Q(pk__in=in_stock_ids))
 
 

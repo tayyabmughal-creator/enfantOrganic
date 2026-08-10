@@ -33,7 +33,7 @@ from ..serializers import (
     serialize_site_settings,
 )
 from ..services.search import apply_ranked_product_search
-from ..services.stock import filter_products_fulfillable_for_region
+from ..services.stock import sort_out_of_stock_last_for_region
 from .context import StorefrontContextMixin, product_queryset
 
 
@@ -60,10 +60,48 @@ def _homepage_testimonials(locale):
 
 
 def products_available_for_region(queryset, region):
+    """Everything the region sells — carrying stock as a label, not as a gate.
+
+    A product belongs to a region when it has a price there. Whether that region
+    can ship it today decides where it sorts and what its card says, not whether
+    the customer is allowed to see it at all.
+    """
     if not region:
         return queryset.none()
     queryset = queryset.filter(prices__region=region)
-    return filter_products_fulfillable_for_region(queryset, region).distinct()
+    return sort_out_of_stock_last_for_region(queryset, region).distinct()
+
+
+def related_products_for(product, region, *, limit=8):
+    """Pick a fresh set of suggestions rather than the same first four every time.
+
+    Products in the same category come first; if that category is too small to
+    fill the row, the rest of the region's catalogue tops it up. Both groups are
+    shuffled, so a repeat visit is not a repeat of the same four cards.
+    """
+    pool = products_available_for_region(product_queryset().exclude(pk=product.pk), region)
+
+    primary_category = product.categories.first()
+    picked = []
+    seen = set()
+
+    groups = []
+    if primary_category:
+        groups.append(pool.filter(categories=primary_category))
+    groups.append(pool)
+
+    for group in groups:
+        if len(picked) >= limit:
+            break
+        for candidate in group.order_by("?")[: limit * 2]:
+            if candidate.pk in seen:
+                continue
+            seen.add(candidate.pk)
+            picked.append(candidate)
+            if len(picked) >= limit:
+                break
+
+    return picked
 
 
 BEST_SELLER_EXCLUDED_STATUSES = (
@@ -271,24 +309,23 @@ class ProductDetailView(StorefrontContextMixin, APIView):
         locale = self.get_locale()
         context = self.get_serializer_context()
         region = context["region"]
-        base_product = product_queryset().filter(slug=slug, prices__region=region).distinct().first()
         product = products_available_for_region(
             product_queryset().filter(slug=slug),
             region,
         ).first()
         if not product:
-            if not base_product:
-                return Response({"detail": "Not found"}, status=404)
-            product = base_product
-            unavailable_for_region = True
-        else:
-            unavailable_for_region = False
+            return Response({"detail": "Not found"}, status=404)
+        # Being out of stock no longer removes a product from its region, so the
+        # only way to reach this view is to be sold here. Kept in the payload
+        # because clients still read the key.
+        unavailable_for_region = False
 
         primary_category = product.categories.first()
-        related_qs = product_queryset().exclude(pk=product.pk)
-        if primary_category:
-            related_qs = related_qs.filter(categories=primary_category)
-        related = products_available_for_region(related_qs, region)[:4]
+        # "You may also like" showed the same four products on every visit, because
+        # it took the first four of one category in a fixed order. It now offers
+        # eight, drawn at random, and tops up from the wider catalogue when a small
+        # category cannot fill the row on its own.
+        related = related_products_for(product, region, limit=8)
 
         category_name = CategorySerializer(primary_category, context=context).data["name"] if primary_category else ""
         payload = {
@@ -327,7 +364,7 @@ class SearchSuggestionsView(StorefrontContextMixin, APIView):
 
         region = context["region"]
         matches = apply_ranked_product_search(product_queryset(), query)
-        matches = filter_products_fulfillable_for_region(matches, region).distinct()
+        matches = sort_out_of_stock_last_for_region(matches, region).distinct()
         matches = unique_products_by_slug(matches, limit=8, scan_limit=48)
 
         seen_slugs = set()
@@ -470,15 +507,21 @@ def apply_catalog_filters(queryset, request, region):
         if collection == "best_sellers" or only_best_sellers:
             queryset = queryset.filter(best_seller_units__gt=0)
 
+    # Whatever the shopper sorted by, what the region cannot ship today settles at
+    # the bottom rather than disappearing from the list.
+    stock_first = ["region_out_of_stock"] if "region_out_of_stock" in queryset.query.annotations else []
+
     if ordering in {"price_asc", "price-asc", "price_low_to_high"}:
-        queryset = queryset.order_by("prices__price")
+        queryset = queryset.order_by(*stock_first, "prices__price")
     elif ordering in {"price_desc", "price-desc", "price_high_to_low"}:
-        queryset = queryset.order_by("-prices__price")
+        queryset = queryset.order_by(*stock_first, "-prices__price")
     elif ordering in {"newest", "-id"}:
-        queryset = queryset.order_by("-id")
+        queryset = queryset.order_by(*stock_first, "-id")
     elif ordering in {"rating", "rating_desc", "-rating"}:
-        queryset = queryset.order_by("-rating", "-review_count", "-id")
+        queryset = queryset.order_by(*stock_first, "-rating", "-review_count", "-id")
     elif use_best_seller_ranking:
-        queryset = queryset.order_by("-best_seller_units", "-best_seller_revenue", "-id")
+        queryset = queryset.order_by(*stock_first, "-best_seller_units", "-best_seller_revenue", "-id")
+    elif stock_first:
+        queryset = queryset.order_by(*stock_first, *(queryset.query.order_by or ["sort_order", "id"]))
 
     return queryset.distinct()

@@ -42,6 +42,7 @@ from store.api_serializers.catalog import ProductDetailSerializer, RegionSeriali
 from store.api_views.admin_ops import HasAdminCapability, IsStaffUser
 from store.emails import send_order_confirmation_email, send_payment_paid_email
 from store.notifications import NotificationDispatchRetryableError
+from store.services.stock import StockError, ensure_region_stock_available
 from store.services.invoice import ensure_paid_order_invoice
 from store.services import carrier_router, sms_router
 from store.tasks import process_order_event_async
@@ -4478,9 +4479,17 @@ class CheckoutAndPermsTestCase(TestCase):
             low_stock_threshold=2,
         )
 
+        # Listed, but plainly marked out of stock. Hiding it instead meant a
+        # published product could not be found anywhere on the site, not even by
+        # searching its name, while the admin panel showed it as live.
         response = self.api_client.get("/api/products/", {"region": sa_region.code, "locale": "en"})
         self.assertEqual(response.status_code, 200)
-        self.assertFalse(any(item["slug"] == self.product.slug for item in response.data))
+        listed = next(item for item in response.data if item["slug"] == self.product.slug)
+        self.assertFalse(listed["stock_status"]["is_in_stock"])
+
+        # What "not purchasable" has to mean: checkout refuses it.
+        with self.assertRaises(StockError):
+            ensure_region_stock_available(self.product, sa_region, 1)
 
     def test_checkout_rejects_quantity_above_regional_stock(self):
         sa_region = Region.objects.create(

@@ -103,14 +103,25 @@ class InventoryNotificationsSeoReviewsTests(TestCase):
             ).exists()
         )
 
-    def test_direct_regional_product_url_returns_unavailable_state(self):
+    def test_direct_regional_product_url_reports_out_of_stock_not_unavailable(self):
         ProductStock.objects.create(product=self.product, warehouse=self.om_warehouse, quantity=4)
         ProductStock.objects.create(product=self.product, warehouse=self.ae_warehouse, quantity=0)
 
         response = self.client.get("/api/products/regional-cream/", {"locale": "en", "region": "ae"})
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.data["unavailable_for_region"])
+        # "Unavailable for region" means the market does not sell it. Running out
+        # of stock is a different thing, and is reported by stock_status.
+        self.assertFalse(response.data["unavailable_for_region"])
         self.assertFalse(response.data["product"]["stock_status"]["is_in_stock"])
+
+    def test_a_product_not_sold_in_the_region_is_still_a_404_there(self):
+        unsold = Product.objects.create(
+            slug="oman-only-balm", name_en="Oman Only Balm", name_ar="بلسم", is_published=True,
+        )
+        ProductPrice.objects.create(product=unsold, region=self.om, price=Decimal("3.000"))
+
+        response = self.client.get("/api/products/oman-only-balm/", {"locale": "en", "region": "ae"})
+        self.assertEqual(response.status_code, 404)
 
     def test_product_detail_exposes_saved_seo_payload(self):
         ProductStock.objects.create(product=self.product, warehouse=self.om_warehouse, quantity=4)
