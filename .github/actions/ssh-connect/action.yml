@@ -1,0 +1,92 @@
+name: Open an SSH channel to a deploy target
+description: >
+  Installs the deploy key, defines a "deploy-target" SSH alias, and waits for the
+  host to answer. GitHub runners intermittently cannot reach these hosts at all —
+  the TCP SYN goes unanswered and the step dies after the OS connect timeout,
+  taking the whole deploy with it. Failures alternated between the two deploy
+  jobs at random, so a short connect timeout plus a retry is the fix: a run that
+  used to fail outright now waits out a block that lasts a minute or two.
+
+inputs:
+  host:
+    description: Hostname or IP of the deploy target
+    required: true
+  port:
+    description: SSH port
+    required: true
+  user:
+    description: SSH user
+    required: true
+  key:
+    description: Private key with access to the target
+    required: true
+  attempts:
+    description: How many times to wait for the host before giving up
+    required: false
+    default: "6"
+
+runs:
+  using: composite
+  steps:
+    - name: Install deploy key and SSH alias
+      shell: bash
+      env:
+        DEPLOY_KEY: ${{ inputs.key }}
+        DEPLOY_HOST: ${{ inputs.host }}
+        DEPLOY_PORT: ${{ inputs.port }}
+        DEPLOY_USER: ${{ inputs.user }}
+      run: |
+        set -euo pipefail
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key
+
+        # ConnectTimeout is deliberately short. The OS default is around two
+        # minutes, which burns the step before any retry can help.
+        cat >> ~/.ssh/config <<EOF
+        Host deploy-target
+          HostName $DEPLOY_HOST
+          User $DEPLOY_USER
+          Port $DEPLOY_PORT
+          IdentityFile ~/.ssh/deploy_key
+          IdentitiesOnly yes
+          StrictHostKeyChecking no
+          UserKnownHostsFile /dev/null
+          LogLevel ERROR
+          ConnectTimeout 25
+          ServerAliveInterval 30
+          ServerAliveCountMax 20
+        EOF
+        chmod 600 ~/.ssh/config
+
+    - name: Install the retry helper
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo tee /usr/local/bin/retry >/dev/null <<'HELPER'
+        #!/usr/bin/env bash
+        # retry <max-attempts> <command...> — backs off 15s, 30s, 45s, ...
+        set -uo pipefail
+        max="$1"; shift
+        attempt=1
+        until "$@"; do
+          status=$?
+          if [ "$attempt" -ge "$max" ]; then
+            echo "retry: giving up after ${attempt} attempt(s) (exit ${status}): $*" >&2
+            return "$status" 2>/dev/null || exit "$status"
+          fi
+          delay=$(( attempt * 15 ))
+          echo "retry: attempt ${attempt}/${max} failed (exit ${status}); retrying in ${delay}s" >&2
+          sleep "$delay"
+          attempt=$(( attempt + 1 ))
+        done
+        HELPER
+        sudo chmod +x /usr/local/bin/retry
+
+    - name: Wait for the host to answer
+      shell: bash
+      run: |
+        set -euo pipefail
+        retry "${{ inputs.attempts }}" ssh deploy-target true
+        echo "deploy target is reachable"
