@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.test import TestCase
 from rest_framework.test import APIClient
 
-from store.models import Product, ProductPrice, ProductStock, Region, Warehouse
+from store.models import Category, Product, ProductPrice, ProductStock, Region, Warehouse
 
 
 def _region(code, name, currency, fx, *, is_default=False):
@@ -109,3 +109,47 @@ class OutOfStockProductsStayVisibleTestCase(TestCase):
 
         self.assertIn("in-stock-lotion", rows)
         self.assertFalse(rows["in-stock-lotion"]["stock_status"]["is_in_stock"])
+
+
+class RelatedProductsTestCase(TestCase):
+    """"You may also like" offered the same four products on every product page."""
+
+    def setUp(self):
+        self.client_api = APIClient()
+        self.region = _region("om", "Oman", "OMR", Decimal("1.000000"), is_default=True)
+        self.category = Category.objects.create(slug="lotions", name_en="Lotions", name_ar="لوشن")
+        self.subject = self._product("subject", "Subject", category=self.category)
+        # Two in the subject's category, ten elsewhere: the category alone cannot
+        # fill a row of eight.
+        for index in range(2):
+            self._product(f"same-cat-{index}", f"Same {index}", category=self.category)
+        for index in range(10):
+            self._product(f"other-{index}", f"Other {index}")
+
+    def _product(self, slug, name, category=None):
+        product = Product.objects.create(
+            slug=slug, name_en=name, name_ar=name, is_published=True, track_inventory=False,
+        )
+        ProductPrice.objects.create(product=product, region=self.region, price=Decimal("5.000"))
+        if category:
+            product.categories.add(category)
+        return product
+
+    def _related(self):
+        response = self.client_api.get("/api/products/subject/", {"region": "om"})
+        self.assertEqual(response.status_code, 200)
+        return [row["slug"] for row in response.data["related_products"]]
+
+    def test_offers_eight_suggestions_not_four(self):
+        self.assertEqual(len(self._related()), 8)
+
+    def test_never_suggests_the_product_being_viewed(self):
+        self.assertNotIn("subject", self._related())
+
+    def test_tops_up_from_the_wider_catalogue_when_the_category_is_small(self):
+        related = self._related()
+        self.assertTrue(any(slug.startswith("other-") for slug in related))
+
+    def test_suggestions_are_not_the_same_list_every_time(self):
+        seen = {tuple(self._related()) for _ in range(12)}
+        self.assertGreater(len(seen), 1)
