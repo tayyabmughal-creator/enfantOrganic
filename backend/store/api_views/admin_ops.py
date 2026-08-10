@@ -1535,6 +1535,100 @@ class AdminDashboardView(APIView):
         )
 
 
+def normalize_traffic_source(metadata):
+    """Name the platform a visit or an order came from.
+
+    Reads whichever of the utm/referrer keys are present — the same shape is
+    stored on AnalyticsEvent.metadata and on Order.conversion_attribution, so
+    sessions and orders are bucketed by identical rules and the two reports can
+    be read side by side.
+    """
+    raw_source = str((metadata or {}).get("source") or "").strip()
+    joined = " ".join(
+        str((metadata or {}).get(key) or "")
+        for key in ("source", "utm_source", "utm_medium", "utm_campaign", "utm_content", "referrer")
+    ).lower()
+    # Meta's own links abbreviate the platform. The abbreviation was only read
+    # from `source`, so a link carrying nothing but utm parameters — which is
+    # what an ad click looks like when the referrer is stripped — was filed as
+    # Direct and quietly understated Instagram.
+    short_codes = {
+        str((metadata or {}).get(key) or "").strip().lower()
+        for key in ("source", "utm_source")
+    }
+    if "instagram" in joined or "l.instagram.com" in joined or short_codes & {"ig", "instagram"}:
+        return "Instagram"
+    if "facebook" in joined or "fb.com" in joined or short_codes & {"fb", "facebook"}:
+        return "Facebook"
+    if "tiktok" in joined:
+        return "TikTok"
+    if "snapchat" in joined:
+        return "Snapchat"
+    if "google" in joined:
+        return "Google"
+    if "whatsapp" in joined:
+        return "WhatsApp"
+    return raw_source or "Direct"
+
+
+ANALYTICS_RANGE_DAYS = {
+    "last_7_days": 7,
+    "last_30_days": 30,
+    "last_90_days": 90,
+}
+
+
+def resolve_analytics_window(request):
+    """The period an analytics screen is asking about.
+
+    Returns (start, end, key). Either bound may be None, meaning open-ended, so
+    "all_time" is (None, None). Days are counted in the store's own timezone —
+    on UTC, a Gulf evening fell into the previous day.
+    """
+    key = str(request.query_params.get("date_range") or "last_30_days").strip().lower()
+    now = timezone.now()
+
+    def day_start(target_date):
+        return timezone.make_aware(datetime.combine(target_date, datetime.min.time()))
+
+    def day_end(target_date):
+        return timezone.make_aware(datetime.combine(target_date, datetime.max.time()))
+
+    today = timezone.localdate()
+
+    if key == "all_time":
+        return None, None, key
+    if key == "today":
+        return day_start(today), now, key
+    if key == "yesterday":
+        yesterday = today - timedelta(days=1)
+        return day_start(yesterday), day_end(yesterday), key
+    if key == "this_month":
+        return day_start(today.replace(day=1)), now, key
+    if key == "custom":
+        start_date = parse_date(str(request.query_params.get("start_date") or "").strip())
+        end_date = parse_date(str(request.query_params.get("end_date") or "").strip())
+        if start_date and end_date:
+            if start_date > end_date:
+                start_date, end_date = end_date, start_date
+            return day_start(start_date), day_end(end_date), key
+        return None, None, "all_time"
+
+    days = ANALYTICS_RANGE_DAYS.get(key)
+    if days is None:
+        days = ANALYTICS_RANGE_DAYS["last_30_days"]
+        key = "last_30_days"
+    return now - timedelta(days=days), now, key
+
+
+def scope_to_window(queryset, field, start, end):
+    if start is not None:
+        queryset = queryset.filter(**{f"{field}__gte": start})
+    if end is not None:
+        queryset = queryset.filter(**{f"{field}__lte": end})
+    return queryset
+
+
 class AdminAnalyticsView(APIView):
     permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
     admin_read_capabilities = (CAP_DASHBOARD_VIEW,)
@@ -1543,7 +1637,8 @@ class AdminAnalyticsView(APIView):
     def get(self, request):
         now = timezone.now()
         this_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        orders = Order.objects.all()
+        window_start, window_end, window_key = resolve_analytics_window(request)
+        orders = scope_to_window(Order.objects.all(), "created_at", window_start, window_end)
         # Count all placed orders (paid, COD, unpaid) — exclude only cancelled/failed/refunded
         paid_orders = orders.exclude(status__in=[Order.STATUS_CANCELLED, Order.STATUS_FAILED, Order.STATUS_REFUNDED])
 
@@ -1562,9 +1657,9 @@ class AdminAnalyticsView(APIView):
                 "orders": region_orders.count(),
             }
 
-        # Conversion funnel — real AnalyticsEvent counts (all-time, no date filter applied here)
+        # Conversion funnel — real AnalyticsEvent counts, over the selected period.
         try:
-            all_events = AnalyticsEvent.objects.all()
+            all_events = scope_to_window(AnalyticsEvent.objects.all(), "created_at", window_start, window_end)
             funnel_visitors = all_events.filter(
                 event_type=AnalyticsEvent.EVENT_PAGE_VIEW
             ).values("session_key").distinct().count()
@@ -1580,26 +1675,6 @@ class AdminAnalyticsView(APIView):
 
             # Traffic sources — read `source` key from metadata of page_view events
             # Uses one session per source (first-touch attribution per session)
-            def _normalize_source(metadata):
-                raw_source = str((metadata or {}).get("source") or "").strip()
-                joined = " ".join(
-                    str((metadata or {}).get(key) or "")
-                    for key in ("source", "utm_source", "utm_medium", "utm_campaign", "utm_content", "referrer")
-                ).lower()
-                if "instagram" in joined or "l.instagram.com" in joined or raw_source.lower() == "ig":
-                    return "Instagram"
-                if "facebook" in joined or "fb.com" in joined or raw_source.lower() == "fb":
-                    return "Facebook"
-                if "tiktok" in joined:
-                    return "TikTok"
-                if "snapchat" in joined:
-                    return "Snapchat"
-                if "google" in joined:
-                    return "Google"
-                if "whatsapp" in joined:
-                    return "WhatsApp"
-                return raw_source or "Direct"
-
             page_view_events = (
                 all_events.filter(event_type=AnalyticsEvent.EVENT_PAGE_VIEW)
                 .order_by("created_at", "id")
@@ -1608,7 +1683,7 @@ class AdminAnalyticsView(APIView):
             source_sessions = {}
             for ev in page_view_events:
                 sk = ev["session_key"]
-                src = _normalize_source(ev.get("metadata") or {})
+                src = normalize_traffic_source(ev.get("metadata") or {})
                 current = source_sessions.get(sk)
                 if current is None or (current == "Direct" and src != "Direct"):
                     source_sessions[sk] = src
@@ -1656,7 +1731,34 @@ class AdminAnalyticsView(APIView):
 
         payment_success_rate = round((paid_orders_count / total_orders_count) * 100, 1) if total_orders_count else 0
 
+        # Sessions per market. The live-visitor map only ever showed who is on the
+        # site this minute; this answers "how many sessions came from Oman last
+        # week", which is what the admin actually plans against.
+        sessions_by_region = []
+        try:
+            region_names = dict(Region.objects.values_list("code", "name_en"))
+            rows = (
+                scope_to_window(AnalyticsEvent.objects.all(), "created_at", window_start, window_end)
+                .filter(event_type=AnalyticsEvent.EVENT_PAGE_VIEW)
+                .values("region__code")
+                .annotate(sessions=Count("session_key", distinct=True))
+                .order_by("-sessions")
+            )
+            for row in rows:
+                code = row["region__code"]
+                sessions_by_region.append({
+                    "code": code or "",
+                    "name": region_names.get(code) or (code.upper() if code else "Unknown"),
+                    "sessions": row["sessions"],
+                })
+        except Exception:
+            sessions_by_region = []
+
         return Response({
+            "date_range": window_key,
+            "date_from": window_start.isoformat() if window_start else "",
+            "date_to": window_end.isoformat() if window_end else "",
+            "sessions_by_region": sessions_by_region,
             "visitors": funnel_visitors,
             "product_views": funnel_product_views,
             "cart_adds": funnel_cart_adds,
@@ -1682,6 +1784,121 @@ class AdminAnalyticsView(APIView):
             "order_status_distribution": list(
                 orders.values("status").annotate(count=Count("id")).order_by("status")
             ),
+        })
+
+
+class AdminAttributionView(APIView):
+    """Which platform the orders actually came from.
+
+    The attribution is already captured on every order — source, medium,
+    campaign, the utm parameters and the referrer — it simply had nowhere to be
+    read. This pairs it with the sessions recorded for the same period so each
+    platform can be shown with its own conversion rate.
+
+    Revenue is totalled per currency and never across them; a converted total is
+    offered separately with the rate it used.
+    """
+
+    permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
+    admin_read_capabilities = (CAP_DASHBOARD_VIEW,)
+
+    @extend_schema(responses=dict)
+    def get(self, request):
+        window_start, window_end, window_key = resolve_analytics_window(request)
+
+        orders = scope_to_window(
+            Order.objects.exclude(status__in=[Order.STATUS_CANCELLED, Order.STATUS_FAILED, Order.STATUS_REFUNDED]),
+            "created_at",
+            window_start,
+            window_end,
+        ).only("currency_code", "grand_total", "conversion_attribution")
+
+        buckets = {}
+        untracked = 0
+        for order in orders.iterator(chunk_size=500):
+            attribution = order.conversion_attribution or {}
+            if not attribution:
+                untracked += 1
+            source = normalize_traffic_source(attribution)
+            bucket = buckets.setdefault(source, {"source": source, "orders": 0, "revenue": {}, "campaigns": {}})
+            bucket["orders"] += 1
+
+            currency = str(order.currency_code or "OMR").upper()
+            bucket["revenue"][currency] = bucket["revenue"].get(currency, Decimal("0")) + Decimal(order.grand_total or 0)
+
+            campaign = str(attribution.get("campaign") or attribution.get("utm_campaign") or "").strip()
+            if campaign:
+                bucket["campaigns"][campaign] = bucket["campaigns"].get(campaign, 0) + 1
+
+        # Sessions for the same window, bucketed by the identical rules so the two
+        # columns can honestly be divided into one another.
+        sessions_by_source = {}
+        try:
+            events = (
+                scope_to_window(AnalyticsEvent.objects.all(), "created_at", window_start, window_end)
+                .filter(event_type=AnalyticsEvent.EVENT_PAGE_VIEW)
+                .order_by("created_at", "id")
+                .values("session_key", "metadata")
+            )
+            first_touch = {}
+            for event in events.iterator(chunk_size=2000):
+                key = event["session_key"]
+                source = normalize_traffic_source(event.get("metadata") or {})
+                current = first_touch.get(key)
+                if current is None or (current == "Direct" and source != "Direct"):
+                    first_touch[key] = source
+            for source in first_touch.values():
+                sessions_by_source[source] = sessions_by_source.get(source, 0) + 1
+        except Exception:
+            sessions_by_source = {}
+
+        rates = analytics_to_omr_rates()
+        rows = []
+        for bucket in buckets.values():
+            sessions = sessions_by_source.get(bucket["source"], 0)
+            converted = sum(
+                (amount * rates.get(currency, Decimal("1.0")) for currency, amount in bucket["revenue"].items()),
+                Decimal("0"),
+            )
+            rows.append({
+                "source": bucket["source"],
+                "orders": bucket["orders"],
+                "sessions": sessions,
+                "conversion_rate": round((bucket["orders"] / sessions) * 100, 2) if sessions else None,
+                "revenue": [
+                    {"currency": currency, "amount": str(quantize_money(amount))}
+                    for currency, amount in sorted(bucket["revenue"].items())
+                ],
+                "revenue_omr": str(quantize_money(converted)),
+                "top_campaigns": [
+                    {"campaign": name, "orders": count}
+                    for name, count in sorted(bucket["campaigns"].items(), key=lambda item: -item[1])[:5]
+                ],
+            })
+
+        rows.sort(key=lambda row: -row["orders"])
+
+        # Platforms that brought sessions but no orders are the ones worth seeing.
+        for source, sessions in sessions_by_source.items():
+            if source not in buckets:
+                rows.append({
+                    "source": source,
+                    "orders": 0,
+                    "sessions": sessions,
+                    "conversion_rate": 0.0,
+                    "revenue": [],
+                    "revenue_omr": "0.00",
+                    "top_campaigns": [],
+                })
+
+        return Response({
+            "date_range": window_key,
+            "date_from": window_start.isoformat() if window_start else "",
+            "date_to": window_end.isoformat() if window_end else "",
+            "rows": rows,
+            "orders_total": sum(row["orders"] for row in rows),
+            "orders_without_attribution": untracked,
+            "conversion_rates": {code: str(rate) for code, rate in rates.items()},
         })
 
 
@@ -2541,6 +2758,62 @@ class AdminProductGalleryUploadView(AdminCapabilityMixin, APIView):
             )
         except Exception:
             logger.exception("Gallery upload audit-log failed (product=%s)", product.slug)
+        return Response({"urls": urls})
+
+
+class AdminReviewImageUploadView(AdminCapabilityMixin, APIView):
+    """Store photos for a review and hand back their /media URLs.
+
+    Review images could only be entered as a hand-written JSON list of URLs,
+    which meant there was no way to attach a photo a customer had emailed in.
+    The review's ``images`` list is still saved by the normal review PATCH; this
+    only puts the files somewhere and returns where they landed.
+    """
+
+    admin_read_capabilities = (CAP_REVIEWS_EDIT,)
+    admin_write_capabilities = (CAP_REVIEWS_EDIT,)
+    parser_classes = (MultiPartParser, FormParser)
+
+    ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}
+
+    def post(self, request):
+        import os
+        import uuid
+        from django.conf import settings as dj_settings
+        from django.core.files.storage import default_storage
+        from django.utils.text import slugify
+        from PIL import Image
+
+        files = request.FILES.getlist("files")
+        if not files and "file" in request.FILES:
+            files = [request.FILES["file"]]
+        if not files:
+            return Response({"detail": "No image files were provided."}, status=400)
+
+        urls = []
+        for upload in files:
+            try:
+                Image.open(upload).verify()
+                upload.seek(0)
+            except Exception:
+                return Response({"detail": f"'{upload.name}' is not a valid image."}, status=400)
+
+            base, ext = os.path.splitext(upload.name or "")
+            ext = ext.lower()
+            if ext not in self.ALLOWED_EXTENSIONS:
+                ext = ".jpg"
+            safe_base = slugify(base)[:60] or "review"
+            target = f"reviews/{safe_base}-{uuid.uuid4().hex[:8]}{ext}"
+            try:
+                stored_path = default_storage.save(target, upload)
+            except Exception:
+                logger.exception("Review image save failed (file=%s)", upload.name)
+                return Response(
+                    {"detail": f"Could not save '{upload.name}'. Please try a different file."},
+                    status=400,
+                )
+            urls.append(f"{dj_settings.MEDIA_URL.rstrip('/')}/{stored_path}")
+
         return Response({"urls": urls})
 
 

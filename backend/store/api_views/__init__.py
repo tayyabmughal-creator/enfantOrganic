@@ -87,6 +87,8 @@ from .admin_ops import (
     AdminWarehouseListCreateView,
     ReportCsvView,
     CogsCostResyncView,
+    AdminAttributionView,
+    AdminReviewImageUploadView,
 )
 from .checkout import CheckoutView, CouponValidationView, GiftCardValidationView
 from .orders import GuestOrderLookupView, OrderDetailView, OrderInvoiceDownloadView
@@ -205,6 +207,8 @@ __all__ = [
     "RegisterView",
     "ReportCsvView",
     "CogsCostResyncView",
+    "AdminAttributionView",
+    "AdminReviewImageUploadView",
     "ReviewCreateView",
     "WhatsAppWebhookView",
     "WishlistView",

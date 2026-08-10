@@ -96,6 +96,8 @@ from .api_views import (
     RegisterView,
     ReportCsvView,
     CogsCostResyncView,
+    AdminAttributionView,
+    AdminReviewImageUploadView,
     ReviewCreateView,
     SearchSuggestionsView,
     WishlistView,
@@ -197,6 +199,8 @@ __all__ = [
     "RegisterView",
     "ReportCsvView",
     "CogsCostResyncView",
+    "AdminAttributionView",
+    "AdminReviewImageUploadView",
     "ReviewCreateView",
     "WishlistView",
 ]

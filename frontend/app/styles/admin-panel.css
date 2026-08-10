@@ -4925,3 +4925,30 @@
   .admin-record-main strong { font-size: 13px; }
   .admin-pagination { gap: 8px; padding: 12px 0 2px; }
 }
+
+/* Analytics period picker — the screen had no date control at all before. */
+.admin-analytics-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: end;
+}
+
+.admin-analytics-filter label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-soft, #66705d);
+}
+
+.admin-analytics-filter select,
+.admin-analytics-filter input[type="date"] {
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line, #dfe7d6);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  font-size: 0.86rem;
+  color: var(--text, #2c3327);
+}

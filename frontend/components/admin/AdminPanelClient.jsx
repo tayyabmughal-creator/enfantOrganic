@@ -261,10 +261,10 @@ const FIELD_CONFIGS = {
     ["is_active","Active","checkbox"],["is_staff","Staff access","checkbox"],
   ],
   reviews: [
-    ["product","Product ID","number"],["order","Order ID","number"],
+    ["product","Product","product-picker"],["order","Order ID","number"],
     ["customer_name","Customer name","text"],["rating","Rating","number"],
     ["title","Title","text"],["comment","Comment","textarea"],
-    ["images","Review image URLs JSON","json"],
+    ["images","Review photos","review-images"],
     ["is_verified_purchase","Verified purchase","checkbox"],["is_approved","Approved","checkbox"],
   ],
   shipping: [
@@ -584,6 +584,10 @@ function titleFor(item, key) {
 function metaFor(item, key) {
   if (!item) return "";
   if (key === "returns") return `${item.customer_name || item.customer_email || "Customer"} · ${item.status}`;
+  if (key === "reviews") {
+    const product = item.product_name || (item.product ? `Product #${item.product}` : "Unknown product");
+    return `${product} · ${item.rating}★ · ${item.is_approved ? "Approved" : "Pending moderation"}`;
+  }
   if (key === "regions") return `${item.currency_code || ""} · ${item.is_active ? "Active" : "Inactive"}`;
   if (key === "taxes")   return `${item.region_code || "Global"} · ${item.is_active ? "Active" : "Inactive"}`;
   if (key === "staff")   return `${item.roles?.[0] || "No role"} · ${item.is_active ? "Active" : "Inactive"}`;
@@ -824,6 +828,11 @@ export default function AdminPanelClient() {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [dashboardFilters, setDashboardFilters] = useState(DASHBOARD_FILTER_DEFAULTS);
+  const [analyticsFilters, setAnalyticsFilters] = useState({
+    dateRange: "last_30_days",
+    startDate: "",
+    endDate: "",
+  });
   const [orderFilters, setOrderFilters] = useState(ORDER_FILTER_DEFAULTS);
   const [inventoryThreshold, setInventoryThreshold] = useState(10);
   const [inventoryFocusSlug, setInventoryFocusSlug] = useState("");
@@ -1085,6 +1094,14 @@ export default function AdminPanelClient() {
         if (filterSource.topDateRange === "custom_date") {
           if (filterSource.customStartDate) params.set("top_start_date", filterSource.customStartDate);
           if (filterSource.customEndDate) params.set("top_end_date", filterSource.customEndDate);
+        }
+      }
+      if (screenKey === "analytics") {
+        const analyticsSource = options.analyticsFilters || analyticsFilters;
+        params.set("date_range", analyticsSource.dateRange);
+        if (analyticsSource.dateRange === "custom") {
+          if (analyticsSource.startDate) params.set("start_date", analyticsSource.startDate);
+          if (analyticsSource.endDate) params.set("end_date", analyticsSource.endDate);
         }
       }
       if (screenKey === "inventory") {
@@ -1897,7 +1914,20 @@ export default function AdminPanelClient() {
           onViewAllInventory={() => navigate("inventory")}
         />
       );
-    if (activeKey === "analytics")              return <AnalyticsView data={data} />;
+    if (activeKey === "analytics")              return (
+      <AnalyticsView
+        data={data}
+        filters={analyticsFilters}
+        request={request}
+        onFiltersChange={(patch) => {
+          setAnalyticsFilters((prev) => {
+            const next = { ...prev, ...patch };
+            loadScreen(active, { analyticsFilters: next, silent: true });
+            return next;
+          });
+        }}
+      />
+    );
     if (activeKey === "inventory")              return <InventoryView rows={Array.isArray(data) ? data : []} threshold={inventoryThreshold} focusProductSlug={inventoryFocusSlug} warehouseStocks={warehouseStocks} warehouses={warehouses} demandAlerts={demandAlerts} onSaveStock={handleSaveInventoryStock} />;
     if (activeKey === "customers") return (
       <div>

@@ -1801,6 +1801,102 @@ function GalleryManager({ field, value, editor, setEditor, mode, onGalleryUpload
   );
 }
 
+// A review's product could only be set by typing a raw database id, so the admin
+// had no way to tell what "Product ID 8" was, or which item a review belonged to.
+function ProductPickerField({ field, value, editor, setEditor, disabled }) {
+  const [name, label] = field;
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? window.localStorage.getItem("enfhant-admin-token") : null;
+    fetch("/api/admin/products/?page_size=500", {
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    })
+      .then((r) => r.json())
+      .then((d) => setProducts(Array.isArray(d) ? d : (d?.results || [])))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <label className="admin-label">
+      {label}
+      <select
+        className="admin-input"
+        value={value ?? ""}
+        disabled={disabled || loading}
+        onChange={(e) => setEditor({ ...editor, [name]: e.target.value === "" ? "" : Number(e.target.value) })}
+      >
+        <option value="">{loading ? "Loading products…" : "— Select a product —"}</option>
+        {products.map((product) => (
+          <option key={product.id} value={product.id}>
+            {product.name_en || product.slug} (#{product.id})
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+// Review photos could only be entered as a hand-typed JSON list of URLs.
+function ReviewImagesField({ field, value, editor, setEditor }) {
+  const name = field[0];
+  const label = field[1];
+  const list = Array.isArray(value) ? value : [];
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+
+  const update = (next) => setEditor({ ...editor, [name]: next });
+
+  async function onPick(event) {
+    const files = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (!files.length) return;
+    setError("");
+    setUploading(true);
+    try {
+      const token = typeof window !== "undefined" ? window.localStorage.getItem("enfhant-admin-token") : null;
+      const body = new FormData();
+      files.forEach((file) => body.append("files", file));
+      const response = await fetch("/api/admin/reviews/images/", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body,
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.detail || "Upload failed.");
+      update(list.concat(Array.isArray(data.urls) ? data.urls : []));
+    } catch (err) {
+      setError(err?.message || "Upload failed.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div className="admin-label full-width">
+      <span>{label}</span>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, margin: "8px 0" }}>
+        {list.map((url, index) => (
+          <div key={`${url}-${index}`} style={{ width: 92 }}>
+            <img src={url} alt={`Review ${index + 1}`} style={{ width: 92, height: 92, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e5e5", display: "block" }} />
+            <div style={{ display: "flex", justifyContent: "center", marginTop: 4 }}>
+              <button type="button" onClick={() => update(list.filter((_, i) => i !== index))} title="Remove" style={{ ...GAL_BTN, color: "#c0392b" }}>×</button>
+            </div>
+          </div>
+        ))}
+        {list.length === 0 ? <small className="admin-field-help">No photos on this review yet.</small> : null}
+      </div>
+      <label className="admin-input" style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer", width: "fit-content" }}>
+        <input type="file" accept="image/*" multiple disabled={uploading} onChange={onPick} style={{ display: "none" }} />
+        <span>{uploading ? "Uploading…" : "+ Upload photos"}</span>
+      </label>
+      {error ? <small className="admin-field-help" style={{ color: "#c0392b" }}>{error}</small> : null}
+    </div>
+  );
+}
+
 function CategoriesSelectField({ field, value, editor, setEditor, disabled }) {
   const [name, label] = field;
   const [allCategories, setAllCategories] = useState([]);
@@ -2088,6 +2184,12 @@ function FormField({ field, value, editor, setEditor, mode, onGalleryUpload }) {
   const previewUrl = objectPreviewUrl || existingPreviewUrl;
   const showImagePreview = Boolean(previewUrl && name.includes("image"));
 
+  if (type === "product-picker") {
+    return <ProductPickerField field={field} value={value} editor={editor} setEditor={setEditor} disabled={disabled} />;
+  }
+  if (type === "review-images") {
+    return <ReviewImagesField field={field} value={value} editor={editor} setEditor={setEditor} />;
+  }
   if (type === "categories-select") {
     return <CategoriesSelectField field={field} value={value} editor={editor} setEditor={setEditor} disabled={disabled} />;
   }

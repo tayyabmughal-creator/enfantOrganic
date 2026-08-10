@@ -246,12 +246,170 @@ function TrafficSourcesPanel({ sources = [] }) {
   );
 }
 
+const ANALYTICS_RANGES = [
+  ["today", "Today"],
+  ["yesterday", "Yesterday"],
+  ["last_7_days", "Last 7 days"],
+  ["last_30_days", "Last 30 days"],
+  ["last_90_days", "Last 90 days"],
+  ["this_month", "This month"],
+  ["all_time", "All time"],
+  ["custom", "Custom dates"],
+];
+
+// Analytics had no date control at all: every number was all-time, so there was
+// no way to answer "how did last week go".
+function AnalyticsDateFilter({ filters, onFiltersChange }) {
+  if (typeof onFiltersChange !== "function") return null;
+  return (
+    <section className="admin-chart-card admin-analytics-filter">
+      <label>
+        <span>Period</span>
+        <select
+          value={filters?.dateRange || "last_30_days"}
+          onChange={(event) => onFiltersChange({ dateRange: event.target.value })}
+        >
+          {ANALYTICS_RANGES.map(([value, label]) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
+        </select>
+      </label>
+      {filters?.dateRange === "custom" ? (
+        <>
+          <label>
+            <span>Start date</span>
+            <input
+              type="date"
+              value={filters.startDate || ""}
+              onChange={(event) => onFiltersChange({ startDate: event.target.value })}
+            />
+          </label>
+          <label>
+            <span>End date</span>
+            <input
+              type="date"
+              value={filters.endDate || ""}
+              onChange={(event) => onFiltersChange({ endDate: event.target.value })}
+            />
+          </label>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
+// The live map only ever showed who is on the site this minute. This answers
+// "how many sessions came from Oman last week", which is what gets planned against.
+function SessionsByRegionPanel({ rows = [] }) {
+  if (!rows.length) return null;
+  const total = rows.reduce((sum, row) => sum + Number(row.sessions || 0), 0);
+  const flags = { om: "🇴🇲", ae: "🇦🇪", sa: "🇸🇦" };
+  return (
+    <section className="admin-chart-card admin-traffic-card">
+      <h3>Sessions by Market</h3>
+      <div className="admin-traffic-list">
+        {rows.map((row) => {
+          const sessions = Number(row.sessions || 0);
+          const pct = total > 0 ? Math.round((sessions / total) * 100) : 0;
+          return (
+            <div key={row.code || row.name} className="admin-traffic-row">
+              <span className="admin-traffic-icon">{flags[row.code] || "🌐"}</span>
+              <span className="admin-traffic-name">{row.name}</span>
+              <div className="admin-traffic-bar-track">
+                <div className="admin-traffic-bar-fill" style={{ width: `${pct}%` }} />
+              </div>
+              <span className="admin-traffic-pct">{pct}%</span>
+              <span className="admin-traffic-count">{sessions}</span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+// Which platform the orders actually came from. The data was already on every
+// order; it simply had nowhere to be read.
+function AttributionPanel({ filters, request }) {
+  const [payload, setPayload] = useState(null);
+  const [error, setError] = useState("");
+  const range = filters?.dateRange || "last_30_days";
+  const start = filters?.startDate || "";
+  const end = filters?.endDate || "";
+
+  useEffect(() => {
+    if (typeof request !== "function") return;
+    const params = new URLSearchParams({ date_range: range });
+    if (range === "custom") {
+      if (start) params.set("start_date", start);
+      if (end) params.set("end_date", end);
+    }
+    let cancelled = false;
+    request(`/admin/attribution/?${params.toString()}`)
+      .then((data) => { if (!cancelled) { setPayload(data); setError(""); } })
+      .catch((err) => { if (!cancelled) setError(err?.message || "Attribution unavailable"); });
+    return () => { cancelled = true; };
+  }, [request, range, start, end]);
+
+  const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+
+  return (
+    <section className="admin-chart-card span-2">
+      <h3>Where the orders came from</h3>
+      {error ? <div className="admin-form-error">{error}</div> : null}
+      {!error && !rows.length ? (
+        <p className="admin-chart-notice">No orders in this period.</p>
+      ) : null}
+      {rows.length ? (
+        <div className="admin-orders-table-wrap">
+          <table className="admin-orders-table">
+            <thead>
+              <tr>
+                <th>Source</th>
+                <th>Sessions</th>
+                <th>Orders</th>
+                <th>Conversion</th>
+                <th>Revenue</th>
+                <th>Top campaign</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.source}>
+                  <td>{SOURCE_ICONS[row.source] || "🌐"} {row.source}</td>
+                  <td>{row.sessions || "—"}</td>
+                  <td>{row.orders}</td>
+                  <td>{row.conversion_rate === null ? "—" : `${row.conversion_rate}%`}</td>
+                  <td>
+                    {/* Per currency — OMR, AED and SAR are never added together. */}
+                    {row.revenue.length
+                      ? row.revenue.map((entry) => (
+                          <div key={entry.currency}>{entry.amount} {entry.currency}</div>
+                        ))
+                      : "—"}
+                  </td>
+                  <td>{row.top_campaigns?.[0]?.campaign || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+      {payload?.orders_without_attribution ? (
+        <p className="admin-chart-notice">
+          {payload.orders_without_attribution} order(s) carried no attribution and are counted as Direct.
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
 function fmtMoney(value, currency = "") {
   const number = Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
   return currency ? `${currency} ${number}` : number;
 }
 
-export default function AnalyticsView({ data }) {
+export default function AnalyticsView({ data, filters, onFiltersChange, request }) {
   const completedOrders = Number(data?.completed_orders || data?.orders || 0);
   const visitors = Number(data?.visitors || 0);
   const funnelPct = (value) =>
@@ -286,11 +444,19 @@ export default function AnalyticsView({ data }) {
 
   return (
     <div className="admin-analytics">
+      <AnalyticsDateFilter filters={filters} onFiltersChange={onFiltersChange} />
+
       {/* Live visitors panel — self-polling */}
       <LiveVisitorsPanel />
 
-      {/* Traffic sources */}
-      <TrafficSourcesPanel sources={data?.traffic_sources || []} />
+      <div className="admin-chart-row">
+        <TrafficSourcesPanel sources={data?.traffic_sources || []} />
+        <SessionsByRegionPanel rows={data?.sessions_by_region || []} />
+      </div>
+
+      <div className="admin-chart-row">
+        <AttributionPanel filters={filters} request={request} />
+      </div>
 
       <div className="admin-chart-row">
         <section className="admin-chart-card span-2">
