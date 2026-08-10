@@ -199,6 +199,93 @@
   padding-inline-end: 2px;
 }
 
+/* Suggestions beside the cart — a swipeable rail so a narrow drawer can still
+   offer several without turning into a list the shopper has to scroll past. */
+.cart-recommendations {
+  border-top: 1px solid var(--line, #dfe7d6);
+  padding-top: 14px;
+  margin-top: 2px;
+}
+
+.cart-recommendations-title {
+  margin: 0 0 10px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--text, #2c3327);
+}
+
+.cart-recommendations-rail {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 118px;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  padding-bottom: 6px;
+}
+
+.cart-recommendation {
+  scroll-snap-align: start;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+.cart-recommendation-media {
+  display: block;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line, #dfe7d6);
+  background: #fff;
+}
+
+.cart-recommendation-media img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+.cart-recommendation-name {
+  font-size: 0.76rem;
+  line-height: 1.35;
+  color: inherit;
+  text-decoration: none;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.cart-recommendation-price {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--brand-dark, #607a42);
+}
+
+.cart-recommendation-add {
+  min-height: 30px;
+  border-radius: 999px;
+  border: 1px solid var(--brand-dark, #607a42);
+  background: transparent;
+  color: var(--brand-dark, #607a42);
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cart-recommendation-add:hover:not(:disabled) {
+  background: var(--brand-dark, #607a42);
+  color: #fff;
+}
+
+.cart-recommendation-add:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .cart-line-item {
   display: grid;
   grid-template-columns: 84px minmax(0, 1fr) 40px;

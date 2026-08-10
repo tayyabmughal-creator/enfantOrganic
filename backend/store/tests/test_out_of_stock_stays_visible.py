@@ -187,3 +187,57 @@ class TopChoicesCollectionTestCase(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["hero"]["title"], "Parents Top Choices")
+
+
+class CartRecommendationsTestCase(TestCase):
+    """An empty cart offered only "Continue shopping"; a full one suggested nothing."""
+
+    def setUp(self):
+        self.client_api = APIClient()
+        self.region = _region("om", "Oman", "OMR", Decimal("1.000000"), is_default=True)
+        self.hair = Category.objects.create(slug="hair", name_en="Hair", name_ar="شعر")
+        self.wipes = Category.objects.create(slug="wipes", name_en="Wipes", name_ar="مناديل")
+
+        self.shampoo = self._product("shampoo", "Shampoo", self.hair)
+        self.conditioner = self._product("conditioner", "Conditioner", self.hair)
+        self.oil = self._product("hair-oil", "Hair Oil", self.hair)
+        for index in range(6):
+            self._product(f"wipe-{index}", f"Wipe {index}", self.wipes)
+
+    def _product(self, slug, name, category):
+        product = Product.objects.create(
+            slug=slug, name_en=name, name_ar=name, is_published=True, track_inventory=False,
+        )
+        ProductPrice.objects.create(product=product, region=self.region, price=Decimal("5.000"))
+        product.categories.add(category)
+        return product
+
+    def _recommend(self, slugs="", limit=6):
+        response = self.client_api.get(
+            "/api/cart-recommendations/", {"region": "om", "slugs": slugs, "limit": limit}
+        )
+        self.assertEqual(response.status_code, 200)
+        return [row["slug"] for row in response.data["products"]]
+
+    def test_an_empty_cart_still_gets_suggestions(self):
+        self.assertEqual(len(self._recommend()), 6)
+
+    def test_never_suggests_what_is_already_in_the_cart(self):
+        slugs = self._recommend(slugs="shampoo,conditioner")
+        self.assertNotIn("shampoo", slugs)
+        self.assertNotIn("conditioner", slugs)
+
+    def test_prefers_the_categories_already_in_the_cart(self):
+        # Only three hair products exist and one is in the cart, so the two
+        # remaining ones must lead before wipes are used to top the row up.
+        slugs = self._recommend(slugs="shampoo", limit=3)
+        self.assertIn("conditioner", slugs)
+        self.assertIn("hair-oil", slugs)
+
+    def test_tops_up_beyond_a_small_category(self):
+        slugs = self._recommend(slugs="shampoo", limit=6)
+        self.assertEqual(len(slugs), 6)
+        self.assertTrue(any(slug.startswith("wipe-") for slug in slugs))
+
+    def test_limit_is_capped(self):
+        self.assertLessEqual(len(self._recommend(limit=999)), 12)

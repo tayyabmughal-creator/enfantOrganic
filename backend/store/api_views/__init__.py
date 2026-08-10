@@ -99,6 +99,7 @@ from .storefront import (
     NavigationView,
     ProductDetailView,
     ProductListView,
+    CartRecommendationsView,
     SearchSuggestionsView,
 )
 from .whatsapp import WhatsAppWebhookView
@@ -197,6 +198,7 @@ __all__ = [
     "ProfileView",
     "ProductDetailView",
     "ProductListView",
+    "CartRecommendationsView",
     "SearchSuggestionsView",
     "PushDeviceDeactivateView",
     "PushDeviceRegisterView",

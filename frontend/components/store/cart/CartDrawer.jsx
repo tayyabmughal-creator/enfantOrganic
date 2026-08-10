@@ -130,13 +130,81 @@ function MilestoneBar({ subtotal, milestones, currency, locale }) {
   );
 }
 
+function CartRecommendations({ locale, region, cartItems, drawerOpen, onAdd }) {
+  const isAr = locale === "ar";
+  const [products, setProducts] = useState([]);
+  const slugKey = cartItems.map((item) => item.slug).sort().join(",");
+
+  // Only ever fetched while the drawer is open. The drawer is mounted on every
+  // page, so fetching on render would pull a row of product images down on every
+  // visit for a panel nobody has opened.
+  useEffect(() => {
+    if (!drawerOpen) return undefined;
+
+    const controller = new AbortController();
+    const params = new URLSearchParams({ locale, region, limit: "6" });
+    if (slugKey) params.set("slugs", slugKey);
+
+    fetch(`${API_BASE_URL}/cart-recommendations/?${params.toString()}`, { signal: controller.signal })
+      .then((response) => response.json())
+      .then((data) => setProducts(Array.isArray(data?.products) ? data.products : []))
+      .catch(() => {});
+
+    return () => controller.abort();
+  }, [drawerOpen, locale, region, slugKey]);
+
+  if (!products.length) return null;
+
+  return (
+    <div className="cart-recommendations">
+      <h4 className="cart-recommendations-title">
+        {cartItems.length
+          ? (isAr ? "أضف إليها" : "Goes well with this")
+          : (isAr ? "الأكثر مبيعًا" : "Popular right now")}
+      </h4>
+      <div className="cart-recommendations-rail">
+        {products.map((product) => {
+          const outOfStock = product.stock_status && product.stock_status.is_in_stock === false;
+          return (
+            <article key={product.slug} className="cart-recommendation">
+              <Link
+                href={buildStorePath(locale, `/product/${product.slug}`, region)}
+                className="cart-recommendation-media"
+              >
+                <SiteImage src={product.image} alt={product.name} width={96} height={96} loading="lazy" sizes="96px" />
+              </Link>
+              <Link
+                href={buildStorePath(locale, `/product/${product.slug}`, region)}
+                className="cart-recommendation-name"
+              >
+                {product.name}
+              </Link>
+              <span className="cart-recommendation-price">{formatMoney(product.pricing, locale)}</span>
+              <button
+                type="button"
+                className="cart-recommendation-add"
+                disabled={outOfStock}
+                onClick={() => onAdd(product)}
+              >
+                {outOfStock
+                  ? (isAr ? "نفد المخزون" : "Out of stock")
+                  : (isAr ? "أضف" : "Add")}
+              </button>
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function CartDrawerInner() {
   // Never from `?region=` alone — the browser URL has no such param, so that
   // read priced every UAE and Saudi cart in OMR. See useRegionCode().
   const region = useRegionCode();
   const { locale } = useLocale();
   const t = uiText(locale);
-  const { cartItems, closeCart, drawerOpen, refreshCartPricing, removeItem, subtotal, updateQuantity } = useStore();
+  const { addItem, cartItems, closeCart, drawerOpen, refreshCartPricing, removeItem, subtotal, updateQuantity } = useStore();
   const [milestones, setMilestones] = useState([]);
   const [thresholdCurrency, setThresholdCurrency] = useState("OMR");
 
@@ -230,6 +298,14 @@ function CartDrawerInner() {
                 </article>
               ))
             )}
+
+            <CartRecommendations
+              locale={locale}
+              region={region}
+              cartItems={cartItems}
+              drawerOpen={drawerOpen}
+              onAdd={(product) => addItem(product, 1)}
+            />
           </div>
 
           <div className="cart-drawer-footer">

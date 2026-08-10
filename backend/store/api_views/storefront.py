@@ -299,6 +299,63 @@ class CatalogPageView(StorefrontContextMixin, APIView):
         return Response(payload)
 
 
+class CartRecommendationsView(StorefrontContextMixin, APIView):
+    """What to suggest beside the cart.
+
+    An empty cart offered nothing but "Continue shopping", and a full one
+    suggested nothing at all. Suggestions are drawn from the categories already
+    in the basket — add a shampoo, be offered the conditioner — and topped up
+    with best sellers when the basket is empty or its categories are too small.
+    Anything already in the cart is never suggested back.
+    """
+
+    serializer_class = ProductCardSerializer
+
+    def get(self, request):
+        context = self.get_serializer_context()
+        region = context["region"]
+
+        try:
+            limit = min(max(int(request.query_params.get("limit") or 6), 1), 12)
+        except (TypeError, ValueError):
+            limit = 6
+
+        in_cart = {
+            slug.strip()
+            for slug in str(request.query_params.get("slugs") or "").split(",")
+            if slug.strip()
+        }
+
+        pool = products_available_for_region(product_queryset(), region).exclude(slug__in=in_cart)
+
+        picked = []
+        seen = set()
+
+        def take(queryset):
+            for candidate in queryset[: limit * 2]:
+                if candidate.pk in seen:
+                    continue
+                seen.add(candidate.pk)
+                picked.append(candidate)
+                if len(picked) >= limit:
+                    return
+
+        if in_cart:
+            cart_categories = Category.objects.filter(category_products__slug__in=in_cart).distinct()
+            if cart_categories.exists():
+                take(pool.filter(categories__in=cart_categories).distinct().order_by("?"))
+
+        if len(picked) < limit:
+            take(apply_best_seller_ranking(pool).order_by("-best_seller_units", "-best_seller_revenue", "?"))
+
+        if len(picked) < limit:
+            take(pool.order_by("?"))
+
+        return Response({
+            "products": ProductCardSerializer(picked, many=True, context=context).data,
+        })
+
+
 class ProductListView(StorefrontContextMixin, APIView):
     serializer_class = ProductCardSerializer
 
