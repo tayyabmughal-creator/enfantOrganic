@@ -12,7 +12,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from store.api_views.admin_ops import build_cogs_report_rows
-from store.models import Order, OrderItem, Product, Region, Tag
+from store.models import Order, OrderItem, Product, ProductPrice, Region, Tag
 from store.services.admin_roles import ROLE_MANAGER, ensure_default_admin_roles
 from store.services.costing import (
     backfill_missing_order_item_costs,
@@ -354,3 +354,41 @@ class ApplyArabicNamesTestCase(TestCase):
                     re.fullmatch(r"[A-Za-z0-9 ,&'\-\.\+%/]+", str(arabic)),
                     f"{group}/{slug} is still Latin text: {arabic}",
                 )
+
+
+class LocalizedProductUnitTestCase(TestCase):
+    """"Standard Set" was showing in English on the Arabic product cards."""
+
+    def setUp(self):
+        self.client_api = APIClient()
+        self.region = _region("om", "Oman", "OMR", Decimal("1.000000"), is_default=True)
+
+    def _product(self, slug, unit, unit_ar=""):
+        product = Product.objects.create(
+            slug=slug, name_en=slug, name_ar=slug, is_published=True,
+            track_inventory=False, unit=unit, unit_ar=unit_ar,
+        )
+        ProductPrice.objects.create(product=product, region=self.region, price=Decimal("5.000"))
+        return product
+
+    def _unit(self, slug, locale):
+        response = self.client_api.get("/api/products/", {"region": "om", "locale": locale})
+        self.assertEqual(response.status_code, 200)
+        return next(row["unit"] for row in response.data if row["slug"] == slug)
+
+    def test_arabic_uses_the_arabic_unit(self):
+        self._product("kit", "Standard Set", "طقم قياسي")
+
+        self.assertEqual(self._unit("kit", "ar"), "طقم قياسي")
+
+    def test_english_is_untouched(self):
+        self._product("kit", "Standard Set", "طقم قياسي")
+
+        self.assertEqual(self._unit("kit", "en"), "Standard Set")
+
+    def test_a_measurement_needs_no_translation(self):
+        # Left blank on purpose: "175 ml" reads the same either way, and blanking
+        # the pill would be worse than showing it.
+        self._product("lotion", "175 ml")
+
+        self.assertEqual(self._unit("lotion", "ar"), "175 ml")

@@ -7,10 +7,13 @@ from store.models import Product, Tag
 
 DEFAULT_SOURCE = Path(__file__).resolve().parents[2] / "data" / "arabic_names.json"
 
-# Which JSON key feeds which model, looked up by slug.
+# Which JSON key feeds which model and field, looked up by slug. The third entry
+# is the field holding the English text, used to tell "never translated" apart
+# from "deliberately translated".
 TARGETS = {
-    "tags": Tag,
-    "products": Product,
+    "tags": (Tag, "name_ar", "name_en"),
+    "products": (Product, "name_ar", "name_en"),
+    "product_units": (Product, "unit_ar", "unit"),
 }
 
 
@@ -57,7 +60,7 @@ class Command(BaseCommand):
         total_skipped = 0
         missing = []
 
-        for group, model in TARGETS.items():
+        for group, (model, arabic_field, english_field) in TARGETS.items():
             mapping = payload.get(group) or {}
             if not mapping:
                 continue
@@ -75,8 +78,9 @@ class Command(BaseCommand):
                     missing.append(f"{group}/{slug}")
                     continue
 
-                current = str(obj.name_ar or "").strip()
-                already_translated = bool(current) and current != str(obj.name_en or "").strip()
+                current = str(getattr(obj, arabic_field) or "").strip()
+                english = str(getattr(obj, english_field) or "").strip()
+                already_translated = bool(current) and current != english
 
                 if current == arabic:
                     total_skipped += 1
@@ -89,8 +93,8 @@ class Command(BaseCommand):
                 total_written += 1
                 self.stdout.write(f"  set    {slug}: {arabic}")
                 if not dry_run:
-                    obj.name_ar = arabic
-                    obj.save(update_fields=["name_ar"])
+                    setattr(obj, arabic_field, arabic)
+                    obj.save(update_fields=[arabic_field])
 
         verb = "would be updated" if dry_run else "updated"
         self.stdout.write("")

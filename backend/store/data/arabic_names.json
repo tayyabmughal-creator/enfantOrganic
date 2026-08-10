@@ -1,5 +1,5 @@
 {
-  "_comment": "Arabic display names for records whose name_ar still holds the English text. Applied by `manage.py apply_arabic_names`, which only writes where name_ar is empty or identical to name_en, so a real translation is never overwritten.",
+  "_comment": "Arabic display text for records whose Arabic field still holds the English. Applied by `manage.py apply_arabic_names`, which writes only where the Arabic is empty or identical to the English, so a real translation is never overwritten. Units that are measurements are left out on purpose — they read the same in Arabic.",
   "tags": {
     "2-in-1-baby-wash": "غسول أطفال 2 في 1",
     "2-year-old-baby-care": "عناية للأطفال من عمر سنتين",
@@ -63,5 +63,14 @@
   },
   "products": {
     "enfant-organic-bye-bye-insect-repellent-lotion": "لوشن Bye Bye العضوي الطارد للحشرات من إنفانت للأطفال"
+  },
+  "product_units": {
+    "enfant-organic-baby-basics-set": "طقم قياسي",
+    "enfant-organic-essential-care-set-6-in-1-newborn-starter-bundle": "طقم قياسي",
+    "enfant-organic-lavender-care-set-relaxing-newborn-bedtime-essentials": "طقم قياسي",
+    "enfant-organic-the-complete-baby-kit-10-in-1-ultimate-newborn-care-bundle": "طقم قياسي",
+    "enfant-premium-newborn-set-and-baby-gift-uae": "طقم قياسي",
+    "enfant-ultimate-newborn-essential-kit-uae-and-oman": "طقم قياسي",
+    "small-new-born-baby-set-gentle-organic-essentials": "طقم قياسي"
   }
 }

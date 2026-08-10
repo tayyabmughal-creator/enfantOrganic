@@ -322,7 +322,7 @@ class ProductAdmin(admin.ModelAdmin):
                 "fields": (
                     ("slug", "is_published"),
                     ("name_en", "name_ar"),
-                    ("brand", "unit"),
+                    ("brand", "unit", "unit_ar"),
                     "sort_order",
                 ),
                 "description": (

@@ -16,7 +16,7 @@ from ..models import (
     Tag,
     Testimonial,
 )
-from .localization import get_image_url, localized, localized_json
+from .localization import get_image_url, localized, localized_json, normalize_locale
 from ..services.payment_router import get_region_provider_options, get_region_provider_warnings
 from ..services.carrier_router import get_region_carrier_options, get_region_carrier_warnings
 from ..services.stock import get_region_available_stock, get_region_warehouses
@@ -352,6 +352,7 @@ class ProductCardSerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()
     hover_image = serializers.SerializerMethodField()
     stock_status = serializers.SerializerMethodField()
+    unit = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -463,6 +464,13 @@ class ProductCardSerializer(serializers.ModelSerializer):
                 warehouse__active=True,
             )
         )
+
+    def get_unit(self, obj):
+        # Measurements read the same either way, so a blank Arabic unit falls
+        # back to the shared one rather than blanking the pill.
+        if normalize_locale(self.context.get("locale")) == "ar":
+            return obj.unit_ar or obj.unit
+        return obj.unit
 
     def get_stock_status(self, obj):
         variants = active_product_variants(obj, self.context.get("locale"), self.context.get("region"))

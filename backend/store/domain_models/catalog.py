@@ -637,6 +637,10 @@ class Product(OrderedModel):
     name_ar = models.CharField(max_length=255, blank=True, default="")
     brand = models.CharField(max_length=120, blank=True, default="Enfant")
     unit = models.CharField(max_length=80, blank=True, default="")
+    # Most units are measurements ("175 ml") that read the same in both languages,
+    # but some are prose — "Standard Set" was showing in English on the Arabic
+    # product cards. Left blank, the shared `unit` is used for both.
+    unit_ar = models.CharField(max_length=80, blank=True, default="")
     vendor_en = models.CharField(max_length=120, blank=True, default="Enfant Organics")
     vendor_ar = models.CharField(max_length=120, blank=True, default="إنفانت أورجانيكس")
     short_description_en = models.TextField(blank=True, default="")
