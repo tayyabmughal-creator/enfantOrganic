@@ -104,7 +104,9 @@ export default async function LocalizedHomePage({ params, searchParams }) {
   const heroLastOddChipIdx = heroRestOdd && heroChips.length > 0 ? heroChips.length - 1 : -1;
   const sectionPathByKey = {
     "new-arrivals": "/new-arrivals",
-    "top-choices": "/best-sellers",
+    // Its own collection, not Best Sellers — those are different lists, and
+    // sending shoppers to the wrong one made the section's "View all" a lie.
+    "top-choices": "/collections?collection=top_choices",
     "baby-sets": "/collections?collection=baby_sets",
   };
   const sectionEmptyCopy = {
@@ -258,82 +260,6 @@ export default async function LocalizedHomePage({ params, searchParams }) {
       </section>
       )}
 
-      <section className="section container">
-        <div className="our-story">
-          <div className="our-story-top">
-            <div>
-              <span className="our-story-eyebrow">{isAr ? "قصتنا" : "Our Story"}</span>
-              <h2 className="our-story-headline">
-                {isAr
-                  ? "أربعة عقود من العناية النقية، وموطن جديد في الخليج."
-                  : "Four decades of pure care. One new home in the Gulf."}
-              </h2>
-            </div>
-            <p className="our-story-lede">
-              {isAr
-                ? "وُلدت في تايلاند عام 1984، ووصلت إلى الخليج عام 2025."
-                : "Born in Thailand, 1984. Arrived in the GCC, 2025."}
-            </p>
-          </div>
-
-          <div className="our-story-strip-wrap">
-            <div className="our-story-strip">
-              {[
-                {
-                  year: "1984",
-                  image: "/enfant/our-story-1984.webp",
-                  en: "Enfant is founded in Thailand with one promise: pure, natural care for baby's delicate skin.",
-                  ar: "تأسست إنفانت في تايلاند بوعد واحد: عناية نقية وطبيعية لبشرة الطفل الحساسة.",
-                },
-                {
-                  year: "1986",
-                  image: "/enfant/our-story-1986.webp",
-                  en: "The brand launches its first toiletry range, made with natural ingredients.",
-                  ar: "أطلقت العلامة أول مجموعة عناية لها، مصنوعة من مكونات طبيعية.",
-                },
-                {
-                  year: "2013",
-                  image: "/enfant/our-story-2013.webp",
-                  en: "Enfant launches an organic toiletry line — same trusted formulas, now free from harsh chemicals.",
-                  ar: "أطلقت إنفانت خط عناية عضوي — نفس التركيبات الموثوقة، الآن خالية من المواد الكيميائية القاسية.",
-                },
-                {
-                  year: "2025",
-                  launch: true,
-                  image: "/enfant/our-story-2025.webp",
-                  en: "Enfant Organic arrives in the GCC — organic-certified and dermatologically tested in Germany.",
-                  ar: "تصل إنفانت أورجانيك إلى الخليج — معتمدة عضويًا ومختبرة جلديًا في ألمانيا.",
-                  badgeEn: "Now Here",
-                  badgeAr: "الآن هنا",
-                },
-              ].map((node) => (
-                <div key={node.year} className={`our-story-node${node.launch ? " is-launch" : ""}`}>
-                  <span className="our-story-photo">
-                    <SiteImage src={node.image} alt="" fill sizes="74px" />
-                  </span>
-                  <div className="our-story-year">{node.year}</div>
-                  <p className="our-story-caption">{isAr ? node.ar : node.en}</p>
-                  {node.launch ? (
-                    <span className="our-story-badge">{isAr ? node.badgeAr : node.badgeEn}</span>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="our-story-bottom">
-            <div className="our-story-trust">
-              <span className="our-story-trust-item"><i className="our-story-dot" aria-hidden="true" />{isAr ? "تأسست 1984" : "Est. 1984"}</span>
-              <span className="our-story-trust-item"><i className="our-story-dot" aria-hidden="true" />{isAr ? "عضوي ECOCERT" : "ECOCERT Organic"}</span>
-              <span className="our-story-trust-item"><i className="our-story-dot" aria-hidden="true" />{isAr ? "مختبر جلديًا في ألمانيا" : "Dermatologically Tested in Germany"}</span>
-            </div>
-            <Link href={buildStorePath(locale, "/collections", region)} className="our-story-cta">
-              {isAr ? "اكتشفي منتجاتنا" : "Discover our products"}
-              <span aria-hidden="true">{isAr ? "←" : "→"}</span>
-            </Link>
-          </div>
-        </div>
-      </section>
 
       <section className="section container">
         <div className="section-heading">
@@ -341,7 +267,7 @@ export default async function LocalizedHomePage({ params, searchParams }) {
             <h3>{home.categories_heading.title}</h3>
             <p>{home.categories_heading.subtitle}</p>
           </div>
-          <Link href={buildStorePath(locale, "/collections", region)} className="section-link">
+          <Link href={buildStorePath(locale, "/categories", region)} className="section-link">
             {home.categories_heading.cta}
           </Link>
         </div>
@@ -536,6 +462,83 @@ export default async function LocalizedHomePage({ params, searchParams }) {
             </p>
           </div>
         )}
+      </section>
+
+      <section className="section container">
+        <div className="our-story">
+          <div className="our-story-top">
+            <div>
+              <span className="our-story-eyebrow">{isAr ? "قصتنا" : "Our Story"}</span>
+              <h2 className="our-story-headline">
+                {isAr
+                  ? "أربعة عقود من العناية النقية، وموطن جديد في الخليج."
+                  : "Four decades of pure care. One new home in the Gulf."}
+              </h2>
+            </div>
+            <p className="our-story-lede">
+              {isAr
+                ? "وُلدت في تايلاند عام 1984، ووصلت إلى الخليج عام 2025."
+                : "Born in Thailand, 1984. Arrived in the GCC, 2025."}
+            </p>
+          </div>
+
+          <div className="our-story-strip-wrap">
+            <div className="our-story-strip">
+              {[
+                {
+                  year: "1984",
+                  image: "/enfant/our-story-1984.webp",
+                  en: "Enfant is founded in Thailand with one promise: pure, natural care for baby's delicate skin.",
+                  ar: "تأسست إنفانت في تايلاند بوعد واحد: عناية نقية وطبيعية لبشرة الطفل الحساسة.",
+                },
+                {
+                  year: "1986",
+                  image: "/enfant/our-story-1986.webp",
+                  en: "The brand launches its first toiletry range, made with natural ingredients.",
+                  ar: "أطلقت العلامة أول مجموعة عناية لها، مصنوعة من مكونات طبيعية.",
+                },
+                {
+                  year: "2013",
+                  image: "/enfant/our-story-2013.webp",
+                  en: "Enfant launches an organic toiletry line — same trusted formulas, now free from harsh chemicals.",
+                  ar: "أطلقت إنفانت خط عناية عضوي — نفس التركيبات الموثوقة، الآن خالية من المواد الكيميائية القاسية.",
+                },
+                {
+                  year: "2025",
+                  launch: true,
+                  image: "/enfant/our-story-2025.webp",
+                  en: "Enfant Organic arrives in the GCC — organic-certified and dermatologically tested in Germany.",
+                  ar: "تصل إنفانت أورجانيك إلى الخليج — معتمدة عضويًا ومختبرة جلديًا في ألمانيا.",
+                  badgeEn: "Now Here",
+                  badgeAr: "الآن هنا",
+                },
+              ].map((node) => (
+                <div key={node.year} className={`our-story-node${node.launch ? " is-launch" : ""}`}>
+                  <span className="our-story-photo">
+                    <SiteImage src={node.image} alt="" fill sizes="74px" />
+                  </span>
+                  <div className="our-story-year">{node.year}</div>
+                  <p className="our-story-caption">{isAr ? node.ar : node.en}</p>
+                  {node.launch ? (
+                    <span className="our-story-badge">{isAr ? node.badgeAr : node.badgeEn}</span>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="our-story-bottom">
+            <div className="our-story-trust">
+              <span className="our-story-trust-item"><i className="our-story-dot" aria-hidden="true" />{isAr ? "تأسست 1984" : "Est. 1984"}</span>
+              <span className="our-story-trust-item"><i className="our-story-dot" aria-hidden="true" />{isAr ? "عضوي ECOCERT" : "ECOCERT Organic"}</span>
+              <span className="our-story-trust-item"><i className="our-story-dot" aria-hidden="true" />{isAr ? "مختبر جلديًا في ألمانيا" : "Dermatologically Tested in Germany"}</span>
+            </div>
+            <Link href={buildStorePath(locale, "/collections", region)} className="our-story-cta">
+              {isAr ? "اكتشفي منتجاتنا" : "Discover our products"}
+              <span aria-hidden="true">{isAr ? "←" : "→"}</span>
+            </Link>
+          </div>
+        </div>
       </section>
 
       <section className="section container">

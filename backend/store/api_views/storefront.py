@@ -215,7 +215,13 @@ class HomePageView(StorefrontContextMixin, APIView):
                 "subtitle": "Discover our Premium collections" if locale == "en" else "اكتشف مجموعاتنا المميزة",
                 "cta": "View All Categories" if locale == "en" else "عرض جميع الفئات",
             },
-            "categories": CategorySerializer(Category.objects.all(), many=True, context=context).data,
+            # Annotated so the Shop by Category page can show how many products
+            # sit behind each one; the carousel simply ignores the count.
+            "categories": CategorySerializer(
+                Category.objects.annotate(product_count=Count("category_products")),
+                many=True,
+                context=context,
+            ).data,
             "sections": sections,
             "reviews_heading": "ENFANT Reviews" if locale == "en" else "آراء عملاء إنفانت",
             "testimonials": _homepage_testimonials(locale),
@@ -264,6 +270,13 @@ class CatalogPageView(StorefrontContextMixin, APIView):
                 "Curated Enfant care sets for gifting, routines, and everyday essentials."
                 if locale == "en"
                 else "مجموعات إنفانت مختارة للهدايا والروتين اليومي."
+            )
+        if collection == "top_choices":
+            hero_title = "Parents Top Choices" if locale == "en" else "الأكثر اختيارًا من الآباء"
+            hero_subtitle = (
+                "The Enfant essentials parents reach for again and again."
+                if locale == "en"
+                else "أساسيات إنفانت التي يعود إليها الآباء مرارًا."
             )
         if category_slug:
             try:
@@ -502,6 +515,10 @@ def apply_catalog_filters(queryset, request, region):
         queryset = queryset.filter(show_in_new_arrivals=True)
     if collection == "baby_sets":
         queryset = queryset.filter(show_in_baby_sets=True)
+    # Parents Top Choices had no collection of its own, so the homepage's "View
+    # all" for it had to point at Best Sellers — a different, longer list.
+    if collection == "top_choices":
+        queryset = queryset.filter(show_in_top_choices=True)
     if use_best_seller_ranking:
         queryset = apply_best_seller_ranking(queryset)
         if collection == "best_sellers" or only_best_sellers:

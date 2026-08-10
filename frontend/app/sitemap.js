@@ -27,6 +27,7 @@ const STATIC_PAGE_SLUGS = [
 
 const LISTING_PATHS = [
   { path: "/collections", priority: 0.9, changeFrequency: "daily" },
+  { path: "/categories", priority: 0.8, changeFrequency: "weekly" },
   { path: "/best-sellers", priority: 0.8, changeFrequency: "daily" },
   { path: "/new-arrivals", priority: 0.8, changeFrequency: "daily" },
   { path: "/blog", priority: 0.7, changeFrequency: "weekly" },

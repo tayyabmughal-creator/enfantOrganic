@@ -153,3 +153,37 @@ class RelatedProductsTestCase(TestCase):
     def test_suggestions_are_not_the_same_list_every_time(self):
         seen = {tuple(self._related()) for _ in range(12)}
         self.assertGreater(len(seen), 1)
+
+
+class TopChoicesCollectionTestCase(TestCase):
+    """Parents Top Choices had no collection, so its "View all" pointed at Best Sellers."""
+
+    def setUp(self):
+        self.client_api = APIClient()
+        self.region = _region("om", "Oman", "OMR", Decimal("1.000000"), is_default=True)
+        self.chosen = self._product("chosen", "Chosen", top_choice=True)
+        self.other = self._product("ordinary", "Ordinary", top_choice=False)
+
+    def _product(self, slug, name, *, top_choice):
+        product = Product.objects.create(
+            slug=slug, name_en=name, name_ar=name, is_published=True,
+            track_inventory=False, show_in_top_choices=top_choice,
+        )
+        ProductPrice.objects.create(product=product, region=self.region, price=Decimal("5.000"))
+        return product
+
+    def test_the_collection_returns_only_top_choices(self):
+        response = self.client_api.get(
+            "/api/products/", {"region": "om", "collection": "top_choices"}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([row["slug"] for row in response.data], ["chosen"])
+
+    def test_the_collection_page_names_itself(self):
+        response = self.client_api.get(
+            "/api/catalog/", {"region": "om", "collection": "top_choices", "locale": "en"}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["hero"]["title"], "Parents Top Choices")
