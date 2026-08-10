@@ -33,6 +33,9 @@ const PASSTHROUGH = /^\/(api|_next|django-admin|admin|checkout\/return|offline|m
 // Exempt from host canonicalisation: a stale service worker still calls the
 // old API host, and a 301 would drop a POST body on the way.
 const API_PASSTHROUGH = /^\/(api|_next|django-admin|admin)(\/|$)/;
+// Files that describe the whole site rather than one storefront. A legacy host
+// must still be redirected away from them, but to the same path on www.
+const SITE_LEVEL_FILE = /^\/(robots\.txt|sitemap\.xml|manifest\.webmanifest|favicon\.ico)$/;
 
 function pickRegion(raw) {
   const value = String(raw || "").toLowerCase().trim();
@@ -97,17 +100,26 @@ export async function middleware(request) {
   // installs carrying a stale service worker, and redirecting a POST would lose
   // its body.
   if (!isLocalHost && !API_PASSTHROUGH.test(pathname)) {
-    const subdomainMatch = hostname.match(REGION_SUBDOMAIN);
-    if (subdomainMatch) {
-      const subRegion = subdomainMatch[1].toLowerCase();
-      const parsedHost = parseLocaleRegionFromPath(pathname);
-      const restHost = parsedHost ? pathname.split("/").slice(2).join("/") : pathname.replace(/^\//, "");
-      const localeHost = parsedHost ? parsedHost.locale : localeForRedirect(request);
-      return redirectTo(request, `${buildStorePath(localeHost, `/${restHost}`, subRegion)}${search}`, 301);
-    }
+    // Site-level files belong to the site, not to a storefront, so they keep
+    // their path rather than having a region folded into it — /en-om/robots.txt
+    // is not a thing that exists.
+    if (SITE_LEVEL_FILE.test(pathname)) {
+      if (REGION_SUBDOMAIN.test(hostname) || NON_CANONICAL_HOSTS.test(hostname)) {
+        return redirectTo(request, `${pathname}${search}`, 301);
+      }
+    } else {
+      const subdomainMatch = hostname.match(REGION_SUBDOMAIN);
+      if (subdomainMatch) {
+        const subRegion = subdomainMatch[1].toLowerCase();
+        const parsedHost = parseLocaleRegionFromPath(pathname);
+        const restHost = parsedHost ? pathname.split("/").slice(2).join("/") : pathname.replace(/^\//, "");
+        const localeHost = parsedHost ? parsedHost.locale : localeForRedirect(request);
+        return redirectTo(request, `${buildStorePath(localeHost, `/${restHost}`, subRegion)}${search}`, 301);
+      }
 
-    if (NON_CANONICAL_HOSTS.test(hostname)) {
-      return redirectTo(request, `${pathname}${search}`, 301);
+      if (NON_CANONICAL_HOSTS.test(hostname)) {
+        return redirectTo(request, `${pathname}${search}`, 301);
+      }
     }
   }
 

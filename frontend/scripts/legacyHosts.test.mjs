@@ -80,3 +80,18 @@ test("a lookalike host is not treated as ours", () => {
   assert.equal(NON_CANONICAL_HOSTS.test("notenfantorganic.com"), false);
   assert.equal(REGION_SUBDOMAIN.test("om.enfantorganic.com.evil.test"), false);
 });
+
+const SITE_LEVEL_FILE = readRegex("SITE_LEVEL_FILE");
+
+test("site-level files are recognised", () => {
+  for (const path of ["/robots.txt", "/sitemap.xml", "/manifest.webmanifest", "/favicon.ico"]) {
+    assert.equal(SITE_LEVEL_FILE.test(path), true, path);
+  }
+});
+
+test("a storefront path is not mistaken for a site-level file", () => {
+  // These must keep having the region folded into them on a legacy host.
+  for (const path of ["/collections", "/en-om", "/product/x", "/en-om/robots.txt"]) {
+    assert.equal(SITE_LEVEL_FILE.test(path), false, path);
+  }
+});
