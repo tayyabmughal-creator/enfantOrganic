@@ -204,7 +204,6 @@ export default function ProductDetailClient({ locale, product, region }) {
   );
   const optionGroups = Array.isArray(product.option_groups) ? product.option_groups : [];
   const variants = Array.isArray(product.variants) ? product.variants : [];
-  const detailPoints = Array.isArray(product.details) ? product.details : [];
   const editorialReviews = Array.isArray(product.reviews) ? product.reviews : [];
   const customerReviews = Array.isArray(product.customer_reviews) ? product.customer_reviews : [];
   const [selectedImage, setSelectedImage] = useState(galleryImages[0] || product.image);
@@ -896,32 +895,6 @@ export default function ProductDetailClient({ locale, product, region }) {
               </div>
             </div>
           </div>
-
-          {/* Details */}
-          {(detailPoints.length > 0 || product.origin_source || product.shelf_life) ? (
-            <div className={`detail-accordion-item${openAccordion === "details" ? " is-open" : ""}`}>
-              <button
-                type="button"
-                className="detail-accordion-header"
-                onClick={() => toggleAccordion("details")}
-                aria-expanded={openAccordion === "details"}
-              >
-                <span>{t.details}</span>
-                <svg className="detail-accordion-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-              </button>
-              <div className="detail-accordion-body">
-                <div className="detail-accordion-inner">
-                  <ul className="detail-accordion-list">
-                    {detailPoints.map((detail) => (
-                      <li key={detail}>{detail}</li>
-                    ))}
-                    {product.origin_source ? <li>{product.origin_source}</li> : null}
-                    {product.shelf_life ? <li>{product.shelf_life}</li> : null}
-                  </ul>
-                </div>
-              </div>
-            </div>
-          ) : null}
 
           {/* Reviews */}
           <div className={`detail-accordion-item${openAccordion === "reviews" ? " is-open" : ""}`}>

@@ -1635,8 +1635,13 @@
     padding: 16px;
   }
 
+  /* Two cards share the viewport here, so the third grid column left the stars
+     nothing to sit in and they collided with the name — worse in Arabic, where
+     the name runs the other way. They drop to their own row under the name. */
   .review-card-head {
-    gap: 8px;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 8px;
+    row-gap: 4px;
   }
 
   .review-avatar {
@@ -1650,8 +1655,10 @@
   }
 
   .review-card-head .review-stars {
-    font-size: 0.66rem;
-    letter-spacing: 0;
+    grid-column: 2;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
   }
 }
 

@@ -845,6 +845,36 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     [cartItems],
   );
 
+  // Shipping, VAT and the delivery estimate come back from the same endpoint that
+  // checks discount codes, so a rejected code used to take the whole summary with
+  // it: shipping and VAT collapsed to "—" and the total dropped to the bare
+  // subtotal, which reads as the shipping fee having been discounted away. The
+  // code was refused; the shipping was never in question. This re-prices the
+  // basket with the rejected code dropped so those lines stay truthful.
+  const repriceWithout = useCallback(
+    async ({ couponCode = "", giftCardCode = "", city = "", area = "" } = {}) => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/coupons/validate/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            region,
+            coupon_code: String(couponCode || "").trim(),
+            gift_card_code: String(giftCardCode || "").trim(),
+            city,
+            area,
+            items: checkoutItemsPayload(),
+          }),
+        });
+        const data = await readJson(response, { isAr });
+        setCouponPreview(response.ok && data.valid ? data : null);
+      } catch {
+        setCouponPreview(null);
+      }
+    },
+    [checkoutItemsPayload, isAr, region],
+  );
+
   const runCouponValidation = useCallback(
     async ({ couponCode = "", giftCardCode = "", city = "", area = "", silent = false } = {}) => {
       const normalizedCouponCode = String(couponCode || "").trim();
@@ -878,18 +908,25 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
           // In silent mode (auto-revalidation while typing), keep the existing
           // couponPreview so shipping/totals don't flash to "—" mid-keystroke.
           if (!silent) {
-            setCouponPreview(null);
             const text =
               data.error || data.message || (isAr ? "الكوبون غير صالح." : "Coupon is not valid.");
             // Mirror of the gift card path: this endpoint validates both, so the
             // failure can belong to the gift card field instead.
-            if (data.error_field === "gift_card_code") {
+            const giftCardIsAtFault = data.error_field === "gift_card_code";
+            if (giftCardIsAtFault) {
               setGiftCardMessage(text);
               setCouponMessage("");
               setActiveDiscountField("gift_card");
             } else {
               setCouponMessage(text);
             }
+            // Drop only the code that was refused, and keep the other one.
+            await repriceWithout({
+              couponCode: giftCardIsAtFault ? normalizedCouponCode : "",
+              giftCardCode: giftCardIsAtFault ? "" : normalizedGiftCardCode,
+              city,
+              area,
+            });
           }
           return false;
         }
@@ -915,7 +952,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         }
       }
     },
-    [cartItems.length, checkoutItemsPayload, isAr, region],
+    [cartItems.length, checkoutItemsPayload, isAr, region, repriceWithout],
   );
 
   const validateCouponCode = useCallback(
