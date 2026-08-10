@@ -1,0 +1,38 @@
+{
+  "contact": {
+    "title_en": "Contact Us",
+    "title_ar": "تواصل معنا",
+    "body_en": "<h2>We&#x27;re Here to Help</h2>\n<p>Our team is available 7 days a week to assist you with product recommendations, order tracking, delivery questions, and returns. Reach us in Arabic or English — whichever is easier for you.</p>\n<h2>WhatsApp (Fastest)</h2>\n<p>For the quickest response, send us a message on WhatsApp. We typically reply within 30 minutes during business hours (9 AM – 9 PM Gulf time).</p>\n<h2>Business Hours</h2>\n<p>Saturday – Thursday: 9:00 AM – 9:00 PM (Gulf Standard Time)</p>\n<p>Friday: 2:00 PM – 9:00 PM</p>\n<h2>Regional Offices</h2>\n<p>We have local teams in Oman, UAE, and Saudi Arabia. When you reach out, let us know your region and we will connect you with the right team.</p>",
+    "body_ar": "<h2>نحن هنا للمساعدة</h2>\n<p>فريقنا متاح 7 أيام في الأسبوع لمساعدتك في التوصيات، تتبع الطلبات، أسئلة التوصيل، والإرجاع. تواصل معنا بالعربية أو الإنجليزية — أيهما أسهل لك.</p>\n<h2>واتساب (الأسرع)</h2>\n<p>للحصول على أسرع رد، أرسل لنا رسالة على واتساب. نرد في العادة خلال 30 دقيقة خلال ساعات العمل (9 صباحًا – 9 مساءً بتوقيت الخليج).</p>\n<h2>ساعات العمل</h2>\n<p>السبت – الخميس: 9:00 صباحًا – 9:00 مساءً (توقيت الخليج)</p>\n<p>الجمعة: 2:00 مساءً – 9:00 مساءً</p>\n<h2>المكاتب الإقليمية</h2>\n<p>لدينا فرق محلية في عمان والإمارات والسعودية. عند تواصلك، أخبرنا بمنطقتك وسنوصلك بالفريق المناسب.</p>"
+  },
+  "faq": {
+    "title_en": "Frequently Asked Questions",
+    "title_ar": "الأسئلة الشائعة",
+    "body_en": "<h2>Are your products safe for newborns?</h2>\n<p>Yes. All Enfant Organics products are dermatologically tested on sensitive and newborn skin. They are free from parabens, sulphates, artificial colours, and harsh preservatives. We recommend our Extra Mild Moisture Lotion and Extra Mild Baby Wipes for newborns.</p>\n<h2>How long does delivery take?</h2>\n<p>Oman: 1–3 business days</p>\n<p>UAE: 2–4 business days</p>\n<p>Saudi Arabia: 3–5 business days</p>\n<p>Express options may be available — contact us on WhatsApp to confirm.</p>\n<h2>What payment methods do you accept?</h2>\n<p>We accept Cash on Delivery (COD), online card payment via Paymob, bank transfer, and WhatsApp-confirmed orders. All online payments are secured with SSL encryption.</p>\n<h2>How do I track my order?</h2>\n<p>Use the Track Order page with your order number and the email or phone number used at checkout. You will also receive a WhatsApp or email notification when your order is dispatched.</p>\n<h2>Can I return a product?</h2>\n<p>We accept returns on unopened, undamaged products within 7 days of delivery. Contact us on WhatsApp with your order number to initiate a return. Opened products cannot be returned for hygiene reasons.</p>\n<h2>Do you ship outside the GCC?</h2>\n<p>Currently we serve Oman, UAE, and Saudi Arabia. International shipping is not yet available, but we are working on expanding to other regions soon.</p>\n<h2>Are your products certified organic?</h2>\n<p>Yes. Our products use certified organic ingredients that meet European certification standards. Each product page lists the certifications applicable to that product.</p>",
+    "body_ar": "<h2>هل منتجاتكم آمنة للمواليد؟</h2>\n<p>نعم. جميع منتجات إنفانت أورجانيك تم اختبارها طبيًا على البشرة الحساسة وبشرة المواليد. خالية من المواد الضارة ومعتمدة للاستخدام الآمن.</p>\n<h2>كم تستغرق مدة التوصيل؟</h2>\n<p>عُمان: 1–3 أيام عمل</p>\n<p>الإمارات: 2–4 أيام عمل</p>\n<p>السعودية: 3–5 أيام عمل</p>\n<p>تواصل معنا على واتساب لتأكيد خيارات التوصيل السريع.</p>\n<h2>ما طرق الدفع المتاحة؟</h2>\n<p>نقبل الدفع عند الاستلام، والدفع الإلكتروني عبر Paymob، والتحويل البنكي، والطلب عبر واتساب.</p>\n<h2>كيف أتتبع طلبي؟</h2>\n<p>استخدم صفحة تتبع الطلب برقم طلبك والبريد الإلكتروني أو الهاتف المستخدم عند الشراء.</p>\n<h2>هل يمكنني إرجاع منتج؟</h2>\n<p>نقبل الإرجاع على المنتجات غير المفتوحة وغير التالفة خلال 7 أيام من الاستلام. تواصل معنا على واتساب برقم طلبك.</p>\n<h2>هل تشحنون خارج الخليج؟</h2>\n<p>حاليًا نخدم عُمان والإمارات والسعودية. نعمل على التوسع قريبًا.</p>\n<h2>هل منتجاتكم معتمدة عضويًا؟</h2>\n<p>نعم. منتجاتنا تستخدم مكونات عضوية معتمدة وفق المعايير الأوروبية.</p>"
+  },
+  "ingredients": {
+    "title_en": "Ingredients",
+    "title_ar": "المكونات",
+    "body_en": "<h2>How We Choose Ingredients</h2>\n<p>Our ingredients are selected with care for delicate baby skin and everyday family use.</p>\n<h2>Transparency First</h2>\n<p>We aim to keep product ingredient information clear on product pages so parents can make informed decisions.</p>\n<h2>Need Help Choosing</h2>\n<p>If your child has specific sensitivities, contact our support team and we can help you compare suitable options.</p>",
+    "body_ar": "<h2>كيف نختار المكونات</h2>\n<p>يتم اختيار مكوناتنا بعناية لتناسب بشرة الأطفال الحساسة والاستخدام اليومي للعائلة.</p>\n<h2>الشفافية أولًا</h2>\n<p>نحرص على عرض معلومات المكونات بوضوح في صفحات المنتجات لمساعدة الأهالي على اتخاذ قرار مناسب.</p>\n<h2>المساعدة في الاختيار</h2>\n<p>إذا كانت لدى طفلك حساسية معينة، تواصل مع فريق الدعم وسنساعدك في مقارنة الخيارات المناسبة.</p>"
+  },
+  "certifications": {
+    "title_en": "Certifications",
+    "title_ar": "الشهادات",
+    "body_en": "<h2>Our Approach</h2>\n<p>We value third-party standards and clear product documentation whenever available.</p>\n<h2>Product-Level Details</h2>\n<p>Certification details can be updated by the store admin and may differ by product and supplier.</p>\n<h2>Before You Purchase</h2>\n<p>Please check the latest product page details for the most current certification information.</p>",
+    "body_ar": "<h2>نهجنا</h2>\n<p>نقدّر المعايير المعتمدة من جهات خارجية وتوثيق المنتجات بوضوح عند توفره.</p>\n<h2>تفاصيل حسب المنتج</h2>\n<p>يمكن تحديث تفاصيل الشهادات من قبل إدارة المتجر، وقد تختلف حسب المنتج والمورّد.</p>\n<h2>قبل الشراء</h2>\n<p>يرجى مراجعة صفحة المنتج للاطلاع على أحدث معلومات الشهادات.</p>"
+  },
+  "sustainability": {
+    "title_en": "Sustainability",
+    "title_ar": "الاستدامة",
+    "body_en": "<h2>Responsible Choices</h2>\n<p>We aim to make thoughtful decisions in sourcing, packaging, and fulfillment wherever practical.</p>\n<h2>Continuous Improvement</h2>\n<p>Sustainability is an ongoing journey. We review materials and operations regularly to reduce waste over time.</p>\n<h2>What You Can Expect</h2>\n<p>You may see updates to packaging and logistics as we improve our sustainability practices.</p>",
+    "body_ar": "<h2>خيارات مسؤولة</h2>\n<p>نسعى لاتخاذ قرارات مدروسة في التوريد والتغليف والتوصيل كلما كان ذلك عمليًا.</p>\n<h2>تحسين مستمر</h2>\n<p>الاستدامة رحلة مستمرة. نراجع المواد والعمليات بشكل دوري لتقليل الهدر مع الوقت.</p>\n<h2>ما يمكن توقعه</h2>\n<p>قد تلاحظ تحديثات في التغليف والعمليات اللوجستية ضمن جهودنا لتطوير ممارسات الاستدامة.</p>"
+  },
+  "our-standards": {
+    "title_en": "Our Standards",
+    "title_ar": "معاييرنا",
+    "body_en": "<h2>Built for Delicate Skin</h2>\n<p>We focus on gentle formulations and practical product quality checks designed for baby-care routines.</p>\n<h2>Clear Communication</h2>\n<p>We work to keep ingredient and usage information understandable so families can shop with confidence.</p>\n<h2>Regional Support</h2>\n<p>Our team can guide you in choosing products based on climate, routine, and age stage across GCC markets.</p>",
+    "body_ar": "<h2>مصممة للبشرة الحساسة</h2>\n<p>نركز على تركيبات لطيفة وفحوصات جودة عملية تناسب روتين العناية بالأطفال.</p>\n<h2>تواصل واضح</h2>\n<p>نعمل على تقديم معلومات المكونات والاستخدام بشكل سهل لتسوق بثقة.</p>\n<h2>دعم إقليمي</h2>\n<p>يمكن لفريقنا مساعدتك في اختيار المنتجات المناسبة حسب المناخ والروتين والمرحلة العمرية داخل أسواق الخليج.</p>"
+  }
+}

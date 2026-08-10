@@ -816,7 +816,15 @@ export default async function StaticPage({ params, searchParams }) {
   }
 
   const content = resolved.content;
-  const phone = WHATSAPP_PHONE || navigation?.contact?.phone || "";
+  // The region's WhatsApp number, which the admin can edit under Regions — not
+  // the switchboard number. This button used to dial contact_phone, so editing
+  // the WhatsApp number changed nothing, exactly as the client reported. The
+  // floating button already reads the right field.
+  const phone =
+    WHATSAPP_PHONE
+    || navigation?.current_region?.whatsapp_phone
+    || navigation?.contact?.phone
+    || "";
   const waLink = phone ? `https://wa.me/${phone.replace(/\D/g, "")}` : "#";
   const isAr = locale === "ar";
 
