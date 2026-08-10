@@ -2387,3 +2387,23 @@
   height: 16px;
   margin-top: 1px;
 }
+
+/* What the shopper saved. Discounts were applied but never named, so nobody
+   could see what the offer had actually been worth to them. */
+.checkout-savings-row,
+.cart-savings-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(96, 122, 66, 0.09);
+  color: var(--brand-dark, #607a42);
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.checkout-savings-row strong,
+.cart-savings-row strong {
+  font-weight: 800;
+}

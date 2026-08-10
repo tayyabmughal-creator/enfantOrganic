@@ -8,7 +8,7 @@ import SiteImage from "@/components/ui/SiteImage";
 import CartApplePayButton from "@/components/store/cart/CartApplePayButton";
 import { useStore } from "@/components/store/cart/StoreProvider";
 import { useLocale } from "@/contexts/LocaleContext";
-import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
+import { buildStorePath, cartSavings, formatMoney, uiText } from "@/lib/storefront";
 import { useRegionCode } from "@/lib/useRegionCode";
 import { API_BASE_URL } from "@/lib/config";
 
@@ -206,6 +206,8 @@ function CartDrawerInner() {
   const t = uiText(locale);
   const { addItem, cartItems, closeCart, drawerOpen, refreshCartPricing, removeItem, subtotal, updateQuantity } = useStore();
   const [milestones, setMilestones] = useState([]);
+  // Product savings only here — the cart does not know about coupons yet.
+  const savings = cartSavings(cartItems);
   const [thresholdCurrency, setThresholdCurrency] = useState("OMR");
 
   useEffect(() => {
@@ -326,6 +328,19 @@ function CartDrawerInner() {
                       : ""}
                   </strong>
                 </div>
+                {savings > 0 ? (
+                  <div className="cart-savings-row">
+                    <span aria-hidden="true">🎉</span>
+                    <span>
+                      {locale === "ar"
+                        ? "أنت توفّر"
+                        : "You're saving"}{" "}
+                      <strong>
+                        {formatMoney({ ...cartItems[0].pricing, amount: savings, prefix: "" }, locale)}
+                      </strong>
+                    </span>
+                  </div>
+                ) : null}
                 <p>{t.shipping}</p>
                 <CartApplePayButton />
                 <Link

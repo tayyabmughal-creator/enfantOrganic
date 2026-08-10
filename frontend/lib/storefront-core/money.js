@@ -45,3 +45,24 @@ export function formatMoney(pricing, locale) {
   const formatted = getCurrencyFormatter(intlLocale, pricing.currency_code || pricing.currency || "USD").format(pricing.amount);
   return pricing.prefix ? `${pricing.prefix} ${formatted}` : formatted;
 }
+
+/**
+ * What the shopper is saving on a basket, in the basket's own currency.
+ *
+ * Two things make up a saving and the customer thinks of them as one number:
+ * a product sold below its compare-at price, and any discount applied at
+ * checkout. Coupon and gift-card amounts are passed in because only the
+ * checkout knows them; the cart drawer sees product savings alone.
+ */
+export function cartSavings(items = [], { discountAmount = 0, giftCardAmount = 0 } = {}) {
+  const productSavings = (Array.isArray(items) ? items : []).reduce((sum, item) => {
+    const price = Number(item?.pricing?.amount) || 0;
+    const compare = Number(item?.pricing?.compare_amount) || 0;
+    const quantity = Number(item?.quantity) || 0;
+    // A compare-at price below the selling price is bad data, not a saving.
+    return compare > price ? sum + (compare - price) * quantity : sum;
+  }, 0);
+
+  const total = productSavings + (Number(discountAmount) || 0) + (Number(giftCardAmount) || 0);
+  return Math.max(0, Math.round(total * 1000) / 1000);
+}

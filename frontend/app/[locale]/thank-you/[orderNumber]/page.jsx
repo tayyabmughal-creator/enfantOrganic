@@ -106,6 +106,10 @@ export default async function ThankYouPage({ params, searchParams }) {
   }
 
   const whatsappPhone = order.region?.whatsapp_phone || process.env.NEXT_PUBLIC_WHATSAPP_PHONE || "";
+  // What the order actually saved them: the discount applied plus any gift card
+  // spent. Product compare-at savings are already inside the line totals.
+  const orderSavings =
+    (Number(order.discount_total) || 0) + (Number(order.gift_card_amount) || 0);
   const totalFormatted = money(order.grand_total, order.currency_code, orderRegion, locale);
   const message = encodeURIComponent(
     `New order confirmation\n\nOrder: ${order.order_number}\nName: ${order.customer_name}\nPhone: ${order.customer_phone}\nAddress: ${order.address_line_1}, ${order.city}, ${order.country}\nTotal: ${totalFormatted}\n\nItems:\n${order.items
@@ -286,6 +290,16 @@ export default async function ThankYouPage({ params, searchParams }) {
           <hr />
 
           <h3 style={{ margin: "0 0 10px" }}>{isAr ? "الإجماليات" : "Order Totals"}</h3>
+          {orderSavings > 0 ? (
+            <div className="checkout-savings-row" style={{ marginBottom: 12 }}>
+              <span aria-hidden="true">🎉</span>
+              <span>
+                {isAr ? "تهانينا! لقد وفّرت" : "Congratulations! You have saved"}{" "}
+                <strong>{money(orderSavings, order.currency_code, orderRegion, locale)}</strong>
+                {isAr ? " على هذا الطلب" : " on this order"}
+              </span>
+            </div>
+          ) : null}
           <div className="summary-lines">
             <div className="total-line">
               <span>{isAr ? "المجموع الفرعي" : "Subtotal"}</span>

@@ -15,7 +15,7 @@ import {
 } from "@/components/store/analytics/AnalyticsScripts";
 import { buildMetaUserData, getFbc, getFbp } from "@/lib/metaCapi";
 import { getAttributionSnapshot, getOrCreateSessionKey, trackEvent } from "@/lib/eventTracking";
-import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
+import { buildStorePath, cartSavings, formatMoney, uiText } from "@/lib/storefront";
 import { API_BASE_URL as CONFIG_API_BASE_URL, CUSTOMER_TOKEN_KEY, safeRedirectUrl } from "@/lib/config";
 import { readJson } from "@/lib/http";
 import { appendRegionQuery } from "@/lib/regionResolver";
@@ -554,6 +554,16 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
       payment_method: paymentMethods[0]?.value || "cod",
     }));
   }, [form.payment_method, paymentMethods]);
+
+  // A product sold below its compare-at price and any discount applied at
+  // checkout are one number to the customer.
+  const checkoutSavings = useMemo(
+    () => cartSavings(cartItems, {
+      discountAmount: couponPreview?.valid ? couponPreview.discount_amount : 0,
+      giftCardAmount: couponPreview?.valid ? couponPreview.gift_card_amount : 0,
+    }),
+    [cartItems, couponPreview],
+  );
 
   const summaryPricing = useMemo(() => {
     if (!cartItems[0]) return null;
@@ -2175,7 +2185,17 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     
             
 
-            <div className="subtotal-row order-grand-total">
+            {checkoutSavings > 0 ? (
+                  <div className="checkout-savings-row">
+                    <span aria-hidden="true">🎉</span>
+                    <span>
+                      {isAr ? "أنت على وشك توفير" : "You are about to save"}{" "}
+                      <strong>{previewMoney(checkoutSavings)}</strong>
+                      {isAr ? " على هذا الطلب" : " on this order"}
+                    </span>
+                  </div>
+                ) : null}
+                <div className="subtotal-row order-grand-total">
                   <span>{isAr ? "الإجمالي" : "Total"}</span>
                   <strong>{previewMoney(couponPreview.final_total)}</strong>
                 </div>
@@ -2201,7 +2221,17 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     
             
 
-            <div className="subtotal-row order-grand-total">
+            {checkoutSavings > 0 ? (
+                  <div className="checkout-savings-row">
+                    <span aria-hidden="true">🎉</span>
+                    <span>
+                      {isAr ? "أنت على وشك توفير" : "You are about to save"}{" "}
+                      <strong>{previewMoney(checkoutSavings)}</strong>
+                      {isAr ? " على هذا الطلب" : " on this order"}
+                    </span>
+                  </div>
+                ) : null}
+                <div className="subtotal-row order-grand-total">
                   <span>{isAr ? "الإجمالي" : "Total"}</span>
                   <strong>{formatMoney(summaryPricing, locale)}</strong>
                 </div>
