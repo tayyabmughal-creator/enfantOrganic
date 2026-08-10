@@ -30,6 +30,9 @@ const NON_CANONICAL_HOSTS = /^(enfantorganic\.com|app\.enfantorganic\.com)$/i;
 
 // Routes that are not part of the localized storefront and must pass through untouched.
 const PASSTHROUGH = /^\/(api|_next|django-admin|admin|checkout\/return|offline|manifest\.webmanifest)(\/|$)/;
+// Exempt from host canonicalisation: a stale service worker still calls the
+// old API host, and a 301 would drop a POST body on the way.
+const API_PASSTHROUGH = /^\/(api|_next|django-admin|admin)(\/|$)/;
 
 function pickRegion(raw) {
   const value = String(raw || "").toLowerCase().trim();
@@ -79,28 +82,37 @@ export async function middleware(request) {
   const hostname = (request.headers.get("host") || "").split(":")[0];
   const { pathname, search } = request.nextUrl;
 
-  if (PASSTHROUGH.test(pathname)) {
-    return NextResponse.next();
-  }
-
   const isLocalHost = /^(localhost|127\.0\.0\.1|\[::1\])$/i.test(hostname);
 
   // ── Non-canonical hosts → 301 to www ─────────────────────────────────────
-  // The region subdomains carried real content until now, so their region is
-  // folded into the destination path rather than dropped.
-  if (!isLocalHost) {
+  // This runs BEFORE the passthrough list. A legacy host that answers 200 for
+  // its own /robots.txt and /sitemap.xml is a live site as far as Google is
+  // concerned, which is why om. and app. kept their own search results long
+  // after every page on them started redirecting. Redirecting robots.txt is the
+  // right move rather than serving a Disallow there: a blocked host can never be
+  // crawled, so the page redirects would never be seen and the old URLs would
+  // stay indexed forever.
+  //
+  // /api is deliberately exempt. app.enfantorganic.com still answers it for PWA
+  // installs carrying a stale service worker, and redirecting a POST would lose
+  // its body.
+  if (!isLocalHost && !API_PASSTHROUGH.test(pathname)) {
     const subdomainMatch = hostname.match(REGION_SUBDOMAIN);
     if (subdomainMatch) {
       const subRegion = subdomainMatch[1].toLowerCase();
-      const parsed = parseLocaleRegionFromPath(pathname);
-      const rest = parsed ? pathname.split("/").slice(2).join("/") : pathname.replace(/^\//, "");
-      const locale = parsed ? parsed.locale : localeForRedirect(request);
-      return redirectTo(request, `${buildStorePath(locale, `/${rest}`, subRegion)}${search}`, 301);
+      const parsedHost = parseLocaleRegionFromPath(pathname);
+      const restHost = parsedHost ? pathname.split("/").slice(2).join("/") : pathname.replace(/^\//, "");
+      const localeHost = parsedHost ? parsedHost.locale : localeForRedirect(request);
+      return redirectTo(request, `${buildStorePath(localeHost, `/${restHost}`, subRegion)}${search}`, 301);
     }
 
     if (NON_CANONICAL_HOSTS.test(hostname)) {
       return redirectTo(request, `${pathname}${search}`, 301);
     }
+  }
+
+  if (PASSTHROUGH.test(pathname)) {
+    return NextResponse.next();
   }
 
   // ── Legacy Shopify URLs → 301 ────────────────────────────────────────────
@@ -177,6 +189,8 @@ export async function middleware(request) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    // robots.txt and sitemap.xml are deliberately NOT excluded: the middleware
+    // is what stops a legacy host serving its own copy of them.
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };
