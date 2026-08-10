@@ -386,6 +386,8 @@ const FIELD_CONFIGS = {
     ["instagram_title_en","Instagram title EN","text"],["instagram_title_ar","Instagram title AR","text"],
     ["instagram_cta_en","Instagram CTA EN","text"],["instagram_cta_ar","Instagram CTA AR","text"],
     ["blog_title_en","Blog title EN","text"],["blog_title_ar","Blog title AR","text"],
+    ["urgency_text_en","Product page offer strip EN","text"],["urgency_text_ar","Product page offer strip AR","text"],
+    ["urgency_ends_at","Offer ends at (leave blank for no countdown)","datetime-local"],
     ["free_gift_title_en","Free gift title EN","text"],["free_gift_title_ar","Free gift title AR","text"],
     ["free_gift_subtitle_en","Free gift subtitle EN","textarea"],["free_gift_subtitle_ar","Free gift subtitle AR","textarea"],
     ["why_choose_links","Why choose links (JSON)","json"],

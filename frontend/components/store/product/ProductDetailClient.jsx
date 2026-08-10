@@ -193,7 +193,40 @@ function StarRating({ rating = 5, size = 16 }) {
   );
 }
 
-export default function ProductDetailClient({ locale, product, region, deliveryEta }) {
+// An offer strip between the reviews and the price — the position the client
+// asked for. Empty text hides it; a deadline turns it into a live countdown.
+function UrgencyStrip({ urgency, locale }) {
+  const text = String(urgency?.text || "").trim();
+  const endsAt = urgency?.endsAt ? new Date(urgency.endsAt) : null;
+  const hasDeadline = endsAt && !Number.isNaN(endsAt.getTime());
+  const [remaining, setRemaining] = useState(() => (hasDeadline ? endsAt - Date.now() : 0));
+
+  useEffect(() => {
+    if (!hasDeadline) return undefined;
+    const timer = setInterval(() => setRemaining(endsAt - Date.now()), 1000);
+    return () => clearInterval(timer);
+    // endsAt is derived from a string prop, so compare on that.
+  }, [hasDeadline, urgency?.endsAt]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!text) return null;
+  // A deadline that has passed takes the strip with it rather than showing 00:00.
+  if (hasDeadline && remaining <= 0) return null;
+
+  const pad = (value) => String(Math.floor(value)).padStart(2, "0");
+  const countdown = hasDeadline
+    ? `${pad(remaining / 86400000)}d ${pad((remaining / 3600000) % 24)}h ${pad((remaining / 60000) % 60)}m ${pad((remaining / 1000) % 60)}s`
+    : "";
+
+  return (
+    <div className="product-urgency-strip">
+      <span aria-hidden="true">🔥</span>
+      <span className="product-urgency-text">{text}</span>
+      {countdown ? <span className="product-urgency-countdown">{countdown}</span> : null}
+    </div>
+  );
+}
+
+export default function ProductDetailClient({ locale, product, region, deliveryEta, urgency }) {
   const { addItem, flyToCart } = useStore();
   const addBtnRef = useRef(null);
   const router = useRouter();
@@ -648,6 +681,8 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
                 </span>
               )}
             </div>
+
+            <UrgencyStrip urgency={urgency} locale={locale} />
 
             <div className="product-pricing large product-pricing--premium">
               <strong>{formatMoney(selectedPricing, locale)}</strong>

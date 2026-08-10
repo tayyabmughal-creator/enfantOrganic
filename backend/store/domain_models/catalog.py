@@ -325,6 +325,12 @@ class SiteSettings(models.Model):
     free_gift_title_ar = models.CharField(max_length=255)
     free_gift_subtitle_en = models.TextField()
     free_gift_subtitle_ar = models.TextField()
+    # An offer strip on the product page, between the review row and the price.
+    # Blank text hides it entirely; a deadline is optional and drives a countdown.
+    urgency_text_en = models.CharField(max_length=255, blank=True, default="")
+    urgency_text_ar = models.CharField(max_length=255, blank=True, default="")
+    urgency_ends_at = models.DateTimeField(null=True, blank=True)
+
     why_choose_links = models.JSONField(default=list, blank=True)
     policy_links = models.JSONField(default=list, blank=True)
     static_links = models.JSONField(default=list, blank=True)

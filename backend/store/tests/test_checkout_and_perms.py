@@ -2198,15 +2198,18 @@ class CheckoutAndPermsTestCase(TestCase):
         self.assertEqual(market_response.status_code, 200)
         self.assertEqual(market_order_numbers, {yesterday_order.order_number})
 
-        today_key = now.date().isoformat()
+        # The admin filters by the business day, which is the store's own timezone,
+        # not UTC. now.date() is the UTC date and differs from it for four hours
+        # every evening — the exact confusion this filter was changed to remove.
+        today_key = timezone.localdate().isoformat()
         today_response = self.api_client.get("/api/admin/orders/", {"date_from": today_key, "date_to": today_key})
         today_rows = today_response.data.get("results", today_response.data) if isinstance(today_response.data, dict) else today_response.data
         today_order_numbers = {row["order_number"] for row in today_rows}
         self.assertEqual(today_response.status_code, 200)
         self.assertEqual(today_order_numbers, {today_order.order_number})
 
-        from_key = (now.date() - timedelta(days=29)).isoformat()
-        to_key = now.date().isoformat()
+        from_key = (timezone.localdate() - timedelta(days=29)).isoformat()
+        to_key = timezone.localdate().isoformat()
         last_30_response = self.api_client.get("/api/admin/orders/", {"date_from": from_key, "date_to": to_key})
         last_30_rows = last_30_response.data.get("results", last_30_response.data) if isinstance(last_30_response.data, dict) else last_30_response.data
         last_30_order_numbers = {row["order_number"] for row in last_30_rows}

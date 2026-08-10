@@ -189,6 +189,10 @@ export default async function LocalizedProductPage({ params, searchParams }) {
             min: navigation?.current_region?.delivery_eta_min_days ?? null,
             max: navigation?.current_region?.delivery_eta_max_days ?? null,
           }}
+          urgency={{
+            text: navigation?.settings?.urgency_text || "",
+            endsAt: navigation?.settings?.urgency_ends_at || "",
+          }}
         />
       </section>
       <section className="section container">

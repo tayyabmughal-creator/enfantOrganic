@@ -1037,3 +1037,30 @@
     height: 32px;
   }
 }
+
+/* Offer strip between the reviews and the price. Hidden entirely when the admin
+   has set no text, so an empty promo never leaves a stray band on the page. */
+.product-urgency-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 10px 0 4px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid #f0d79a;
+  background: linear-gradient(180deg, #fffaf0, #fff4e0);
+  color: #8a5b12;
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.product-urgency-countdown {
+  margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #b3431f;
+  white-space: nowrap;
+}

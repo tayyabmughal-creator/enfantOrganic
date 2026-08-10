@@ -77,6 +77,8 @@ def serialize_site_settings(settings, locale):
         "blog_title": _loc("blog_title"),
         "free_gift_title": _loc("free_gift_title"),
         "free_gift_subtitle": _loc("free_gift_subtitle"),
+        "urgency_text": _loc("urgency_text"),
+        "urgency_ends_at": settings.urgency_ends_at.isoformat() if settings.urgency_ends_at else "",
         # Link groups
         "why_choose_links": localized_link_items(settings.why_choose_links, normalized),
         "policy_links": localized_link_items(settings.policy_links, normalized),
