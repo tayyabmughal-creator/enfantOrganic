@@ -1801,6 +1801,75 @@ function GalleryManager({ field, value, editor, setEditor, mode, onGalleryUpload
   );
 }
 
+// Menu links were editable only as a raw JSON blob, so adding a menu item meant
+// hand-writing an object and hoping the commas were right — the client reported
+// this as having no option at all.
+function LinkListField({ field, value, editor, setEditor, disabled }) {
+  const name = field[0];
+  const label = field[1];
+  const rows = Array.isArray(value) ? value : [];
+
+  const update = (next) => setEditor({ ...editor, [name]: next });
+  const patch = (index, changes) =>
+    update(rows.map((row, i) => (i === index ? { ...row, ...changes } : row)));
+  const remove = (index) => update(rows.filter((_, i) => i !== index));
+  const move = (index, direction) => {
+    const target = index + direction;
+    if (target < 0 || target >= rows.length) return;
+    const next = rows.slice();
+    [next[index], next[target]] = [next[target], next[index]];
+    update(next);
+  };
+  const add = () => update([...rows, { label_en: "", label_ar: "", href: "/" }]);
+
+  return (
+    <div className="admin-label full-width">
+      <span className="admin-label-text">{label}</span>
+      <div className="admin-linklist">
+        {rows.map((row, index) => (
+          <div key={index} className="admin-linklist-row">
+            <input
+              className="admin-input"
+              placeholder="Label (English)"
+              value={row.label_en ?? row.label ?? ""}
+              disabled={disabled}
+              onChange={(e) => patch(index, { label_en: e.target.value })}
+            />
+            <input
+              className="admin-input"
+              placeholder="Label (Arabic)"
+              dir="rtl"
+              value={row.label_ar ?? ""}
+              disabled={disabled}
+              onChange={(e) => patch(index, { label_ar: e.target.value })}
+            />
+            <input
+              className="admin-input"
+              placeholder="/link-target"
+              value={row.href ?? ""}
+              disabled={disabled}
+              onChange={(e) => patch(index, { href: e.target.value })}
+            />
+            <div className="admin-linklist-actions">
+              <button type="button" style={GAL_BTN} title="Move up" disabled={index === 0} onClick={() => move(index, -1)}>↑</button>
+              <button type="button" style={GAL_BTN} title="Move down" disabled={index === rows.length - 1} onClick={() => move(index, 1)}>↓</button>
+              <button type="button" style={{ ...GAL_BTN, color: "#c0392b" }} title="Remove" onClick={() => remove(index)}>×</button>
+            </div>
+          </div>
+        ))}
+        {rows.length === 0 ? <small className="admin-field-help">No links yet.</small> : null}
+      </div>
+      <button type="button" className="admin-btn admin-btn-xs" disabled={disabled} onClick={add}>
+        + Add link
+      </button>
+      <small className="admin-field-help">
+        Reorder with ↑ ↓, remove with ×. A link target starts with / for a page on this site.
+        Changes save when you click Save.
+      </small>
+    </div>
+  );
+}
+
 // A review's product could only be set by typing a raw database id, so the admin
 // had no way to tell what "Product ID 8" was, or which item a review belonged to.
 function ProductPickerField({ field, value, editor, setEditor, disabled }) {
@@ -2184,6 +2253,9 @@ function FormField({ field, value, editor, setEditor, mode, onGalleryUpload }) {
   const previewUrl = objectPreviewUrl || existingPreviewUrl;
   const showImagePreview = Boolean(previewUrl && name.includes("image"));
 
+  if (type === "link-list") {
+    return <LinkListField field={field} value={value} editor={editor} setEditor={setEditor} disabled={disabled} />;
+  }
   if (type === "product-picker") {
     return <ProductPickerField field={field} value={value} editor={editor} setEditor={setEditor} disabled={disabled} />;
   }

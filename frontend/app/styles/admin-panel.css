@@ -4952,3 +4952,32 @@
   font-size: 0.86rem;
   color: var(--text, #2c3327);
 }
+
+/* Menu link editor — rows instead of a raw JSON blob. */
+.admin-linklist {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.admin-linklist-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.admin-linklist-actions {
+  display: flex;
+  gap: 4px;
+}
+
+@media (max-width: 760px) {
+  .admin-linklist-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-linklist-actions {
+    justify-content: flex-end;
+  }
+}

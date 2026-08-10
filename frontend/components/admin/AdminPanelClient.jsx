@@ -390,7 +390,7 @@ const FIELD_CONFIGS = {
     ["urgency_ends_at","Offer ends at (leave blank for no countdown)","datetime-local"],
     ["free_gift_title_en","Free gift title EN","text"],["free_gift_title_ar","Free gift title AR","text"],
     ["free_gift_subtitle_en","Free gift subtitle EN","textarea"],["free_gift_subtitle_ar","Free gift subtitle AR","textarea"],
-    ["why_choose_links","Why choose links (JSON)","json"],
+    ["why_choose_links","Why Choose Us menu","link-list"],
   ],
   branding: [
     ["brand_name","Brand name","text"],
@@ -401,13 +401,13 @@ const FIELD_CONFIGS = {
     ["accent_color","Accent color (hex)","text"],
   ],
   nav_settings: [
-    ["nav_links","Nav links JSON — [{\"label_en\":\"Home\",\"label_ar\":\"الرئيسية\",\"href\":\"/\"}]","json"],
-    ["static_links","Static/utility links JSON","json"],
+    ["nav_links","Main header menu","link-list"],
+    ["static_links","Header utility links (Contact, About Us…)","link-list"],
   ],
   footer_social: [
     ["footer_about_en","Footer about EN","textarea"],["footer_about_ar","Footer about AR","textarea"],
     ["copyright_en","Copyright text EN","text"],["copyright_ar","Copyright text AR","text"],
-    ["policy_links","Policy links JSON — [{\"label_en\":\"Privacy\",\"label_ar\":\"الخصوصية\",\"href\":\"/privacy\"}]","json"],
+    ["policy_links","Footer policy links","link-list"],
     ["facebook_url","Facebook URL","text"],
     ["instagram_url","Instagram URL","text"],
     ["twitter_url","Twitter / X URL","text"],
@@ -643,6 +643,8 @@ function localInputToUtc(value) {
 
 function stringify(value, type) {
   if (type === "gallery") return Array.isArray(value) ? value : [];
+  // The link editor works on real rows, not on a JSON string.
+  if (type === "link-list") return Array.isArray(value) ? value : [];
   if (type === "product-variants") return Array.isArray(value) ? value : [];
   if (type === "option-groups") return Array.isArray(value) ? value : [];
   if (type === "categories-select") return Array.isArray(value) ? value : [];
@@ -654,6 +656,19 @@ function stringify(value, type) {
 
 function getFieldType(name, key) {
   return (FIELD_CONFIGS[key] || []).find(([n]) => n === name)?.[2];
+}
+
+function cleanLinkList(value) {
+  // A half-filled row is a slip, not a menu item: a link with no target would
+  // render as a dead entry in the header.
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((row) => ({
+      label_en: String(row?.label_en ?? row?.label ?? "").trim(),
+      label_ar: String(row?.label_ar ?? "").trim(),
+      href: String(row?.href ?? "").trim(),
+    }))
+    .filter((row) => row.label_en && row.href);
 }
 
 function cleanOptionGroups(value) {
@@ -781,6 +796,7 @@ function buildPayload(editor, key, mode) {
       if (type === "product-variants") fd.append(k, JSON.stringify(cleanProductVariants(v)));
       else if (type === "option-groups") fd.append(k, JSON.stringify(cleanOptionGroups(v)));
       else if (type === "json" || type === "gallery") fd.append(k, JSON.stringify(typeof v === "string" ? JSON.parse(v || "null") : v));
+      else if (type === "link-list") fd.append(k, JSON.stringify(cleanLinkList(v)));
       else if (type === "categories-select") { const ids = Array.isArray(v) ? v : []; ids.forEach((id) => fd.append(k, id)); if (ids.length === 0) fd.append(k, ""); }
       else if (k === "product_slugs") { const slugs = Array.isArray(v) ? v : []; slugs.forEach((slug) => fd.append(k, slug)); if (slugs.length === 0) fd.append(k, ""); }
       else if (v instanceof File) fd.append(k, v);
@@ -796,6 +812,7 @@ function buildPayload(editor, key, mode) {
     if (type === "product-variants") payload[k] = cleanProductVariants(v);
     else if (type === "option-groups") payload[k] = cleanOptionGroups(v);
     else if (type === "json" || type === "gallery") payload[k] = typeof v === "string" ? JSON.parse(v || "null") : v;
+    else if (type === "link-list") payload[k] = cleanLinkList(v);
     else if (type === "categories-select") payload[k] = Array.isArray(v) ? v : [];
     else if (k === "product_slugs") payload[k] = Array.isArray(v) ? v : [];
     else if (type === "datetime-local" && v) payload[k] = localInputToUtc(v);
