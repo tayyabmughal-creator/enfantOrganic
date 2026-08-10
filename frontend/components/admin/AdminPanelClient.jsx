@@ -1926,7 +1926,7 @@ export default function AdminPanelClient() {
     if (activeKey === "newsletter")             return <NewsletterPanel data={data} />;
     if (activeKey === "notifications")          return <NotificationHealthView data={data} />;
     if (activeKey === "popup_leads")            return <PopupLeadsPanel data={data} onDownload={(params) => downloadReport("newsletter", params)} canExport={canViewKey("reports")} />;
-    if (activeKey === "reports")               return <Reports data={data} onDownload={downloadReport} onPreview={previewReport} />;
+    if (activeKey === "reports")               return <Reports data={data} onDownload={downloadReport} onPreview={previewReport} request={request} />;
     if (activeKey === "audit_logs")            return <AuditLogsPanel rows={Array.isArray(data) ? data : []} filters={auditFilters} onFiltersChange={(patch) => setAuditFilters((prev) => ({ ...prev, ...patch }))} />;
     if (activeKey === "regions")               return <RegionsView rows={Array.isArray(data) ? data : []} request={request} onSaved={() => loadScreen()} />;
     if (activeKey === "instagram_posts")       return <InstagramPostsPanel rows={Array.isArray(data) ? data : []} request={request} onSaved={() => loadScreen()} />;

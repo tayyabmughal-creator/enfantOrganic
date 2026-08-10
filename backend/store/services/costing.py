@@ -88,11 +88,32 @@ def _find_raw_variant(product, *, variant_snapshot=None, variant_id=""):
     return None
 
 
-def resolve_order_item_cost(product, *, quantity=1, variant_snapshot=None, variant_id=""):
+def resolve_fx_rate(value):
+    """Normalise an OMR→region rate. Anything unusable falls back to 1 (no conversion)."""
+    try:
+        rate = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return Decimal("1")
+    return rate if rate > 0 else Decimal("1")
+
+
+def convert_cost_to_order_currency(omr_cost, fx_rate):
+    """Cost prices are captured once, in the base (OMR) currency.
+
+    Order money — unit_price, line_total — is stored in the order's own currency,
+    so a cost left in OMR sat in an AED row understating itself ~9.5x and inflating
+    the gross profit beside it. Costs now travel to the order's currency the same
+    way prices do.
+    """
+    return quantize_cost(Decimal(str(omr_cost or 0)) * resolve_fx_rate(fx_rate))
+
+
+def resolve_order_item_cost(product, *, quantity=1, variant_snapshot=None, variant_id="", fx_rate=None):
     raw_variant = _find_raw_variant(product, variant_snapshot=variant_snapshot, variant_id=variant_id)
     variant_unit_cost = _variant_cost(raw_variant)
     product_unit_cost = quantize_cost(getattr(product, "cost_price", 0))
-    unit_cost = variant_unit_cost if variant_unit_cost is not None else product_unit_cost
+    base_unit_cost = variant_unit_cost if variant_unit_cost is not None else product_unit_cost
+    unit_cost = convert_cost_to_order_currency(base_unit_cost, fx_rate)
 
     try:
         qty = max(int(quantity or 0), 0)
@@ -111,4 +132,69 @@ def resolve_order_item_cost(product, *, quantity=1, variant_snapshot=None, varia
         "line_cost_total": quantize_cost(unit_cost * qty),
         "cost_source": "variant" if variant_unit_cost is not None else "product",
         "missing_cost": unit_cost <= 0,
+    }
+
+
+def backfill_missing_order_item_costs(*, queryset=None, dry_run=False):
+    """Fill in cost snapshots that were never captured.
+
+    ``OrderItem.unit_cost_price`` is frozen when the order is placed. Every sale
+    made before a product's cost price was entered in the admin therefore kept a
+    zero cost forever — entering the cost later did nothing, and "Recalculate"
+    only re-read the same zeroes. This walks those items and prices them from the
+    product's current cost, converted into the order's own currency, marking each
+    one estimated so the report can say where the number came from.
+
+    Only zero-cost items are touched: a cost captured at sale time is the truth
+    for that sale and is never overwritten.
+    """
+    from ..domain_models.commerce import OrderItem
+
+    items = queryset if queryset is not None else OrderItem.objects.all()
+    items = items.filter(unit_cost_price__lte=0).select_related("product", "order")
+
+    updated = 0
+    still_missing = 0
+    missing_products = {}
+
+    for item in items.iterator(chunk_size=500):
+        product = item.product
+        if product is None:
+            still_missing += 1
+            continue
+
+        order = item.order
+        fx_rate = None
+        if order is not None:
+            fx_rate = order.fx_rate_snapshot
+            if fx_rate is None:
+                fx_rate = getattr(order.region, "fx_rate", None)
+
+        snapshot = resolve_order_item_cost(
+            product,
+            quantity=item.quantity,
+            variant_snapshot=item.price_snapshot.get("variant") if isinstance(item.price_snapshot, dict) else None,
+            variant_id=item.sku,
+            fx_rate=fx_rate,
+        )
+
+        if snapshot["unit_cost_price"] <= 0:
+            still_missing += 1
+            missing_products.setdefault(product.slug, product.name_en)
+            continue
+
+        updated += 1
+        if dry_run:
+            continue
+
+        item.unit_cost_price = snapshot["unit_cost_price"]
+        item.line_cost_total = snapshot["line_cost_total"]
+        item.cost_is_estimated = True
+        item.save(update_fields=["unit_cost_price", "line_cost_total", "cost_is_estimated"])
+
+    return {
+        "updated": updated,
+        "still_missing": still_missing,
+        "missing_products": missing_products,
+        "dry_run": dry_run,
     }

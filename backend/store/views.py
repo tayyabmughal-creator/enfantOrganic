@@ -94,6 +94,7 @@ from .api_views import (
     PushDeviceRegisterView,
     RegisterView,
     ReportCsvView,
+    CogsCostResyncView,
     ReviewCreateView,
     SearchSuggestionsView,
     WishlistView,
@@ -193,6 +194,7 @@ __all__ = [
     "PushDeviceRegisterView",
     "RegisterView",
     "ReportCsvView",
+    "CogsCostResyncView",
     "ReviewCreateView",
     "WishlistView",
 ]

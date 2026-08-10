@@ -1032,6 +1032,7 @@ class CheckoutCreateSerializer(serializers.Serializer):
                 quantity=prepared_item["quantity"],
                 variant_snapshot=variant_snapshot,
                 variant_id=prepared_item.get("variant_id", ""),
+                fx_rate=region.fx_rate,
             )
             order_item_payload = {
                 key: value

@@ -627,6 +627,13 @@ class OrderItem(models.Model):
     line_total = models.DecimalField(max_digits=10, decimal_places=2)
     unit_cost_price = models.DecimalField(max_digits=10, decimal_places=3, default=0)
     line_cost_total = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    cost_is_estimated = models.BooleanField(
+        default=False,
+        help_text=(
+            "True when the cost was filled in after the sale from the product's current "
+            "cost price, rather than captured at the moment the order was placed."
+        ),
+    )
     taxable_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     tax_rate = models.DecimalField(max_digits=5, decimal_places=4, default=0)
     tax_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)

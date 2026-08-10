@@ -84,7 +84,11 @@ from ..api_serializers.admin_ops import (
     AdminWarehouseSerializer,
 )
 from ..notifications import notify_admins_low_stock, notify_admins_paid_order, notify_admins_payment_review
-from ..services.costing import quantize_cost, resolve_order_item_cost
+from ..services.costing import (
+    backfill_missing_order_item_costs,
+    quantize_cost,
+    resolve_order_item_cost,
+)
 from ..api_serializers.checkout import (
     build_tax_breakdown,
     calculate_checkout_totals,
@@ -655,6 +659,7 @@ def _replace_draft_order_items(*, order, region, prepared_items, totals):
             quantity=prepared_item["quantity"],
             variant_snapshot=variant_snapshot,
             variant_id=prepared_item.get("variant_id", ""),
+            fx_rate=region.fx_rate,
         )
         order_item_payload = {
             key: value
@@ -1680,6 +1685,17 @@ class AdminAnalyticsView(APIView):
         })
 
 
+def products_missing_cost_price():
+    """Products still carrying no cost price — every sale of these can only ever
+    report a missing cost, so the report names them instead of just flagging rows."""
+    return [
+        {"slug": slug, "name": name}
+        for slug, name in Product.objects.filter(is_published=True, cost_price__lte=0)
+        .order_by("name_en")
+        .values_list("slug", "name_en")
+    ]
+
+
 def build_cogs_report_rows(start_date=None, end_date=None, include_unpaid=True):
     sold_items = (
         OrderItem.objects.select_related("order")
@@ -1712,6 +1728,7 @@ def build_cogs_report_rows(start_date=None, end_date=None, include_unpaid=True):
                 "revenue": Decimal("0"),
                 "cost_of_goods": Decimal("0"),
                 "missing_cost": False,
+                "estimated_cost": False,
             },
         )
         qty = int(item.quantity or 0)
@@ -1723,6 +1740,7 @@ def build_cogs_report_rows(start_date=None, end_date=None, include_unpaid=True):
         row["revenue"] += Decimal(item.line_total or 0)
         row["cost_of_goods"] += line_cost
         row["missing_cost"] = row["missing_cost"] or unit_cost <= 0
+        row["estimated_cost"] = row["estimated_cost"] or bool(item.cost_is_estimated)
 
     rows = []
     for row in sorted(totals.values(), key=lambda item: (-item["units_sold"], item["product_name"], item["sku"])):
@@ -1733,25 +1751,109 @@ def build_cogs_report_rows(start_date=None, end_date=None, include_unpaid=True):
             "gross_profit": row["revenue"] - row["cost_of_goods"],
         })
 
-    grand_units = sum(row["units_sold"] for row in rows)
-    grand_revenue = sum((row["revenue"] for row in rows), Decimal("0"))
-    grand_cogs = sum((row["cost_of_goods"] for row in rows), Decimal("0"))
-    total = {
-        "product_slug": "TOTAL",
-        "sku": "",
-        "variant": "",
-        "product_name": "",
-        "currency": "",
-        "units_sold": grand_units,
-        "revenue": grand_revenue,
-        "avg_unit_cost": quantize_cost(grand_cogs / grand_units) if grand_units else Decimal("0.000"),
-        "cost_of_goods": grand_cogs,
-        "gross_profit": grand_revenue - grand_cogs,
-        "missing_cost": any(row["missing_cost"] for row in rows),
+    return rows, summarise_cogs_by_currency(
+        rows,
+        orders_included=orders_included,
+        include_unpaid=include_unpaid,
+    )
+
+
+def summarise_cogs_by_currency(rows, *, orders_included=0, include_unpaid=True):
+    """Total the COGS rows once per currency — never across them.
+
+    OMR, AED and SAR are different units of account. Adding 382 AED to 5.80 OMR
+    produces a number that means nothing, so each currency gets its own total and
+    the only combined figure is an explicitly converted one that carries its rate.
+    """
+    per_currency = {}
+    for row in rows:
+        bucket = per_currency.setdefault(
+            row["currency"],
+            {
+                "currency": row["currency"],
+                "units_sold": 0,
+                "revenue": Decimal("0"),
+                "cost_of_goods": Decimal("0"),
+                "missing_cost": False,
+                "estimated_cost": False,
+            },
+        )
+        bucket["units_sold"] += row["units_sold"]
+        bucket["revenue"] += row["revenue"]
+        bucket["cost_of_goods"] += row["cost_of_goods"]
+        bucket["missing_cost"] = bucket["missing_cost"] or row["missing_cost"]
+        bucket["estimated_cost"] = bucket["estimated_cost"] or row.get("estimated_cost", False)
+
+    by_currency = []
+    for bucket in sorted(per_currency.values(), key=lambda item: -item["revenue"]):
+        units = bucket["units_sold"]
+        by_currency.append({
+            **bucket,
+            "avg_unit_cost": quantize_cost(bucket["cost_of_goods"] / units) if units else Decimal("0.000"),
+            "gross_profit": bucket["revenue"] - bucket["cost_of_goods"],
+        })
+
+    rates = analytics_to_omr_rates()
+    converted_revenue = Decimal("0")
+    converted_cogs = Decimal("0")
+    used_rates = {}
+    for bucket in by_currency:
+        rate = rates.get(str(bucket["currency"] or "OMR").upper(), Decimal("1.0"))
+        used_rates[bucket["currency"]] = rate
+        converted_revenue += bucket["revenue"] * rate
+        converted_cogs += bucket["cost_of_goods"] * rate
+
+    return {
+        "by_currency": by_currency,
+        "converted": {
+            "currency": "OMR",
+            "units_sold": sum(bucket["units_sold"] for bucket in by_currency),
+            "revenue": quantize_money(converted_revenue),
+            "cost_of_goods": quantize_cost(converted_cogs),
+            "gross_profit": quantize_money(converted_revenue - converted_cogs),
+            "rates": {code: str(rate) for code, rate in used_rates.items()},
+        },
+        "currencies": [bucket["currency"] for bucket in by_currency],
+        "missing_cost": any(bucket["missing_cost"] for bucket in by_currency),
+        "estimated_cost": any(bucket["estimated_cost"] for bucket in by_currency),
         "orders_included": orders_included,
         "include_unpaid": include_unpaid,
     }
-    return rows, total
+
+
+class CogsCostResyncView(APIView):
+    """Price up sales whose cost was never captured.
+
+    A cost snapshot is taken when the order is placed, so every sale made before
+    its product had a cost price kept a zero forever — and the old Recalculate
+    button only re-read those same zeroes. This fills them from the product's
+    current cost, converted into the order's currency, and never overwrites a
+    cost that was genuinely captured at sale time.
+    """
+
+    permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
+    admin_write_capabilities = (CAP_PRODUCTS_EDIT,)
+    admin_read_capabilities = (CAP_REPORTS_VIEW,)
+
+    @extend_schema(responses=dict)
+    def post(self, request):
+        start_date = parse_date(str(request.data.get("start_date") or "").strip())
+        end_date = parse_date(str(request.data.get("end_date") or "").strip())
+
+        queryset = OrderItem.objects.exclude(
+            order__status__in=[Order.STATUS_CANCELLED, Order.STATUS_FAILED, Order.STATUS_REFUNDED]
+        )
+        if start_date:
+            queryset = queryset.filter(order__created_at__date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(order__created_at__date__lte=end_date)
+
+        result = backfill_missing_order_item_costs(queryset=queryset)
+        return Response({
+            "updated": result["updated"],
+            "still_missing": result["still_missing"],
+            "products_missing_cost": products_missing_cost_price(),
+        })
 
 
 class ReportCsvView(APIView):
@@ -1951,8 +2053,23 @@ class ReportCsvView(APIView):
                         "cost_of_goods": str(row["cost_of_goods"]),
                         "gross_profit": str(row["gross_profit"]),
                         "missing_cost": row["missing_cost"],
+                        "estimated_cost": row.get("estimated_cost", False),
                         "stock_left": stock_map.get(row["product_slug"]),
                     }
+
+                def serialize_cogs_total(bucket):
+                    return {
+                        "currency": bucket["currency"],
+                        "units_sold": bucket["units_sold"],
+                        "revenue": str(bucket["revenue"]),
+                        "avg_unit_cost": str(bucket["avg_unit_cost"]),
+                        "cost_of_goods": str(bucket["cost_of_goods"]),
+                        "gross_profit": str(bucket["gross_profit"]),
+                        "missing_cost": bucket["missing_cost"],
+                        "estimated_cost": bucket.get("estimated_cost", False),
+                    }
+
+                converted = cogs_total["converted"]
                 return Response({
                     "date_from": start_date.isoformat() if start_date else "",
                     "date_to": end_date.isoformat() if end_date else "",
@@ -1960,7 +2077,18 @@ class ReportCsvView(APIView):
                     "orders_included": cogs_total.get("orders_included", 0),
                     "include_unpaid": include_unpaid,
                     "rows": [serialize_cogs_row(row) for row in cogs_rows[:preview_limit]],
-                    "total": serialize_cogs_row(cogs_total),
+                    "totals_by_currency": [serialize_cogs_total(bucket) for bucket in cogs_total["by_currency"]],
+                    "converted_total": {
+                        "currency": converted["currency"],
+                        "units_sold": converted["units_sold"],
+                        "revenue": str(converted["revenue"]),
+                        "cost_of_goods": str(converted["cost_of_goods"]),
+                        "gross_profit": str(converted["gross_profit"]),
+                        "rates": converted["rates"],
+                    },
+                    "missing_cost": cogs_total["missing_cost"],
+                    "estimated_cost": cogs_total["estimated_cost"],
+                    "products_missing_cost": products_missing_cost_price(),
                     "truncated": len(cogs_rows) > preview_limit,
                 })
             writer.writerow([
@@ -1975,11 +2103,15 @@ class ReportCsvView(APIView):
                 "cost_of_goods",
                 "gross_profit",
                 "missing_cost",
+                "estimated_cost",
                 "date_from",
                 "date_to",
             ])
             sorted_rows = cogs_rows
-            detail_limit = max(max_rows - 1, 0)
+            # One TOTAL line per currency, plus the converted line — reserve room
+            # for them so a long product list can never push the totals out.
+            total_line_count = len(cogs_total["by_currency"]) + (1 if len(cogs_total["by_currency"]) > 1 else 0)
+            detail_limit = max(max_rows - total_line_count, 0)
             if len(sorted_rows) > detail_limit:
                 truncated = True
             for row in sorted_rows[:detail_limit]:
@@ -1995,23 +2127,44 @@ class ReportCsvView(APIView):
                     row["cost_of_goods"],
                     row["gross_profit"],
                     "yes" if row["missing_cost"] else "no",
+                    "yes" if row.get("estimated_cost") else "no",
                     start_date.isoformat() if start_date else "",
                     end_date.isoformat() if end_date else "",
                 ]):
                     break
-            if sorted_rows:
+            for bucket in cogs_total["by_currency"]:
                 write_row([
-                    cogs_total["product_slug"],
-                    cogs_total["sku"],
-                    cogs_total["variant"],
-                    cogs_total["product_name"],
-                    cogs_total["currency"],
-                    cogs_total["units_sold"],
-                    cogs_total["revenue"],
-                    cogs_total["avg_unit_cost"],
-                    cogs_total["cost_of_goods"],
-                    cogs_total["gross_profit"],
+                    f"TOTAL ({bucket['currency']})",
+                    "",
+                    "",
+                    "",
+                    bucket["currency"],
+                    bucket["units_sold"],
+                    bucket["revenue"],
+                    bucket["avg_unit_cost"],
+                    bucket["cost_of_goods"],
+                    bucket["gross_profit"],
+                    "yes" if bucket["missing_cost"] else "no",
+                    "yes" if bucket["estimated_cost"] else "no",
+                    start_date.isoformat() if start_date else "",
+                    end_date.isoformat() if end_date else "",
+                ])
+            if len(cogs_total["by_currency"]) > 1:
+                converted = cogs_total["converted"]
+                rate_note = ", ".join(f"1 {code}={rate} OMR" for code, rate in converted["rates"].items())
+                write_row([
+                    "TOTAL (converted)",
+                    "",
+                    "",
+                    f"Converted at {rate_note}",
+                    converted["currency"],
+                    converted["units_sold"],
+                    converted["revenue"],
+                    "",
+                    converted["cost_of_goods"],
+                    converted["gross_profit"],
                     "yes" if cogs_total["missing_cost"] else "no",
+                    "yes" if cogs_total["estimated_cost"] else "no",
                     start_date.isoformat() if start_date else "",
                     end_date.isoformat() if end_date else "",
                 ])
@@ -3265,7 +3418,11 @@ class AdminOrderItemsView(APIView):
             unit_price = quantize_money(price_obj.price) if price_obj else Decimal("0.00")
 
         line_total = quantize_money(unit_price * quantity)
-        cost_snapshot = resolve_order_item_cost(product, quantity=quantity)
+        cost_snapshot = resolve_order_item_cost(
+            product,
+            quantity=quantity,
+            fx_rate=order.fx_rate_snapshot if order.fx_rate_snapshot is not None else getattr(order.region, "fx_rate", None),
+        )
         existing = order.items.filter(product_slug=product_slug).first()
         if existing and existing.unit_price == unit_price and existing.unit_cost_price == cost_snapshot["unit_cost_price"]:
             existing.quantity += quantity

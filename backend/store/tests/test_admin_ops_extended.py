@@ -488,7 +488,8 @@ class AdminOpsExtendedTestCase(TestCase):
         self.assertEqual(first["avg_unit_cost"], "2.500")
         self.assertEqual(first["cost_of_goods"], "5.000")
         self.assertEqual(first["missing_cost"], "no")
-        self.assertEqual(total["product_slug"], "TOTAL")
+        self.assertEqual(total["product_slug"], "TOTAL (OMR)")
+        self.assertEqual(total["currency"], "OMR")
         self.assertEqual(total["cost_of_goods"], "5.000")
 
         preview_response = self.api_client.get(
@@ -497,7 +498,9 @@ class AdminOpsExtendedTestCase(TestCase):
         )
         self.assertEqual(preview_response.status_code, 200)
         self.assertEqual(preview_response.data["rows"][0]["avg_unit_cost"], "2.500")
-        self.assertEqual(preview_response.data["total"]["gross_profit"], "15.000")
+        totals = preview_response.data["totals_by_currency"]
+        self.assertEqual([bucket["currency"] for bucket in totals], ["OMR"])
+        self.assertEqual(totals[0]["gross_profit"], "15.000")
 
     def test_seed_regions_preserves_existing_admin_values(self):
         self.region.contact_phone = "+968 ADMIN"

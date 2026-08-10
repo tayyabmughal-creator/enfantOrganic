@@ -109,6 +109,7 @@ from .views import (
     PushDeviceRegisterView,
     RegisterView,
     ReportCsvView,
+    CogsCostResyncView,
     ReviewCreateView,
     SearchSuggestionsView,
     WishlistView,
@@ -164,6 +165,7 @@ urlpatterns = [
     path("admin/moderation/", AdminModerationSummaryView.as_view(), name="admin-moderation"),
     path("admin/notification-health/", AdminNotificationHealthView.as_view(), name="admin-notification-health"),
     path("admin/newsletter-subscribers/", AdminNewsletterSubscriberListView.as_view(), name="admin-newsletter-subscribers"),
+    path("admin/reports/cogs/resync/", CogsCostResyncView.as_view(), name="admin-cogs-resync"),
     path("admin/reports/<str:report_type>/", ReportCsvView.as_view(), name="admin-report"),
     path("admin/products/", AdminProductListCreateView.as_view(), name="admin-products"),
     # Must precede the <slug> detail route, otherwise "export" is read as a slug.

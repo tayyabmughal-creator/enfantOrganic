@@ -198,13 +198,15 @@ export function SettingsPanel({ data, onEdit, canEdit }) {
   return <StoreSettingsSection section="homepage" data={data} onEdit={onEdit} canEdit={canEdit} />;
 }
 
-export function Reports({ data, onDownload, onPreview }) {
+export function Reports({ data, onDownload, onPreview, request }) {
   const [cogsRange, setCogsRange] = useState("previous_month");
   const [cogsStart, setCogsStart] = useState("");
   const [cogsEnd, setCogsEnd] = useState("");
   const [cogsPreview, setCogsPreview] = useState(null);
   const [cogsLoading, setCogsLoading] = useState(false);
   const [cogsError, setCogsError] = useState("");
+  const [costFixBusy, setCostFixBusy] = useState(false);
+  const [costFixNote, setCostFixNote] = useState("");
   const [cogsSearch, setCogsSearch] = useState("");
   const [cogsSort, setCogsSort] = useState({ key: "units_sold", dir: -1 });
   const COGS_NUM_KEYS = useMemo(
@@ -265,6 +267,40 @@ export function Reports({ data, onDownload, onPreview }) {
   useEffect(() => {
     loadCogsPreview();
   }, [loadCogsPreview]);
+  // Entering a cost price only affects sales made from that moment on, because
+  // the cost is snapshotted onto the order. This prices up the sales that were
+  // already on the books when the cost was finally filled in.
+  const fixMissingCosts = useCallback(async () => {
+    if (typeof request !== "function") return;
+    setCostFixBusy(true);
+    setCostFixNote("");
+    try {
+      const body = {};
+      if (cogsRange === "custom") {
+        if (cogsStart) body.start_date = cogsStart;
+        if (cogsEnd) body.end_date = cogsEnd;
+      }
+      const result = await request("/admin/reports/cogs/resync/", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      const parts = [`${result?.updated ?? 0} sale line(s) priced from the current cost.`];
+      if (result?.still_missing) {
+        parts.push(`${result.still_missing} still have no cost — set a cost price on the products listed above.`);
+      }
+      setCostFixNote(parts.join(" "));
+      await loadCogsPreview();
+    } catch (error) {
+      setCostFixNote(error?.message || "Could not fill in the missing costs.");
+    } finally {
+      setCostFixBusy(false);
+    }
+  }, [cogsEnd, cogsRange, cogsStart, loadCogsPreview, request]);
+  const cogsTotals = Array.isArray(cogsPreview?.totals_by_currency) ? cogsPreview.totals_by_currency : [];
+  const cogsConverted = cogsPreview?.converted_total || null;
+  const productsMissingCost = Array.isArray(cogsPreview?.products_missing_cost)
+    ? cogsPreview.products_missing_cost
+    : [];
   return (
     <div className="admin-reports">
       <section className="admin-panel-card">
@@ -311,33 +347,88 @@ export function Reports({ data, onDownload, onPreview }) {
               <h3>Inventory Sold &amp; Cost of Goods</h3>
               <span>
                 {cogsPreview?.include_unpaid === false
-                  ? "Counting paid orders only · excludes cancelled / refunded"
-                  : "Counting paid + unpaid orders · excludes cancelled / refunded"}
+                  ? "Paid orders only · excludes cancelled, failed and refunded"
+                  : "Every placed order including cash on delivery · excludes cancelled, failed and refunded"}
+                {" · totalled separately per currency"}
               </span>
             </div>
-            <button type="button" className="admin-btn-sm" onClick={loadCogsPreview} disabled={cogsLoading}>
-              {cogsLoading ? "Loading" : "Recalculate"}
-            </button>
+            <div className="admin-cogs-actions">
+              <button type="button" className="admin-btn-sm" onClick={fixMissingCosts} disabled={costFixBusy || cogsLoading}>
+                {costFixBusy ? "Filling in…" : "Fill in missing costs"}
+              </button>
+              <button type="button" className="admin-btn-sm" onClick={loadCogsPreview} disabled={cogsLoading}>
+                {cogsLoading ? "Loading" : "Recalculate"}
+              </button>
+            </div>
           </div>
           {cogsError ? <div className="admin-form-error">{cogsError}</div> : null}
-          {cogsPreview?.total ? (
-            <div className="admin-cogs-summary">
-              <div className="admin-cogs-stat">
-                <span className="admin-cogs-stat-label">Units sold</span>
-                <span className="admin-cogs-stat-value">{cogsPreview.total.units_sold}</span>
-              </div>
+          {costFixNote ? <div className="admin-form-note">{costFixNote}</div> : null}
+          {productsMissingCost.length ? (
+            <div className="admin-cogs-warning">
+              <strong>{productsMissingCost.length} product{productsMissingCost.length === 1 ? " has" : "s have"} no cost price.</strong>{" "}
+              Their profit cannot be worked out until you set one under Products → Cost price:{" "}
+              {productsMissingCost.map((item) => item.name).join(", ")}
+            </div>
+          ) : null}
+          {cogsTotals.length ? (
+            <div className="admin-cogs-currency-totals">
               <div className="admin-cogs-stat">
                 <span className="admin-cogs-stat-label">Orders included</span>
                 <span className="admin-cogs-stat-value">{cogsPreview.orders_included ?? "—"}</span>
               </div>
-              <div className="admin-cogs-stat">
-                <span className="admin-cogs-stat-label">Avg. cost / unit</span>
-                <span className="admin-cogs-stat-value">{cogsPreview.total.avg_unit_cost}</span>
-              </div>
-              <div className="admin-cogs-stat is-accent">
-                <span className="admin-cogs-stat-label">Total cost of goods</span>
-                <span className="admin-cogs-stat-value">{cogsPreview.total.cost_of_goods}</span>
-              </div>
+              {cogsTotals.map((bucket) => (
+                <div key={bucket.currency} className="admin-cogs-currency-block">
+                  <div className="admin-cogs-currency-head">
+                    {bucket.currency}
+                    {bucket.estimated_cost ? <span className="admin-badge warning">Some costs estimated</span> : null}
+                    {bucket.missing_cost ? <span className="admin-badge danger">Cost missing</span> : null}
+                  </div>
+                  <div className="admin-cogs-summary">
+                    <div className="admin-cogs-stat">
+                      <span className="admin-cogs-stat-label">Units sold</span>
+                      <span className="admin-cogs-stat-value">{bucket.units_sold}</span>
+                    </div>
+                    <div className="admin-cogs-stat">
+                      <span className="admin-cogs-stat-label">Revenue</span>
+                      <span className="admin-cogs-stat-value">{bucket.revenue} {bucket.currency}</span>
+                    </div>
+                    <div className="admin-cogs-stat">
+                      <span className="admin-cogs-stat-label">Cost of goods</span>
+                      <span className="admin-cogs-stat-value">{bucket.cost_of_goods} {bucket.currency}</span>
+                    </div>
+                    <div className="admin-cogs-stat is-accent">
+                      <span className="admin-cogs-stat-label">Gross profit</span>
+                      <span className="admin-cogs-stat-value">{bucket.gross_profit} {bucket.currency}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {cogsTotals.length > 1 && cogsConverted ? (
+                <div className="admin-cogs-currency-block is-converted">
+                  <div className="admin-cogs-currency-head">
+                    All markets, converted to {cogsConverted.currency}
+                    <span className="admin-cogs-rate-note">
+                      {Object.entries(cogsConverted.rates || {})
+                        .map(([code, rate]) => `1 ${code} = ${Number(rate).toFixed(4)} ${cogsConverted.currency}`)
+                        .join(" · ")}
+                    </span>
+                  </div>
+                  <div className="admin-cogs-summary">
+                    <div className="admin-cogs-stat">
+                      <span className="admin-cogs-stat-label">Revenue</span>
+                      <span className="admin-cogs-stat-value">{cogsConverted.revenue} {cogsConverted.currency}</span>
+                    </div>
+                    <div className="admin-cogs-stat">
+                      <span className="admin-cogs-stat-label">Cost of goods</span>
+                      <span className="admin-cogs-stat-value">{cogsConverted.cost_of_goods} {cogsConverted.currency}</span>
+                    </div>
+                    <div className="admin-cogs-stat is-accent">
+                      <span className="admin-cogs-stat-label">Gross profit</span>
+                      <span className="admin-cogs-stat-value">{cogsConverted.gross_profit} {cogsConverted.currency}</span>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : null}
           <div className="admin-cogs-toolbar">
@@ -395,22 +486,34 @@ export function Reports({ data, onDownload, onPreview }) {
                       <td>{row.avg_unit_cost}</td>
                       <td>{row.cost_of_goods} {row.currency}</td>
                       <td>{row.gross_profit} {row.currency}</td>
-                      <td>{row.missing_cost ? <span className="admin-badge danger">Missing</span> : <span className="admin-badge success">OK</span>}</td>
+                      <td>
+                        {row.missing_cost ? (
+                          <span className="admin-badge danger">Missing</span>
+                        ) : row.estimated_cost ? (
+                          <span className="admin-badge warning" title="Filled in from the product's current cost price, not captured at the time of sale">
+                            Estimated
+                          </span>
+                        ) : (
+                          <span className="admin-badge success">OK</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
-                  {cogsPreview.total ? (
-                    <tr className="admin-cogs-total-row">
-                      <td colSpan={4}>Total</td>
-                      <td>{cogsPreview.total.units_sold}</td>
-                      <td>{cogsPreview.total.revenue}</td>
-                      <td>{cogsPreview.total.avg_unit_cost}</td>
-                      <td>{cogsPreview.total.cost_of_goods}</td>
-                      <td>{cogsPreview.total.gross_profit}</td>
-                      <td>{cogsPreview.total.missing_cost ? <span className="admin-badge danger">Missing</span> : <span className="admin-badge success">OK</span>}</td>
+                  {/* One total per currency. OMR, AED and SAR are different units
+                      of account, so a single combined figure would be meaningless. */}
+                  {cogsTotals.map((bucket) => (
+                    <tr key={bucket.currency} className="admin-cogs-total-row">
+                      <td colSpan={4}>Total · {bucket.currency}</td>
+                      <td>{bucket.units_sold}</td>
+                      <td>{bucket.revenue} {bucket.currency}</td>
+                      <td>{bucket.avg_unit_cost}</td>
+                      <td>{bucket.cost_of_goods} {bucket.currency}</td>
+                      <td>{bucket.gross_profit} {bucket.currency}</td>
+                      <td>{bucket.missing_cost ? <span className="admin-badge danger">Missing</span> : <span className="admin-badge success">OK</span>}</td>
                     </tr>
-                  ) : null}
+                  ))}
                 </tfoot>
               </table>
             </div>
