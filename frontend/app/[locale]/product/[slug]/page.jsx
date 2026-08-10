@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 export const revalidate = 120; // 2 minutes — admin changes reflect quickly
@@ -10,7 +11,7 @@ import { ApiError, getNavigationData, getProductBySlug } from "@/lib/api";
 import { toPlainText } from "@/lib/safeHtml";
 import { resolveServerRegion } from "@/lib/regionResolver";
 import { buildSeoMetadata, buildLocalizedPath, toAbsoluteUrl, SITE_NAME } from "@/lib/seo";
-import { normalizeLocale, normalizeRegion, uiText } from "@/lib/storefront";
+import { buildStorePath, normalizeLocale, normalizeRegion, uiText } from "@/lib/storefront";
 
 function getProductAvailability(product) {
   return product?.stock_status?.is_in_stock
@@ -187,6 +188,9 @@ export default async function LocalizedProductPage({ params, searchParams }) {
           <div>
             <h3>{t.related}</h3>
           </div>
+          <Link href={buildStorePath(locale, "/collections", region)} className="section-link">
+            {t.viewAll}
+          </Link>
         </div>
         {productPage.related_products.length ? (
           <div className="product-rail">
