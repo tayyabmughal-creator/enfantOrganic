@@ -153,7 +153,12 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LANGUAGE_CODE = "en-us"
-TIME_ZONE = "UTC"
+# The store, its staff and every customer sit in the Gulf (UTC+4). On UTC, an
+# order placed at 1am Gulf time was stamped with the previous day: its order
+# number read EO-2026MMDD-x for yesterday while the screen showed today, and the
+# dashboard's "Today" dropped it entirely. Timestamps are stored in UTC either
+# way (USE_TZ); this only decides which calendar day the business counts by.
+TIME_ZONE = os.environ.get("DJANGO_TIME_ZONE", "Asia/Dubai")
 USE_I18N = True
 USE_TZ = True
 
