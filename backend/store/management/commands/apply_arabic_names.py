@@ -14,6 +14,7 @@ TARGETS = {
     "tags": (Tag, "name_ar", "name_en"),
     "products": (Product, "name_ar", "name_en"),
     "product_units": (Product, "unit_ar", "unit"),
+    "product_badges": (Product, "badge_ar", "badge_en"),
 }
 
 
