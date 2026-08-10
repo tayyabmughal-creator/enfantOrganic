@@ -1,12 +1,18 @@
+import json
+import re
+import tempfile
 from decimal import Decimal
+from pathlib import Path
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from rest_framework.test import APIClient
 
 from store.api_views.admin_ops import build_cogs_report_rows
-from store.models import Order, OrderItem, Product, Region
+from store.models import Order, OrderItem, Product, Region, Tag
 from store.services.admin_roles import ROLE_MANAGER, ensure_default_admin_roles
 from store.services.costing import (
     backfill_missing_order_item_costs,
@@ -261,3 +267,90 @@ class ForeignCurrencyCostRepairTestCase(TestCase):
 
         self.assertEqual(result["repaired"], 1)
         self.assertEqual(item.unit_cost_price, Decimal("1.630"))
+
+
+class ApplyArabicNamesTestCase(TestCase):
+    """The Arabic storefront rendered English because name_ar held the English text."""
+
+    def setUp(self):
+        self.source = Path(tempfile.mkdtemp()) / "names.json"
+        self.source.write_text(
+            json.dumps({
+                "tags": {"baby-set": "طقم أطفال", "shampoo": "شامبو"},
+                "products": {"lotion": "لوشن"},
+            }, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+    def _run(self, **options):
+        call_command("apply_arabic_names", source=str(self.source), verbosity=0, **options)
+
+    def test_a_name_still_holding_the_english_is_translated(self):
+        tag = Tag.objects.create(slug="baby-set", name_en="Baby Set", name_ar="Baby Set")
+
+        self._run()
+        tag.refresh_from_db()
+
+        self.assertEqual(tag.name_ar, "طقم أطفال")
+
+    def test_an_empty_arabic_name_is_filled_in(self):
+        tag = Tag.objects.create(slug="shampoo", name_en="Shampoo", name_ar="")
+
+        self._run()
+        tag.refresh_from_db()
+
+        self.assertEqual(tag.name_ar, "شامبو")
+
+    def test_a_real_translation_is_never_overwritten(self):
+        tag = Tag.objects.create(slug="baby-set", name_en="Baby Set", name_ar="مجموعة مختارة")
+
+        self._run()
+        tag.refresh_from_db()
+
+        self.assertEqual(tag.name_ar, "مجموعة مختارة")
+
+    def test_force_overwrites_an_existing_translation(self):
+        tag = Tag.objects.create(slug="baby-set", name_en="Baby Set", name_ar="مجموعة مختارة")
+
+        self._run(force=True)
+        tag.refresh_from_db()
+
+        self.assertEqual(tag.name_ar, "طقم أطفال")
+
+    def test_products_are_translated_too(self):
+        product = Product.objects.create(slug="lotion", name_en="Lotion", name_ar="Lotion")
+
+        self._run()
+        product.refresh_from_db()
+
+        self.assertEqual(product.name_ar, "لوشن")
+
+    def test_dry_run_writes_nothing(self):
+        tag = Tag.objects.create(slug="baby-set", name_en="Baby Set", name_ar="Baby Set")
+
+        self._run(dry_run=True)
+        tag.refresh_from_db()
+
+        self.assertEqual(tag.name_ar, "Baby Set")
+
+    def test_running_twice_changes_nothing_the_second_time(self):
+        tag = Tag.objects.create(slug="baby-set", name_en="Baby Set", name_ar="Baby Set")
+
+        self._run()
+        self._run()
+        tag.refresh_from_db()
+
+        self.assertEqual(tag.name_ar, "طقم أطفال")
+
+    def test_the_shipped_translation_file_is_valid_and_complete(self):
+        shipped = Path(settings.BASE_DIR) / "store" / "data" / "arabic_names.json"
+        payload = json.loads(shipped.read_text(encoding="utf-8"))
+
+        for group in ("tags", "products"):
+            for slug, arabic in payload[group].items():
+                self.assertTrue(str(arabic).strip(), f"{group}/{slug} has an empty translation")
+                # A translation that is still Latin would defeat the whole exercise.
+                self.assertFalse(
+                    re.fullmatch(r"[A-Za-z0-9 ,&'\-\.\+%/]+", str(arabic)),
+                    f"{group}/{slug} is still Latin text: {arabic}",
+                )
