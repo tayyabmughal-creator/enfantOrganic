@@ -7,6 +7,7 @@ This module centralizes provider selection and exposes a stable interface:
     - get_status(transaction)
     - refund(transaction, amount)
 """
+import logging
 from decimal import Decimal
 
 from ..models import PaymentTransaction
@@ -15,6 +16,9 @@ from . import paymob
 from . import paytabs
 from . import thawani
 from .payment_config import get_hyperpay_config, get_paymob_config, get_telr_config
+
+
+logger = logging.getLogger(__name__)
 
 
 PROVIDER_LABELS = {
@@ -132,6 +136,18 @@ class PaymobPaymentProvider(BasePaymentProvider):
         self.check_configuration(region_code)
 
         if not paymob.verify_hmac(payload, received_hmac, region_code=region_code):
+            # A rejected callback is a paid order that never gets marked paid, and
+            # the only trace of it was a bare 400 in the access log — the cause
+            # took an hour of forensics to find. Say which order and which
+            # region's secret was used, so the next one is a glance.
+            logger.warning(
+                "Paymob callback rejected on HMAC: order=%s region=%s paymob_tx=%s. "
+                "The HMAC secret held for this region does not match the Paymob "
+                "account that sent the callback.",
+                merchant_order_id or "(none)",
+                region_code or "(default)",
+                str(payload.get("id", "")) or "(none)",
+            )
             raise PaymentProviderError("Invalid HMAC signature.", code="invalid_signature", http_status=400)
 
         paymob_tx_id = str(payload.get("id", "")).strip()
