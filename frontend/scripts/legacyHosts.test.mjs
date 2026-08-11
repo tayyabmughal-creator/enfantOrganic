@@ -81,17 +81,25 @@ test("a lookalike host is not treated as ours", () => {
   assert.equal(REGION_SUBDOMAIN.test("om.enfantorganic.com.evil.test"), false);
 });
 
-const SITE_LEVEL_FILE = readRegex("SITE_LEVEL_FILE");
+const SITE_LEVEL_PATH = readRegex("SITE_LEVEL_PATH");
 
-test("site-level files are recognised", () => {
+test("site-level paths are recognised", () => {
   for (const path of ["/robots.txt", "/sitemap.xml", "/manifest.webmanifest", "/favicon.ico"]) {
-    assert.equal(SITE_LEVEL_FILE.test(path), true, path);
+    assert.equal(SITE_LEVEL_PATH.test(path), true, path);
   }
+});
+
+test("the payment return path keeps its exact path on a legacy host", () => {
+  // Paymob sends the customer here after paying. Folding a region in sent them
+  // to /en-om/checkout/return, which is a 404 — a paying customer on a dead page.
+  // The query string is carried separately; this only ever sees the path.
+  assert.equal(SITE_LEVEL_PATH.test("/checkout/return"), true);
+  assert.equal(SITE_LEVEL_PATH.test("/checkout/return/"), true);
 });
 
 test("a storefront path is not mistaken for a site-level file", () => {
   // These must keep having the region folded into them on a legacy host.
   for (const path of ["/collections", "/en-om", "/product/x", "/en-om/robots.txt"]) {
-    assert.equal(SITE_LEVEL_FILE.test(path), false, path);
+    assert.equal(SITE_LEVEL_PATH.test(path), false, path);
   }
 });

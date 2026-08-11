@@ -35,7 +35,12 @@ const PASSTHROUGH = /^\/(api|_next|django-admin|admin|checkout\/return|offline|m
 const API_PASSTHROUGH = /^\/(api|_next|django-admin|admin)(\/|$)/;
 // Files that describe the whole site rather than one storefront. A legacy host
 // must still be redirected away from them, but to the same path on www.
-const SITE_LEVEL_FILE = /^\/(robots\.txt|sitemap\.xml|manifest\.webmanifest|favicon\.ico)$/;
+// Paths that belong to the site rather than to a storefront. A legacy host must
+// still be redirected away from them, but to the SAME path on www — folding a
+// region in produces /en-om/robots.txt and /en-om/checkout/return, neither of
+// which exists. Paymob sends the customer to /checkout/return after paying, so
+// getting this wrong lands a paying customer on a 404.
+const SITE_LEVEL_PATH = /^\/(robots\.txt|sitemap\.xml|manifest\.webmanifest|favicon\.ico|checkout\/return|offline)(\/|$)/;
 
 function pickRegion(raw) {
   const value = String(raw || "").toLowerCase().trim();
@@ -103,7 +108,7 @@ export async function middleware(request) {
     // Site-level files belong to the site, not to a storefront, so they keep
     // their path rather than having a region folded into it — /en-om/robots.txt
     // is not a thing that exists.
-    if (SITE_LEVEL_FILE.test(pathname)) {
+    if (SITE_LEVEL_PATH.test(pathname)) {
       if (REGION_SUBDOMAIN.test(hostname) || NON_CANONICAL_HOSTS.test(hostname)) {
         return redirectTo(request, `${pathname}${search}`, 301);
       }
