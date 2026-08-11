@@ -193,6 +193,118 @@ function StarRating({ rating = 5, size = 16 }) {
   );
 }
 
+// "How will customer leave a review on a product?" — they could not. The only
+// endpoint wanted a signed-in customer with a delivered order, and checkout here
+// is guest-first and often phone-only, so nothing was ever submitted.
+function WriteReviewForm({ slug, locale }) {
+  const isAr = locale === "ar";
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({
+    customer_name: "", rating: 5, title: "", comment: "", order_number: "", email: "",
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(null);
+  const [error, setError] = useState("");
+
+  const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
+
+  async function submit(event) {
+    event.preventDefault();
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_BASE_URL}/products/${encodeURIComponent(slug)}/reviews/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, rating: Number(form.rating) }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        // DRF returns {field: [message]}; show the first thing it objected to.
+        const first = Object.values(data).flat()[0];
+        throw new Error(typeof first === "string" ? first : (isAr ? "تعذّر إرسال المراجعة." : "Could not send your review."));
+      }
+      setDone(data);
+    } catch (err) {
+      setError(err?.message || (isAr ? "تعذّر إرسال المراجعة." : "Could not send your review."));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (done) {
+    return (
+      <div className="review-form-done">
+        <strong>{isAr ? "شكرًا لك!" : "Thank you!"}</strong>
+        <p>
+          {isAr
+            ? "تم إرسال مراجعتك وستظهر بعد المراجعة."
+            : "Your review has been sent and will appear once it is approved."}
+        </p>
+      </div>
+    );
+  }
+
+  if (!open) {
+    return (
+      <button type="button" className="review-write-btn" onClick={() => setOpen(true)}>
+        {isAr ? "اكتب مراجعة" : "Write a review"}
+      </button>
+    );
+  }
+
+  return (
+    <form className="review-form" onSubmit={submit}>
+      <div className="review-form-row">
+        <label>
+          <span>{isAr ? "الاسم" : "Your name"}</span>
+          <input value={form.customer_name} onChange={set("customer_name")} required maxLength={160} />
+        </label>
+        <label>
+          <span>{isAr ? "التقييم" : "Rating"}</span>
+          <select value={form.rating} onChange={set("rating")}>
+            {[5, 4, 3, 2, 1].map((value) => (
+              <option key={value} value={value}>{"★".repeat(value)}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <label>
+        <span>{isAr ? "العنوان (اختياري)" : "Title (optional)"}</span>
+        <input value={form.title} onChange={set("title")} maxLength={160} />
+      </label>
+      <label>
+        <span>{isAr ? "مراجعتك" : "Your review"}</span>
+        <textarea value={form.comment} onChange={set("comment")} required rows={4} maxLength={4000} />
+      </label>
+      <div className="review-form-row">
+        <label>
+          <span>{isAr ? "رقم الطلب (اختياري)" : "Order number (optional)"}</span>
+          <input value={form.order_number} onChange={set("order_number")} placeholder="EO-…" />
+        </label>
+        <label>
+          <span>{isAr ? "البريد الإلكتروني للطلب" : "Order email"}</span>
+          <input type="email" value={form.email} onChange={set("email")} />
+        </label>
+      </div>
+      <small className="review-form-help">
+        {isAr
+          ? "أضف رقم الطلب والبريد الإلكتروني للحصول على شارة \"شراء موثّق\"."
+          : "Add your order number and email to earn a \"verified purchase\" badge."}
+      </small>
+      {error ? <div className="review-form-error">{error}</div> : null}
+      <div className="review-form-actions">
+        <button type="submit" className="primary-action" disabled={submitting}>
+          {submitting ? (isAr ? "جارٍ الإرسال…" : "Sending…") : (isAr ? "إرسال المراجعة" : "Submit review")}
+        </button>
+        <button type="button" className="secondary-action" onClick={() => setOpen(false)}>
+          {isAr ? "إلغاء" : "Cancel"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 // An offer strip between the reviews and the price — the position the client
 // asked for. Empty text hides it; a deadline turns it into a live countdown.
 function UrgencyStrip({ urgency, locale }) {
@@ -1011,6 +1123,7 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
                         </article>
                       )}
                 </div>
+                <WriteReviewForm slug={product.slug} locale={locale} />
               </div>
             </div>
           </div>

@@ -2,11 +2,14 @@ from django.db.models import Count, DecimalField, IntegerField, OuterRef, Q, Sub
 from django.db.models.functions import Coalesce
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
+from drf_spectacular.utils import extend_schema
+from rest_framework import permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from ..models import (
     BlogPost,
+    Product,
     CmsPage,
     Category,
     HeroPromoCard,
@@ -33,6 +36,7 @@ from ..serializers import (
     serialize_site_settings,
 )
 from ..services.search import apply_ranked_product_search
+from ..api_serializers.account import PublicReviewCreateSerializer
 from ..services.stock import sort_out_of_stock_last_for_region
 from .context import StorefrontContextMixin, product_queryset
 
@@ -297,6 +301,69 @@ class CatalogPageView(StorefrontContextMixin, APIView):
             "products": ProductDetailSerializer(products, many=True, context=context).data,
         }
         return Response(payload)
+
+
+class ProductReviewCreateView(APIView):
+    """Let a customer actually leave a review.
+
+    There was no way to write one from the site at all: the existing endpoint
+    needed a logged-in user with a delivered order, and checkout here is
+    guest-first — often phone-only — so the condition was almost never met and
+    18 published products had no reviews.
+
+    Anything submitted here waits for moderation (`is_approved=False`), so an
+    open form cannot put text on the storefront by itself. Giving an order number
+    that matches the product and the email on file earns the verified badge.
+    """
+
+    permission_classes = [permissions.AllowAny]
+    throttle_scope = "review_submit"
+    serializer_class = PublicReviewCreateSerializer
+
+    @extend_schema(request=PublicReviewCreateSerializer, responses=dict)
+    def post(self, request, slug):
+        product = Product.objects.filter(slug=slug, is_published=True).first()
+        if not product:
+            return Response({"detail": "Not found"}, status=404)
+
+        serializer = PublicReviewCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        order = None
+        order_number = str(data.get("order_number") or "").strip()
+        if order_number:
+            order_query = Order.objects.filter(order_number__iexact=order_number, items__product=product)
+            email = str(data.get("email") or "").strip()
+            if email:
+                order_query = order_query.filter(customer_email__iexact=email)
+            elif request.user.is_authenticated:
+                order_query = order_query.filter(user=request.user)
+            else:
+                # An order number alone is guessable, so it cannot confer the badge.
+                order_query = order_query.none()
+            order = order_query.first()
+
+        review = Review.objects.create(
+            product=product,
+            user=request.user if request.user.is_authenticated else None,
+            order=order,
+            customer_name=data["customer_name"],
+            rating=data["rating"],
+            title=data.get("title", ""),
+            comment=data["comment"],
+            is_verified_purchase=order is not None,
+            is_approved=False,
+        )
+
+        return Response(
+            {
+                "id": review.id,
+                "is_verified_purchase": review.is_verified_purchase,
+                "detail": "Thank you — your review has been sent for approval.",
+            },
+            status=201,
+        )
 
 
 class CartRecommendationsView(StorefrontContextMixin, APIView):

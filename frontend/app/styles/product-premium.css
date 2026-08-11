@@ -1064,3 +1064,99 @@
   color: #b3431f;
   white-space: nowrap;
 }
+
+/* Leaving a review. There was no way to do it from the site at all before. */
+.review-write-btn {
+  margin-top: 14px;
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid var(--brand-dark, #607a42);
+  background: transparent;
+  color: var(--brand-dark, #607a42);
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.review-write-btn:hover {
+  background: var(--brand-dark, #607a42);
+  color: #fff;
+}
+
+.review-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line, #dfe7d6);
+}
+
+.review-form-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.review-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-soft, #66705d);
+}
+
+.review-form input,
+.review-form select,
+.review-form textarea {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--line, #dfe7d6);
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+  font-weight: 500;
+  color: var(--text, #2c3327);
+}
+
+.review-form textarea {
+  resize: vertical;
+}
+
+.review-form-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.review-form-help {
+  color: var(--text-soft, #66705d);
+  font-size: 0.76rem;
+}
+
+.review-form-error {
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #fbe9e4;
+  color: #c0492f;
+  font-size: 0.82rem;
+}
+
+.review-form-done {
+  margin-top: 16px;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(96, 122, 66, 0.09);
+  color: var(--brand-dark, #607a42);
+}
+
+.review-form-done p {
+  margin: 4px 0 0;
+  font-size: 0.86rem;
+}
+
+@media (max-width: 640px) {
+  .review-form-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

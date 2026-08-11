@@ -427,3 +427,33 @@ class CustomerReturnRequestSerializer(serializers.ModelSerializer):
         if len(text) < 10:
             raise serializers.ValidationError("Please provide at least 10 characters.")
         return text
+
+
+class PublicReviewCreateSerializer(serializers.Serializer):
+    """A review written from the product page, by anyone.
+
+    The only way to leave a review was a logged-in customer with a delivered
+    order — and checkout is guest-first here, phone-only in most cases, so in
+    practice nobody could. Reviews land unapproved and wait for moderation, and
+    an order number is optional: supplying one that matches only earns the
+    verified-purchase badge.
+    """
+
+    customer_name = serializers.CharField(max_length=160)
+    rating = serializers.IntegerField(min_value=1, max_value=5)
+    title = serializers.CharField(max_length=160, required=False, allow_blank=True)
+    comment = serializers.CharField(max_length=4000)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    order_number = serializers.CharField(max_length=32, required=False, allow_blank=True)
+
+    def validate_customer_name(self, value):
+        name = " ".join(str(value or "").split())
+        if len(name) < 2:
+            raise serializers.ValidationError("Please enter your name.")
+        return name
+
+    def validate_comment(self, value):
+        comment = str(value or "").strip()
+        if len(comment) < 10:
+            raise serializers.ValidationError("Please write at least a few words about the product.")
+        return comment

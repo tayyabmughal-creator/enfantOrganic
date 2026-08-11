@@ -219,6 +219,8 @@ REST_FRAMEWORK = {
         # throttle_scope="analytics" raised ImproperlyConfigured -> HTTP 500 on
         # every event, so the admin "Conversion Breakdown" funnel never populated.
         "analytics": os.getenv("DRF_ANALYTICS_RATE", "1000/min"),
+        # Writing a review is a deliberate act; anything faster is a script.
+        "review_submit": os.getenv("DRF_REVIEW_SUBMIT_RATE", "5/hour"),
     },
 }
 
@@ -240,6 +242,7 @@ if "test" in sys.argv:
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["password_reset"] = "10000/hour"
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["payment"] = "10000/hour"
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["region_detection"] = "10000/hour"
+    REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["review_submit"] = "10000/hour"
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["webhook"] = "10000/min"
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["analytics"] = "100000/min"
     CELERY_TASK_ALWAYS_EAGER = True
