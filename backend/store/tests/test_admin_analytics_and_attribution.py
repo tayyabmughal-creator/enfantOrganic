@@ -319,3 +319,64 @@ class SelfReferralTestCase(TestCase):
             normalize_traffic_source({"source": "myenfant-me.com"}),
             "myenfant-me.com",
         )
+
+
+class FunnelCountsPeopleTestCase(TestCase):
+    """"Meta says 30 adds to cart, the site says 7" — the same day, two measures.
+
+    The funnel counts people, ad platforms count events. It only looked like a
+    tracking fault because one step of the funnel counted events while the rest
+    counted sessions, so the pass-through percentages divided one by the other.
+    """
+
+    def setUp(self):
+        ensure_default_admin_roles()
+        self.client_api = APIClient()
+        user = User.objects.create_user(username="mgr-funnel", password="Pass12345!", is_staff=True)
+        user.groups.add(Group.objects.get(name=ROLE_MANAGER))
+        self.client_api.force_authenticate(user=user)
+        self.om = _region("om", "Oman", "OMR", Decimal("1.000000"), is_default=True)
+
+        # One shopper who views three products and adds two of them, plus a
+        # second shopper who adds one.
+        self._events("shopper-a", AnalyticsEvent.EVENT_PAGE_VIEW, 2)
+        self._events("shopper-a", AnalyticsEvent.EVENT_PRODUCT_VIEW, 3)
+        self._events("shopper-a", AnalyticsEvent.EVENT_ADD_TO_CART, 2)
+        self._events("shopper-b", AnalyticsEvent.EVENT_PAGE_VIEW, 1)
+        self._events("shopper-b", AnalyticsEvent.EVENT_PRODUCT_VIEW, 1)
+        self._events("shopper-b", AnalyticsEvent.EVENT_ADD_TO_CART, 1)
+
+    def _events(self, session, event_type, count):
+        for _ in range(count):
+            event = AnalyticsEvent.objects.create(
+                event_type=event_type, session_key=session, region=self.om, metadata={},
+            )
+            AnalyticsEvent.objects.filter(pk=event.pk).update(created_at=timezone.now())
+
+    def _data(self):
+        response = self.client_api.get("/api/admin/analytics/", {"date_range": "all_time"})
+        self.assertEqual(response.status_code, 200)
+        return response.data
+
+    def test_every_funnel_step_counts_people(self):
+        data = self._data()
+
+        self.assertEqual(data["visitors"], 2)
+        # Was 4 — this step alone counted raw events.
+        self.assertEqual(data["product_views"], 2)
+        self.assertEqual(data["cart_adds"], 2)
+
+    def test_event_totals_are_reported_for_reconciling_with_meta(self):
+        data = self._data()
+
+        self.assertEqual(data["event_totals"]["product_views"], 4)
+        self.assertEqual(data["event_totals"]["cart_adds"], 3)
+        self.assertEqual(data["event_totals"]["page_views"], 3)
+
+    def test_the_two_measures_are_labelled_apart(self):
+        data = self._data()
+
+        self.assertTrue(data["funnel_counts_people"])
+        # People never exceed events — if they do, something is miscounted.
+        self.assertLessEqual(data["cart_adds"], data["event_totals"]["cart_adds"])
+        self.assertLessEqual(data["product_views"], data["event_totals"]["product_views"])

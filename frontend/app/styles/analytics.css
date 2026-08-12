@@ -63,3 +63,34 @@
     width: 100%;
   }
 }
+
+/* The funnel counts people; ad platforms count events. Showing both side by
+   side is what makes "Meta says 30, the site says 7" explainable. */
+.admin-funnel-events {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--line, #dfe7d6);
+}
+
+.admin-funnel-events-title {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-soft, #66705d);
+  margin-bottom: 8px;
+}
+
+.admin-funnel-events-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  font-size: 0.82rem;
+  color: var(--text-soft, #66705d);
+}
+
+.admin-funnel-events-row strong {
+  color: var(--brand-dark, #607a42);
+  margin-inline-start: 4px;
+}

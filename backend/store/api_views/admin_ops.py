@@ -1724,15 +1724,29 @@ class AdminAnalyticsView(APIView):
             funnel_visitors = all_events.filter(
                 event_type=AnalyticsEvent.EVENT_PAGE_VIEW
             ).values("session_key").distinct().count()
+            # Sessions, like every other step. This one counted raw events, so the
+            # funnel divided sessions by events and produced pass-through figures
+            # that meant nothing.
             funnel_product_views = all_events.filter(
                 event_type=AnalyticsEvent.EVENT_PRODUCT_VIEW
-            ).count()
+            ).values("session_key").distinct().count()
             funnel_cart_adds = all_events.filter(
                 event_type=AnalyticsEvent.EVENT_ADD_TO_CART
             ).values("session_key").distinct().count()
             funnel_checkouts = all_events.filter(
                 event_type=AnalyticsEvent.EVENT_CHECKOUT_INITIATED
             ).values("session_key").distinct().count()
+
+            # Meta counts every event; the funnel counts people. Both are right,
+            # and without the raw totals here the two can never be reconciled —
+            # "Meta says 30 adds to cart, the site says 7" is the same day seen
+            # two ways, not a tracking fault.
+            funnel_event_totals = {
+                "page_views": all_events.filter(event_type=AnalyticsEvent.EVENT_PAGE_VIEW).count(),
+                "product_views": all_events.filter(event_type=AnalyticsEvent.EVENT_PRODUCT_VIEW).count(),
+                "cart_adds": all_events.filter(event_type=AnalyticsEvent.EVENT_ADD_TO_CART).count(),
+                "checkouts": all_events.filter(event_type=AnalyticsEvent.EVENT_CHECKOUT_INITIATED).count(),
+            }
 
             # Traffic sources — read `source` key from metadata of page_view events
             # Uses one session per source (first-touch attribution per session)
@@ -1760,6 +1774,7 @@ class AdminAnalyticsView(APIView):
             funnel_product_views = 0
             funnel_cart_adds = 0
             funnel_checkouts = 0
+            funnel_event_totals = {"page_views": 0, "product_views": 0, "cart_adds": 0, "checkouts": 0}
             traffic_sources = []
 
         total_orders_count = orders.count()
@@ -1824,6 +1839,8 @@ class AdminAnalyticsView(APIView):
             "product_views": funnel_product_views,
             "cart_adds": funnel_cart_adds,
             "checkouts": funnel_checkouts,
+            "funnel_counts_people": True,
+            "event_totals": funnel_event_totals,
             "completed_orders": paid_orders_count,
             "abandoned_orders": cancelled_orders_count,
             "payment_success_rate": payment_success_rate,

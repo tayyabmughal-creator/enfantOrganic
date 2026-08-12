@@ -488,6 +488,12 @@ export default function AnalyticsView({ data, filters, onFiltersChange, request 
       <div className="admin-chart-row">
         <section className="admin-chart-card admin-analytics-funnel-card">
           <h3>Conversion Funnel</h3>
+          <p className="admin-chart-notice">
+            Each step counts <strong>people</strong> — one visitor who adds three
+            items is one add to cart here. Meta counts every event, so its number
+            is larger. The totals underneath are the event counts to compare it
+            against.
+          </p>
           {visitors === 0 && (
             <p className="admin-chart-notice">
               No visitor data yet. Funnel will populate as customers browse the storefront.
@@ -515,6 +521,19 @@ export default function AnalyticsView({ data, filters, onFiltersChange, request 
               </div>
             ))}
           </div>
+
+          {/* What Meta and the other ad platforms report: every event, not people. */}
+          {data?.event_totals ? (
+            <div className="admin-funnel-events">
+              <span className="admin-funnel-events-title">Total events (compare with Meta / TikTok)</span>
+              <div className="admin-funnel-events-row">
+                <span>Page views <strong>{Number(data.event_totals.page_views || 0).toLocaleString()}</strong></span>
+                <span>Product views <strong>{Number(data.event_totals.product_views || 0).toLocaleString()}</strong></span>
+                <span>Adds to cart <strong>{Number(data.event_totals.cart_adds || 0).toLocaleString()}</strong></span>
+                <span>Checkouts <strong>{Number(data.event_totals.checkouts || 0).toLocaleString()}</strong></span>
+              </div>
+            </div>
+          ) : null}
         </section>
 
         <section className="admin-chart-card admin-analytics-status-card">
