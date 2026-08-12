@@ -963,8 +963,8 @@ class AdminDashboardView(APIView):
             scoped_orders = scoped_orders.filter(created_at__gte=now - timedelta(days=day_window))
 
         # Include ALL placed orders (paid, COD, unpaid) — exclude only cancelled/failed/refunded
-        _excluded_statuses = [Order.STATUS_CANCELLED, Order.STATUS_FAILED, Order.STATUS_REFUNDED]
-        scoped_active_orders = scoped_orders.exclude(status__in=_excluded_statuses)
+        _excluded_statuses = list(NON_SALE_STATUSES)
+        scoped_active_orders = exclude_non_sales(scoped_orders)
         scoped_paid_orders = scoped_active_orders  # keep alias for downstream compat
         scoped_paid_orders_count = scoped_active_orders.count()
 
@@ -999,8 +999,8 @@ class AdminDashboardView(APIView):
             current_period_orders = base_orders.filter(created_at__gte=this_month_start)
             previous_period_orders = base_orders.filter(created_at__gte=last_month_start, created_at__lt=this_month_start)
 
-        current_period_paid = current_period_orders.exclude(status__in=_excluded_statuses)
-        previous_period_paid = previous_period_orders.exclude(status__in=_excluded_statuses)
+        current_period_paid = exclude_non_sales(current_period_orders)
+        previous_period_paid = exclude_non_sales(previous_period_orders)
 
         base_abandoned_carts = AbandonedCart.objects.all()
         if top_market != "all":
@@ -1268,8 +1268,8 @@ class AdminDashboardView(APIView):
 
         # Status mix follows the active dashboard scope (date + market).
         status_mix = list(scoped_orders.values("status").annotate(count=Count("id")).order_by("status"))
-        sales_channel_orders = scoped_orders.exclude(status__in=_excluded_statuses)
-        previous_sales_channel_orders = previous_period_orders.exclude(status__in=_excluded_statuses)
+        sales_channel_orders = exclude_non_sales(scoped_orders)
+        previous_sales_channel_orders = exclude_non_sales(previous_period_orders)
         sales_by_channel = _build_sales_channel_summary(
             sales_channel_orders,
             previous_sales_channel_orders,
@@ -1564,6 +1564,34 @@ def _is_internal_referrer(referrer):
     )
 
 
+# Statuses that are never a sale, wherever orders are counted.
+NON_SALE_STATUSES = (Order.STATUS_CANCELLED, Order.STATUS_FAILED, Order.STATUS_REFUNDED)
+
+
+def exclude_non_sales(queryset, prefix=""):
+    """Narrow a queryset to the orders that count as sales on every admin screen.
+
+    Cancelled, failed and refunded orders never count. Nor does an **unpaid draft
+    order**: a draft is a quote the admin is still writing, and there is no step
+    that converts it into a real order, so it stays a draft even after it is
+    paid — payment is the only honest signal that it became a sale.
+
+    Getting this wrong is what made the Dashboard, the reports and the Orders
+    list each show a different figure. The Orders list keeps drafts on their own
+    tab, so a pending draft was invisible there while still adding to revenue
+    everywhere else: June counted 33 orders and 660.37 OMR against the 31 orders
+    and 650.67 OMR the client could actually see, and an SAR column appeared in a
+    month whose Orders list held no SAR order at all.
+
+    `prefix` lets the same rule apply to a queryset of OrderItems ("order").
+    """
+    path = f"{prefix}__" if prefix else ""
+    return queryset.exclude(**{f"{path}status__in": NON_SALE_STATUSES}).exclude(
+        Q(**{f"{path}sales_channel": Order.SALES_CHANNEL_DRAFT_ORDER})
+        & ~Q(**{f"{path}payment_status": Order.PAYMENT_PAID})
+    )
+
+
 def normalize_traffic_source(metadata):
     """Name the platform a visit or an order came from.
 
@@ -1673,7 +1701,7 @@ class AdminAnalyticsView(APIView):
         window_start, window_end, window_key = resolve_analytics_window(request)
         orders = scope_to_window(Order.objects.all(), "created_at", window_start, window_end)
         # Count all placed orders (paid, COD, unpaid) — exclude only cancelled/failed/refunded
-        paid_orders = orders.exclude(status__in=[Order.STATUS_CANCELLED, Order.STATUS_FAILED, Order.STATUS_REFUNDED])
+        paid_orders = exclude_non_sales(orders)
 
         # Regional revenue split
         regional_revenue = {}
@@ -1840,7 +1868,7 @@ class AdminAttributionView(APIView):
         window_start, window_end, window_key = resolve_analytics_window(request)
 
         orders = scope_to_window(
-            Order.objects.exclude(status__in=[Order.STATUS_CANCELLED, Order.STATUS_FAILED, Order.STATUS_REFUNDED]),
+            exclude_non_sales(Order.objects.all()),
             "created_at",
             window_start,
             window_end,
@@ -1947,11 +1975,9 @@ def products_missing_cost_price():
 
 
 def build_cogs_report_rows(start_date=None, end_date=None, include_unpaid=True):
-    sold_items = (
-        OrderItem.objects.select_related("order")
-        .exclude(order__status__in=[Order.STATUS_CANCELLED, Order.STATUS_FAILED, Order.STATUS_REFUNDED])
-        .order_by("product_slug", "sku", "selected_options_text", "order__currency_code")
-    )
+    sold_items = exclude_non_sales(
+        OrderItem.objects.select_related("order"), prefix="order"
+    ).order_by("product_slug", "sku", "selected_options_text", "order__currency_code")
     if not include_unpaid:
         sold_items = sold_items.filter(order__payment_status=Order.PAYMENT_PAID)
     if start_date:

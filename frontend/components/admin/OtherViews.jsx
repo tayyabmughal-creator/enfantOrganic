@@ -350,6 +350,10 @@ export function Reports({ data, onDownload, onPreview, request }) {
                   ? "Paid orders only · excludes cancelled, failed and refunded"
                   : "Every placed order including cash on delivery · excludes cancelled, failed and refunded"}
                 {" · totalled separately per currency"}
+                <br />
+                <strong>Product revenue only</strong> — what the items sold for.
+                The Dashboard shows order revenue, which also adds shipping and
+                VAT and takes off discounts, so the two figures differ by design.
               </span>
             </div>
             <div className="admin-cogs-actions">
@@ -389,7 +393,7 @@ export function Reports({ data, onDownload, onPreview, request }) {
                       <span className="admin-cogs-stat-value">{bucket.units_sold}</span>
                     </div>
                     <div className="admin-cogs-stat">
-                      <span className="admin-cogs-stat-label">Revenue</span>
+                      <span className="admin-cogs-stat-label">Product revenue</span>
                       <span className="admin-cogs-stat-value">{bucket.revenue} {bucket.currency}</span>
                     </div>
                     <div className="admin-cogs-stat">
@@ -415,7 +419,7 @@ export function Reports({ data, onDownload, onPreview, request }) {
                   </div>
                   <div className="admin-cogs-summary">
                     <div className="admin-cogs-stat">
-                      <span className="admin-cogs-stat-label">Revenue</span>
+                      <span className="admin-cogs-stat-label">Product revenue</span>
                       <span className="admin-cogs-stat-value">{cogsConverted.revenue} {cogsConverted.currency}</span>
                     </div>
                     <div className="admin-cogs-stat">
@@ -455,7 +459,7 @@ export function Reports({ data, onDownload, onPreview, request }) {
                       ["variant", "Variant"],
                       ["stock_left", "Stock left"],
                       ["units_sold", "Units sold"],
-                      ["revenue", "Revenue"],
+                      ["revenue", "Product revenue"],
                       ["avg_unit_cost", "Cost / unit"],
                       ["cost_of_goods", "Total cost"],
                       ["gross_profit", "Gross profit"],

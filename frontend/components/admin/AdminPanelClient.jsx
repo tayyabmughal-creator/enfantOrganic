@@ -1902,7 +1902,11 @@ export default function AdminPanelClient() {
           fields={FIELD_CONFIGS[activeKey]}
           request={activeKey === "orders" ? request : undefined}
           onOrderRefreshed={activeKey === "orders" ? (updated) => { setSelected(updated); setEditor(makeEditor(updated, activeKey)); } : undefined}
-          onDeleteOrder={activeKey === "orders" ? handleDeleteOrder : undefined}
+          // Draft orders need this more than real orders do: a draft is a
+          // scratch order, and there was no way to throw one away.
+          onDeleteOrder={
+            activeKey === "orders" || activeKey === "draft_orders" ? handleDeleteOrder : undefined
+          }
         />
       ) : null}
     </div>
