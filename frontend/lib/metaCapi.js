@@ -46,21 +46,70 @@ export function getFbp() {
   return readCookie("_fbp");
 }
 
+// Mirrors the Pixel's own `_fbc` cookie lifetime, so a stored click stops
+// attributing conversions at the same point Meta would stop counting it.
+const FBC_STORAGE_KEY = "enfant-meta-fbc";
+const FBC_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
+
 /**
- * The Meta click ID cookie.
+ * The fbclid exactly as Facebook put it in the URL.
+ *
+ * Not `URLSearchParams`: it percent-decodes and turns "+" into a space. Meta
+ * compares the fbclid inside `fbc` against the one it issued, and any such
+ * rewrite is reported as a "modified fbclid value" against match quality.
+ */
+function readRawFbclid() {
+  const match = String(window.location.search || "").match(/[?&]fbclid=([^&]*)/);
+  return match ? match[1] : "";
+}
+
+function readStoredClick() {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(FBC_STORAGE_KEY) || "null");
+    if (!parsed || !parsed.fbclid || !parsed.ts) return null;
+    return Date.now() - parsed.ts > FBC_MAX_AGE_MS ? null : parsed;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The Meta click ID, in Meta's format: `fb.1.<click time>.<fbclid>`.
  *
  * The Pixel writes `_fbc` from the `fbclid` URL parameter, but only once it has
- * loaded. A visitor who lands from an ad and converts quickly — or who blocks
- * the Pixel outright — can lose it, so the fbclid in the current URL is used as
- * a fallback, formatted exactly as Meta specifies (`fb.1.<timestamp>.<fbclid>`).
+ * loaded — a visitor who converts quickly, or who blocks the Pixel outright,
+ * never gets one. So the click is remembered here on first sight and replayed
+ * for the rest of the funnel.
+ *
+ * Remembering it matters as much as capturing it. The fbclid only appears in
+ * the URL of the landing page, and the timestamp belongs to the *click*, not to
+ * the event being sent. Rebuilding from `Date.now()` on each event gave one
+ * click several different `fbc` values — and gave the later funnel steps, whose
+ * URL no longer carries the parameter, none at all. Meta reads both as a
+ * modified click ID, which is what the AddToCart/InitiateCheckout/Purchase
+ * diagnostic was reporting.
  */
 export function getFbc() {
   const cookie = readCookie("_fbc");
   if (cookie) return cookie;
   if (typeof window === "undefined") return "";
   try {
-    const fbclid = new URLSearchParams(window.location.search).get("fbclid");
-    return fbclid ? `fb.1.${Date.now()}.${fbclid}` : "";
+    const fbclid = readRawFbclid();
+    const stored = readStoredClick();
+
+    if (fbclid && (!stored || stored.fbclid !== fbclid)) {
+      // A new click wins over a remembered one — the visitor came back through
+      // a different ad and that is the click this conversion belongs to.
+      const click = { fbclid, ts: Date.now() };
+      try {
+        window.localStorage.setItem(FBC_STORAGE_KEY, JSON.stringify(click));
+      } catch {
+        // Storage can be blocked; the value below is still correct for this page.
+      }
+      return `fb.1.${click.ts}.${click.fbclid}`;
+    }
+
+    return stored ? `fb.1.${stored.ts}.${stored.fbclid}` : "";
   } catch {
     return "";
   }
