@@ -142,8 +142,9 @@ class PaymobPaymentProvider(BasePaymentProvider):
             # region's secret was used, so the next one is a glance.
             logger.warning(
                 "Paymob callback rejected on HMAC: order=%s region=%s paymob_tx=%s. "
-                "The HMAC secret held for this region does not match the Paymob "
-                "account that sent the callback.",
+                "Either the secret held for this region belongs to a different "
+                "Paymob account, or the signed field rendering has drifted from "
+                "the wire format — check both before assuming the credential.",
                 merchant_order_id or "(none)",
                 region_code or "(default)",
                 str(payload.get("id", "")) or "(none)",

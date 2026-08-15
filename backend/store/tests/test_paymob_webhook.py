@@ -21,8 +21,26 @@ from store.services import paymob
 HMAC_SECRET = "test-hmac-secret"
 
 
+def _paymob_scalar(obj, dotted_key):
+    """
+    Render one field the way Paymob does when it signs a callback.
+
+    Deliberately independent of ``paymob._get``. Signing with the same helper the
+    code verifies with makes the test agree with itself: it passed for months
+    while every real callback was rejected, because both sides rendered booleans
+    as ``True`` where Paymob sends ``true``. This mirrors the wire format instead.
+    """
+    keys = dotted_key.split(".", 1)
+    value = obj.get(keys[0], "")
+    if len(keys) == 2 and isinstance(value, dict):
+        value = value.get(keys[1], "")
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
+
+
 def sign(obj, secret=HMAC_SECRET):
-    concat = "".join(paymob._get(obj, field) for field in paymob._HMAC_FIELDS)
+    concat = "".join(_paymob_scalar(obj, field) for field in paymob._HMAC_FIELDS)
     return hmac.new(secret.encode(), concat.encode(), hashlib.sha512).hexdigest()
 
 

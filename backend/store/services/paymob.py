@@ -85,7 +85,11 @@ _HMAC_FIELDS = [
     "is_refunded",
     "is_standalone_payment",
     "is_voided",
-    "order",
+    # Paymob signs the order *id*. In the webhook body ``order`` is a nested
+    # object, so asking for the bare key stringified the whole dict into the
+    # digest. The dotted form falls back to the scalar for payloads that send
+    # ``order`` flat, as the browser return URL does.
+    "order.id",
     "owner",
     "pending",
     "source_data.pan",
@@ -132,11 +136,24 @@ def _check_config(region_code=""):
 
 
 def _get(data: dict, dotted_key: str) -> str:
-    """Retrieve a possibly nested value using dot notation, coerce to str."""
+    """
+    Retrieve a possibly nested value using dot notation, rendered the way Paymob
+    signed it.
+
+    Ten of the twenty HMAC fields are JSON booleans, which arrive in the webhook
+    body as Python ``bool``. Paymob concatenates the JSON scalar — ``true`` —
+    while ``str(True)`` yields ``True``. That single capital letter changes the
+    digest, so *every* callback failed verification and no online order was ever
+    marked paid. Format booleans explicitly rather than relying on ``str``.
+    """
     keys = dotted_key.split(".", 1)
     value = data.get(keys[0], "")
-    if len(keys) == 2 and isinstance(value, dict):
-        value = value.get(keys[1], "")
+    if len(keys) == 2:
+        # A scalar parent is the value itself — the return URL sends ``order``
+        # flat where the webhook body nests it, and both must sign identically.
+        value = value.get(keys[1], "") if isinstance(value, dict) else value
+    if isinstance(value, bool):
+        return "true" if value else "false"
     return str(value)
 
 
