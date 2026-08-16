@@ -1686,6 +1686,135 @@ function RegionContentRow({ code, field, label, kind, value, request, onSaved })
   );
 }
 
+// Everything a Region needs before it can be saved. The rest of the model has
+// defaults and is edited on the region's own card once it exists.
+const NEW_REGION_FIELDS = [
+  ["code", "Code", "text", "e.g. kw", true],
+  ["currency_code", "Currency", "text", "e.g. KWD", true],
+  ["name_en", "Name (English)", "text", "e.g. Kuwait", true],
+  ["name_ar", "Name (Arabic)", "text", "e.g. الكويت", true],
+  ["fx_rate", "Rate vs base currency", "number", "e.g. 0.118", true],
+  ["shipping_fee", "Shipping fee", "number", "e.g. 2.00", true],
+  ["shipping_threshold", "Free shipping over", "number", "0 for none", true],
+  ["contact_phone", "Contact phone", "text", "+965 …", true],
+  ["contact_email", "Contact email", "email", "contact@…", false],
+  ["whatsapp_phone", "WhatsApp number", "text", "+965 …", false],
+  ["address_en", "Address (English)", "text", "", true],
+  ["address_ar", "Address (Arabic)", "text", "", true],
+];
+
+const EMPTY_REGION = {
+  code: "", currency_code: "", name_en: "", name_ar: "", fx_rate: "1",
+  shipping_fee: "2.00", shipping_threshold: "0", contact_phone: "", contact_email: "",
+  whatsapp_phone: "", address_en: "", address_ar: "",
+};
+
+function NewRegionForm({ request, onSaved }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(EMPTY_REGION);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  function reset() {
+    setDraft(EMPTY_REGION);
+    setError("");
+    setOpen(false);
+  }
+
+  async function save() {
+    const missing = NEW_REGION_FIELDS
+      .filter(([field, , , , required]) => required && !String(draft[field] || "").trim())
+      .map(([, label]) => label);
+    if (missing.length) {
+      setError(`Still needed: ${missing.join(", ")}`);
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    try {
+      await request("/admin/regions/", {
+        method: "POST",
+        body: JSON.stringify({
+          ...draft,
+          // The storefront reads the region out of the URL in lowercase, and
+          // currency codes are upper by convention everywhere else.
+          code: draft.code.trim().toLowerCase(),
+          currency_code: draft.currency_code.trim().toUpperCase(),
+          locale_code: "en",
+          is_active: true,
+        }),
+      });
+      reset();
+      onSaved?.();
+    } catch (err) {
+      // DRF answers {field: [message]} — a duplicate code is the common one.
+      let detail = "";
+      try {
+        const parsed = JSON.parse(err?.message || "{}");
+        detail = Object.entries(parsed)
+          .map(([field, messages]) => `${field}: ${[].concat(messages).join(" ")}`)
+          .join(" · ");
+      } catch {
+        detail = err?.message || "";
+      }
+      setError(detail || "Could not create the region — check the values and try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!request) return null;
+
+  return (
+    <section className="admin-panel-card">
+      <div className="admin-panel-head">
+        <div>
+          <h3>Add a region</h3>
+          <span>
+            A new market gets its own currency, prices and shipping. After saving, set
+            its product prices with &quot;Apply conversion rates&quot;.
+          </span>
+        </div>
+        <button
+          className={`admin-btn ${open ? "" : "admin-btn-primary"}`}
+          onClick={() => (open ? reset() : setOpen(true))}
+        >
+          {open ? "Cancel" : "Add region"}
+        </button>
+      </div>
+
+      {open && (
+        <>
+          <div className="admin-new-region-grid">
+            {NEW_REGION_FIELDS.map(([field, label, type, placeholder, required]) => (
+              <label key={field} className="admin-new-region-field">
+                <span>{label}{required ? " *" : ""}</span>
+                <input
+                  className="admin-input"
+                  type={type}
+                  value={draft[field]}
+                  placeholder={placeholder}
+                  step={type === "number" ? "any" : undefined}
+                  maxLength={field === "code" ? 2 : field === "currency_code" ? 3 : undefined}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, [field]: e.target.value }))}
+                />
+              </label>
+            ))}
+          </div>
+          {error && <p className="admin-fx-msg err">{error}</p>}
+          <div className="admin-new-region-actions">
+            <button className="admin-btn admin-btn-primary" disabled={saving} onClick={save}>
+              {saving ? "Creating…" : "Create region"}
+            </button>
+            <button className="admin-btn" onClick={reset}>Cancel</button>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 export function RegionsView({ rows, request, onSaved }) {
   const [editingThreshold, setEditingThreshold] = useState({});
   const [savingThreshold, setSavingThreshold] = useState({});
@@ -1824,13 +1953,17 @@ export function RegionsView({ rows, request, onSaved }) {
 
   if (!rows.length) {
     return (
-      <section className="admin-panel-card">
-        <div className="admin-panel-head"><h3>Regions</h3><span>No regions configured.</span></div>
-      </section>
+      <div className="admin-regions">
+        <section className="admin-panel-card">
+          <div className="admin-panel-head"><h3>Regions</h3><span>No regions configured.</span></div>
+        </section>
+        <NewRegionForm request={request} onSaved={onSaved} />
+      </div>
     );
   }
   return (
     <div className="admin-regions">
+      <NewRegionForm request={request} onSaved={onSaved} />
       {request && (
         <section className="admin-panel-card admin-fx-banner">
           <div className="admin-panel-head">
