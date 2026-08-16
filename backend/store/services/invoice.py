@@ -10,7 +10,7 @@ from xml.sax.saxutils import escape
 from django.core.files.base import ContentFile
 from django.utils import timezone
 
-from ..models import Order
+from ..models import Order, SiteSettings
 
 logger = logging.getLogger(__name__)
 
@@ -215,13 +215,29 @@ def _fetch_product_image(item, size_mm=14):
         return None
 
 
+COMPANY_ADDRESS = (
+    "IFZA Business Park - Building A02 - Dubai Silicon Oasis - "
+    "Industrial Area - Dubai - United Arab Emirates"
+)
+
+
+def _company_address():
+    """The address the business trades under, as edited in Settings."""
+    settings_row = SiteSettings.objects.only("address_en").first()
+    return (settings_row.address_en.strip() if settings_row else "") or COMPANY_ADDRESS
+
+
 def _seller_snapshot(order):
     region = order.region
+    # Region.address_en is where the market is served from (Oman's is a Muscat
+    # warehouse), not who is selling — it was printing the wrong company address
+    # on every Oman invoice. Prefer the per-market legal override, then the one
+    # company address the admin maintains in Settings.
     return {
         "legal_name": region.seller_legal_name or "Enfant Organic",
         "vat_number": region.seller_vat_number or "",
         "cr_number": region.seller_cr_number or "",
-        "address_en": region.seller_address_en or region.address_en or "IFZA Business Park - Building A02 - Dubai Silicon Oasis - Industrial Area - Dubai - United Arab Emirates",
+        "address_en": region.seller_address_en.strip() or _company_address(),
         "phone": region.seller_phone or region.contact_phone or "",
         "email": region.seller_email or region.contact_email or "sales@enfant-me.com",
         "website": getattr(region, "website", "") or "www.enfantorganic.com",
