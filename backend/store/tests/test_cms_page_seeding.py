@@ -61,6 +61,40 @@ class SeedCmsPagesTestCase(TestCase):
 
         self.assertFalse(CmsPage.objects.filter(slug="contact").exists())
 
+    def test_a_seeded_page_is_published(self):
+        # is_published defaults to False and the storefront only serves published
+        # pages, so an unpublished seed leaves the hardcoded frontend copy live
+        # and every admin edit silently does nothing.
+        self._run()
+
+        self.assertTrue(CmsPage.objects.get(slug="contact").is_published)
+
+    def test_an_existing_unpublished_page_is_published_without_losing_its_copy(self):
+        CmsPage.objects.create(
+            slug="contact", title_en="Reach us", body_en="<p>Admin wrote this</p>", is_published=False,
+        )
+
+        self._run()
+
+        page = CmsPage.objects.get(slug="contact")
+        self.assertTrue(page.is_published)
+        self.assertIn("Admin wrote this", page.body_en)
+
+    def test_dry_run_does_not_publish(self):
+        CmsPage.objects.create(slug="contact", title_en="Reach us", is_published=False)
+
+        self._run(dry_run=True)
+
+        self.assertFalse(CmsPage.objects.get(slug="contact").is_published)
+
+    def test_a_seeded_page_reaches_the_storefront(self):
+        self._run()
+
+        response = APIClient().get("/api/pages/contact/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["title"], "Contact Us")
+
     def test_the_shipped_seed_file_covers_the_pages_that_had_none(self):
         shipped = Path(settings.BASE_DIR) / "store" / "data" / "cms_seed_pages.json"
         payload = json.loads(shipped.read_text(encoding="utf-8"))

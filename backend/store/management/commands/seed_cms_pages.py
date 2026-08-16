@@ -11,7 +11,9 @@ DEFAULT_SOURCE = Path(__file__).resolve().parents[2] / "data" / "cms_seed_pages.
 class Command(BaseCommand):
     help = (
         "Create CmsPage rows for pages whose text only existed in the frontend, so "
-        "the admin can edit them. Never touches a page that already exists."
+        "the admin can edit them. Never rewrites the copy of a page that already "
+        "exists, but does publish it: an unpublished row is invisible to the "
+        "storefront, so editing it changes nothing on the live site."
     )
 
     def add_arguments(self, parser):
@@ -34,20 +36,37 @@ class Command(BaseCommand):
 
         dry_run = options["dry_run"]
         created = 0
+        published = 0
         kept = 0
 
-        existing = set(CmsPage.objects.filter(slug__in=list(payload)).values_list("slug", flat=True))
+        existing = {
+            page.slug: page
+            for page in CmsPage.objects.filter(slug__in=list(payload))
+        }
 
         for slug, row in payload.items():
-            if slug in existing:
+            page = existing.get(slug)
+            if page is not None:
                 # Whatever the admin has since written is the live copy; the
                 # frontend text is only a starting point for a page that has none.
-                self.stdout.write(f"  keep   {slug}: already a CMS page")
-                kept += 1
+                # Publishing is a different matter: CmsPage.is_published defaults
+                # to False, so a seeded page never reached the storefront and the
+                # admin's edits went nowhere.
+                if page.is_published:
+                    self.stdout.write(f"  keep    {slug}: already a published CMS page")
+                    kept += 1
+                    continue
+
+                published += 1
+                self.stdout.write(f"  publish {slug}: existed but was unpublished")
+                if dry_run:
+                    continue
+                page.is_published = True
+                page.save(update_fields=["is_published"])
                 continue
 
             created += 1
-            self.stdout.write(f"  create {slug}: {row.get('title_en', '')}")
+            self.stdout.write(f"  create  {slug}: {row.get('title_en', '')}")
             if dry_run:
                 continue
 
@@ -57,10 +76,16 @@ class Command(BaseCommand):
                 title_ar=row.get("title_ar", ""),
                 body_en=row.get("body_en", ""),
                 body_ar=row.get("body_ar", ""),
+                is_published=True,
             )
 
         verb = "would be created" if dry_run else "created"
+        published_verb = "would be published" if dry_run else "published"
         self.stdout.write("")
-        self.stdout.write(self.style.SUCCESS(f"{created} page(s) {verb}, {kept} left alone."))
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"{created} page(s) {verb}, {published} {published_verb}, {kept} left alone."
+            )
+        )
         if dry_run:
             self.stdout.write(self.style.NOTICE("Dry run — nothing was written."))
