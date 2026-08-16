@@ -196,9 +196,10 @@ function StarRating({ rating = 5, size = 16 }) {
 // "How will customer leave a review on a product?" — they could not. The only
 // endpoint wanted a signed-in customer with a delivered order, and checkout here
 // is guest-first and often phone-only, so nothing was ever submitted.
-function WriteReviewForm({ slug, locale }) {
+// The form lives in a dialog opened from the top of the reviews section: nobody
+// scrolls past every review to find a "write one" link at the bottom.
+function WriteReviewModal({ slug, locale, open, onClose }) {
   const isAr = locale === "ar";
-  const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     customer_name: "", rating: 5, title: "", comment: "", order_number: "", email: "",
   });
@@ -207,6 +208,15 @@ function WriteReviewForm({ slug, locale }) {
   const [error, setError] = useState("");
 
   const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
 
   async function submit(event) {
     event.preventDefault();
@@ -232,76 +242,97 @@ function WriteReviewForm({ slug, locale }) {
     }
   }
 
-  if (done) {
-    return (
-      <div className="review-form-done">
-        <strong>{isAr ? "شكرًا لك!" : "Thank you!"}</strong>
-        <p>
-          {isAr
-            ? "تم إرسال مراجعتك وستظهر بعد المراجعة."
-            : "Your review has been sent and will appear once it is approved."}
-        </p>
-      </div>
-    );
-  }
-
-  if (!open) {
-    return (
-      <button type="button" className="review-write-btn" onClick={() => setOpen(true)}>
-        {isAr ? "اكتب مراجعة" : "Write a review"}
-      </button>
-    );
-  }
+  if (!open) return null;
 
   return (
-    <form className="review-form" onSubmit={submit}>
-      <div className="review-form-row">
-        <label>
-          <span>{isAr ? "الاسم" : "Your name"}</span>
-          <input value={form.customer_name} onChange={set("customer_name")} required maxLength={160} />
-        </label>
-        <label>
-          <span>{isAr ? "التقييم" : "Rating"}</span>
-          <select value={form.rating} onChange={set("rating")}>
-            {[5, 4, 3, 2, 1].map((value) => (
-              <option key={value} value={value}>{"★".repeat(value)}</option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <label>
-        <span>{isAr ? "العنوان (اختياري)" : "Title (optional)"}</span>
-        <input value={form.title} onChange={set("title")} maxLength={160} />
-      </label>
-      <label>
-        <span>{isAr ? "مراجعتك" : "Your review"}</span>
-        <textarea value={form.comment} onChange={set("comment")} required rows={4} maxLength={4000} />
-      </label>
-      <div className="review-form-row">
-        <label>
-          <span>{isAr ? "رقم الطلب (اختياري)" : "Order number (optional)"}</span>
-          <input value={form.order_number} onChange={set("order_number")} placeholder="EO-…" />
-        </label>
-        <label>
-          <span>{isAr ? "البريد الإلكتروني للطلب" : "Order email"}</span>
-          <input type="email" value={form.email} onChange={set("email")} />
-        </label>
-      </div>
-      <small className="review-form-help">
-        {isAr
-          ? "أضف رقم الطلب والبريد الإلكتروني للحصول على شارة \"شراء موثّق\"."
-          : "Add your order number and email to earn a \"verified purchase\" badge."}
-      </small>
-      {error ? <div className="review-form-error">{error}</div> : null}
-      <div className="review-form-actions">
-        <button type="submit" className="primary-action" disabled={submitting}>
-          {submitting ? (isAr ? "جارٍ الإرسال…" : "Sending…") : (isAr ? "إرسال المراجعة" : "Submit review")}
+    <div
+      className="review-modal-backdrop"
+      role="presentation"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="review-modal" role="dialog" aria-modal="true" aria-label={isAr ? "اكتب مراجعة" : "Write a review"}>
+        <button type="button" className="review-modal-close" onClick={onClose} aria-label={isAr ? "إغلاق" : "Close"}>
+          ×
         </button>
-        <button type="button" className="secondary-action" onClick={() => setOpen(false)}>
-          {isAr ? "إلغاء" : "Cancel"}
-        </button>
+
+        {done ? (
+          <div className="review-form-done">
+            <strong>{isAr ? "شكرًا لك!" : "Thank you!"}</strong>
+            <p>
+              {isAr
+                ? "تم إرسال مراجعتك وستظهر بعد المراجعة."
+                : "Your review has been sent and will appear once it is approved."}
+            </p>
+            <button type="button" className="primary-action" onClick={onClose}>
+              {isAr ? "إغلاق" : "Close"}
+            </button>
+          </div>
+        ) : (
+          <form className="review-form" onSubmit={submit}>
+            <h3 className="review-modal-title">{isAr ? "اكتب مراجعة" : "Write a review"}</h3>
+
+            <fieldset className="review-star-picker">
+              <legend>{isAr ? "التقييم" : "Your rating"}</legend>
+              <div className="review-star-picker-stars">
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={`review-star${Number(form.rating) >= value ? " is-on" : ""}`}
+                    onClick={() => setForm((prev) => ({ ...prev, rating: value }))}
+                    aria-label={`${value} ${isAr ? "نجوم" : "stars"}`}
+                    aria-pressed={Number(form.rating) === value}
+                  >
+                    ★
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+
+            <div className="review-form-row">
+              <label>
+                <span>{isAr ? "الاسم" : "Your name"}</span>
+                <input value={form.customer_name} onChange={set("customer_name")} required maxLength={160} />
+              </label>
+              <label>
+                <span>{isAr ? "العنوان (اختياري)" : "Title (optional)"}</span>
+                <input value={form.title} onChange={set("title")} maxLength={160} />
+              </label>
+            </div>
+            <label>
+              <span>{isAr ? "مراجعتك" : "Your review"}</span>
+              <textarea value={form.comment} onChange={set("comment")} required rows={4} maxLength={4000} />
+            </label>
+            <div className="review-form-row">
+              <label>
+                <span>{isAr ? "رقم الطلب (اختياري)" : "Order number (optional)"}</span>
+                <input value={form.order_number} onChange={set("order_number")} placeholder="EO-…" />
+              </label>
+              <label>
+                <span>{isAr ? "البريد الإلكتروني للطلب" : "Order email"}</span>
+                <input type="email" value={form.email} onChange={set("email")} />
+              </label>
+            </div>
+            <small className="review-form-help">
+              {isAr
+                ? "أضف رقم الطلب والبريد الإلكتروني للحصول على شارة \"شراء موثّق\"."
+                : "Add your order number and email to earn a \"verified purchase\" badge."}
+            </small>
+            {error ? <div className="review-form-error">{error}</div> : null}
+            <div className="review-form-actions">
+              <button type="submit" className="primary-action" disabled={submitting}>
+                {submitting ? (isAr ? "جارٍ الإرسال…" : "Sending…") : (isAr ? "إرسال المراجعة" : "Submit review")}
+              </button>
+              <button type="button" className="secondary-action" onClick={onClose}>
+                {isAr ? "إلغاء" : "Cancel"}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
-    </form>
+    </div>
   );
 }
 
@@ -366,6 +397,7 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
   const [isWishSubmitting, setIsWishSubmitting] = useState(false);
   const [wishFeedback, setWishFeedback] = useState("");
   const [showAllReviews, setShowAllReviews] = useState(false);
+  const [reviewFormOpen, setReviewFormOpen] = useState(false);
   const lastTrackedViewItemRef = useRef("");
   const lastPixelViewItemRef = useRef("");
   const [selectedOptions, setSelectedOptions] = useState(
@@ -792,6 +824,15 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
                   {isAr ? "لا توجد مراجعات بعد" : "No reviews yet"}
                 </span>
               )}
+              {/* Right where the shopper is already looking at the stars — not
+                  at the far end of the review list. */}
+              <button
+                type="button"
+                className="review-write-link"
+                onClick={() => setReviewFormOpen(true)}
+              >
+                {isAr ? "اكتب مراجعة" : "Write a review"}
+              </button>
             </div>
 
             <UrgencyStrip urgency={urgency} locale={locale} />
@@ -1066,6 +1107,34 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
             </button>
             <div className="detail-accordion-body">
               <div className="detail-accordion-inner">
+                <div className="review-summary-bar">
+                  <div className="review-summary-score">
+                    {/* rating defaults to 5.0 on a product nobody has reviewed —
+                        printing that next to "no reviews yet" would be a lie. */}
+                    {reviewCount > 0 ? (
+                      <>
+                        <strong>{Number(product.rating || 5).toFixed(1)}</strong>
+                        <StarRating rating={product.rating || 5} size={16} />
+                        <span className="review-summary-count">
+                          {isAr ? `بناءً على ${reviewCount} مراجعة` : `Based on ${reviewCount} reviews`}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="review-summary-count">
+                        {isAr
+                          ? "لا توجد مراجعات بعد — كوني أول من يشارك رأيه"
+                          : "No reviews yet — be the first to share yours"}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="review-write-btn"
+                    onClick={() => setReviewFormOpen(true)}
+                  >
+                    {isAr ? "اكتب مراجعة" : "Write a Review"}
+                  </button>
+                </div>
                 <div className="review-list">
                   {customerReviews.length
                     ? (() => {
@@ -1123,7 +1192,12 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
                         </article>
                       )}
                 </div>
-                <WriteReviewForm slug={product.slug} locale={locale} />
+                <WriteReviewModal
+                  slug={product.slug}
+                  locale={locale}
+                  open={reviewFormOpen}
+                  onClose={() => setReviewFormOpen(false)}
+                />
               </div>
             </div>
           </div>
