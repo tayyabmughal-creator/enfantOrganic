@@ -159,8 +159,13 @@ class NavigationView(StorefrontContextMixin, APIView):
             "regions": RegionSerializer(Region.objects.filter(is_active=True), many=True, context=ctx).data,
             "settings": serialized_settings,
             "menus": {
+                # Sorted by the admin's own number, like every other category
+                # surface. Ordering by product_count instead meant the "Sort
+                # order" field on the Categories screen did nothing here.
                 "product_categories": CategorySerializer(
-                    Category.objects.annotate(product_count=Count("category_products")).order_by("-product_count", "name_en"),
+                    Category.objects
+                    .annotate(product_count=Count("category_products"))
+                    .order_by("sort_order", "id"),
                     many=True,
                     context=ctx,
                 ).data,
@@ -221,8 +226,14 @@ class HomePageView(StorefrontContextMixin, APIView):
             },
             # Annotated so the Shop by Category page can show how many products
             # sit behind each one; the carousel simply ignores the count.
+            # order_by is NOT redundant: since Django 3.1 a GROUP BY query
+            # discards Meta.ordering, so annotate() alone returned the rows in
+            # whatever order the database felt like and the admin's sort_order
+            # was ignored on the homepage.
             "categories": CategorySerializer(
-                Category.objects.annotate(product_count=Count("category_products")),
+                Category.objects
+                .annotate(product_count=Count("category_products"))
+                .order_by("sort_order", "id"),
                 many=True,
                 context=context,
             ).data,
