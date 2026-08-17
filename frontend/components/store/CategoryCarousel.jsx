@@ -40,7 +40,17 @@ export default function CategoryCarousel({ categories, href, locale = "en" }) {
         {categories.map((category) => (
           <Link key={category.slug} href={categoryHref(category)} className="category-round-card">
             <span className="category-round-image">
-              <SiteImage src={category.image} alt={category.name} fill sizes="120px" />
+              {/* Must track .category-carousel-rail's grid-auto-columns in
+                  home.css — clamp(148px, 16vw, 200px), and a flat 148px below
+                  640px. Declaring 120px had the browser fetch a 128w or 256w
+                  variant for a circle that is 200px wide and 400 device pixels
+                  on a retina screen, so every category came out soft. */}
+              <SiteImage
+                src={category.image}
+                alt={category.name}
+                fill
+                sizes="(max-width: 640px) 148px, (max-width: 1250px) 16vw, 200px"
+              />
             </span>
             <span className="category-round-title">{category.name}</span>
           </Link>
