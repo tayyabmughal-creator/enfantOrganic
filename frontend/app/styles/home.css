@@ -1255,7 +1255,10 @@
   letter-spacing: -0.04em;
 }
 
-.product-pricing span {
+/* The compare price on a card is a bare <span>, so this has to stay loose —
+   but it must not reach the savings badge, which is a span in the same box and
+   was being struck through and greyed out along with it. */
+.product-pricing span:not(.save-badge) {
   color: #96a28a;
   text-decoration: line-through;
 }

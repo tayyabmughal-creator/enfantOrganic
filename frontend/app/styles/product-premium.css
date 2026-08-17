@@ -220,17 +220,23 @@
   font-weight: 500;
 }
 
+/* A solid fill, matching the savings badge on the product cards. The cream pill
+   it replaced was the palest thing in the price row, so the one number the
+   shopper should notice was the one that receded. */
 .save-badge {
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
+  padding: 5px 12px;
   border-radius: 999px;
-  background: linear-gradient(135deg, #fef3e8, #fff8f0);
-  color: #b86a1e;
-  font-size: 0.74rem;
+  background: var(--brand-dark, #607a42);
+  color: #fff;
+  font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0.03em;
-  border: 1px solid rgba(214, 166, 110, 0.25);
+  white-space: nowrap;
+  /* Belt and braces: the strikethrough on the compare price sits on a shared
+     ancestor selector, and this badge must never inherit it. */
+  text-decoration: none;
 }
 
 /* ── Variant Pills ────────────────────────────────────────────────────── */
