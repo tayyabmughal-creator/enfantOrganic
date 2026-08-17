@@ -683,11 +683,10 @@
   color: white;
 }
 
-.option-pill.is-unavailable {
-  opacity: 0.38;
-  cursor: not-allowed;
-  text-decoration: line-through;
-}
+/* The unavailable state is defined once, in product-premium.css, and applies
+   to the quick view as well. It used to be declared here too, with a different
+   opacity and a strike-through, and which of the two won came down to the order
+   the stylesheets happened to load in. */
 
 .quick-view-out-of-stock {
   font-size: 0.85rem;

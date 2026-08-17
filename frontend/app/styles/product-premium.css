@@ -281,9 +281,14 @@
   font-weight: 700;
 }
 
+/* A size that genuinely cannot be bought right now. Faded and not clickable,
+   but never struck through: the client read the line as damage to the size
+   itself, and a struck-out "500ml" on a product whose only size is 500ml reads
+   as a broken page rather than as stock information. */
 .option-pill.is-unavailable {
-  opacity: 0.35;
+  opacity: 0.42;
   cursor: not-allowed;
+  text-decoration: none;
 }
 
 /* ── Quantity ─────────────────────────────────────────────────────────── */

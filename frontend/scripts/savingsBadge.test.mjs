@@ -58,3 +58,26 @@ test("the savings badge is filled, not the palest thing in the price row", () =>
     "badge should not be back on the pale cream gradient",
   );
 });
+
+/**
+ * A size option that cannot be bought is faded, never struck through — a line
+ * through "500ml" reads as damage to the size rather than as stock news, which
+ * is what the client reported. The state was declared in two stylesheets with
+ * different values, so which one applied depended on load order.
+ */
+const overlays = readFileSync(new URL("../app/styles/overlays.css", import.meta.url), "utf8");
+
+test("an unavailable size option is not struck through", () => {
+  const rule = premium.match(/\.option-pill\.is-unavailable\s*\{([^}]*)\}/);
+  assert.ok(rule, ".option-pill.is-unavailable rule not found");
+  assert.ok(
+    !/line-through/.test(rule[1]),
+    "an unavailable size must not be struck through",
+  );
+});
+
+test("the unavailable state is declared in exactly one stylesheet", () => {
+  const count = (css) => (css.match(/\.option-pill\.is-unavailable\s*\{/g) || []).length;
+  assert.equal(count(premium), 1);
+  assert.equal(count(overlays), 0, "overlays.css must not redeclare it and race on load order");
+});
