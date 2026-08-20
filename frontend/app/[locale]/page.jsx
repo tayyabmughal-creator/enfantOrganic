@@ -8,6 +8,7 @@ import Icon from "@/components/icons/Icon";
 import JsonLd from "@/components/seo/JsonLd";
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import CategoryCarousel from "@/components/store/CategoryCarousel";
+import HeroBannerCarousel from "@/components/store/HeroBannerCarousel";
 import NewsletterForm from "@/components/store/NewsletterForm";
 import ProductRail from "@/components/store/ProductRail";
 import TestimonialsSlider from "@/components/store/TestimonialsSlider";
@@ -34,7 +35,12 @@ export async function generateMetadata({ params, searchParams }) {
     if (primaryHero?.subtitle) {
       description = primaryHero.subtitle;
     }
-    if (primaryHero?.image) {
+    // The banner carousel now owns the top of the page, so its first slide is
+    // the truest share image; promo cards stay the fallback.
+    const firstSlide = home.hero_banner_slides?.find((slide) => slide?.image);
+    if (firstSlide?.image) {
+      image = firstSlide.image;
+    } else if (primaryHero?.image) {
       image = primaryHero.image;
     }
   } catch {
@@ -84,6 +90,15 @@ export default async function LocalizedHomePage({ params, searchParams }) {
     new:      isAr ? "وصل حديثاً"     : "New Arrival",
     sun:      isAr ? "حماية يومية"    : "Daily Care",
   };
+
+  // Links are resolved here because the carousel is a client component and a
+  // path builder cannot be handed across the server/client boundary.
+  const heroBannerSlides = (Array.isArray(home.hero_banner_slides) ? home.hero_banner_slides : [])
+    .filter((slide) => slide?.image)
+    .map((slide) => ({
+      ...slide,
+      href: slide.href ? buildStorePath(locale, slide.href, region) : "",
+    }));
 
   const heroCards = Array.isArray(home.hero_cards) ? home.hero_cards : [];
   const heroLarge = heroCards.filter((c) => c.size === "large");
@@ -157,6 +172,9 @@ export default async function LocalizedHomePage({ params, searchParams }) {
       <h1 className="visually-hidden">{isAr ? "متجر إنفانت أورجانيك" : "Enfant Organic Store"}</h1>
       <JsonLd data={organizationJsonLd} />
       <JsonLd data={websiteJsonLd} />
+
+      <HeroBannerCarousel slides={heroBannerSlides} locale={locale} />
+
       {heroShowcaseEmpty ? null : (
       <section className="section container">
         <div className="offers-showcase">

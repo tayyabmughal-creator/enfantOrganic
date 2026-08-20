@@ -17,6 +17,7 @@ from ..models import (
     Category,
     Coupon,
     GiftCard,
+    HeroBannerSlide,
     HeroPromoCard,
     InstagramPost,
     Order,
@@ -267,6 +268,62 @@ class AdminHeroPromoCardSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         request = self.context.get("request")
         data["image"] = get_image_url(instance, request, "image_file", "image")
+        return data
+
+
+class OmittableBooleanField(serializers.BooleanField):
+    """A boolean missing from multipart data is unset, not False.
+
+    DRF maps an absent boolean in HTML input to False on create
+    (``default_empty_html``), which is right for a rendered checkbox but wrong
+    for an uploader that only posts the fields it has. The Hero Banner screen
+    posts a file plus a couple of text fields, so without this every new slide
+    was saved hidden and the admin had to click "Show" to undo it.
+    """
+
+    default_empty_html = serializers.empty
+
+
+class AdminHeroBannerSlideSerializer(serializers.ModelSerializer):
+    image = serializers.CharField(required=False, allow_blank=True)
+    image_mobile = serializers.CharField(required=False, allow_blank=True)
+    is_visible = OmittableBooleanField(required=False, default=True)
+
+    class Meta:
+        model = HeroBannerSlide
+        fields = (
+            "id",
+            "image",
+            "image_file",
+            "image_mobile",
+            "image_file_mobile",
+            "alt_text_en",
+            "alt_text_ar",
+            "href",
+            "sort_order",
+            "is_visible",
+        )
+        extra_kwargs = {
+            "image_file": {"required": False},
+            "image_file_mobile": {"required": False},
+        }
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if self.instance:
+            return attrs
+
+        if not attrs.get("image") and not attrs.get("image_file"):
+            raise serializers.ValidationError({"image": "Upload an image or provide an image URL."})
+        return attrs
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        # The admin list renders straight from these, so hand back resolved URLs
+        # rather than the raw storage path an uploaded file would otherwise emit.
+        data["image"] = get_image_url(instance, request, "image_file", "image")
+        data["image_mobile"] = get_image_url(instance, request, "image_file_mobile", "image_mobile")
         return data
 
 

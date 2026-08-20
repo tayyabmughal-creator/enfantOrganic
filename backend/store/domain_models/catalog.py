@@ -608,6 +608,30 @@ class HeroPromoCard(OrderedModel):
         return self.title_en
 
 
+class HeroBannerSlide(OrderedModel):
+    """One image in the full-width carousel at the top of the homepage.
+
+    The banner used to be a single ``HeroPromoCard`` with ``size="large"``, so
+    running more than one promo meant swapping the artwork by hand. Slides are
+    plain artwork with an optional link — all the copy lives inside the image the
+    client designs, which is how their banners have always been produced.
+    """
+
+    image = models.URLField(max_length=500, blank=True, default="")
+    image_file = models.ImageField(upload_to="hero-banner/", blank=True, null=True)
+    # Optional phone-specific crop. Blank means the desktop artwork is reused, so
+    # a slide only ever needs one upload to work everywhere.
+    image_mobile = models.URLField(max_length=500, blank=True, default="")
+    image_file_mobile = models.ImageField(upload_to="hero-banner/", blank=True, null=True)
+    alt_text_en = models.CharField(max_length=255, blank=True, default="")
+    alt_text_ar = models.CharField(max_length=255, blank=True, default="")
+    href = models.CharField(max_length=255, blank=True, default="")
+    is_visible = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.alt_text_en or f"Hero banner slide {self.pk}"
+
+
 class Category(OrderedModel):
     slug = models.SlugField(unique=True)
     name_en = models.CharField(max_length=120, default="")

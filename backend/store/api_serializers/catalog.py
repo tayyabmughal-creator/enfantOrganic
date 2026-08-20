@@ -8,6 +8,7 @@ from ..models import (
     CmsPage,
     BlogPost,
     Category,
+    HeroBannerSlide,
     HeroPromoCard,
     InstagramPost,
     Product,
@@ -296,6 +297,28 @@ class HeroPromoCardSerializer(serializers.ModelSerializer):
 
     def get_cta(self, obj):
         return localized(obj, "cta", self.context.get("locale"))
+
+
+class HeroBannerSlideSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
+    image_mobile = serializers.SerializerMethodField()
+    alt = serializers.SerializerMethodField()
+
+    class Meta:
+        model = HeroBannerSlide
+        fields = ("id", "image", "image_mobile", "alt", "href")
+
+    def get_image(self, obj):
+        request = self.context.get("request")
+        return get_image_url(obj, request, "image_file", "image")
+
+    def get_image_mobile(self, obj):
+        # Empty when no mobile artwork is set — frontend then reuses the desktop image.
+        request = self.context.get("request")
+        return get_image_url(obj, request, "image_file_mobile", "image_mobile")
+
+    def get_alt(self, obj):
+        return localized(obj, "alt_text", self.context.get("locale"))
 
 
 class CategorySerializer(serializers.ModelSerializer):

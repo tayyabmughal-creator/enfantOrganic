@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DashboardView from "./DashboardView";
 import AnalyticsView from "./AnalyticsView";
-import { StoreSettingsSection, SettingsPanel, Reports, AuditLogsPanel, IntegrationsView, PaymentGatewaysView, InventoryView, InsightsView, NewsletterPanel, PopupLeadsPanel, RegionsView, InstagramPostsPanel, NotificationHealthView, PlaceholderModule } from "./OtherViews";
+import { StoreSettingsSection, SettingsPanel, Reports, AuditLogsPanel, IntegrationsView, PaymentGatewaysView, InventoryView, InsightsView, NewsletterPanel, PopupLeadsPanel, RegionsView, InstagramPostsPanel, HeroBannerPanel, NotificationHealthView, PlaceholderModule } from "./OtherViews";
 import { CrudPanel, CrudFormModal } from "./CrudViews";
 import DraftOrderComposer from "./DraftOrderComposer";
 import { AdminToast } from "./SharedUI";
@@ -55,6 +55,7 @@ const NAV_GROUPS = [
       { key: "popup_leads",     label: "Popup Leads",    icon: "target",    endpoint: "/admin/newsletter-subscribers/?source=discount_popup", desc: "Phone numbers captured from the discount popup." },
       { key: "blog",            label: "Blog",           icon: "edit",      endpoint: "/admin/blog-posts/",              desc: "Articles, guides, and brand stories." },
       { key: "pages",           label: "Pages",          icon: "edit",      endpoint: "/admin/cms-pages/",               desc: "CMS-managed policy and static content pages." },
+      { key: "hero_banner",     label: "Hero Banner",    icon: "image",     endpoint: "/admin/hero-banner-slides/",      desc: "Full-width image carousel at the top of the homepage." },
       { key: "hero_cards",      label: "Hero Cards",     icon: "image",     endpoint: "/admin/hero-promo-cards/",        desc: "Homepage hero promo cards and visuals." },
       { key: "instagram_posts", label: "Instagram Grid", icon: "instagram", endpoint: "/admin/instagram-posts/",        desc: "Instagram feed photos shown on the homepage." },
       { key: "homepage",        label: "Content",        icon: "home",      endpoint: "/admin/settings/",               desc: "Announcements, newsletter, and homepage sections." },
@@ -109,6 +110,7 @@ const NAV_READ_CAPABILITY = {
   warehouses: "inventory.view",
   blog: "content.view",
   pages: "content.view",
+  hero_banner: "content.view",
   hero_cards: "content.view",
   instagram_posts: "content.view",
   homepage: "content.view",
@@ -151,6 +153,7 @@ const NAV_WRITE_CAPABILITY = {
   warehouses: "inventory.edit",
   blog: "content.edit",
   pages: "content.edit",
+  hero_banner: "content.edit",
   hero_cards: "content.edit",
   instagram_posts: "content.edit",
   homepage: "content.edit",
@@ -358,7 +361,7 @@ const FIELD_CONFIGS = {
       ["/product/extra-mild-baby-wipes","Product: Extra Mild Baby Wipes"],
       ["/product/sweet-dream-foam-mousse-400ml","Product: Moisture Shampoo 300ml"],
     ]],
-    ["size","Card size","select",[["large","Large — main hero (2-col width)"],["small","Small — tile grid card"]]],
+    ["size","Card size","select",[["large","Large — wide promo card"],["small","Small — tile grid card"]]],
     ["accent","Preset label (used only if Eyebrow is empty)","select",[
       ["none","— No eyebrow label —"],
       ["gift","Exclusive Offer"],
@@ -1983,6 +1986,7 @@ export default function AdminPanelClient() {
     if (activeKey === "audit_logs")            return <AuditLogsPanel rows={Array.isArray(data) ? data : []} filters={auditFilters} onFiltersChange={(patch) => setAuditFilters((prev) => ({ ...prev, ...patch }))} />;
     if (activeKey === "regions")               return <RegionsView rows={Array.isArray(data) ? data : []} request={request} onSaved={() => loadScreen()} />;
     if (activeKey === "instagram_posts")       return <InstagramPostsPanel rows={Array.isArray(data) ? data : []} request={request} onSaved={() => loadScreen()} />;
+    if (activeKey === "hero_banner")           return <HeroBannerPanel rows={Array.isArray(data) ? data : []} request={request} canEdit={canWriteKey("hero_banner")} onSaved={() => loadScreen()} />;
     if (activeKey === "draft_orders" && draftComposerOpen) {
       return (
         <DraftOrderComposer

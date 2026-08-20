@@ -2389,6 +2389,277 @@ export function InstagramPostsPanel({ rows = [], request, onSaved }) {
   );
 }
 
+// ─── Hero Banner Carousel ─────────────────────────────────────────────────────
+
+const HERO_BANNER_LINKS = [
+  ["", "— No link (image only) —"],
+  ["/collections", "All Collections"],
+  ["/collections?collection=baby_sets", "Gift Sets"],
+  ["/collections?collection=top_choices", "Parents Top Choices"],
+  ["/collections?ordering=-id", "New Arrivals"],
+  ["/collections?ordering=-rating", "Best Rated"],
+];
+
+const EMPTY_SLIDE_FORM = {
+  file: null,
+  preview: "",
+  mobileFile: null,
+  mobilePreview: "",
+  href: "",
+  alt_text_en: "",
+  alt_text_ar: "",
+};
+
+export function HeroBannerPanel({ rows = [], request, onSaved, canEdit = true }) {
+  const [slides, setSlides] = useState(rows);
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState(EMPTY_SLIDE_FORM);
+  const [saving, setSaving] = useState(false);
+  const [busyId, setBusyId] = useState(null);
+  const [error, setError] = useState("");
+  const fileRef = useRef(null);
+  const mobileFileRef = useRef(null);
+
+  useEffect(() => { setSlides(rows); }, [rows]);
+
+  function pickFile(e, key) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const preview = URL.createObjectURL(file);
+    setForm((f) => {
+      const oldPreview = key === "file" ? f.preview : f.mobilePreview;
+      if (oldPreview) URL.revokeObjectURL(oldPreview);
+      return key === "file"
+        ? { ...f, file, preview }
+        : { ...f, mobileFile: file, mobilePreview: preview };
+    });
+  }
+
+  function resetForm() {
+    if (form.preview) URL.revokeObjectURL(form.preview);
+    if (form.mobilePreview) URL.revokeObjectURL(form.mobilePreview);
+    setForm(EMPTY_SLIDE_FORM);
+    setAdding(false);
+    setError("");
+  }
+
+  async function handleAdd(e) {
+    e.preventDefault();
+    if (!form.file) { setError("Choose a banner image to upload."); return; }
+    setSaving(true); setError("");
+    try {
+      const fd = new FormData();
+      fd.append("image_file", form.file);
+      if (form.mobileFile) fd.append("image_file_mobile", form.mobileFile);
+      if (form.href.trim()) fd.append("href", form.href.trim());
+      if (form.alt_text_en.trim()) fd.append("alt_text_en", form.alt_text_en.trim());
+      if (form.alt_text_ar.trim()) fd.append("alt_text_ar", form.alt_text_ar.trim());
+      // New slides go to the end of the deck rather than jumping to the front.
+      fd.append("sort_order", String(slides.length));
+      await request("/admin/hero-banner-slides/", { method: "POST", body: fd });
+      resetForm();
+      onSaved?.();
+    } catch (err) {
+      setError(err?.message || "Upload failed. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function patchSlide(id, body) {
+    setBusyId(id); setError("");
+    try {
+      await request(`/admin/hero-banner-slides/${id}/`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      onSaved?.();
+    } catch (err) {
+      setError(err?.message || "Could not save that change.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleDelete(id) {
+    setBusyId(id); setError("");
+    try {
+      await request(`/admin/hero-banner-slides/${id}/`, { method: "DELETE" });
+      onSaved?.();
+    } catch (err) {
+      setError(err?.message || "Delete failed.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // Slides carry arbitrary sort_order values, so a swap writes explicit
+  // positions for both rows instead of nudging one number and hoping.
+  async function move(index, direction) {
+    const target = index + direction;
+    if (target < 0 || target >= slides.length) return;
+    const a = slides[index];
+    const b = slides[target];
+    setBusyId(a.id); setError("");
+    try {
+      await request(`/admin/hero-banner-slides/${a.id}/`, {
+        method: "PATCH", body: JSON.stringify({ sort_order: target }),
+      });
+      await request(`/admin/hero-banner-slides/${b.id}/`, {
+        method: "PATCH", body: JSON.stringify({ sort_order: index }),
+      });
+      onSaved?.();
+    } catch (err) {
+      setError(err?.message || "Could not reorder the slides.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const visibleCount = slides.filter((s) => s.is_visible !== false).length;
+
+  return (
+    <section className="admin-panel-card">
+      <div className="admin-panel-head">
+        <div>
+          <h3>Hero Banner</h3>
+          <span>
+            {slides.length} slide{slides.length !== 1 ? "s" : ""}
+            {slides.length ? ` · ${visibleCount} live` : ""} · full-width carousel at the top of the homepage
+          </span>
+        </div>
+        {canEdit && !adding && (
+          <button type="button" className="admin-btn-primary" onClick={() => { setAdding(true); setError(""); }}>
+            + Add slide
+          </button>
+        )}
+      </div>
+
+      {adding && (
+        <form className="ig-post-add-form" onSubmit={handleAdd}>
+          <div className="ig-post-add-fields">
+            <label>
+              <span>Banner image <span style={{ color: "#c0392b" }}>*</span></span>
+              <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => pickFile(e, "file")} />
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <button type="button" className="admin-btn-ghost" onClick={() => fileRef.current?.click()} style={{ whiteSpace: "nowrap" }}>
+                  {form.file ? "Change image" : "📁 Choose image"}
+                </button>
+                {form.file && <span style={{ fontSize: 13, color: "#5a7a4a" }}>✓ {form.file.name}</span>}
+              </div>
+              <small className="admin-field-help">Wide artwork works best — around 1920 × 400px.</small>
+            </label>
+            <label>
+              <span>Mobile image (optional)</span>
+              <input ref={mobileFileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => pickFile(e, "mobileFile")} />
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <button type="button" className="admin-btn-ghost" onClick={() => mobileFileRef.current?.click()} style={{ whiteSpace: "nowrap" }}>
+                  {form.mobileFile ? "Change image" : "📁 Choose image"}
+                </button>
+                {form.mobileFile && <span style={{ fontSize: 13, color: "#5a7a4a" }}>✓ {form.mobileFile.name}</span>}
+              </div>
+              <small className="admin-field-help">Leave empty and phones reuse the image above.</small>
+            </label>
+            <label>
+              <span>Link when clicked</span>
+              <input
+                list="hero-banner-links"
+                placeholder="/collections"
+                value={form.href}
+                onChange={(e) => setForm((f) => ({ ...f, href: e.target.value }))}
+              />
+              <datalist id="hero-banner-links">
+                {HERO_BANNER_LINKS.filter(([value]) => value).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </datalist>
+              <small className="admin-field-help">Leave empty for an image-only banner.</small>
+            </label>
+            <label>
+              <span>Description EN (for screen readers)</span>
+              <input
+                type="text"
+                placeholder="Hot deals up to 50% off"
+                value={form.alt_text_en}
+                onChange={(e) => setForm((f) => ({ ...f, alt_text_en: e.target.value }))}
+              />
+            </label>
+            <label>
+              <span>Description AR (optional)</span>
+              <input
+                type="text"
+                dir="rtl"
+                value={form.alt_text_ar}
+                onChange={(e) => setForm((f) => ({ ...f, alt_text_ar: e.target.value }))}
+              />
+            </label>
+          </div>
+          {form.preview && (
+            <div className="hero-banner-admin-preview">
+              <img src={form.preview} alt="Banner preview" />
+            </div>
+          )}
+          {error && <p className="admin-threshold-error">{error}</p>}
+          <div className="ig-post-add-actions">
+            <button type="submit" className="admin-btn-primary" disabled={saving}>{saving ? "Uploading…" : "Save slide"}</button>
+            <button type="button" className="admin-btn-ghost" onClick={resetForm}>Cancel</button>
+          </div>
+        </form>
+      )}
+
+      {!adding && error && <p className="admin-threshold-error">{error}</p>}
+
+      {slides.length === 0 && !adding ? (
+        <AdminEmpty message="No banner slides yet. Add the first one to show the homepage carousel." />
+      ) : (
+        <div className="hero-banner-admin-list">
+          {slides.map((slide, index) => (
+            <div key={slide.id} className={`hero-banner-admin-row${slide.is_visible === false ? " is-hidden" : ""}`}>
+              <div className="hero-banner-admin-thumb">
+                <img
+                  src={slide.image}
+                  alt=""
+                  onError={(e) => { e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='50'%3E%3Crect width='160' height='50' fill='%23e8f0e0'/%3E%3C/svg%3E"; }}
+                />
+              </div>
+              <div className="hero-banner-admin-meta">
+                <strong>{slide.alt_text_en || `Slide ${index + 1}`}</strong>
+                <span>{slide.href ? `Links to ${slide.href}` : "No link"}</span>
+                {slide.image_mobile ? <span>Has a separate mobile image</span> : null}
+              </div>
+              {canEdit ? (
+                <div className="hero-banner-admin-actions">
+                  <button type="button" className="admin-btn-ghost" onClick={() => move(index, -1)} disabled={index === 0 || busyId === slide.id} title="Move up">↑</button>
+                  <button type="button" className="admin-btn-ghost" onClick={() => move(index, 1)} disabled={index === slides.length - 1 || busyId === slide.id} title="Move down">↓</button>
+                  <button
+                    type="button"
+                    className="admin-btn-ghost"
+                    onClick={() => patchSlide(slide.id, { is_visible: slide.is_visible === false })}
+                    disabled={busyId === slide.id}
+                  >
+                    {slide.is_visible === false ? "Show" : "Hide"}
+                  </button>
+                  <button
+                    type="button"
+                    className="admin-btn-ghost"
+                    style={{ color: "#c0392b" }}
+                    onClick={() => handleDelete(slide.id)}
+                    disabled={busyId === slide.id}
+                    title="Delete slide"
+                  >
+                    {busyId === slide.id ? "…" : "Delete"}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function PlaceholderModule({ config }) {
   return (
     <section className="admin-placeholder-card">

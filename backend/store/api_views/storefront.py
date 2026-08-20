@@ -12,6 +12,7 @@ from ..models import (
     Product,
     CmsPage,
     Category,
+    HeroBannerSlide,
     HeroPromoCard,
     InstagramPost,
     Order,
@@ -26,6 +27,7 @@ from ..serializers import (
     BlogPostSerializer,
     CategorySerializer,
     CmsPageSerializer,
+    HeroBannerSlideSerializer,
     HeroPromoCardSerializer,
     InstagramPostSerializer,
     ProductCardSerializer,
@@ -214,6 +216,12 @@ class HomePageView(StorefrontContextMixin, APIView):
         ]
 
         payload = {
+            # Full-width carousel above everything else on the homepage.
+            "hero_banner_slides": HeroBannerSlideSerializer(
+                HeroBannerSlide.objects.filter(is_visible=True),
+                many=True,
+                context=context,
+            ).data,
             "hero_cards": HeroPromoCardSerializer(
                 HeroPromoCard.objects.filter(is_visible=True),
                 many=True,

@@ -9,6 +9,7 @@ from .models import (
     Category,
     GiftCard,
     GiftCardRedemption,
+    HeroBannerSlide,
     HeroPromoCard,
     InstagramPost,
     CustomerAddress,
@@ -236,6 +237,12 @@ class PaymobRegionConfigAdmin(admin.ModelAdmin):
 @admin.register(HeroPromoCard)
 class HeroPromoCardAdmin(admin.ModelAdmin):
     list_display = ("title_en", "size", "accent", "sort_order")
+
+
+@admin.register(HeroBannerSlide)
+class HeroBannerSlideAdmin(admin.ModelAdmin):
+    list_display = ("__str__", "href", "is_visible", "sort_order")
+    list_filter = ("is_visible",)
 
 
 @admin.register(Category)
