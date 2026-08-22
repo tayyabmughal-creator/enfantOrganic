@@ -5,14 +5,21 @@ with is_approved=True. After import, Product.review_count and Product.rating
 (average) are recalculated from the actual Review records.
 
 Idempotent — keyed on (product_slug, customer_name, title[:160]). Re-running
-safely skips already-imported rows.
+safely skips already-imported rows, so it is the way to pick up products added
+to the catalogue after an earlier import (their rows were skipped back then
+because the product did not exist yet).
+
+Handles that were re-slugged after a previous import are mapped through
+HANDLE_ALIASES; anything still unmatched is listed at the end of the run.
 
 Usage:
     python manage.py import_shopify_reviews /path/to/review-export.xlsx [--dry-run]
+    python manage.py import_shopify_reviews /path/to/review-export.xlsx --backfill-images
 
 Requires openpyxl:
     pip install openpyxl
 """
+import collections
 import datetime
 import re
 from pathlib import Path
@@ -30,6 +37,27 @@ except ImportError as exc:
 from store.models import Product, Review
 
 
+# Some products were re-slugged after their reviews were first imported, so the
+# handle in the Shopify export no longer resolves to a Product and every row for
+# them was being counted as skipped_no_slug. Map the export handle onto the slug
+# the product carries today. Verified by reviewer-name overlap against the rows
+# already in the database.
+HANDLE_ALIASES = {
+    "enfant-organic-plus-moisture-conditioner-for-kids": "Enfant-Organic-Kids-Hair-Conditioner",
+    "best-newborn-gift-set-uae-relaxing-night-routine": "newborn-baby-gift-set",
+    "enfant-organic-plus-extra-mild-face-body-wipes": "Enfant-Organic-Plus-Extra-Mild-Wipes",
+    "enfant-organic-body-wash-shampoo-500-ml": "enfant-organic-body-wash-shampoo",
+    "enfant-ultimate-newborn-essential-kit-uae-and-oman": "organic-newborn-essential-kit",
+    "enfant-ultra-care-organic-plus-shampoo-body-wash-uae-oman": "Ultra-Care-Shampoo",
+}
+
+# Columns holding photos the customer attached to the review. "Reviewer Image
+# Url" is deliberately absent — that is the reviewer's avatar (Facebook / LINE
+# profile picture), not a picture of the product, and it does not belong in the
+# review's image gallery.
+MEDIA_COLUMNS = ("Media URLs",)
+
+
 class Command(BaseCommand):
     help = "Import a Shopify review export (.xlsx) into Review records."
 
@@ -40,6 +68,14 @@ class Command(BaseCommand):
             action="store_true",
             help="Parse and report counts without writing to the database.",
         )
+        parser.add_argument(
+            "--backfill-images",
+            action="store_true",
+            help=(
+                "Also attach media to reviews that already exist (imported before "
+                "photo support). Only fills reviews whose images are empty."
+            ),
+        )
 
     def handle(self, *args, **options):
         xlsx_path = Path(options["xlsx_path"]).expanduser()
@@ -47,6 +83,7 @@ class Command(BaseCommand):
             raise CommandError(f"File not found: {xlsx_path}")
 
         dry_run = bool(options["dry_run"])
+        backfill_images = bool(options["backfill_images"])
 
         self.stdout.write(f"Loading {xlsx_path.name} …")
         wb = openpyxl.load_workbook(xlsx_path, read_only=True, data_only=True)
@@ -68,12 +105,7 @@ class Command(BaseCommand):
 
         def review_images(row_dict):
             values = []
-            for header in headers:
-                key = str(header or "").strip().lower()
-                if not key:
-                    continue
-                if not any(token in key for token in ("image", "photo", "picture")):
-                    continue
+            for header in MEDIA_COLUMNS:
                 raw = row_dict.get(header)
                 if raw is None:
                     continue
@@ -88,6 +120,20 @@ class Command(BaseCommand):
 
         # Pre-load product slug → pk mapping (slug is unique index).
         slug_to_pk = dict(Product.objects.values_list("slug", "pk"))
+        lower_slug_to_pk = {slug.lower(): pk for slug, pk in slug_to_pk.items()}
+
+        def resolve_pk(handle):
+            """Export handle → Product pk, tolerating case and post-import re-slugs."""
+            if not handle:
+                return None
+            candidates = [handle, HANDLE_ALIASES.get(handle, "")]
+            for candidate in candidates:
+                if not candidate:
+                    continue
+                pk = slug_to_pk.get(candidate) or lower_slug_to_pk.get(candidate.lower())
+                if pk:
+                    return pk
+            return None
 
         stats = {
             "rows": 0,
@@ -95,21 +141,37 @@ class Command(BaseCommand):
             "skipped_status": 0,
             "skipped_no_slug": 0,
             "skipped_duplicate": 0,
+            "images_backfilled": 0,
             "errors": 0,
         }
 
-        # (product_pk, customer_name_lower, title_lower) → already exists
-        existing_keys: set = set()
-        for review in Review.objects.values("product_id", "customer_name", "title"):
-            existing_keys.add(
-                (
+        def dedup_key_for(product_pk, customer_name, title, comment):
+            # Reviewer names arrive anonymised ("r***a") and titles are often
+            # blank, so name+title alone collapses genuinely different reviews
+            # from the same product. The body disambiguates them.
+            return (
+                product_pk,
+                (customer_name or "").lower(),
+                (title or "")[:160].lower(),
+                (comment or "")[:200].strip().lower(),
+            )
+
+        # dedup key → pk of the review already stored
+        existing_keys: dict = {}
+        for review in Review.objects.values("pk", "product_id", "customer_name", "title", "comment"):
+            existing_keys.setdefault(
+                dedup_key_for(
                     review["product_id"],
-                    (review["customer_name"] or "").lower(),
-                    (review["title"] or "")[:160].lower(),
-                )
+                    review["customer_name"],
+                    review["title"],
+                    review["comment"],
+                ),
+                review["pk"],
             )
 
         created_reviews: list[tuple[int, datetime.datetime]] = []  # (pk, date)
+        affected_pks: set = set()
+        unmatched_handles: collections.Counter = collections.Counter()
 
         with transaction.atomic():
             for raw_row in rows[1:]:
@@ -124,20 +186,30 @@ class Command(BaseCommand):
                     continue
 
                 slug = col(row, "Product Handle")
-                if not slug or slug not in slug_to_pk:
+                product_pk = resolve_pk(slug)
+                if product_pk is None:
                     stats["skipped_no_slug"] += 1
+                    unmatched_handles[slug or "(blank)"] += 1
                     continue
 
-                product_pk = slug_to_pk[slug]
+                affected_pks.add(product_pk)
                 customer_name = col(row, "Reviewer Name")[:160] or "Anonymous"
                 title = col(row, "Title")[:160]
                 comment = col(row, "Body")
                 rating = max(1, min(5, int(rating_raw)))
+                images = review_images(row)
 
                 # Idempotency check
-                dedup_key = (product_pk, customer_name.lower(), title.lower())
+                dedup_key = dedup_key_for(product_pk, customer_name, title, comment)
                 if dedup_key in existing_keys:
                     stats["skipped_duplicate"] += 1
+                    # Reviews imported before photo support have no images; give
+                    # them the media from the export without touching their text.
+                    if backfill_images and images and not dry_run:
+                        filled = Review.objects.filter(
+                            pk=existing_keys[dedup_key], images=[]
+                        ).update(images=images)
+                        stats["images_backfilled"] += filled
                     continue
 
                 # Parse date (Judge.me exports as datetime or string). Make tz-aware.
@@ -158,12 +230,12 @@ class Command(BaseCommand):
                             rating=rating,
                             title=title,
                             comment=comment,
-                            images=review_images(row),
+                            images=images,
                             is_approved=True,
                             is_verified_purchase=False,
                         )
                         created_reviews.append((review_obj.pk, review_date))
-                        existing_keys.add(dedup_key)
+                        existing_keys[dedup_key] = review_obj.pk
 
                     stats["imported"] += 1
                 except Exception as exc:
@@ -178,13 +250,6 @@ class Command(BaseCommand):
                     Review.objects.filter(pk=pk).update(created_at=date)
 
                 # Recalculate Product.review_count and Product.rating from Review table.
-                affected_pks = {pk for slug, pk in slug_to_pk.items() if slug in {
-                    col(dict(zip(headers, r)), "Product Handle")
-                    for r in rows[1:]
-                    if col(dict(zip(headers, r)), "Status") == "Published"
-                    and dict(zip(headers, r)).get("Rating") is not None
-                }}
-
                 agg = (
                     Review.objects.filter(product_id__in=affected_pks, is_approved=True)
                     .values("product_id")
@@ -204,8 +269,20 @@ class Command(BaseCommand):
                 "Import complete (dry_run={dry_run}). "
                 "rows={rows} imported={imported} "
                 "skipped_status={skipped_status} skipped_no_slug={skipped_no_slug} "
-                "skipped_duplicate={skipped_duplicate} errors={errors}".format(
+                "skipped_duplicate={skipped_duplicate} "
+                "images_backfilled={images_backfilled} errors={errors}".format(
                     dry_run=dry_run, **stats
                 )
             )
         )
+
+        # A handle no product answers to means those reviews are silently lost.
+        # Print them so the gap is visible instead of hiding inside a count.
+        if unmatched_handles:
+            self.stdout.write(
+                self.style.WARNING(
+                    "Handles with no matching product (add to HANDLE_ALIASES if re-slugged):"
+                )
+            )
+            for handle, count in unmatched_handles.most_common():
+                self.stdout.write(self.style.WARNING(f"  {count:>4} review(s)  {handle}"))
