@@ -635,8 +635,11 @@ class HeroBannerSlide(OrderedModel):
     # separate upload it can be a different shape — tall artwork for phones next
     # to a wide desktop banner — and the carousel follows each one.
     image_mobile = models.URLField(max_length=500, blank=True, default="")
+    # Its own folder: the two uploads are different artwork for different screens
+    # and were landing in one directory, which made them impossible to tell apart
+    # on disk. Files uploaded before this keep their recorded path.
     image_file_mobile = models.ImageField(
-        upload_to="hero-banner/",
+        upload_to="hero-banner/mobile/",
         blank=True,
         null=True,
         width_field="image_mobile_width",

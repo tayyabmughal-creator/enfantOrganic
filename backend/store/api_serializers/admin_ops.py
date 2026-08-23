@@ -311,7 +311,10 @@ class AdminHeroBannerSlideSerializer(serializers.ModelSerializer):
         )
         extra_kwargs = {
             "image_file": {"required": False},
-            "image_file_mobile": {"required": False},
+            # allow_null so the panel can hand the slide back to the website
+            # artwork; the phone image is the one field that is meant to be
+            # emptied again, unlike the required website one.
+            "image_file_mobile": {"required": False, "allow_null": True},
             "image_width": {"read_only": True},
             "image_height": {"read_only": True},
             "image_mobile_width": {"read_only": True},
@@ -326,6 +329,17 @@ class AdminHeroBannerSlideSerializer(serializers.ModelSerializer):
         if not attrs.get("image") and not attrs.get("image_file"):
             raise serializers.ValidationError({"image": "Upload an image or provide an image URL."})
         return attrs
+
+    def update(self, instance, validated_data):
+        # Clearing the phone artwork has to drop both halves of it. Leaving the
+        # URL behind would keep serving a mobile image the panel now shows as
+        # removed, and the two fields are what the storefront falls back between.
+        clearing_mobile = (
+            "image_file_mobile" in validated_data and not validated_data["image_file_mobile"]
+        )
+        if clearing_mobile:
+            validated_data.setdefault("image_mobile", "")
+        return super().update(instance, validated_data)
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

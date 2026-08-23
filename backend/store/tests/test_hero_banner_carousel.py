@@ -127,6 +127,68 @@ class HeroBannerSlideAdminTests(TestCase):
         # Replacing one image must leave the other one alone.
         self.assertEqual((slide.image_width, slide.image_height), (1920, 400))
 
+    def test_mobile_artwork_can_be_removed_again(self):
+        # The panel's Remove button. Without it the phone override was one-way:
+        # once set there was no way back to showing the website image.
+        slide = HeroBannerSlide.objects.create(
+            image_file=make_image_upload(size=(1920, 400)),
+            image_file_mobile=make_image_upload("tall.jpg", size=(1080, 1920)),
+        )
+
+        response = self.api_client.patch(
+            f"/api/admin/hero-banner-slides/{slide.id}/",
+            {"image_file_mobile": None, "image_mobile": ""},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        slide.refresh_from_db()
+        self.assertFalse(slide.image_file_mobile)
+        self.assertEqual(slide.image_mobile, "")
+        # Blank is what the storefront reads as "reuse the website artwork", so a
+        # stale size left behind would size the phone banner to an absent image.
+        self.assertIsNone(slide.image_mobile_width)
+        self.assertIsNone(slide.image_mobile_height)
+        # The website artwork must survive untouched.
+        self.assertTrue(slide.image_file)
+        self.assertEqual((slide.image_width, slide.image_height), (1920, 400))
+
+    def test_clearing_the_mobile_file_also_drops_a_mobile_url(self):
+        # Both halves feed the same fallback, so clearing only the file would keep
+        # serving the URL while the panel shows the slot as empty.
+        slide = HeroBannerSlide.objects.create(
+            image="https://cdn.test/wide.jpg",
+            image_mobile="https://cdn.test/tall.jpg",
+        )
+
+        response = self.api_client.patch(
+            f"/api/admin/hero-banner-slides/{slide.id}/",
+            {"image_file_mobile": None},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        slide.refresh_from_db()
+        self.assertEqual(slide.image_mobile, "")
+        self.assertEqual(slide.image, "https://cdn.test/wide.jpg")
+
+    def test_the_two_uploads_are_stored_apart(self):
+        # They are different artwork for different screens; one shared folder made
+        # them impossible to tell apart on disk.
+        response = self.api_client.post(
+            "/api/admin/hero-banner-slides/",
+            {
+                "image_file": make_image_upload("wide.jpg", size=(1920, 400)),
+                "image_file_mobile": make_image_upload("tall.jpg", size=(1080, 1920)),
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        slide = HeroBannerSlide.objects.get()
+        self.assertTrue(slide.image_file.name.startswith("hero-banner/"))
+        self.assertTrue(slide.image_file_mobile.name.startswith("hero-banner/mobile/"))
+
     def test_a_slide_needs_artwork(self):
         response = self.api_client.post(
             "/api/admin/hero-banner-slides/",

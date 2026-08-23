@@ -2410,6 +2410,9 @@ const EMPTY_SLIDE_FORM = {
   alt_text_ar: "",
 };
 
+const BLANK_THUMB =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='50'%3E%3Crect width='160' height='50' fill='%23e8f0e0'/%3E%3C/svg%3E";
+
 // The banner adopts the shape of whatever is uploaded, so the size is worth
 // stating plainly next to each slide rather than leaving it to be guessed.
 function describeArtwork(width, height) {
@@ -2526,6 +2529,23 @@ export function HeroBannerPanel({ rows = [], request, onSaved, canEdit = true })
     }
   }
 
+  // Hands the slide back to the website artwork on phones. The website image is
+  // deliberately not clearable — a slide with no artwork at all has nothing to show.
+  async function clearMobileImage(id) {
+    setBusyId(id); setError("");
+    try {
+      await request(`/admin/hero-banner-slides/${id}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ image_file_mobile: null, image_mobile: "" }),
+      });
+      onSaved?.();
+    } catch (err) {
+      setError(err?.message || "Could not remove the mobile image.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   function askForImage(id, field) {
     setReplaceTarget({ id, field });
     // The state has to land before the picker opens, or the change handler fires
@@ -2570,7 +2590,7 @@ export function HeroBannerPanel({ rows = [], request, onSaved, canEdit = true })
           </span>
         </div>
         {canEdit && !adding && (
-          <button type="button" className="admin-btn-primary" onClick={() => { setAdding(true); setError(""); }}>
+          <button type="button" className="admin-btn admin-btn-primary" onClick={() => { setAdding(true); setError(""); }}>
             + Add slide
           </button>
         )}
@@ -2583,7 +2603,7 @@ export function HeroBannerPanel({ rows = [], request, onSaved, canEdit = true })
               <span>Website image (desktop) <span style={{ color: "#c0392b" }}>*</span></span>
               <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => pickFile(e, "file")} />
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <button type="button" className="admin-btn-ghost" onClick={() => fileRef.current?.click()} style={{ whiteSpace: "nowrap" }}>
+                <button type="button" className="admin-btn admin-btn-ghost" onClick={() => fileRef.current?.click()} style={{ whiteSpace: "nowrap" }}>
                   {form.file ? "Change image" : "📁 Choose image"}
                 </button>
                 {form.file && <span style={{ fontSize: 13, color: "#5a7a4a" }}>✓ {form.file.name}</span>}
@@ -2597,7 +2617,7 @@ export function HeroBannerPanel({ rows = [], request, onSaved, canEdit = true })
               <span>Mobile image (optional)</span>
               <input ref={mobileFileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => pickFile(e, "mobileFile")} />
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <button type="button" className="admin-btn-ghost" onClick={() => mobileFileRef.current?.click()} style={{ whiteSpace: "nowrap" }}>
+                <button type="button" className="admin-btn admin-btn-ghost" onClick={() => mobileFileRef.current?.click()} style={{ whiteSpace: "nowrap" }}>
                   {form.mobileFile ? "Change image" : "📁 Choose image"}
                 </button>
                 {form.mobileFile && <span style={{ fontSize: 13, color: "#5a7a4a" }}>✓ {form.mobileFile.name}</span>}
@@ -2660,8 +2680,8 @@ export function HeroBannerPanel({ rows = [], request, onSaved, canEdit = true })
           )}
           {error && <p className="admin-threshold-error">{error}</p>}
           <div className="ig-post-add-actions">
-            <button type="submit" className="admin-btn-primary" disabled={saving}>{saving ? "Uploading…" : "Save slide"}</button>
-            <button type="button" className="admin-btn-ghost" onClick={resetForm}>Cancel</button>
+            <button type="submit" className="admin-btn admin-btn-primary" disabled={saving}>{saving ? "Uploading…" : "Save slide"}</button>
+            <button type="button" className="admin-btn admin-btn-ghost" onClick={resetForm}>Cancel</button>
           </div>
         </form>
       )}
@@ -2684,66 +2704,112 @@ export function HeroBannerPanel({ rows = [], request, onSaved, canEdit = true })
         <div className="hero-banner-admin-list">
           {slides.map((slide, index) => (
             <div key={slide.id} className={`hero-banner-admin-row${slide.is_visible === false ? " is-hidden" : ""}`}>
-              <div className="hero-banner-admin-thumb">
-                <img
-                  src={slide.image}
-                  alt=""
-                  onError={(e) => { e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='50'%3E%3Crect width='160' height='50' fill='%23e8f0e0'/%3E%3C/svg%3E"; }}
-                />
-              </div>
-              <div className="hero-banner-admin-meta">
-                <strong>{slide.alt_text_en || `Slide ${index + 1}`}</strong>
-                <span>{slide.href ? `Links to ${slide.href}` : "No link"}</span>
-                <span>Website: {describeArtwork(slide.image_width, slide.image_height)}</span>
-                <span>
-                  Mobile:{" "}
-                  {slide.image_mobile
-                    ? describeArtwork(slide.image_mobile_width, slide.image_mobile_height)
-                    : "reusing the website image"}
-                </span>
-              </div>
-              {canEdit ? (
-                <div className="hero-banner-admin-actions">
-                  <button type="button" className="admin-btn-ghost" onClick={() => move(index, -1)} disabled={index === 0 || busyId === slide.id} title="Move up">↑</button>
-                  <button type="button" className="admin-btn-ghost" onClick={() => move(index, 1)} disabled={index === slides.length - 1 || busyId === slide.id} title="Move down">↓</button>
-                  <button
-                    type="button"
-                    className="admin-btn-ghost"
-                    onClick={() => askForImage(slide.id, "image_file")}
-                    disabled={busyId === slide.id}
-                    title="Replace the image shown on computers"
-                  >
-                    Website image
-                  </button>
-                  <button
-                    type="button"
-                    className="admin-btn-ghost"
-                    onClick={() => askForImage(slide.id, "image_file_mobile")}
-                    disabled={busyId === slide.id}
-                    title="Set the image shown on phones"
-                  >
-                    {slide.image_mobile ? "Mobile image" : "+ Mobile image"}
-                  </button>
-                  <button
-                    type="button"
-                    className="admin-btn-ghost"
-                    onClick={() => patchSlide(slide.id, { is_visible: slide.is_visible === false })}
-                    disabled={busyId === slide.id}
-                  >
-                    {slide.is_visible === false ? "Show" : "Hide"}
-                  </button>
-                  <button
-                    type="button"
-                    className="admin-btn-ghost"
-                    style={{ color: "#c0392b" }}
-                    onClick={() => handleDelete(slide.id)}
-                    disabled={busyId === slide.id}
-                    title="Delete slide"
-                  >
-                    {busyId === slide.id ? "…" : "Delete"}
-                  </button>
+              <div className="hero-banner-admin-rowhead">
+                <div className="hero-banner-admin-title">
+                  <strong>{slide.alt_text_en || `Slide ${index + 1}`}</strong>
+                  <span>
+                    {slide.href ? `Links to ${slide.href}` : "No link"}
+                    {slide.is_visible === false ? " · Hidden" : ""}
+                  </span>
                 </div>
-              ) : null}
+                {canEdit ? (
+                  <div className="hero-banner-admin-actions">
+                    <button type="button" className="admin-btn admin-btn-ghost admin-btn-icon" onClick={() => move(index, -1)} disabled={index === 0 || busyId === slide.id} title="Move up">↑</button>
+                    <button type="button" className="admin-btn admin-btn-ghost admin-btn-icon" onClick={() => move(index, 1)} disabled={index === slides.length - 1 || busyId === slide.id} title="Move down">↓</button>
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn-ghost"
+                      onClick={() => patchSlide(slide.id, { is_visible: slide.is_visible === false })}
+                      disabled={busyId === slide.id}
+                    >
+                      {slide.is_visible === false ? "Show" : "Hide"}
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn-ghost hero-banner-admin-delete"
+                      onClick={() => handleDelete(slide.id)}
+                      disabled={busyId === slide.id}
+                      title="Delete slide"
+                    >
+                      {busyId === slide.id ? "…" : "Delete"}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+
+              {/* Two separate slots rather than one thumbnail and a line of text:
+                  the phone artwork was invisible here, so there was no way to tell
+                  which image a screen was actually going to get. */}
+              <div className="hero-banner-admin-slots">
+                <div className="hero-banner-admin-slot">
+                  <span className="hero-banner-admin-slot-label"><span aria-hidden="true">🖥</span>Website</span>
+                  <div className="hero-banner-admin-thumb">
+                    <img
+                      src={slide.image}
+                      alt=""
+                      onError={(e) => { e.target.src = BLANK_THUMB; }}
+                    />
+                  </div>
+                  <span className="hero-banner-admin-slot-size">
+                    {describeArtwork(slide.image_width, slide.image_height)}
+                  </span>
+                  {canEdit ? (
+                    <div className="hero-banner-admin-slot-actions">
+                      <button
+                        type="button"
+                        className="admin-btn admin-btn-ghost"
+                        onClick={() => askForImage(slide.id, "image_file")}
+                        disabled={busyId === slide.id}
+                      >
+                        Replace
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="hero-banner-admin-slot">
+                  <span className="hero-banner-admin-slot-label"><span aria-hidden="true">📱</span>Mobile</span>
+                  <div className={`hero-banner-admin-thumb${slide.image_mobile ? "" : " is-empty"}`}>
+                    {slide.image_mobile ? (
+                      <img
+                        src={slide.image_mobile}
+                        alt=""
+                        onError={(e) => { e.target.src = BLANK_THUMB; }}
+                      />
+                    ) : (
+                      <span>Not set</span>
+                    )}
+                  </div>
+                  <span className="hero-banner-admin-slot-size">
+                    {slide.image_mobile
+                      ? describeArtwork(slide.image_mobile_width, slide.image_mobile_height)
+                      : "Phones show the website image"}
+                  </span>
+                  {canEdit ? (
+                    <div className="hero-banner-admin-slot-actions">
+                      <button
+                        type="button"
+                        className="admin-btn admin-btn-ghost"
+                        onClick={() => askForImage(slide.id, "image_file_mobile")}
+                        disabled={busyId === slide.id}
+                      >
+                        {slide.image_mobile ? "Replace" : "Upload"}
+                      </button>
+                      {slide.image_mobile ? (
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn-ghost hero-banner-admin-delete"
+                          onClick={() => clearMobileImage(slide.id)}
+                          disabled={busyId === slide.id}
+                          title="Go back to showing the website image on phones"
+                        >
+                          Remove
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
             </div>
           ))}
         </div>

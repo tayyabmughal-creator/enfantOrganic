@@ -3350,53 +3350,47 @@
   margin-top: 14px;
 }
 
+/* A slide is a small card: identity and slide-level actions on top, then the two
+   artwork slots side by side. They used to share one row with a single
+   thumbnail, which left the phone image invisible and its button stranded among
+   Move/Hide/Delete. */
 .hero-banner-admin-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 10px 12px;
+  display: grid;
+  gap: 12px;
+  padding: 12px 14px;
   border-radius: 12px;
   border: 1px solid rgba(30, 30, 30, 0.09);
   background: #fff;
 }
 
 .hero-banner-admin-row.is-hidden {
-  opacity: 0.55;
+  opacity: 0.6;
   background: #fafafa;
 }
 
-.hero-banner-admin-thumb {
-  flex: 0 0 auto;
-  width: 160px;
-  aspect-ratio: 1920 / 400;
-  border-radius: 8px;
-  overflow: hidden;
-  background: #f2f3ee;
+.hero-banner-admin-rowhead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-/* contain, so the row thumbnail shows the whole banner rather than a crop of it. */
-.hero-banner-admin-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
-}
-
-.hero-banner-admin-meta {
+.hero-banner-admin-title {
   display: grid;
   gap: 2px;
   min-width: 0;
-  flex: 1 1 auto;
+  flex: 1 1 220px;
 }
 
-.hero-banner-admin-meta strong {
-  font-size: 0.88rem;
+.hero-banner-admin-title strong {
+  font-size: 0.9rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.hero-banner-admin-meta span {
+.hero-banner-admin-title span {
   font-size: 0.76rem;
   color: #6b6b6b;
   overflow: hidden;
@@ -3411,9 +3405,105 @@
   flex: 0 0 auto;
 }
 
+/* The ghost variant collapses to 4px of inline padding, which is too tight for
+   buttons that sit in a row of their own rather than at the end of a line of
+   text. Specificity has to match .admin-btn-ghost.admin-btn to win. */
+.hero-banner-admin-actions .admin-btn,
+.hero-banner-admin-slot-actions .admin-btn {
+  padding-inline: 10px;
+  border-color: #dfe7d6;
+  background: #fff;
+}
+
+.hero-banner-admin-actions .admin-btn:hover:not(:disabled),
+.hero-banner-admin-slot-actions .admin-btn:hover:not(:disabled) {
+  background: #edf4e6;
+  border-color: #cfe0c2;
+}
+
+.admin-btn-icon {
+  min-width: 34px;
+  justify-content: center;
+}
+
+.hero-banner-admin-delete.admin-btn {
+  color: #c0392b;
+}
+
+.hero-banner-admin-delete.admin-btn:hover:not(:disabled) {
+  background: #fdecea;
+  border-color: #f0c4be;
+}
+
+/* Equal columns so neither screen's artwork reads as the primary one. */
+.hero-banner-admin-slots {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.hero-banner-admin-slot {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(96, 122, 66, 0.16);
+  background: #fbfcfa;
+}
+
+.hero-banner-admin-slot-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #5a7a4a;
+}
+
+.hero-banner-admin-slot-size {
+  font-size: 0.74rem;
+  color: #6b6b6b;
+}
+
+.hero-banner-admin-slot-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Both thumbnails are the same height and the image is contained inside, so each
+   one shows its true proportions — a wide strip next to a tall portrait — and
+   the two slots stay level instead of one leaving a void under its button. */
+.hero-banner-admin-thumb {
+  width: 100%;
+  height: 150px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f2f3ee;
+}
+
+.hero-banner-admin-thumb.is-empty {
+  display: grid;
+  place-items: center;
+  border: 1px dashed rgba(96, 122, 66, 0.35);
+  background: #fff;
+  font-size: 0.74rem;
+  color: #8a8a8a;
+}
+
+/* contain, so the thumbnail shows the whole banner rather than a crop of it. */
+.hero-banner-admin-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
 @media (max-width: 720px) {
-  .hero-banner-admin-row { flex-wrap: wrap; }
-  .hero-banner-admin-thumb { width: 100%; }
+  .hero-banner-admin-slots { grid-template-columns: minmax(0, 1fr); }
   .hero-banner-admin-actions { width: 100%; }
 }
 
