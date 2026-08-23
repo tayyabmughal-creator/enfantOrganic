@@ -23,9 +23,9 @@ from store.services.admin_roles import ROLE_MANAGER, ensure_default_admin_roles
 User = get_user_model()
 
 
-def make_image_upload(name="banner.jpg"):
+def make_image_upload(name="banner.jpg", size=(12, 4)):
     buffer = BytesIO()
-    Image.new("RGB", (12, 4), "green").save(buffer, format="JPEG")
+    Image.new("RGB", size, "green").save(buffer, format="JPEG")
     buffer.seek(0)
     return SimpleUploadedFile(name, buffer.read(), content_type="image/jpeg")
 
@@ -60,6 +60,72 @@ class HeroBannerSlideAdminTests(TestCase):
         # The panel renders straight from this, so it must be a usable URL and
         # not the bare storage path the ImageField would otherwise serialize.
         self.assertIn("/media/hero-banner/", response.data["image"])
+
+    def test_an_upload_records_its_dimensions(self):
+        # The storefront sizes the carousel from these, so an upload that does not
+        # report its shape puts the banner back on the old fixed-height crop.
+        response = self.api_client.post(
+            "/api/admin/hero-banner-slides/",
+            {"image_file": make_image_upload(size=(1920, 400))},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        slide = HeroBannerSlide.objects.get()
+        self.assertEqual((slide.image_width, slide.image_height), (1920, 400))
+        self.assertEqual(response.data["image_width"], 1920)
+        self.assertEqual(response.data["image_height"], 400)
+
+    def test_website_and_mobile_artwork_keep_their_own_shapes(self):
+        # The whole point of the split: a wide desktop banner alongside a tall
+        # portrait one for phones, neither forced into the other's proportions.
+        response = self.api_client.post(
+            "/api/admin/hero-banner-slides/",
+            {
+                "image_file": make_image_upload("wide.jpg", size=(1920, 400)),
+                "image_file_mobile": make_image_upload("tall.jpg", size=(1080, 1920)),
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        slide = HeroBannerSlide.objects.get()
+        self.assertEqual((slide.image_width, slide.image_height), (1920, 400))
+        self.assertEqual((slide.image_mobile_width, slide.image_mobile_height), (1080, 1920))
+
+    def test_dimensions_cannot_be_set_by_hand(self):
+        # They describe the file, so a client claiming otherwise must not be able
+        # to make the carousel reserve the wrong height.
+        slide = HeroBannerSlide.objects.create(image="https://cdn.test/a.jpg")
+
+        response = self.api_client.patch(
+            f"/api/admin/hero-banner-slides/{slide.id}/",
+            {"image_width": 9999, "image_height": 1},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        slide.refresh_from_db()
+        self.assertIsNone(slide.image_width)
+        self.assertIsNone(slide.image_height)
+
+    def test_mobile_artwork_can_be_added_to_an_existing_slide(self):
+        # The panel offers this per row; without it the only way to give a live
+        # slide a phone graphic was to delete it and lose its place in the deck.
+        slide = HeroBannerSlide.objects.create(image_file=make_image_upload(size=(1920, 400)))
+
+        response = self.api_client.patch(
+            f"/api/admin/hero-banner-slides/{slide.id}/",
+            {"image_file_mobile": make_image_upload("tall.jpg", size=(1080, 1920))},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        slide.refresh_from_db()
+        self.assertTrue(slide.image_file_mobile)
+        self.assertEqual((slide.image_mobile_width, slide.image_mobile_height), (1080, 1920))
+        # Replacing one image must leave the other one alone.
+        self.assertEqual((slide.image_width, slide.image_height), (1920, 400))
 
     def test_a_slide_needs_artwork(self):
         response = self.api_client.post(
@@ -169,3 +235,28 @@ class HeroBannerStorefrontTests(TestCase):
 
     def test_no_slides_means_an_empty_list(self):
         self.assertEqual(self.get_slides(), [])
+
+    def test_artwork_dimensions_reach_the_storefront(self):
+        # The carousel derives its aspect ratio from these during the server
+        # render, so the banner reserves the right height on the first paint.
+        HeroBannerSlide.objects.create(
+            image_file=make_image_upload(size=(1920, 400)),
+            image_file_mobile=make_image_upload("tall.jpg", size=(1080, 1920)),
+        )
+
+        slide = self.get_slides()[0]
+
+        self.assertEqual(slide["image_width"], 1920)
+        self.assertEqual(slide["image_height"], 400)
+        self.assertEqual(slide["image_mobile_width"], 1080)
+        self.assertEqual(slide["image_mobile_height"], 1920)
+
+    def test_dimensions_are_null_for_a_url_only_slide(self):
+        # Nothing to measure without a file — the frontend then keeps its default
+        # banner shape rather than guessing one.
+        HeroBannerSlide.objects.create(image="https://cdn.test/a.jpg")
+
+        slide = self.get_slides()[0]
+
+        self.assertIsNone(slide["image_width"])
+        self.assertIsNone(slide["image_height"])

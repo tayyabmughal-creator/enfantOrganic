@@ -13,6 +13,27 @@
   background: #f2f3ee;
 }
 
+/* Once the artwork's dimensions are known the banner takes its shape from them
+   instead of the fixed strip below — the client designs wide graphics for
+   desktop and tall ones for phones, and both should arrive uncropped. The two
+   ratios are set per slide-deck by HeroBannerCarousel. */
+.hero-banner--sized .hero-banner-viewport {
+  height: auto;
+  aspect-ratio: var(--hero-banner-ratio, var(--hero-banner-ratio-mobile));
+  /* A very tall upload must not push the entire shop below the fold. */
+  max-height: 92vh;
+  /* Without this the ratio runs backwards once max-height bites — the box takes
+     its width from the clamped height and leaves a gap beside the banner. The
+     banner must always span the page; the clamp may only shorten it. */
+  width: 100%;
+}
+
+/* cover would crop back whatever the ratio did not match exactly, which is the
+   behaviour this replaced; contain guarantees the full graphic is visible. */
+.hero-banner--sized .hero-banner-img {
+  object-fit: contain;
+}
+
 .hero-banner-viewport:focus-visible {
   outline: 2px solid var(--brand, #4b6043);
   outline-offset: -2px;
@@ -131,6 +152,12 @@
 @media (max-width: 639px) {
   .hero-banner { --hero-banner-height: 220px; }
   .hero-banner-arrow { width: 34px; height: 34px; font-size: 1.25rem; }
+
+  /* Matches the breakpoint ArtDirectedImage swaps the phone artwork in at, so
+     the box changes shape at the same width the image inside it does. */
+  .hero-banner--sized .hero-banner-viewport {
+    aspect-ratio: var(--hero-banner-ratio-mobile, var(--hero-banner-ratio));
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

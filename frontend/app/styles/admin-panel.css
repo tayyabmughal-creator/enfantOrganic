@@ -3307,9 +3307,18 @@
 /* ─── Hero banner slides ──────────────────────────────────────────────────── */
 /* Wide preview rather than a square thumb — a banner is judged by its full
    crop, and a square would hide exactly the part that gets cut off. */
+.hero-banner-admin-previews {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+/* No fixed aspect-ratio here on purpose: the storefront shows these at their own
+   shape now, so a preview locked to 1920/400 would misrepresent a tall phone
+   graphic — exactly the crop this feature removes. */
 .hero-banner-admin-preview {
-  width: min(100%, 420px);
-  aspect-ratio: 1920 / 400;
+  margin: 0;
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid rgba(96, 122, 66, 0.18);
@@ -3317,10 +3326,22 @@
 }
 
 .hero-banner-admin-preview img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
   display: block;
+  width: auto;
+  max-width: min(100%, 420px);
+  max-height: 220px;
+}
+
+.hero-banner-admin-preview--mobile img {
+  max-width: 160px;
+}
+
+.hero-banner-admin-preview figcaption {
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  color: #6b6b6b;
+  background: #fff;
+  border-top: 1px solid rgba(96, 122, 66, 0.14);
 }
 
 .hero-banner-admin-list {
@@ -3353,10 +3374,11 @@
   background: #f2f3ee;
 }
 
+/* contain, so the row thumbnail shows the whole banner rather than a crop of it. */
 .hero-banner-admin-thumb img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
 }
 

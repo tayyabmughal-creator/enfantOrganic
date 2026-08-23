@@ -306,7 +306,20 @@ class HeroBannerSlideSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = HeroBannerSlide
-        fields = ("id", "image", "image_mobile", "alt", "href")
+        # The carousel sizes itself from the artwork, so the dimensions travel
+        # with the slide. They are null for URL-only slides, where the frontend
+        # falls back to its default banner shape.
+        fields = (
+            "id",
+            "image",
+            "image_mobile",
+            "alt",
+            "href",
+            "image_width",
+            "image_height",
+            "image_mobile_width",
+            "image_mobile_height",
+        )
 
     def get_image(self, obj):
         request = self.context.get("request")

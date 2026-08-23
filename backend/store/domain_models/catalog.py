@@ -618,11 +618,32 @@ class HeroBannerSlide(OrderedModel):
     """
 
     image = models.URLField(max_length=500, blank=True, default="")
-    image_file = models.ImageField(upload_to="hero-banner/", blank=True, null=True)
+    # Dimensions are recorded on upload so the storefront can size the carousel to
+    # the artwork instead of cropping it into a fixed-height strip. Django fills
+    # these itself whenever the file changes.
+    image_file = models.ImageField(
+        upload_to="hero-banner/",
+        blank=True,
+        null=True,
+        width_field="image_width",
+        height_field="image_height",
+    )
+    image_width = models.PositiveIntegerField(blank=True, null=True)
+    image_height = models.PositiveIntegerField(blank=True, null=True)
     # Optional phone-specific crop. Blank means the desktop artwork is reused, so
-    # a slide only ever needs one upload to work everywhere.
+    # a slide only ever needs one upload to work everywhere. Because it is a
+    # separate upload it can be a different shape — tall artwork for phones next
+    # to a wide desktop banner — and the carousel follows each one.
     image_mobile = models.URLField(max_length=500, blank=True, default="")
-    image_file_mobile = models.ImageField(upload_to="hero-banner/", blank=True, null=True)
+    image_file_mobile = models.ImageField(
+        upload_to="hero-banner/",
+        blank=True,
+        null=True,
+        width_field="image_mobile_width",
+        height_field="image_mobile_height",
+    )
+    image_mobile_width = models.PositiveIntegerField(blank=True, null=True)
+    image_mobile_height = models.PositiveIntegerField(blank=True, null=True)
     alt_text_en = models.CharField(max_length=255, blank=True, default="")
     alt_text_ar = models.CharField(max_length=255, blank=True, default="")
     href = models.CharField(max_length=255, blank=True, default="")

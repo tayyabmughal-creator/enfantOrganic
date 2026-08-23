@@ -2410,6 +2410,14 @@ const EMPTY_SLIDE_FORM = {
   alt_text_ar: "",
 };
 
+// The banner adopts the shape of whatever is uploaded, so the size is worth
+// stating plainly next to each slide rather than leaving it to be guessed.
+function describeArtwork(width, height) {
+  if (!width || !height) return "size unknown";
+  const shape = width > height * 1.2 ? "wide" : height > width * 1.2 ? "tall" : "square";
+  return `${width} × ${height} (${shape})`;
+}
+
 export function HeroBannerPanel({ rows = [], request, onSaved, canEdit = true }) {
   const [slides, setSlides] = useState(rows);
   const [adding, setAdding] = useState(false);
@@ -2417,8 +2425,10 @@ export function HeroBannerPanel({ rows = [], request, onSaved, canEdit = true })
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState("");
+  const [replaceTarget, setReplaceTarget] = useState(null);
   const fileRef = useRef(null);
   const mobileFileRef = useRef(null);
+  const replaceRef = useRef(null);
 
   useEffect(() => { setSlides(rows); }, [rows]);
 
@@ -2494,6 +2504,35 @@ export function HeroBannerPanel({ rows = [], request, onSaved, canEdit = true })
     }
   }
 
+  // Swapping artwork on a slide that is already live used to mean deleting it and
+  // adding it back, which lost its place in the deck — and there was no way at all
+  // to give an existing slide the phone-specific graphic.
+  async function replaceImage(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !replaceTarget) return;
+    const { id, field } = replaceTarget;
+    setReplaceTarget(null);
+    setBusyId(id); setError("");
+    try {
+      const fd = new FormData();
+      fd.append(field, file);
+      await request(`/admin/hero-banner-slides/${id}/`, { method: "PATCH", body: fd });
+      onSaved?.();
+    } catch (err) {
+      setError(err?.message || "Could not replace that image.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  function askForImage(id, field) {
+    setReplaceTarget({ id, field });
+    // The state has to land before the picker opens, or the change handler fires
+    // with no target to write to.
+    setTimeout(() => replaceRef.current?.click(), 0);
+  }
+
   // Slides carry arbitrary sort_order values, so a swap writes explicit
   // positions for both rows instead of nudging one number and hoping.
   async function move(index, direction) {
@@ -2526,7 +2565,8 @@ export function HeroBannerPanel({ rows = [], request, onSaved, canEdit = true })
           <h3>Hero Banner</h3>
           <span>
             {slides.length} slide{slides.length !== 1 ? "s" : ""}
-            {slides.length ? ` · ${visibleCount} live` : ""} · full-width carousel at the top of the homepage
+            {slides.length ? ` · ${visibleCount} live` : ""} · full-width carousel at the top
+            of the homepage · separate website and mobile artwork, each shown at its own shape
           </span>
         </div>
         {canEdit && !adding && (
@@ -2540,7 +2580,7 @@ export function HeroBannerPanel({ rows = [], request, onSaved, canEdit = true })
         <form className="ig-post-add-form" onSubmit={handleAdd}>
           <div className="ig-post-add-fields">
             <label>
-              <span>Banner image <span style={{ color: "#c0392b" }}>*</span></span>
+              <span>Website image (desktop) <span style={{ color: "#c0392b" }}>*</span></span>
               <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => pickFile(e, "file")} />
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 <button type="button" className="admin-btn-ghost" onClick={() => fileRef.current?.click()} style={{ whiteSpace: "nowrap" }}>
@@ -2548,7 +2588,10 @@ export function HeroBannerPanel({ rows = [], request, onSaved, canEdit = true })
                 </button>
                 {form.file && <span style={{ fontSize: 13, color: "#5a7a4a" }}>✓ {form.file.name}</span>}
               </div>
-              <small className="admin-field-help">Wide artwork works best — around 1920 × 400px.</small>
+              <small className="admin-field-help">
+                Shown on computers and tablets. Wide artwork suits it best — the banner
+                takes its shape from whatever you upload, so nothing gets cropped.
+              </small>
             </label>
             <label>
               <span>Mobile image (optional)</span>
@@ -2559,7 +2602,11 @@ export function HeroBannerPanel({ rows = [], request, onSaved, canEdit = true })
                 </button>
                 {form.mobileFile && <span style={{ fontSize: 13, color: "#5a7a4a" }}>✓ {form.mobileFile.name}</span>}
               </div>
-              <small className="admin-field-help">Leave empty and phones reuse the image above.</small>
+              <small className="admin-field-help">
+                Shown only on phones, and it can be a different shape — a tall
+                portrait graphic here works next to a wide one above. Leave it empty
+                and phones reuse the website image.
+              </small>
             </label>
             <label>
               <span>Link when clicked</span>
@@ -2595,9 +2642,20 @@ export function HeroBannerPanel({ rows = [], request, onSaved, canEdit = true })
               />
             </label>
           </div>
-          {form.preview && (
-            <div className="hero-banner-admin-preview">
-              <img src={form.preview} alt="Banner preview" />
+          {(form.preview || form.mobilePreview) && (
+            <div className="hero-banner-admin-previews">
+              {form.preview && (
+                <figure className="hero-banner-admin-preview">
+                  <img src={form.preview} alt="Website banner preview" />
+                  <figcaption>Website</figcaption>
+                </figure>
+              )}
+              {form.mobilePreview && (
+                <figure className="hero-banner-admin-preview hero-banner-admin-preview--mobile">
+                  <img src={form.mobilePreview} alt="Mobile banner preview" />
+                  <figcaption>Mobile</figcaption>
+                </figure>
+              )}
             </div>
           )}
           {error && <p className="admin-threshold-error">{error}</p>}
@@ -2609,6 +2667,16 @@ export function HeroBannerPanel({ rows = [], request, onSaved, canEdit = true })
       )}
 
       {!adding && error && <p className="admin-threshold-error">{error}</p>}
+
+      {/* One shared picker for every row's replace button — replaceTarget says
+          which slide and which of its two images the chosen file belongs to. */}
+      <input
+        ref={replaceRef}
+        type="file"
+        accept="image/*"
+        style={{ display: "none" }}
+        onChange={replaceImage}
+      />
 
       {slides.length === 0 && !adding ? (
         <AdminEmpty message="No banner slides yet. Add the first one to show the homepage carousel." />
@@ -2626,12 +2694,36 @@ export function HeroBannerPanel({ rows = [], request, onSaved, canEdit = true })
               <div className="hero-banner-admin-meta">
                 <strong>{slide.alt_text_en || `Slide ${index + 1}`}</strong>
                 <span>{slide.href ? `Links to ${slide.href}` : "No link"}</span>
-                {slide.image_mobile ? <span>Has a separate mobile image</span> : null}
+                <span>Website: {describeArtwork(slide.image_width, slide.image_height)}</span>
+                <span>
+                  Mobile:{" "}
+                  {slide.image_mobile
+                    ? describeArtwork(slide.image_mobile_width, slide.image_mobile_height)
+                    : "reusing the website image"}
+                </span>
               </div>
               {canEdit ? (
                 <div className="hero-banner-admin-actions">
                   <button type="button" className="admin-btn-ghost" onClick={() => move(index, -1)} disabled={index === 0 || busyId === slide.id} title="Move up">↑</button>
                   <button type="button" className="admin-btn-ghost" onClick={() => move(index, 1)} disabled={index === slides.length - 1 || busyId === slide.id} title="Move down">↓</button>
+                  <button
+                    type="button"
+                    className="admin-btn-ghost"
+                    onClick={() => askForImage(slide.id, "image_file")}
+                    disabled={busyId === slide.id}
+                    title="Replace the image shown on computers"
+                  >
+                    Website image
+                  </button>
+                  <button
+                    type="button"
+                    className="admin-btn-ghost"
+                    onClick={() => askForImage(slide.id, "image_file_mobile")}
+                    disabled={busyId === slide.id}
+                    title="Set the image shown on phones"
+                  >
+                    {slide.image_mobile ? "Mobile image" : "+ Mobile image"}
+                  </button>
                   <button
                     type="button"
                     className="admin-btn-ghost"

@@ -302,10 +302,20 @@ class AdminHeroBannerSlideSerializer(serializers.ModelSerializer):
             "href",
             "sort_order",
             "is_visible",
+            # Read-only: filled from the upload itself. The admin list shows them
+            # so the client can see what shape each banner will take.
+            "image_width",
+            "image_height",
+            "image_mobile_width",
+            "image_mobile_height",
         )
         extra_kwargs = {
             "image_file": {"required": False},
             "image_file_mobile": {"required": False},
+            "image_width": {"read_only": True},
+            "image_height": {"read_only": True},
+            "image_mobile_width": {"read_only": True},
+            "image_mobile_height": {"read_only": True},
         }
 
     def validate(self, attrs):

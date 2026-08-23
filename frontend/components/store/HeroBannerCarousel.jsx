@@ -10,6 +10,39 @@ const AUTOPLAY_MS = 5000;
 const SWIPE_THRESHOLD_PX = 40;
 
 /**
+ * Aspect ratio (width / height) the deck should take, from the artwork itself.
+ *
+ * Every slide shares one height — a carousel that resized between slides would
+ * shunt the whole page up and down on each transition. The tallest slide wins,
+ * so the shape follows what was uploaded and no artwork is ever cropped away;
+ * when the slides are all the same size, which is how a banner set is normally
+ * designed, the deck matches them exactly.
+ *
+ * Returns null when no slide reports a size (URL-only slides), leaving the
+ * stylesheet's fixed-height fallback in charge.
+ */
+function deckRatio(slides, pickSize) {
+  let ratio = null;
+  slides.forEach((slide) => {
+    const [width, height] = pickSize(slide || {});
+    if (!width || !height) return;
+    const slideRatio = width / height;
+    if (ratio === null || slideRatio < ratio) ratio = slideRatio;
+  });
+  return ratio;
+}
+
+const wideSize = (slide) => [Number(slide.image_width), Number(slide.image_height)];
+
+// A slide with no phone artwork shows the desktop image on phones too, so it is
+// the desktop shape that has to be measured for it.
+const mobileSize = (slide) => {
+  const width = Number(slide.image_mobile_width);
+  const height = Number(slide.image_mobile_height);
+  return width && height ? [width, height] : wideSize(slide);
+};
+
+/**
  * Full-bleed image carousel at the top of the homepage.
  *
  * The track is pinned to `direction: ltr` even on Arabic pages: slides are in DOM
@@ -78,9 +111,19 @@ export default function HeroBannerCarousel({ slides = [], locale = "en" }) {
     }
   }
 
+  // Computed during the server render as well, so the banner reserves the right
+  // height in the very first paint rather than settling once JS runs.
+  const wideRatio = deckRatio(slides, wideSize);
+  const mobileRatio = deckRatio(slides, mobileSize);
+  const sized = wideRatio || mobileRatio;
+  const ratioStyle = {};
+  if (wideRatio) ratioStyle["--hero-banner-ratio"] = String(wideRatio);
+  if (mobileRatio) ratioStyle["--hero-banner-ratio-mobile"] = String(mobileRatio);
+
   return (
     <section
-      className="hero-banner"
+      className={`hero-banner${sized ? " hero-banner--sized" : ""}`}
+      style={sized ? ratioStyle : undefined}
       aria-roledescription="carousel"
       aria-label={isAr ? "عروض المتجر" : "Store promotions"}
       onMouseEnter={() => setPaused(true)}
