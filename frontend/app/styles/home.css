@@ -239,28 +239,18 @@
   min-height: 150px;
 }
 
-/* These cards are about half the width the secondary card was designed for, so
-   the copy runs past where its left-to-right scrim has faded out and the text
-   ends up sitting on the photograph. Carry the light wash further across and
-   give the words more of the card. */
-/* The card's ::before is a scrim, but with both it and the photo on z-index auto
-   the image paints over it — a pseudo-element comes before its element's own
-   content in tree order. Lifting it above the photo is what makes the wash do
-   its job; the copy then has to clear it too.
-   Scoped to the hero, so the showcase card lower down keeps the look it has. */
-.home-hero .home-hero-card::before {
-  z-index: 1;
-  /* Near-solid for exactly as far as the copy runs, then a short falloff, so the
-     words always sit on the wash and the photograph still reads on the right. A
-     gentle full-width fade cannot do both at this card size. */
-  background:
-    linear-gradient(100deg, rgba(249, 246, 238, 0.95) 0%, rgba(248, 244, 232, 0.9) 50%, rgba(245, 239, 224, 0.42) 64%, rgba(236, 226, 200, 0) 76%),
-    radial-gradient(ellipse at 60% 20%, rgba(201, 168, 76, 0.08), transparent 55%);
-}
-
-.home-hero .home-hero-card .offer-secondary-copy {
-  z-index: 2;
-  max-width: 54%;
+/* No wash over the photograph. The card's ::before scrim paints under the image
+   (a pseudo-element comes before its element's own content), and lifting it
+   above dulled the product shot — the artwork has bottles across the whole
+   frame, so any overlay that covers the text area covers them too. The copy
+   already sits above the image on its own z-index; a tight halo is enough to
+   keep it legible without touching the picture. */
+.home-hero .home-hero-card .offer-secondary-copy h3,
+.home-hero .home-hero-card .offer-secondary-copy p,
+.home-hero .home-hero-card .offer-secondary-cta {
+  text-shadow:
+    0 1px 2px rgba(255, 255, 255, 0.95),
+    0 0 10px rgba(255, 255, 255, 0.9);
 }
 
 /* Outside .offers-showcase the <picture> is a plain inline box, so make it
