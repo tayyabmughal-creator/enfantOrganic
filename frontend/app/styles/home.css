@@ -164,6 +164,115 @@
   .hero-banner-track { transition: none; }
 }
 
+/* ── Home hero row — carousel + two lead promos ───────────────── */
+/* The banner used to run edge-to-edge above the showcase. It now sits inside the
+   container and shares a row with the two promos that were below it: carousel
+   on one side, the pair stacked on the other, each separated by the gap rather
+   than butted together. */
+.home-hero {
+  display: grid;
+  gap: 20px;
+}
+
+.home-hero-side {
+  display: grid;
+  gap: 20px;
+}
+
+/* The banner is no longer full-bleed, so it takes the same corner radius as the
+   cards beside it. */
+.home-hero-main .hero-banner-viewport {
+  border-radius: 22px;
+}
+
+@media (min-width: 901px) {
+  /* A definite height, so the row is a stable shape whatever the artwork is and
+     the two stacked cards always come out level with the carousel. */
+  .home-hero {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    height: 440px;
+  }
+
+  .home-hero--solo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .home-hero-side {
+    grid-template-rows: 1fr 1fr;
+  }
+
+  /* Inside a fixed panel the slot decides the shape, so the banner fills it
+     rather than sizing itself — its own aspect ratio would leave a band of
+     background above and below. Phones below still show it at full shape. */
+  .home-hero-main .hero-banner,
+  .home-hero-main .hero-banner-viewport {
+    height: 100%;
+  }
+
+  .home-hero .hero-banner--sized .hero-banner-viewport {
+    aspect-ratio: auto;
+    max-height: none;
+  }
+
+  .home-hero .hero-banner--sized .hero-banner-img {
+    object-fit: cover;
+  }
+}
+
+/* Tablets: banner takes the full width with the two promos side by side under
+   it, so neither is squeezed into a narrow column. */
+@media (max-width: 900px) {
+  .home-hero-side {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Phones: one column throughout — the carousel is the whole width, at the shape
+   of the mobile artwork, and the promos follow underneath it. */
+@media (max-width: 560px) {
+  .home-hero-side {
+    grid-template-columns: 1fr;
+  }
+}
+
+.home-hero-card {
+  min-height: 150px;
+}
+
+/* These cards are about half the width the secondary card was designed for, so
+   the copy runs past where its left-to-right scrim has faded out and the text
+   ends up sitting on the photograph. Carry the light wash further across and
+   give the words more of the card. */
+/* The card's ::before is a scrim, but with both it and the photo on z-index auto
+   the image paints over it — a pseudo-element comes before its element's own
+   content in tree order. Lifting it above the photo is what makes the wash do
+   its job; the copy then has to clear it too.
+   Scoped to the hero, so the showcase card lower down keeps the look it has. */
+.home-hero .home-hero-card::before {
+  z-index: 1;
+  /* Near-solid for exactly as far as the copy runs, then a short falloff, so the
+     words always sit on the wash and the photograph still reads on the right. A
+     gentle full-width fade cannot do both at this card size. */
+  background:
+    linear-gradient(100deg, rgba(249, 246, 238, 0.95) 0%, rgba(248, 244, 232, 0.9) 50%, rgba(245, 239, 224, 0.42) 64%, rgba(236, 226, 200, 0) 76%),
+    radial-gradient(ellipse at 60% 20%, rgba(201, 168, 76, 0.08), transparent 55%);
+}
+
+.home-hero .home-hero-card .offer-secondary-copy {
+  z-index: 2;
+  max-width: 54%;
+}
+
+/* Outside .offers-showcase the <picture> is a plain inline box, so make it
+   layout-transparent here the same way. */
+.home-hero-card picture {
+  display: contents;
+}
+
+.home-hero-card .offer-secondary-copy h3 {
+  font-size: clamp(1.1rem, 1.5vw, 1.45rem);
+}
+
 /* ── Offers Showcase ──────────────────────────────────────────── */
 .offers-showcase {
   display: grid;

@@ -100,7 +100,12 @@ export default async function LocalizedHomePage({ params, searchParams }) {
       href: slide.href ? buildStorePath(locale, slide.href, region) : "",
     }));
 
-  const heroCards = Array.isArray(home.hero_cards) ? home.hero_cards : [];
+  const allHeroCards = Array.isArray(home.hero_cards) ? home.hero_cards : [];
+  // The carousel shares the top of the page with two promos beside it, so the
+  // first two cards in admin order are lifted out of the showcase below and
+  // stacked in that column. Reordering them in the panel is what picks them.
+  const heroSideCards = heroBannerSlides.length > 0 ? allHeroCards.slice(0, 2) : [];
+  const heroCards = allHeroCards.slice(heroSideCards.length);
   const heroLarge = heroCards.filter((c) => c.size === "large");
   const heroPrimary = heroLarge[0];
   const heroSecondary = heroLarge[1];
@@ -173,7 +178,47 @@ export default async function LocalizedHomePage({ params, searchParams }) {
       <JsonLd data={organizationJsonLd} />
       <JsonLd data={websiteJsonLd} />
 
-      <HeroBannerCarousel slides={heroBannerSlides} locale={locale} />
+      {/* Carousel and the two lead promos share one row on desktop. On phones the
+          grid collapses, so the banner is full width and the promos fall below it. */}
+      {heroBannerSlides.length > 0 ? (
+        <section className="section container home-hero-section">
+          <div className={`home-hero${heroSideCards.length > 0 ? "" : " home-hero--solo"}`}>
+            <div className="home-hero-main">
+              <HeroBannerCarousel slides={heroBannerSlides} locale={locale} />
+            </div>
+
+            {heroSideCards.length > 0 ? (
+              <div className="home-hero-side">
+                {heroSideCards.map((card) => (
+                  <Link
+                    key={card.title || card.href}
+                    href={buildStorePath(locale, card.href || "/collections", region)}
+                    className="offer-secondary home-hero-card"
+                  >
+                    <ArtDirectedImage
+                      src={card.image}
+                      mobileSrc={card.image_mobile}
+                      alt={card.title}
+                      className="offer-secondary-img"
+                      sizes="(max-width: 900px) 100vw, 32vw"
+                    />
+                    <div className="offer-secondary-copy">
+                      {card.eyebrow ? (
+                        <span className="offer-secondary-eyebrow">{card.eyebrow}</span>
+                      ) : null}
+                      {card.title ? <h3>{card.title}</h3> : null}
+                      {card.subtitle ? <p>{card.subtitle}</p> : null}
+                      {card.cta ? (
+                        <span className="offer-secondary-cta">{card.cta}</span>
+                      ) : null}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
 
       {heroShowcaseEmpty ? null : (
       <section className="section container">
