@@ -185,6 +185,34 @@
   border-radius: 22px;
 }
 
+.home-hero-card {
+  min-height: 150px;
+}
+
+/* No wash over the photograph. The card's ::before scrim paints under the image
+   (a pseudo-element comes before its element's own content), and lifting it
+   above dulled the product shot — the artwork has bottles across the whole
+   frame, so any overlay that covers the text area covers them too. The copy
+   already sits above the image on its own z-index; a tight halo is enough to
+   keep it legible without touching the picture. */
+.home-hero .home-hero-card .offer-secondary-copy h3,
+.home-hero .home-hero-card .offer-secondary-copy p,
+.home-hero .home-hero-card .offer-secondary-cta {
+  text-shadow:
+    0 1px 2px rgba(255, 255, 255, 0.95),
+    0 0 10px rgba(255, 255, 255, 0.9);
+}
+
+/* Outside .offers-showcase the <picture> is a plain inline box, so make it
+   layout-transparent here the same way. */
+.home-hero-card picture {
+  display: contents;
+}
+
+.home-hero-card .offer-secondary-copy h3 {
+  font-size: clamp(1.1rem, 1.5vw, 1.45rem);
+}
+
 @media (min-width: 901px) {
   /* A definite height, so the row is a stable shape whatever the artwork is and
      the two stacked cards always come out level with the carousel. */
@@ -233,35 +261,34 @@
   .home-hero-side {
     grid-template-columns: 1fr;
   }
+
+  /* Half their previous height, so the carousel above reads as the main thing
+     rather than competing with two cards nearly as tall as it.
+     Two classes deep on purpose: the showcase's own phone rule further down sets
+     `.offer-secondary { height: clamp(155px, 42vw, 215px) }`, which at equal
+     specificity would win on source order and was what sized these cards. */
+  .home-hero .home-hero-card {
+    min-height: 0;
+    height: 82px;
+  }
+
+  .home-hero .home-hero-card .offer-secondary-copy {
+    padding: 12px 14px;
+    gap: 3px;
+    max-width: 64%;
+  }
+
+  .home-hero-card .offer-secondary-copy h3 {
+    font-size: 1rem;
+  }
+
+  /* At this height the subtitle cannot fit under the heading. Dropping it beats
+     clipping it mid-sentence; the heading and the link still say what the card is. */
+  .home-hero-card .offer-secondary-copy p {
+    display: none;
+  }
 }
 
-.home-hero-card {
-  min-height: 150px;
-}
-
-/* No wash over the photograph. The card's ::before scrim paints under the image
-   (a pseudo-element comes before its element's own content), and lifting it
-   above dulled the product shot — the artwork has bottles across the whole
-   frame, so any overlay that covers the text area covers them too. The copy
-   already sits above the image on its own z-index; a tight halo is enough to
-   keep it legible without touching the picture. */
-.home-hero .home-hero-card .offer-secondary-copy h3,
-.home-hero .home-hero-card .offer-secondary-copy p,
-.home-hero .home-hero-card .offer-secondary-cta {
-  text-shadow:
-    0 1px 2px rgba(255, 255, 255, 0.95),
-    0 0 10px rgba(255, 255, 255, 0.9);
-}
-
-/* Outside .offers-showcase the <picture> is a plain inline box, so make it
-   layout-transparent here the same way. */
-.home-hero-card picture {
-  display: contents;
-}
-
-.home-hero-card .offer-secondary-copy h3 {
-  font-size: clamp(1.1rem, 1.5vw, 1.45rem);
-}
 
 /* ── Offers Showcase ──────────────────────────────────────────── */
 .offers-showcase {
