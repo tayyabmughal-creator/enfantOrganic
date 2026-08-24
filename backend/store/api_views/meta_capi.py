@@ -16,8 +16,10 @@ import logging
 
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, status
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from ..services.meta_capi import (
     SUPPORTED_EVENTS,
@@ -35,6 +37,23 @@ logger = logging.getLogger(__name__)
 RELAYABLE_EVENTS = SUPPORTED_EVENTS - {"Purchase"}
 
 MAX_CONTENT_IDS = 50
+
+
+class OptionalJWTAuthentication(JWTAuthentication):
+    """JWT that identifies the shopper when it can and stays quiet when it cannot.
+
+    Access tokens live 15 minutes and the storefront keeps browsing with whatever
+    is in storage, so a stale header is routine here. The default class answers
+    401 to one, which on an endpoint that is otherwise open to guests would throw
+    away the event instead of sending it anonymously — losing tracking for every
+    signed-in shopper whose token had aged out.
+    """
+
+    def authenticate(self, request):
+        try:
+            return super().authenticate(request)
+        except AuthenticationFailed:
+            return None
 
 
 class MetaCapiEventView(APIView):
@@ -55,6 +74,7 @@ class MetaCapiEventView(APIView):
     the existing 'analytics' scope.
     """
 
+    authentication_classes = [OptionalJWTAuthentication]
     permission_classes = [permissions.AllowAny]
     throttle_scope = "analytics"
 
@@ -85,8 +105,18 @@ class MetaCapiEventView(APIView):
 
         region_code = str(request.data.get("region_code") or "").strip().lower()
 
+        # ViewContent and AddToCart fire long before checkout, so the browser has
+        # no email to offer and Events Manager flagged the whole browse half of
+        # the funnel as missing its highest-value match key. A signed-in shopper
+        # is the exception: the account already holds a verified address, and
+        # taking it from the session rather than the request body means it cannot
+        # be spoofed through this open endpoint. Guests are unchanged.
+        account_email = ""
+        if request.user and request.user.is_authenticated:
+            account_email = (getattr(request.user, "email", "") or "").strip()
+
         user_data = build_user_data(
-            email=raw_user.get("email", ""),
+            email=account_email or raw_user.get("email", ""),
             phone=raw_user.get("phone", ""),
             first_name=raw_user.get("first_name", ""),
             last_name=raw_user.get("last_name", ""),

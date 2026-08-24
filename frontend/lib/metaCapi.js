@@ -13,7 +13,7 @@
  * email and phone leave the browser over our own HTTPS origin only.
  */
 
-import { API_BASE_URL } from "./config.js";
+import { API_BASE_URL, CUSTOMER_TOKEN_KEY } from "./config.js";
 import { getOrCreateSessionKey } from "./eventTracking.js";
 
 // Purchase is absent on purpose: it is sent from the order record server-side,
@@ -160,7 +160,14 @@ export function relayMetaEvent(eventName, { eventId, customData = {}, userData =
   try {
     fetch(`${API_BASE_URL}/analytics/meta-event/`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        // Signed-in browsing carried no credentials, so every relayed event
+        // looked anonymous to the backend and its stronger identity — the
+        // account's own email and id — was never used. The endpoint still
+        // accepts guests; this only tells it who is browsing when we know.
+        ...authHeader(),
+      },
       body: JSON.stringify(body),
       keepalive: true,
     }).catch(() => {
@@ -168,6 +175,16 @@ export function relayMetaEvent(eventName, { eventId, customData = {}, userData =
     });
   } catch {
     // Same.
+  }
+}
+
+function authHeader() {
+  try {
+    const token = window.localStorage.getItem(CUSTOMER_TOKEN_KEY);
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    // Storage can be blocked; the event is still worth sending as a guest.
+    return {};
   }
 }
 

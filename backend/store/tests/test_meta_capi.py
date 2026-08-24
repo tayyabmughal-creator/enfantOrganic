@@ -327,6 +327,18 @@ class MetaCapiRelayEndpointTests(TestCase):
             meta_capi_dataset_id="2127480041027733",
         )
 
+    @staticmethod
+    def bearer(user):
+        """The storefront authenticates with a JWT, so these tests do too.
+
+        This endpoint pins its own authentication class, and session auth is not
+        part of it — signing in through the session would exercise a path that
+        does not exist in production.
+        """
+        from rest_framework_simplejwt.tokens import AccessToken
+
+        return {"HTTP_AUTHORIZATION": f"Bearer {AccessToken.for_user(user)}"}
+
     def test_relayed_event_is_queued_with_server_side_ip_and_user_agent(self):
         with patch("store.api_views.meta_capi.send_meta_capi_event_async.delay") as delay:
             response = self.client.post(
@@ -415,7 +427,6 @@ class MetaCapiRelayEndpointTests(TestCase):
 
     def test_session_external_id_never_overrides_a_signed_in_user(self):
         user = get_user_model().objects.create_user(username="shopper", password="pw12345!")
-        self.client.force_login(user)
         with patch("store.api_views.meta_capi.send_meta_capi_event_async.delay") as delay:
             self.client.post(
                 self.url,
@@ -425,6 +436,7 @@ class MetaCapiRelayEndpointTests(TestCase):
                     "external_id": "spoofed-session",
                 },
                 content_type="application/json",
+                **self.bearer(user),
             )
 
         user_data = delay.call_args.args[0]["user_data"]
@@ -477,3 +489,122 @@ class MetaCapiRelayEndpointTests(TestCase):
         # feature the client simply has not switched on.
         self.assertEqual(response.status_code, 200)
         delay.assert_not_called()
+
+    def test_a_signed_in_shopper_matches_on_their_account_email(self):
+        # ViewContent and AddToCart fire before checkout, so the browser has no
+        # email to offer and these events reached Meta with no high-value match
+        # key. When we already know who is browsing, the account supplies one.
+        user = get_user_model().objects.create_user(
+            username="shopper", password="Pass12345!", email="Shopper@Example.COM"
+        )
+
+        with patch("store.api_views.meta_capi.send_meta_capi_event_async.delay") as delay:
+            response = self.client.post(
+                self.url,
+                {"event_name": "ViewContent", "event_id": "vc-signed-in"},
+                content_type="application/json",
+                **self.bearer(user),
+            )
+
+        self.assertEqual(response.status_code, 202, response.data)
+        user_data = delay.call_args.args[0]["user_data"]
+        # Normalised then hashed — the raw address never leaves the server.
+        self.assertEqual(user_data["em"], [sha256("shopper@example.com")])
+
+    def test_the_account_email_wins_over_one_supplied_by_the_caller(self):
+        # The endpoint is open by design, so a body field must never be able to
+        # attribute a signed-in shopper's activity to somebody else's address.
+        user = get_user_model().objects.create_user(
+            username="shopper2", password="Pass12345!", email="real@example.com"
+        )
+
+        with patch("store.api_views.meta_capi.send_meta_capi_event_async.delay") as delay:
+            self.client.post(
+                self.url,
+                {
+                    "event_name": "AddToCart",
+                    "event_id": "atc-spoof",
+                    "user_data": {"email": "attacker@example.com"},
+                },
+                content_type="application/json",
+                **self.bearer(user),
+            )
+
+        user_data = delay.call_args.args[0]["user_data"]
+        self.assertEqual(user_data["em"], [sha256("real@example.com")])
+
+    def test_a_guest_still_relays_without_an_email(self):
+        # Guests are most of the funnel; requiring an identity here would drop
+        # exactly the traffic CAPI exists to recover.
+        with patch("store.api_views.meta_capi.send_meta_capi_event_async.delay") as delay:
+            response = self.client.post(
+                self.url,
+                {"event_name": "ViewContent", "event_id": "vc-guest", "external_id": "sess-1"},
+                content_type="application/json",
+            )
+
+        self.assertEqual(response.status_code, 202)
+        user_data = delay.call_args.args[0]["user_data"]
+        self.assertNotIn("em", user_data)
+        self.assertIn("external_id", user_data)
+
+    def test_a_checkout_supplied_email_is_still_used_for_a_guest(self):
+        # Guest checkout has a real address in the form and it is the only match
+        # key those events carry.
+        with patch("store.api_views.meta_capi.send_meta_capi_event_async.delay") as delay:
+            self.client.post(
+                self.url,
+                {
+                    "event_name": "InitiateCheckout",
+                    "event_id": "ic-guest",
+                    "user_data": {"email": "guest@example.com"},
+                },
+                content_type="application/json",
+            )
+
+        user_data = delay.call_args.args[0]["user_data"]
+        self.assertEqual(user_data["em"], [sha256("guest@example.com")])
+
+    def test_the_bearer_token_the_storefront_sends_is_what_identifies_the_shopper(self):
+        # The storefront authenticates with a JWT, not a session, and this
+        # endpoint is AllowAny — so the header has to be what carries identity
+        # in production. A session-based test would not prove that path.
+        from rest_framework_simplejwt.tokens import AccessToken
+
+        user = get_user_model().objects.create_user(
+            username="jwtshopper", password="Pass12345!", email="jwt@example.com"
+        )
+        token = str(AccessToken.for_user(user))
+
+        with patch("store.api_views.meta_capi.send_meta_capi_event_async.delay") as delay:
+            response = self.client.post(
+                self.url,
+                {"event_name": "ViewContent", "event_id": "vc-jwt"},
+                content_type="application/json",
+                HTTP_AUTHORIZATION=f"Bearer {token}",
+            )
+
+        self.assertEqual(response.status_code, 202, response.data)
+        user_data = delay.call_args.args[0]["user_data"]
+        self.assertEqual(user_data["em"], [sha256("jwt@example.com")])
+        # external_id switches to the account id too — it was always meant to,
+        # but no relayed request had ever carried credentials for it to read.
+        self.assertEqual(user_data["external_id"], [sha256(str(user.pk))])
+
+    def test_a_stale_token_still_relays_as_a_guest(self):
+        # Access tokens expire after 15 minutes and the storefront keeps browsing
+        # with whatever is in storage. On an AllowAny endpoint a rejected token
+        # must degrade to anonymous, not 401 the event away — that would lose
+        # tracking for every signed-in shopper whose token had aged out.
+        with patch("store.api_views.meta_capi.send_meta_capi_event_async.delay") as delay:
+            response = self.client.post(
+                self.url,
+                {"event_name": "ViewContent", "event_id": "vc-stale", "external_id": "sess-9"},
+                content_type="application/json",
+                HTTP_AUTHORIZATION="Bearer not-a-real-token",
+            )
+
+        self.assertEqual(response.status_code, 202, getattr(response, "data", response))
+        delay.assert_called_once()
+        user_data = delay.call_args.args[0]["user_data"]
+        self.assertNotIn("em", user_data)
