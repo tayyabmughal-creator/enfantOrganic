@@ -50,12 +50,31 @@ test("the widest declared size matches the widest column the CSS can produce", (
   );
 });
 
+/** The phone override: four cards per screen, `calc((100% - <gaps>) / 4)`. */
+function mobileColumn() {
+  const rules = [...home.matchAll(/\.category-carousel-rail\s*\{([^}]*)\}/g)];
+  const override = rules
+    .map((rule) => rule[1].match(/grid-auto-columns:\s*calc\(\(100%\s*-\s*(\d+)px\)\s*\/\s*(\d+)\)/))
+    .find(Boolean);
+  assert.ok(override, "the mobile rail should size its columns from the rail width");
+  return { gaps: Number(override[1]), perView: Number(override[2]) };
+}
+
 test("the mobile size is not smaller than the mobile column", () => {
-  const { min } = railColumns();
-  const mobile = declaredSizes().match(/\(max-width:\s*\d+px\)\s*(\d+)px/);
-  assert.ok(mobile, "sizes should state a width for the mobile breakpoint");
-  assert.ok(
-    Number(mobile[1]) >= min,
-    `mobile declares ${mobile[1]}px for a ${min}px column`,
-  );
+  const { gaps, perView } = mobileColumn();
+  const declared = declaredSizes().match(/\(max-width:\s*(\d+)px\)\s*(\d+)vw/);
+  assert.ok(declared, "sizes should state a viewport-relative width for the mobile breakpoint");
+  const breakpoint = Number(declared[1]);
+  const vwShare = Number(declared[2]) / 100;
+
+  // The rail is narrower than the viewport (the container pads it), so 100vw is
+  // the widest the column can ever be — check the whole phone range, since a vw
+  // and a calc() cross over rather than staying in a fixed ratio.
+  for (let viewport = 320; viewport <= breakpoint; viewport += 20) {
+    const column = (viewport - gaps) / perView;
+    assert.ok(
+      vwShare * viewport >= column,
+      `at ${viewport}px wide the column is ${column.toFixed(1)}px but sizes declares ${(vwShare * viewport).toFixed(1)}px`,
+    );
+  }
 });
