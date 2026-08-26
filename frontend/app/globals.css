@@ -40,7 +40,7 @@
 .option-pill, .option-pill *,
 .ms-msg, .ms-msg *,
 .ms-pin-label, .ms-pin-label *,
-.cart-line-copy > * {
+.cart-line-copy > *, .cart-line-copy > * * {
   unicode-bidi: plaintext;
 }
 

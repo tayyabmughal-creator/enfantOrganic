@@ -176,8 +176,8 @@
   padding: 24px;
   padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   display: grid;
-  grid-template-rows: auto auto 1fr auto;
-  gap: 18px;
+  grid-template-rows: auto 1fr auto;
+  gap: 16px;
   background: var(--surface);
   border-inline-start: 1px solid var(--line);
   box-shadow: -18px 0 46px rgba(37, 49, 27, 0.12);
@@ -189,14 +189,33 @@
   box-shadow: 18px 0 46px rgba(37, 49, 27, 0.12);
 }
 
-.cart-drawer-items {
+/* The suggestions rail further down is a max-content-wide scroller. Left to
+   size itself, an implicit grid column takes that width (~770px) and stretches
+   every line item to it, so the price, the stepper and the remove button end up
+   outside the drawer and the shopper has to scroll sideways to reach them.
+   Pinning the column to the panel width keeps each scroller inside its own box. */
+.cart-drawer-scroll {
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  display: grid;
-  align-content: start;
-  gap: 14px;
+  /* Flex, not grid: as grid rows the rewards bar was measured at 34px and then
+     clipped by its own overflow:hidden, losing the progress track entirely. */
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
   padding-inline-end: 2px;
+}
+
+.cart-drawer-scroll > * {
+  flex-shrink: 0;
+}
+
+.cart-drawer-items {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 12px;
 }
 
 /* Suggestions beside the cart — a swipeable rail so a narrow drawer can still
@@ -205,6 +224,7 @@
   border-top: 1px solid var(--line, #dfe7d6);
   padding-top: 14px;
   margin-top: 2px;
+  min-width: 0;
 }
 
 .cart-recommendations-title {
@@ -286,19 +306,31 @@
   cursor: not-allowed;
 }
 
+/* The remove button is taken out of the column flow and floated over the top
+   corner: as a third grid column it cost 40px of the width the product name
+   and price have to share, on the narrowest phones the difference between a
+   name that wraps to two lines and one that wraps to four. */
 .cart-line-item {
+  position: relative;
   display: grid;
-  grid-template-columns: 84px minmax(0, 1fr) 40px;
+  grid-template-columns: 76px minmax(0, 1fr);
   gap: 12px;
   padding: 12px;
+  padding-inline-end: 38px;
   border-radius: 18px;
   border: 1px solid rgba(25, 24, 23, 0.06);
   background: #fbfcf8;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.cart-line-item:hover {
+  border-color: rgba(96, 122, 66, 0.22);
+  box-shadow: 0 6px 18px rgba(37, 49, 27, 0.06);
 }
 
 .cart-line-media {
-  width: 82px;
-  height: 94px;
+  width: 76px;
+  height: 88px;
   overflow: hidden;
   border-radius: 12px;
   border: 1px solid rgba(25, 24, 23, 0.06);
@@ -311,32 +343,190 @@
 }
 
 .cart-line-item img {
-  width: 82px;
-  height: 94px;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
   filter: drop-shadow(0 10px 16px rgba(25, 24, 23, 0.12));
 }
 
 .cart-line-copy {
   display: grid;
-  gap: 8px;
+  gap: 5px;
   min-width: 0;
   align-content: start;
 }
 
-.cart-line-copy strong {
-  line-height: 1.3;
+.cart-line-name {
+  font-size: 0.88rem;
+  line-height: 1.35;
+  /* Two lines, then an ellipsis. The full name is one tap away on the product
+     page and an eight-word title otherwise pushes the stepper out of sight. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
 }
 
-.cart-line-copy span {
+.cart-line-variant,
+.cart-line-unit {
   color: var(--text-soft);
-  font-size: 0.9rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.cart-line-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 3px;
+}
+
+.cart-line-prices {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .cart-line-total {
   color: var(--text);
-  font-weight: 850;
+  font-weight: 800;
+  font-size: 0.95rem;
+  font-variant-numeric: lining-nums tabular-nums;
+  white-space: nowrap;
 }
+
+.cart-line-was {
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  opacity: 0.75;
+}
+
+.cart-line-save {
+  justify-self: start;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(96, 122, 66, 0.12);
+  color: var(--brand-dark, #607a42);
+  font-size: 0.71rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.cart-line-remove {
+  position: absolute;
+  top: 8px;
+  inset-inline-end: 8px;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-soft);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.cart-line-remove:hover {
+  background: rgba(25, 24, 23, 0.07);
+  color: var(--text);
+}
+
+/* A compact take on the shared stepper. The 48px product-page control is over
+   half the width of a phone cart line on its own, which is what left no room
+   for the price beside it. Still a 32px tap target on each button. */
+.cart-line-controls {
+  min-height: 34px;
+  padding: 3px;
+  border-radius: 999px;
+  gap: 0;
+  flex-shrink: 0;
+}
+
+.cart-line-controls button {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 0.95rem;
+  line-height: 1;
+  font-weight: 700;
+  box-shadow: 0 1px 4px rgba(25, 24, 23, 0.1);
+  cursor: pointer;
+}
+
+.cart-line-controls span {
+  min-width: 30px;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* ── Cart totals: the same lines the order summary shows ── */
+.cart-summary {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--surface-soft, #f6f8f2);
+  border: 1px solid rgba(37, 49, 27, 0.07);
+}
+
+.cart-summary .subtotal-row {
+  padding: 3px 0;
+}
+
+.cart-summary .subtotal-row > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.cart-summary .subtotal-row > strong {
+  white-space: nowrap;
+}
+
+/* Scoped through .cart-summary so these beat the generic .subtotal-row rules
+   in checkout-order.css, which loads after this file. */
+.cart-summary .cart-summary-total {
+  margin-top: 6px;
+  padding: 9px 0 3px;
+  border-top: 1px dashed rgba(37, 49, 27, 0.16);
+}
+
+.cart-summary .cart-summary-total > span {
+  color: var(--text);
+  font-weight: 700;
+  opacity: 1;
+}
+
+.cart-summary .cart-summary-total > strong {
+  font-size: 1.02rem;
+}
+
+.cart-summary .subtotal-row > strong.cart-summary-pending {
+  color: var(--text-soft);
+  font-weight: 600;
+}
+
+.cart-summary .cart-savings-row {
+  margin-top: 8px;
+  padding: 8px 10px;
+  font-size: 0.8rem;
+}
+
 
 /* ═══════════════════ MILESTONE REWARDS BAR ═══════════════════ */
 .ms-bar {
@@ -377,7 +567,8 @@
   position: relative;
   /* padding-top centres the 36px pins over the 13px track: (36-13)/2 = 11px */
   /* padding-inline keeps pins (36px wide) fully inside the bar: 36/2 = 18px */
-  padding: 11px 18px 50px;
+  /* padding-bottom leaves room for a label that has wrapped to two lines */
+  padding: 11px 18px 60px;
 }
 
 /* ── Track ── */
@@ -474,7 +665,10 @@
   /* Default: centred on the pin */
   left: 50%;
   transform: translateX(-50%);
-  white-space: nowrap;
+  /* Capped and wrapping rather than nowrap: on a phone-width drawer three
+     rewards leave about 100px per pin, and "Free Shipping" on one line ran
+     straight into the label beside it. */
+  max-width: 96px;
   text-align: center;
   pointer-events: none;
   display: flex;
@@ -489,6 +683,7 @@
   transform: none;
   align-items: flex-start;
   text-align: left;
+  max-width: 88px;
 }
 
 /* Last pin label: align to its right edge so it doesn't overflow right */
@@ -498,6 +693,7 @@
   transform: none;
   align-items: flex-end;
   text-align: right;
+  max-width: 88px;
 }
 
 .ms-pin-label strong {
@@ -513,6 +709,8 @@
   font-weight: 500;
   color: #8aaa8e;
   line-height: 1.3;
+  /* The reward name may wrap; the threshold is short and never should. */
+  white-space: nowrap;
 }
 
 .ms-pin.ms-reached .ms-pin-label strong { color: #2a6e38; }
@@ -1128,14 +1326,14 @@
   }
 
   .cart-line-item {
-    grid-template-columns: 72px 1fr 36px;
+    grid-template-columns: 68px minmax(0, 1fr);
     gap: 10px;
+    padding-inline-end: 34px;
   }
 
-  .cart-line-media,
-  .cart-line-item img {
-    width: 72px;
-    height: 84px;
+  .cart-line-media {
+    width: 68px;
+    height: 80px;
   }
 
   .cart-drawer-panel {
@@ -1199,15 +1397,23 @@
   }
 
   .cart-line-item {
-    grid-template-columns: 68px minmax(0, 1fr) 34px;
-    gap: 8px;
+    grid-template-columns: 62px minmax(0, 1fr);
+    gap: 9px;
     padding: 10px;
+    padding-inline-end: 32px;
   }
 
-  .cart-line-media,
-  .cart-line-item img {
-    width: 68px;
-    height: 80px;
+  .cart-line-media {
+    width: 62px;
+    height: 74px;
+  }
+
+  .cart-line-name {
+    font-size: 0.84rem;
+  }
+
+  .cart-line-total {
+    font-size: 0.9rem;
   }
 }
 

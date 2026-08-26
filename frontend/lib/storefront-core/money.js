@@ -1,4 +1,5 @@
-import { normalizeLocale } from "./routing";
+// Extension spelled out so node --test can import this module directly.
+import { normalizeLocale } from "./routing.js";
 
 const LOCALE_MAP = {
   en: {
@@ -65,4 +66,37 @@ export function cartSavings(items = [], { discountAmount = 0, giftCardAmount = 0
 
   const total = productSavings + (Number(discountAmount) || 0) + (Number(giftCardAmount) || 0);
   return Math.max(0, Math.round(total * 1000) / 1000);
+}
+
+/**
+ * The cart-milestone reward a basket has already unlocked.
+ *
+ * Mirrors the server's apply_milestone_rewards(): free shipping if any reached
+ * milestone grants it, and the single largest percentage among the reached
+ * discount milestones — percentages do not stack. The amount is rounded to two
+ * decimals half-up, the same quantisation the checkout totals use, so the cart
+ * quotes the figure the order summary will.
+ *
+ * The cart used to promise "10% Off unlocked" on the progress bar and then show
+ * a subtotal with no discount in it, so the saving the shopper had been told
+ * about only turned into a number once they reached checkout.
+ *
+ * A coupon or gift card suppresses the reward server-side, which is why this is
+ * only ever an estimate: neither can be entered before checkout.
+ */
+export function milestoneReward(milestones = [], subtotal = 0) {
+  let discountPct = 0;
+  let freeShipping = false;
+
+  for (const milestone of Array.isArray(milestones) ? milestones : []) {
+    if (Number(subtotal) < Number(milestone?.threshold)) continue;
+    if (milestone.reward_type === "free_shipping") {
+      freeShipping = true;
+    } else if (milestone.reward_type === "discount_percent") {
+      discountPct = Math.max(discountPct, Number(milestone.discount_value) || 0);
+    }
+  }
+
+  const discount = discountPct > 0 ? Math.round(Number(subtotal) * discountPct) / 100 : 0;
+  return { discountPct, discount, freeShipping };
 }

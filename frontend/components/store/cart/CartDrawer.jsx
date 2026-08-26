@@ -8,7 +8,7 @@ import SiteImage from "@/components/ui/SiteImage";
 import CartApplePayButton from "@/components/store/cart/CartApplePayButton";
 import { useStore } from "@/components/store/cart/StoreProvider";
 import { useLocale } from "@/contexts/LocaleContext";
-import { buildStorePath, cartSavings, formatMoney, uiText } from "@/lib/storefront";
+import { buildStorePath, cartSavings, formatMoney, milestoneReward, uiText } from "@/lib/storefront";
 import { useRegionCode } from "@/lib/useRegionCode";
 import { API_BASE_URL } from "@/lib/config";
 
@@ -206,9 +206,26 @@ function CartDrawerInner() {
   const t = uiText(locale);
   const { addItem, cartItems, closeCart, drawerOpen, refreshCartPricing, removeItem, subtotal, updateQuantity } = useStore();
   const [milestones, setMilestones] = useState([]);
-  // Product savings only here — the cart does not know about coupons yet.
-  const savings = cartSavings(cartItems);
   const [thresholdCurrency, setThresholdCurrency] = useState("OMR");
+
+  const basketPricing = cartItems[0]?.pricing || null;
+  const money = (amount) =>
+    basketPricing ? formatMoney({ ...basketPricing, amount, prefix: "" }, locale) : "";
+
+  // Milestone thresholds come from the region payload while the basket is
+  // priced by the product API. If those two ever disagree on currency the
+  // comparison is meaningless, so no reward is claimed rather than a wrong one.
+  const rewardsComparable =
+    Boolean(basketPricing) && thresholdCurrency === basketPricing.currency_code;
+  const reward = rewardsComparable
+    ? milestoneReward(milestones, subtotal)
+    : { discountPct: 0, discount: 0, freeShipping: false };
+
+  // Same total the checkout shows: what the products are sold below their
+  // compare-at price, plus the cart reward. A coupon can only be entered at
+  // checkout, so it is the one part of that figure the cart cannot know.
+  const savings = cartSavings(cartItems, { discountAmount: reward.discount });
+  const estimatedTotal = Math.max(0, subtotal - reward.discount);
 
   useEffect(() => {
     if (!cartItems.length) {
@@ -251,55 +268,156 @@ function CartDrawerInner() {
             </button>
           </div>
 
-          {milestones.length > 0 && (
-            <MilestoneBar
-              subtotal={subtotal}
-              milestones={milestones}
-              currency={thresholdCurrency}
-              locale={locale}
-            />
-          )}
-
-          <div className="cart-drawer-items">
-            {cartItems.length === 0 ? (
-              <div className="empty-panel">
-                <p>{t.continueShopping}</p>
-              </div>
-            ) : (
-              cartItems.map((item) => (
-                <article key={item.lineId} className="cart-line-item">
-                  <div className="cart-line-media">
-                    <SiteImage src={item.image} alt={item.name} width={120} height={120} loading="lazy" sizes="120px" />
-                  </div>
-                  <div className="cart-line-copy">
-                    <strong>{item.name}</strong>
-                    {item.selectedOptionsText ? <span>{item.selectedOptionsText}</span> : null}
-                    <span className="cart-line-total">
-                      {formatMoney(
-                        {
-                          ...item.pricing,
-                          amount: item.pricing.amount * item.quantity,
-                          prefix: "",
-                        },
-                        locale,
-                      )}
-                    </span>
-                    <div className="cart-line-controls">
-                      <button type="button" onClick={() => updateQuantity(item.lineId, item.quantity - 1)}>
-                        -
-                      </button>
-                      <span>{item.quantity}</span>
-                      <button type="button" onClick={() => updateQuantity(item.lineId, item.quantity + 1)}>
-                        +
-                      </button>
-                    </div>
-                  </div>
-                  <button type="button" className="icon-link" onClick={() => removeItem(item.lineId)}>
-                    <Icon name="close" size={14} />
-                  </button>
-                </article>
-              ))
+          {/* One scroll region for the rewards bar, the lines and the totals.
+              With the totals pinned to the footer instead, a phone in the 667px
+              class had about a hundred pixels left for the basket itself. */}
+          <div className="cart-drawer-scroll">
+            {milestones.length > 0 && (
+              <MilestoneBar
+                subtotal={subtotal}
+                milestones={milestones}
+                currency={thresholdCurrency}
+                locale={locale}
+              />
             )}
+
+            <div className="cart-drawer-items">
+              {cartItems.length === 0 ? (
+                <div className="empty-panel">
+                  <p>{t.continueShopping}</p>
+                </div>
+              ) : (
+                cartItems.map((item) => {
+                  const lineMoney = (amount) => formatMoney({ ...item.pricing, amount, prefix: "" }, locale);
+                  const compare = Number(item.pricing.compare_amount) || 0;
+                  const lineSaving = compare > item.pricing.amount
+                    ? (compare - item.pricing.amount) * item.quantity
+                    : 0;
+
+                  return (
+                    <article key={item.lineId} className="cart-line-item">
+                      <div className="cart-line-media">
+                        <SiteImage src={item.image} alt={item.name} width={120} height={120} loading="lazy" sizes="120px" />
+                      </div>
+                      <div className="cart-line-copy">
+                        <strong className="cart-line-name">{item.name}</strong>
+                        {item.selectedOptionsText ? (
+                          <span className="cart-line-variant">{item.selectedOptionsText}</span>
+                        ) : null}
+                        {item.quantity > 1 ? (
+                          <span className="cart-line-unit">
+                            {lineMoney(item.pricing.amount)} × {item.quantity}
+                          </span>
+                        ) : null}
+
+                        <div className="cart-line-foot">
+                          <div className="cart-line-controls">
+                            <button
+                              type="button"
+                              aria-label={locale === "ar" ? "إنقاص الكمية" : "Decrease quantity"}
+                              onClick={() => updateQuantity(item.lineId, item.quantity - 1)}
+                            >
+                              −
+                            </button>
+                            <span>{item.quantity}</span>
+                            <button
+                              type="button"
+                              aria-label={locale === "ar" ? "زيادة الكمية" : "Increase quantity"}
+                              onClick={() => updateQuantity(item.lineId, item.quantity + 1)}
+                            >
+                              +
+                            </button>
+                          </div>
+                          <div className="cart-line-prices">
+                            <span className="cart-line-total">
+                              {lineMoney(item.pricing.amount * item.quantity)}
+                            </span>
+                            {lineSaving > 0 ? (
+                              <s className="cart-line-was">{lineMoney(compare * item.quantity)}</s>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        {lineSaving > 0 ? (
+                          <span className="cart-line-save">
+                            {locale === "ar" ? "توفير" : "Save"} {lineMoney(lineSaving)}
+                          </span>
+                        ) : null}
+                      </div>
+                      <button
+                        type="button"
+                        className="cart-line-remove"
+                        aria-label={locale === "ar" ? "إزالة المنتج" : "Remove item"}
+                        onClick={() => removeItem(item.lineId)}
+                      >
+                        <Icon name="close" size={13} />
+                      </button>
+                    </article>
+                  );
+                })
+              )}
+            </div>
+
+            {cartItems.length ? (
+              <div className="cart-summary">
+                <div className="subtotal-row">
+                  <span>{t.subtotal}</span>
+                  <strong>{money(subtotal)}</strong>
+                </div>
+
+                {reward.discount > 0 ? (
+                  <div className="subtotal-row">
+                    <span>
+                      {locale === "ar"
+                        ? `مكافأة السلة (خصم ${reward.discountPct}%)`
+                        : `Cart reward (${reward.discountPct}% off)`}
+                    </span>
+                    <strong className="summary-amount--discount">-{money(reward.discount)}</strong>
+                  </div>
+                ) : null}
+
+                <div className="subtotal-row">
+                  <span>{locale === "ar" ? "الشحن" : "Shipping"}</span>
+                  {reward.freeShipping ? (
+                    <strong className="summary-amount--discount">
+                      {locale === "ar" ? "مجاناً" : "Free"}
+                    </strong>
+                  ) : (
+                    <strong className="cart-summary-pending">
+                      {locale === "ar" ? "يُحتسب عند الدفع" : "At checkout"}
+                    </strong>
+                  )}
+                </div>
+
+                {/* Tax needs the region's rate and shipping needs an address,
+                    so neither is a figure the drawer can put a number against.
+                    They are still listed, the way the order summary lists them,
+                    so the estimate visibly excludes them rather than just
+                    reading lower than the total at checkout. */}
+                <div className="subtotal-row">
+                  <span>{locale === "ar" ? "ضريبة القيمة المضافة" : "VAT"}</span>
+                  <strong className="cart-summary-pending">
+                    {locale === "ar" ? "يُحتسب عند الدفع" : "At checkout"}
+                  </strong>
+                </div>
+
+                <div className="subtotal-row cart-summary-total">
+                  <span>{locale === "ar" ? "الإجمالي التقديري" : "Estimated total"}</span>
+                  <strong>{money(estimatedTotal)}</strong>
+                </div>
+
+                {savings > 0 ? (
+                  <div className="cart-savings-row">
+                    <span aria-hidden="true">🎉</span>
+                    <span>
+                      {locale === "ar" ? "أنت توفّر" : "You're saving"}{" "}
+                      <strong>{money(savings)}</strong>
+                      {locale === "ar" ? " على هذا الطلب" : " on this order"}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             <CartRecommendations
               locale={locale}
@@ -313,35 +431,6 @@ function CartDrawerInner() {
           <div className="cart-drawer-footer">
             {cartItems.length ? (
               <>
-                <div className="subtotal-row">
-                  <span>{t.subtotal}</span>
-                  <strong>
-                    {cartItems[0]
-                      ? formatMoney(
-                          {
-                            ...cartItems[0].pricing,
-                            amount: subtotal,
-                            prefix: "",
-                          },
-                          locale,
-                        )
-                      : ""}
-                  </strong>
-                </div>
-                {savings > 0 ? (
-                  <div className="cart-savings-row">
-                    <span aria-hidden="true">🎉</span>
-                    <span>
-                      {locale === "ar"
-                        ? "أنت توفّر"
-                        : "You're saving"}{" "}
-                      <strong>
-                        {formatMoney({ ...cartItems[0].pricing, amount: savings, prefix: "" }, locale)}
-                      </strong>
-                    </span>
-                  </div>
-                ) : null}
-                <p>{t.shipping}</p>
                 <CartApplePayButton />
                 <Link
                   href={buildStorePath(locale, "/checkout", region)}
