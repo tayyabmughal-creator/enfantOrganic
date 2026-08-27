@@ -13,5 +13,5 @@ export {
   replaceLocaleInPath,
   replaceRegionInPath,
 } from "./storefront-core/routing";
-export { formatMoney, cartSavings, milestoneReward } from "./storefront-core/money";
+export { formatMoney, formatAmount, cartSavings, milestoneReward } from "./storefront-core/money";
 export { uiText } from "./storefront-core/translations";

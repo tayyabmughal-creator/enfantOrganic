@@ -23,6 +23,15 @@ const drawer = readFileSync(
   new URL("../components/store/cart/CartDrawer.jsx", import.meta.url),
   "utf8",
 );
+const provider = readFileSync(
+  new URL("../components/store/cart/StoreProvider.jsx", import.meta.url),
+  "utf8",
+);
+const home = readFileSync(new URL("../app/styles/home.css", import.meta.url), "utf8");
+const categoryCarousel = readFileSync(
+  new URL("../components/store/CategoryCarousel.jsx", import.meta.url),
+  "utf8",
+);
 
 /** The declarations of the first rule whose selector list contains `selector`. */
 function ruleBody(css, selector) {
@@ -116,7 +125,106 @@ test("the cart's saving is the checkout's: compare-at prices plus the reward", (
 test("the drawer feeds the milestone discount into the same savings helper", () => {
   assert.match(
     drawer,
-    /cartSavings\(cartItems,\s*\{\s*discountAmount:\s*reward\.discount/,
+    /cartSavings\(pricedItems,\s*\{\s*discountAmount:\s*reward\.discount/,
     "the drawer is back to quoting product savings only",
   );
+});
+
+/**
+ * A line the shopper added in one store and carried into another keeps that
+ * store's currency until it is repriced. When a request for one product got
+ * dropped, the drawer showed OMR on one line and AED on the next and totalled
+ * them together — "OMR 119.220" for a basket that was mostly dirhams.
+ */
+test("the subtotal only counts lines priced for the active store", () => {
+  assert.match(
+    provider,
+    /const isPricedHere\s*=\s*\(item\)\s*=>\s*\n?\s*!activeRegion \|\| item\.pricing\?\.region_code === activeRegion/,
+    "the subtotal no longer filters by the region the cart is priced for",
+  );
+  assert.match(
+    provider,
+    /\.filter\(isPricedHere\)\s*\n?\s*\.reduce\(/,
+    "the subtotal sums every line again, mixing currencies",
+  );
+});
+
+test("a dropped pricing request is retried before the line is left behind", () => {
+  assert.match(
+    provider,
+    /const failed = uniqueSlugs\.filter/,
+    "the single retry that recovers a transient failure is gone",
+  );
+});
+
+test("the drawer flags lines it could not price for this store", () => {
+  assert.match(drawer, /cart-line-item\$\{strandedHere \? " is-unavailable" : ""\}/);
+  assert.match(drawer, /outOfRegionItems\.length/);
+});
+
+/**
+ * What the cart shows about money: the figure being weighed up and one line
+ * naming the saving. Subtotal, shipping, VAT and the reward breakdown belong to
+ * the order summary; repeated here they were deep enough to push the basket off
+ * a phone screen. Per-line "Save X" pills went the same way — the saving is
+ * stated once, at the bottom, for the whole order.
+ */
+test("the cart states the total and the saving, not a summary", () => {
+  assert.match(drawer, /className="cart-total-row"/);
+  assert.match(drawer, /className="cart-saved-line"/);
+  for (const gone of ["cart-summary-total", "cart-summary-pending", "cart-line-save"]) {
+    assert.doesNotMatch(drawer, new RegExp(gone), `${gone} is back in the drawer`);
+  }
+});
+
+test("suggestions are pinned in the footer, one slide at a time", () => {
+  const footer = drawer.slice(drawer.indexOf('className="cart-drawer-footer"'));
+  assert.match(footer, /<CartRecommendations/, "suggestions are back below the basket");
+
+  const rail = ruleBody(overlays, ".cart-recommendations-rail");
+  assert.ok(rail, ".cart-recommendations-rail has no rule");
+  assert.match(rail, /grid-auto-columns:\s*100%/, "more than one suggestion per view");
+  assert.match(rail, /scroll-snap-type:\s*x mandatory/);
+});
+
+/**
+ * Chrome drops smooth programmatic scrolls on a scroll-snap rail, in the call
+ * and through CSS alike, and the rail simply does not move — which is why the
+ * category arrows never worked either.
+ */
+test("snap rails are scrolled by assignment, never smoothly", () => {
+  for (const source of [drawer, categoryCarousel]) {
+    // The comments name scrollTo({behavior:"smooth"}) as the thing not to do,
+    // so this looks for the calls themselves rather than the words.
+    assert.doesNotMatch(source, /rail\.scroll(To|By)\(/);
+  }
+  for (const [css, selector] of [
+    [overlays, ".cart-recommendations-rail"],
+    [home, ".category-carousel-rail"],
+  ]) {
+    const body = ruleBody(css, selector);
+    assert.ok(body, `${selector} has no rule`);
+    assert.match(body, /scroll-snap-type/, `${selector} is no longer a snap rail`);
+    assert.doesNotMatch(
+      body,
+      /scroll-behavior:\s*smooth/,
+      `${selector} smooth-scrolls, which cancels the scroll on a snap rail`,
+    );
+  }
+});
+
+test("a tapped dot lights up without waiting for the scroll to settle", () => {
+  assert.match(drawer, /rail\.scrollLeft = direction \* index \* rail\.clientWidth;\s*\n(\s*\/\/[^\n]*\n)*\s*setSlide\(index\);/);
+  assert.match(categoryCarousel, /rail\.scrollLeft = \(isRtl \? -1 : 1\) \* index \* rail\.clientWidth;\s*\n(\s*\/\/[^\n]*\n)*\s*setPage\(index\);/);
+});
+
+test("repricing is not keyed on the cart array itself", () => {
+  // refreshCartPricing replaces the array, so an effect depending on it would
+  // reprice, re-render, and reprice again without end.
+  assert.doesNotMatch(
+    drawer,
+    /\}, \[cartItems, locale, region, refreshCartPricing\]\)/,
+    "the reprice effect depends on the cart array — that is an infinite loop",
+  );
+  assert.match(drawer, /\}, \[cartItems\.length, drawerOpen, locale, region, refreshCartPricing\]\)/);
 });

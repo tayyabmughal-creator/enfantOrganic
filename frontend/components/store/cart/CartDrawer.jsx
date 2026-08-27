@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import Icon from "@/components/icons/Icon";
@@ -8,7 +8,7 @@ import SiteImage from "@/components/ui/SiteImage";
 import CartApplePayButton from "@/components/store/cart/CartApplePayButton";
 import { useStore } from "@/components/store/cart/StoreProvider";
 import { useLocale } from "@/contexts/LocaleContext";
-import { buildStorePath, cartSavings, formatMoney, milestoneReward, uiText } from "@/lib/storefront";
+import { buildStorePath, cartSavings, formatAmount, formatMoney, milestoneReward, uiText } from "@/lib/storefront";
 import { useRegionCode } from "@/lib/useRegionCode";
 import { API_BASE_URL } from "@/lib/config";
 
@@ -130,9 +130,19 @@ function MilestoneBar({ subtotal, milestones, currency, locale }) {
   );
 }
 
+/**
+ * Suggestions, pinned above the checkout button rather than sitting under the
+ * basket. Below the lines they were only ever seen by a shopper who scrolled
+ * past everything they had already decided to buy.
+ *
+ * One product fills the width at a time and the rest are a swipe away, with
+ * dots so it reads as a carousel instead of a single lonely card.
+ */
 function CartRecommendations({ locale, region, cartItems, drawerOpen, onAdd }) {
   const isAr = locale === "ar";
   const [products, setProducts] = useState([]);
+  const [slide, setSlide] = useState(0);
+  const railRef = useRef(null);
   const slugKey = cartItems.map((item) => item.slug).sort().join(",");
 
   // Only ever fetched while the drawer is open. The drawer is mounted on every
@@ -155,6 +165,27 @@ function CartRecommendations({ locale, region, cartItems, drawerOpen, onAdd }) {
 
   if (!products.length) return null;
 
+  // Which slide is in view, from the rail's own scroll position, so the dots
+  // follow a finger swipe as well as a dot tap.
+  const onRailScroll = () => {
+    const rail = railRef.current;
+    if (!rail || !rail.clientWidth) return;
+    setSlide(Math.round(Math.abs(rail.scrollLeft) / rail.clientWidth));
+  };
+
+  const goToSlide = (index) => {
+    const rail = railRef.current;
+    if (!rail) return;
+    // Signed for RTL, where scrollLeft runs negative from the right edge.
+    // Assigned, not scrollTo({behavior:"smooth"}) — Chrome drops smooth
+    // programmatic scrolls on a scroll-snap rail and nothing moves.
+    const direction = getComputedStyle(rail).direction === "rtl" ? -1 : 1;
+    rail.scrollLeft = direction * index * rail.clientWidth;
+    // Set here as well as from the scroll handler so the tapped dot lights up
+    // immediately rather than after the rail has settled on a snap point.
+    setSlide(index);
+  };
+
   return (
     <div className="cart-recommendations">
       <h4 className="cart-recommendations-title">
@@ -162,24 +193,21 @@ function CartRecommendations({ locale, region, cartItems, drawerOpen, onAdd }) {
           ? (isAr ? "أضف إليها" : "Goes well with this")
           : (isAr ? "الأكثر مبيعًا" : "Popular right now")}
       </h4>
-      <div className="cart-recommendations-rail">
+      <div className="cart-recommendations-rail" ref={railRef} onScroll={onRailScroll}>
         {products.map((product) => {
           const outOfStock = product.stock_status && product.stock_status.is_in_stock === false;
+          const href = buildStorePath(locale, `/product/${product.slug}`, region);
           return (
             <article key={product.slug} className="cart-recommendation">
-              <Link
-                href={buildStorePath(locale, `/product/${product.slug}`, region)}
-                className="cart-recommendation-media"
-              >
+              <Link href={href} className="cart-recommendation-media">
                 <SiteImage src={product.image} alt={product.name} width={96} height={96} loading="lazy" sizes="96px" />
               </Link>
-              <Link
-                href={buildStorePath(locale, `/product/${product.slug}`, region)}
-                className="cart-recommendation-name"
-              >
-                {product.name}
-              </Link>
-              <span className="cart-recommendation-price">{formatMoney(product.pricing, locale)}</span>
+              <div className="cart-recommendation-copy">
+                <Link href={href} className="cart-recommendation-name">
+                  {product.name}
+                </Link>
+                <span className="cart-recommendation-price">{formatMoney(product.pricing, locale)}</span>
+              </div>
               <button
                 type="button"
                 className="cart-recommendation-add"
@@ -194,6 +222,23 @@ function CartRecommendations({ locale, region, cartItems, drawerOpen, onAdd }) {
           );
         })}
       </div>
+
+      {products.length > 1 ? (
+        <div className="cart-recommendations-dots">
+          {products.map((product, index) => (
+            <button
+              key={product.slug}
+              type="button"
+              className={`cart-recommendations-dot${index === slide ? " is-active" : ""}`}
+              aria-label={
+                isAr ? `الاقتراح ${index + 1}` : `Suggestion ${index + 1}`
+              }
+              aria-current={index === slide}
+              onClick={() => goToSlide(index)}
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -204,11 +249,27 @@ function CartDrawerInner() {
   const region = useRegionCode();
   const { locale } = useLocale();
   const t = uiText(locale);
-  const { addItem, cartItems, closeCart, drawerOpen, refreshCartPricing, removeItem, subtotal, updateQuantity } = useStore();
+  const {
+    activeRegion,
+    addItem,
+    cartItems,
+    closeCart,
+    drawerOpen,
+    outOfRegionItems,
+    refreshCartPricing,
+    removeItem,
+    subtotal,
+    updateQuantity,
+  } = useStore();
   const [milestones, setMilestones] = useState([]);
   const [thresholdCurrency, setThresholdCurrency] = useState("OMR");
 
-  const basketPricing = cartItems[0]?.pricing || null;
+  // Only lines actually priced for this store carry the basket's currency; one
+  // left behind by a region switch would otherwise decide how every figure in
+  // the drawer is formatted.
+  const isPricedHere = (item) => !activeRegion || item.pricing?.region_code === activeRegion;
+  const pricedItems = cartItems.filter(isPricedHere);
+  const basketPricing = pricedItems[0]?.pricing || cartItems[0]?.pricing || null;
   const money = (amount) =>
     basketPricing ? formatMoney({ ...basketPricing, amount, prefix: "" }, locale) : "";
 
@@ -224,8 +285,11 @@ function CartDrawerInner() {
   // Same total the checkout shows: what the products are sold below their
   // compare-at price, plus the cart reward. A coupon can only be entered at
   // checkout, so it is the one part of that figure the cart cannot know.
-  const savings = cartSavings(cartItems, { discountAmount: reward.discount });
-  const estimatedTotal = Math.max(0, subtotal - reward.discount);
+  const savings = cartSavings(pricedItems, { discountAmount: reward.discount });
+  const total = Math.max(0, subtotal - reward.discount);
+  // What the basket would have cost at the compare-at prices, struck through
+  // beside the total — the shopper sees the discount rather than a breakdown.
+  const totalBeforeSavings = total + savings;
 
   useEffect(() => {
     if (!cartItems.length) {
@@ -233,7 +297,11 @@ function CartDrawerInner() {
     }
 
     void refreshCartPricing(locale, region);
-  }, [cartItems.length, locale, region, refreshCartPricing]);
+    // Deliberately keyed on the item COUNT, not the array: repricing replaces
+    // the array, so depending on it would re-enter this effect forever. Opening
+    // the drawer is the extra trigger, so a line a dropped request left at the
+    // previous store's price gets another attempt rather than sticking.
+  }, [cartItems.length, drawerOpen, locale, region, refreshCartPricing]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -290,59 +358,63 @@ function CartDrawerInner() {
                 cartItems.map((item) => {
                   const lineMoney = (amount) => formatMoney({ ...item.pricing, amount, prefix: "" }, locale);
                   const compare = Number(item.pricing.compare_amount) || 0;
-                  const lineSaving = compare > item.pricing.amount
-                    ? (compare - item.pricing.amount) * item.quantity
-                    : 0;
+                  const discounted = compare > item.pricing.amount;
+                  const strandedHere = !isPricedHere(item);
 
                   return (
-                    <article key={item.lineId} className="cart-line-item">
+                    <article
+                      key={item.lineId}
+                      className={`cart-line-item${strandedHere ? " is-unavailable" : ""}`}
+                    >
                       <div className="cart-line-media">
-                        <SiteImage src={item.image} alt={item.name} width={120} height={120} loading="lazy" sizes="120px" />
+                        <SiteImage src={item.image} alt={item.name} width={160} height={160} loading="lazy" sizes="96px" />
                       </div>
                       <div className="cart-line-copy">
                         <strong className="cart-line-name">{item.name}</strong>
                         {item.selectedOptionsText ? (
                           <span className="cart-line-variant">{item.selectedOptionsText}</span>
                         ) : null}
-                        {item.quantity > 1 ? (
-                          <span className="cart-line-unit">
-                            {lineMoney(item.pricing.amount)} × {item.quantity}
-                          </span>
-                        ) : null}
 
-                        <div className="cart-line-foot">
-                          <div className="cart-line-controls">
-                            <button
-                              type="button"
-                              aria-label={locale === "ar" ? "إنقاص الكمية" : "Decrease quantity"}
-                              onClick={() => updateQuantity(item.lineId, item.quantity - 1)}
-                            >
-                              −
-                            </button>
-                            <span>{item.quantity}</span>
-                            <button
-                              type="button"
-                              aria-label={locale === "ar" ? "زيادة الكمية" : "Increase quantity"}
-                              onClick={() => updateQuantity(item.lineId, item.quantity + 1)}
-                            >
-                              +
-                            </button>
-                          </div>
-                          <div className="cart-line-prices">
-                            <span className="cart-line-total">
-                              {lineMoney(item.pricing.amount * item.quantity)}
-                            </span>
-                            {lineSaving > 0 ? (
-                              <s className="cart-line-was">{lineMoney(compare * item.quantity)}</s>
-                            ) : null}
-                          </div>
-                        </div>
-
-                        {lineSaving > 0 ? (
-                          <span className="cart-line-save">
-                            {locale === "ar" ? "توفير" : "Save"} {lineMoney(lineSaving)}
+                        {strandedHere ? (
+                          <span className="cart-line-unavailable">
+                            {locale === "ar"
+                              ? "غير متوفر في هذا المتجر — يرجى إزالته"
+                              : "Not available in this store — please remove it"}
                           </span>
-                        ) : null}
+                        ) : (
+                          <div className="cart-line-foot">
+                            <div className="cart-line-controls">
+                              <button
+                                type="button"
+                                aria-label={locale === "ar" ? "إنقاص الكمية" : "Decrease quantity"}
+                                onClick={() => updateQuantity(item.lineId, item.quantity - 1)}
+                              >
+                                −
+                              </button>
+                              <span>{item.quantity}</span>
+                              <button
+                                type="button"
+                                aria-label={locale === "ar" ? "زيادة الكمية" : "Increase quantity"}
+                                onClick={() => updateQuantity(item.lineId, item.quantity + 1)}
+                              >
+                                +
+                              </button>
+                            </div>
+                            <div className="cart-line-prices">
+                              <span className="cart-line-total">
+                                {lineMoney(item.pricing.amount * item.quantity)}
+                              </span>
+                              {discounted ? (
+                                /* Amount only — the price beside it has already
+                                   named the currency, and repeating it pushed
+                                   the pair off the stepper's row. */
+                                <s className="cart-line-was">
+                                  {formatAmount({ ...item.pricing, amount: compare * item.quantity }, locale)}
+                                </s>
+                              ) : null}
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <button
                         type="button"
@@ -358,67 +430,12 @@ function CartDrawerInner() {
               )}
             </div>
 
-            {cartItems.length ? (
-              <div className="cart-summary">
-                <div className="subtotal-row">
-                  <span>{t.subtotal}</span>
-                  <strong>{money(subtotal)}</strong>
-                </div>
+          </div>
 
-                {reward.discount > 0 ? (
-                  <div className="subtotal-row">
-                    <span>
-                      {locale === "ar"
-                        ? `مكافأة السلة (خصم ${reward.discountPct}%)`
-                        : `Cart reward (${reward.discountPct}% off)`}
-                    </span>
-                    <strong className="summary-amount--discount">-{money(reward.discount)}</strong>
-                  </div>
-                ) : null}
-
-                <div className="subtotal-row">
-                  <span>{locale === "ar" ? "الشحن" : "Shipping"}</span>
-                  {reward.freeShipping ? (
-                    <strong className="summary-amount--discount">
-                      {locale === "ar" ? "مجاناً" : "Free"}
-                    </strong>
-                  ) : (
-                    <strong className="cart-summary-pending">
-                      {locale === "ar" ? "يُحتسب عند الدفع" : "At checkout"}
-                    </strong>
-                  )}
-                </div>
-
-                {/* Tax needs the region's rate and shipping needs an address,
-                    so neither is a figure the drawer can put a number against.
-                    They are still listed, the way the order summary lists them,
-                    so the estimate visibly excludes them rather than just
-                    reading lower than the total at checkout. */}
-                <div className="subtotal-row">
-                  <span>{locale === "ar" ? "ضريبة القيمة المضافة" : "VAT"}</span>
-                  <strong className="cart-summary-pending">
-                    {locale === "ar" ? "يُحتسب عند الدفع" : "At checkout"}
-                  </strong>
-                </div>
-
-                <div className="subtotal-row cart-summary-total">
-                  <span>{locale === "ar" ? "الإجمالي التقديري" : "Estimated total"}</span>
-                  <strong>{money(estimatedTotal)}</strong>
-                </div>
-
-                {savings > 0 ? (
-                  <div className="cart-savings-row">
-                    <span aria-hidden="true">🎉</span>
-                    <span>
-                      {locale === "ar" ? "أنت توفّر" : "You're saving"}{" "}
-                      <strong>{money(savings)}</strong>
-                      {locale === "ar" ? " على هذا الطلب" : " on this order"}
-                    </span>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
+          <div className="cart-drawer-footer">
+            {/* Outside the branch below: on an empty cart these become the
+                "Popular right now" rail, which is the only thing in the drawer
+                worth looking at. */}
             <CartRecommendations
               locale={locale}
               region={region}
@@ -426,11 +443,38 @@ function CartDrawerInner() {
               drawerOpen={drawerOpen}
               onAdd={(product) => addItem(product, 1)}
             />
-          </div>
 
-          <div className="cart-drawer-footer">
             {cartItems.length ? (
               <>
+                {outOfRegionItems.length ? (
+                  <p className="cart-region-warning">
+                    {locale === "ar"
+                      ? "بعض المنتجات غير متوفرة في هذا المتجر ولم تُحتسب في الإجمالي."
+                      : "Some items aren't sold in this store and are not counted in the total."}
+                  </p>
+                ) : null}
+
+                {/* Shipping, tax and the reward breakdown all belong to the
+                    order summary. Here it is the one figure the shopper is
+                    weighing up, with what it would have cost struck out. */}
+                <div className="cart-total-row">
+                  <span>{locale === "ar" ? "الإجمالي" : "Total"}</span>
+                  <span className="cart-total-amounts">
+                    {savings > 0 ? (
+                      <s className="cart-total-was">{money(totalBeforeSavings)}</s>
+                    ) : null}
+                    <strong>{money(total)}</strong>
+                  </span>
+                </div>
+
+                {savings > 0 ? (
+                  <p className="cart-saved-line">
+                    {locale === "ar"
+                      ? <>وفّرت <strong>{money(savings)}</strong></>
+                      : <>You saved <strong>{money(savings)}</strong></>}
+                  </p>
+                ) : null}
+
                 <CartApplePayButton />
                 <Link
                   href={buildStorePath(locale, "/checkout", region)}

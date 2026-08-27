@@ -809,6 +809,33 @@
   min-width: 0;
 }
 
+/* One dot per screenful of categories. The ‹ › arrows are desktop-only, so on a
+   phone the four visible tiles read as the whole set. */
+.category-carousel-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.category-carousel-dot {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(37, 49, 27, 0.2);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 160ms ease, width 160ms ease;
+}
+
+.category-carousel-dot.is-active {
+  width: 20px;
+  border-radius: 999px;
+  background: var(--brand-dark, #607a42);
+}
+
 .category-carousel-rail {
   flex: 1 1 auto;
   min-width: 0;

@@ -48,6 +48,34 @@ export function formatMoney(pricing, locale) {
 }
 
 /**
+ * The amount alone, at the currency's own precision (3 places for OMR, 2 for
+ * AED and SAR) and no currency code.
+ *
+ * For the struck-through compare-at price sitting beside a full price that has
+ * already named the currency. Repeating it there cost roughly 35px, which was
+ * the difference between the price fitting on the quantity stepper's row and
+ * dropping onto a line of its own — and it only dropped for some currencies,
+ * so lines in the same cart disagreed about where the price lived.
+ */
+export function formatAmount(pricing, locale) {
+  if (!pricing) {
+    return "";
+  }
+
+  const normalizedLocale = normalizeLocale(locale);
+  const intlLocale = LOCALE_MAP[normalizedLocale]?.[pricing.region_code] || "en-US";
+  const currency = pricing.currency_code || pricing.currency || "USD";
+  const digits = getCurrencyFormatter(intlLocale, currency).resolvedOptions()
+    .minimumFractionDigits;
+
+  return new Intl.NumberFormat(intlLocale, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+    numberingSystem: "latn",
+  }).format(pricing.amount);
+}
+
+/**
  * What the shopper is saving on a basket, in the basket's own currency.
  *
  * Two things make up a saving and the customer thinks of them as one number:

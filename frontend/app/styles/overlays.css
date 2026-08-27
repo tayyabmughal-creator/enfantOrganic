@@ -218,18 +218,18 @@
   gap: 12px;
 }
 
-/* Suggestions beside the cart — a swipeable rail so a narrow drawer can still
-   offer several without turning into a list the shopper has to scroll past. */
+/* Suggestions, pinned in the footer above the checkout button. One wide card
+   fills the drawer and the rest are a swipe away — three narrow portrait tiles
+   in a row left no product legible and only showed up after the whole basket. */
 .cart-recommendations {
   border-top: 1px solid var(--line, #dfe7d6);
-  padding-top: 14px;
-  margin-top: 2px;
+  padding-top: 12px;
   min-width: 0;
 }
 
 .cart-recommendations-title {
-  margin: 0 0 10px;
-  font-size: 0.86rem;
+  margin: 0 0 8px;
+  font-size: 0.8rem;
   font-weight: 700;
   color: var(--text, #2c3327);
 }
@@ -237,40 +237,57 @@
 .cart-recommendations-rail {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: 118px;
-  gap: 12px;
+  /* One slide per view — the swipe unit is the full rail. */
+  grid-auto-columns: 100%;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
-  padding-bottom: 6px;
+  scrollbar-width: none;
+}
+
+.cart-recommendations-rail::-webkit-scrollbar {
+  display: none;
 }
 
 .cart-recommendation {
   scroll-snap-align: start;
+  scroll-snap-stop: always;
   display: grid;
-  align-content: start;
-  gap: 6px;
-}
-
-.cart-recommendation-media {
-  display: block;
-  border-radius: 12px;
-  overflow: hidden;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 14px;
   border: 1px solid var(--line, #dfe7d6);
   background: #fff;
 }
 
+.cart-recommendation-media {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  aspect-ratio: 1;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface-soft, #f6f8f2);
+}
+
 .cart-recommendation-media img {
   width: 100%;
-  height: auto;
-  aspect-ratio: 1;
-  object-fit: cover;
+  height: 100%;
+  object-fit: contain;
+}
+
+.cart-recommendation-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
 }
 
 .cart-recommendation-name {
-  font-size: 0.76rem;
-  line-height: 1.35;
+  font-size: 0.78rem;
+  line-height: 1.3;
   color: inherit;
   text-decoration: none;
   display: -webkit-box;
@@ -280,20 +297,24 @@
 }
 
 .cart-recommendation-price {
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   font-weight: 700;
   color: var(--brand-dark, #607a42);
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 .cart-recommendation-add {
-  min-height: 30px;
+  min-height: 32px;
+  padding: 0 16px;
   border-radius: 999px;
   border: 1px solid var(--brand-dark, #607a42);
   background: transparent;
   color: var(--brand-dark, #607a42);
-  font-size: 0.74rem;
+  font-size: 0.75rem;
   font-weight: 700;
+  white-space: nowrap;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .cart-recommendation-add:hover:not(:disabled) {
@@ -306,6 +327,32 @@
   cursor: not-allowed;
 }
 
+/* Dots: without them a single card reads as the only suggestion there is. */
+.cart-recommendations-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.cart-recommendations-dot {
+  width: 6px;
+  height: 6px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(37, 49, 27, 0.2);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 160ms ease, width 160ms ease;
+}
+
+.cart-recommendations-dot.is-active {
+  width: 16px;
+  border-radius: 999px;
+  background: var(--brand-dark, #607a42);
+}
+
 /* The remove button is taken out of the column flow and floated over the top
    corner: as a third grid column it cost 40px of the width the product name
    and price have to share, on the narrowest phones the difference between a
@@ -313,10 +360,10 @@
 .cart-line-item {
   position: relative;
   display: grid;
-  grid-template-columns: 76px minmax(0, 1fr);
-  gap: 12px;
-  padding: 12px;
-  padding-inline-end: 38px;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px;
+  padding-inline-end: 30px;
   border-radius: 18px;
   border: 1px solid rgba(25, 24, 23, 0.06);
   background: #fbfcf8;
@@ -328,15 +375,19 @@
   box-shadow: 0 6px 18px rgba(37, 49, 27, 0.06);
 }
 
+/* Square, and barely inset. The tile used to be portrait with 8px of padding,
+   so a square product shot was fitted to the narrower side and then inset
+   again — the pack ended up occupying well under half the space it was given. */
 .cart-line-media {
-  width: 76px;
-  height: 88px;
+  width: 84px;
+  aspect-ratio: 1;
+  height: auto;
   overflow: hidden;
   border-radius: 12px;
   border: 1px solid rgba(25, 24, 23, 0.06);
   display: grid;
   place-items: center;
-  padding: 8px;
+  padding: 2px;
   background:
     radial-gradient(circle at 50% 20%, rgba(146, 171, 105, 0.16), transparent 36%),
     linear-gradient(180deg, #fcfef9, #f2f7ea 76%, #e7f0dc);
@@ -346,7 +397,23 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
-  filter: drop-shadow(0 10px 16px rgba(25, 24, 23, 0.12));
+  filter: drop-shadow(0 8px 14px rgba(25, 24, 23, 0.12));
+}
+
+.cart-line-item.is-unavailable {
+  border-color: rgba(192, 57, 43, 0.28);
+  background: rgba(192, 57, 43, 0.04);
+}
+
+.cart-line-item.is-unavailable .cart-line-media {
+  opacity: 0.5;
+}
+
+.cart-line-unavailable {
+  color: var(--color-error, #c0392b);
+  font-size: 0.76rem;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .cart-line-copy {
@@ -376,19 +443,22 @@
   overflow-wrap: anywhere;
 }
 
+/* nowrap: the price belongs on the stepper's row. Wrapping put it on a line of
+   its own the moment the amount got long ("OMR 20.000 OMR 28.000"), so some
+   lines showed the price beside the quantity and others below it. */
 .cart-line-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
-  margin-top: 3px;
+  margin-top: 4px;
 }
 
 .cart-line-prices {
   display: flex;
   align-items: baseline;
-  gap: 7px;
+  gap: 4px;
   flex-wrap: wrap;
   justify-content: flex-end;
   min-width: 0;
@@ -397,36 +467,24 @@
 .cart-line-total {
   color: var(--text);
   font-weight: 800;
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   font-variant-numeric: lining-nums tabular-nums;
   white-space: nowrap;
 }
 
 .cart-line-was {
   color: var(--text-soft);
-  font-size: 0.78rem;
+  font-size: 0.67rem;
   white-space: nowrap;
   opacity: 0.75;
 }
 
-.cart-line-save {
-  justify-self: start;
-  padding: 2px 9px;
-  border-radius: 999px;
-  background: rgba(96, 122, 66, 0.12);
-  color: var(--brand-dark, #607a42);
-  font-size: 0.71rem;
-  font-weight: 800;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-}
-
 .cart-line-remove {
   position: absolute;
-  top: 8px;
-  inset-inline-end: 8px;
-  width: 26px;
-  height: 26px;
+  top: 6px;
+  inset-inline-end: 4px;
+  width: 24px;
+  height: 24px;
   display: grid;
   place-items: center;
   padding: 0;
@@ -448,16 +506,16 @@
    half the width of a phone cart line on its own, which is what left no room
    for the price beside it. Still a 32px tap target on each button. */
 .cart-line-controls {
-  min-height: 34px;
-  padding: 3px;
+  min-height: 32px;
+  padding: 2px;
   border-radius: 999px;
   gap: 0;
   flex-shrink: 0;
 }
 
 .cart-line-controls button {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   font-size: 0.95rem;
   line-height: 1;
@@ -467,7 +525,7 @@
 }
 
 .cart-line-controls span {
-  min-width: 30px;
+  min-width: 20px;
   text-align: center;
   font-size: 0.85rem;
   font-weight: 700;
@@ -475,80 +533,89 @@
   font-variant-numeric: lining-nums tabular-nums;
 }
 
-/* ── Cart totals: the same lines the order summary shows ── */
-.cart-summary {
-  display: grid;
-  gap: 2px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: var(--surface-soft, #f6f8f2);
-  border: 1px solid rgba(37, 49, 27, 0.07);
-}
-
-.cart-summary .subtotal-row {
-  padding: 3px 0;
-}
-
-.cart-summary .subtotal-row > span {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.cart-summary .subtotal-row > strong {
-  white-space: nowrap;
-}
-
-/* Scoped through .cart-summary so these beat the generic .subtotal-row rules
-   in checkout-order.css, which loads after this file. */
-.cart-summary .cart-summary-total {
-  margin-top: 6px;
-  padding: 9px 0 3px;
-  border-top: 1px dashed rgba(37, 49, 27, 0.16);
-}
-
-.cart-summary .cart-summary-total > span {
-  color: var(--text);
+/* ── Cart total ──────────────────────────────────────────────
+   Subtotal, shipping, VAT and the reward breakdown were a block deep enough to
+   push the basket itself off a phone screen, and all of it is restated on the
+   order summary anyway. What is left is the figure being weighed up, with the
+   pre-discount amount struck through and one line naming the saving. */
+.cart-total-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.95rem;
   font-weight: 700;
-  opacity: 1;
+  color: var(--text);
 }
 
-.cart-summary .cart-summary-total > strong {
-  font-size: 1.02rem;
+.cart-total-amounts {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
-.cart-summary .subtotal-row > strong.cart-summary-pending {
+.cart-total-amounts strong {
+  font-size: 1.18rem;
+  font-weight: 850;
+  white-space: nowrap;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.cart-total-was {
   color: var(--text-soft);
-  font-weight: 600;
+  font-size: 0.86rem;
+  font-weight: 500;
+  white-space: nowrap;
+  opacity: 0.8;
 }
 
-.cart-summary .cart-savings-row {
-  margin-top: 8px;
+.cart-saved-line {
+  margin: -6px 0 0;
+  font-size: 0.82rem;
+  color: var(--brand-dark, #607a42);
+}
+
+.cart-saved-line strong {
+  font-weight: 800;
+}
+
+.cart-region-warning {
+  margin: 0;
   padding: 8px 10px;
-  font-size: 0.8rem;
+  border-radius: 10px;
+  background: rgba(192, 57, 43, 0.07);
+  color: var(--color-error, #c0392b);
+  font-size: 0.76rem;
+  line-height: 1.4;
 }
 
 
-/* ═══════════════════ MILESTONE REWARDS BAR ═══════════════════ */
+/* ═══════════════════ MILESTONE REWARDS BAR ═══════════════════
+   Kept deliberately shallow: this sits above the basket, so every pixel it
+   takes is a pixel of the products the shopper actually came to look at. */
 .ms-bar {
-  padding: 14px 16px 18px;
-  border-radius: 20px;
+  padding: 10px 14px 12px;
+  border-radius: 16px;
   background: linear-gradient(150deg, #f2faf0 0%, #e5f4dc 55%, #eef8e6 100%);
   border: 1px solid rgba(74, 124, 66, 0.18);
   box-shadow:
     0 2px 14px rgba(60, 110, 50, 0.07),
     inset 0 1px 0 rgba(255, 255, 255, 0.85);
   display: grid;
-  gap: 13px;
+  gap: 9px;
   overflow: hidden;
 }
 
 /* ── Message ── */
 .ms-msg {
   margin: 0;
-  font-size: 0.83rem;
+  font-size: 0.78rem;
   color: #607858;
   text-align: center;
-  line-height: 1.5;
+  line-height: 1.4;
   letter-spacing: -0.01em;
 }
 
@@ -565,15 +632,15 @@
 /* ── Track area (relative container for both track + pins) ── */
 .ms-track-area {
   position: relative;
-  /* padding-top centres the 36px pins over the 13px track: (36-13)/2 = 11px */
-  /* padding-inline keeps pins (36px wide) fully inside the bar: 36/2 = 18px */
+  /* padding-top centres the 28px pins over the 10px track: (28-10)/2 = 9px */
+  /* padding-inline keeps pins (28px wide) fully inside the bar: 28/2 = 14px */
   /* padding-bottom leaves room for a label that has wrapped to two lines */
-  padding: 11px 18px 60px;
+  padding: 9px 14px 46px;
 }
 
 /* ── Track ── */
 .ms-track {
-  height: 13px;
+  height: 10px;
   border-radius: 999px;
   background: rgba(74, 124, 66, 0.12);
   overflow: hidden;
@@ -627,8 +694,8 @@
 }
 
 .ms-pin-bubble {
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: #fff;
   border: 2px solid rgba(74, 124, 66, 0.22);
@@ -642,8 +709,8 @@
 }
 
 .ms-pin-bubble svg {
-  width: 16px;
-  height: 16px;
+  width: 13px;
+  height: 13px;
   flex-shrink: 0;
 }
 
@@ -661,7 +728,7 @@
 /* ── Label under pin ── */
 .ms-pin-label {
   position: absolute;
-  top: 44px;
+  top: 34px;
   /* Default: centred on the pin */
   left: 50%;
   transform: translateX(-50%);
@@ -697,7 +764,7 @@
 }
 
 .ms-pin-label strong {
-  font-size: 0.67rem;
+  font-size: 0.64rem;
   font-weight: 700;
   color: #3e5e44;
   letter-spacing: -0.01em;
@@ -705,7 +772,7 @@
 }
 
 .ms-pin-label span {
-  font-size: 0.6rem;
+  font-size: 0.58rem;
   font-weight: 500;
   color: #8aaa8e;
   line-height: 1.3;

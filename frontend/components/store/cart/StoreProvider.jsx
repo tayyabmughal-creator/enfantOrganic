@@ -26,6 +26,10 @@ export default function StoreProvider({ children }) {
   const [quickViewProduct, setQuickViewProduct] = useState(null);
   const [hydrated, setHydrated] = useState(false);
   const [repricingInFlight, setRepricingInFlight] = useState(false);
+  // The store the cart is currently being priced for. Lines that could not be
+  // repriced into it are not from this store's catalogue and must stay out of
+  // the totals — see the subtotal below.
+  const [activeRegion, setActiveRegion] = useState("");
 
   // Always points at the latest cart so stable actions can read current items.
   const cartItemsRef = useRef(cartItems);
@@ -34,6 +38,8 @@ export default function StoreProvider({ children }) {
   // Stable setter refs so actions (frozen in useMemo([])) can update state.
   const setRepricingInFlightRef = useRef(setRepricingInFlight);
   setRepricingInFlightRef.current = setRepricingInFlight;
+  const setActiveRegionRef = useRef(setActiveRegion);
+  setActiveRegionRef.current = setActiveRegion;
 
   useEffect(() => {
     const stored = window.localStorage.getItem(CART_STORAGE_KEY);
@@ -129,6 +135,10 @@ export default function StoreProvider({ children }) {
       closeQuickView: () => setQuickViewProduct(null),
       refreshCartPricing: async (locale, region) => {
         const items = cartItemsRef.current;
+        // Recorded even when nothing needs repricing: the subtotal uses it to
+        // decide which lines belong to the store the shopper is actually in.
+        setActiveRegionRef.current(region);
+
         const needsRefresh = items.some(
           (item) =>
             item?.slug &&
@@ -143,42 +153,52 @@ export default function StoreProvider({ children }) {
 
         const uniqueSlugs = [...new Set(items.map((item) => item.slug).filter(Boolean))];
 
+        const fetchPricing = async (slug) => {
+          // Use timestamp cache-bust instead of cache:"no-store" —
+          // Safari silently fails fetches with that directive on some
+          // cross-origin requests, causing the cart to stay mis-priced.
+          const params = new URLSearchParams({ locale, region, _t: Date.now() });
+          const response = await fetch(`${API_BASE_URL}/products/${slug}/?${params.toString()}`);
+
+          if (!response.ok) {
+            return null;
+          }
+
+          const data = await response.json();
+
+          if (!data?.product?.pricing) {
+            return null;
+          }
+
+          return [
+            slug,
+            {
+              image: data.product.image,
+              name: data.product.name,
+              pricing: data.product.pricing,
+              variants: data.product.variants || [],
+            },
+          ];
+        };
+
         try {
-          const refreshedProducts = await Promise.all(
-            uniqueSlugs.map(async (slug) => {
-              // Use timestamp cache-bust instead of cache:"no-store" —
-              // Safari silently fails fetches with that directive on some
-              // cross-origin requests, causing the cart to stay mis-priced.
-              const params = new URLSearchParams({ locale, region, _t: Date.now() });
-              const response = await fetch(`${API_BASE_URL}/products/${slug}/?${params.toString()}`);
-
-              if (!response.ok) {
-                return null;
-              }
-
-              const data = await response.json();
-
-              if (!data?.product?.pricing) {
-                return null;
-              }
-
-              return [
-                slug,
-                {
-                  image: data.product.image,
-                  name: data.product.name,
-                  pricing: data.product.pricing,
-                  variants: data.product.variants || [],
-                },
-              ];
-            }),
+          let refreshedProducts = await Promise.all(
+            uniqueSlugs.map((slug) => fetchPricing(slug).catch(() => null)),
           );
 
-          const refreshedBySlug = new Map(refreshedProducts.filter(Boolean));
-
-          if (!refreshedBySlug.size) {
-            return;
+          // One retry for whatever came back empty. A single dropped request
+          // used to leave that one line at the price of the region the shopper
+          // came from, and nothing re-ran the refresh afterwards — the cart
+          // sat with OMR on one line and AED on the next until it was emptied.
+          const failed = uniqueSlugs.filter((slug, index) => !refreshedProducts[index]);
+          if (failed.length) {
+            const retried = await Promise.all(
+              failed.map((slug) => fetchPricing(slug).catch(() => null)),
+            );
+            refreshedProducts = refreshedProducts.concat(retried);
           }
+
+          const refreshedBySlug = new Map(refreshedProducts.filter(Boolean));
 
           setCartItems((current) =>
             current.map((item) => {
@@ -381,20 +401,30 @@ export default function StoreProvider({ children }) {
 
   const state = useMemo(() => {
     const itemCount = cartItems.reduce((total, item) => total + item.quantity, 0);
-    const subtotal = cartItems.reduce(
-      (total, item) => total + item.quantity * (item.pricing?.amount || 0),
-      0,
-    );
+
+    // A line the region switch could not reprice still carries the previous
+    // store's currency. Adding it in produced a subtotal that summed OMR and
+    // AED figures and then labelled the result with whichever currency the
+    // first line happened to be in. Those lines are reported separately so the
+    // drawer can flag them, and are never part of the money.
+    const isPricedHere = (item) =>
+      !activeRegion || item.pricing?.region_code === activeRegion;
+    const outOfRegionItems = cartItems.filter((item) => !isPricedHere(item));
+    const subtotal = cartItems
+      .filter(isPricedHere)
+      .reduce((total, item) => total + item.quantity * (item.pricing?.amount || 0), 0);
 
     return {
+      activeRegion,
       cartItems,
       itemCount,
+      outOfRegionItems,
       subtotal,
       drawerOpen,
       quickViewProduct,
       repricingInFlight,
     };
-  }, [cartItems, drawerOpen, quickViewProduct, repricingInFlight]);
+  }, [activeRegion, cartItems, drawerOpen, quickViewProduct, repricingInFlight]);
 
   return (
     <StoreActionsContext.Provider value={actions}>
