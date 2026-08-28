@@ -373,12 +373,21 @@ PAYMOB_SECRET_KEY = os.getenv("PAYMOB_SECRET_KEY", "")
 PAYMOB_PUBLIC_KEY = os.getenv("PAYMOB_PUBLIC_KEY", "")
 PAYMOB_USE_UNIFIED_CHECKOUT = os.getenv("PAYMOB_USE_UNIFIED_CHECKOUT", "1")
 # Regions forced onto the legacy Accept/iframe flow even when Unified Checkout is
-# globally on. Use for a Paymob account whose integrations are NOT registered for
-# the Intention API (e.g. UAE MID 79577: integrations 118534/118806 work via the
-# legacy Accept API + iframe 43861 but the Intention API returns "Integration ID
-# does not exist"). Comma-separated region codes. Remove "ae" once Paymob enables
-# those integrations for Unified Checkout.
-PAYMOB_LEGACY_REGIONS = os.getenv("PAYMOB_LEGACY_REGIONS", "ae")
+# globally on. Comma-separated region codes; empty means every region uses Unified
+# Checkout.
+#
+# "ae" used to sit here because the Intention API answered "Integration ID does
+# not exist" for UAE MID 79577. That was a costly compromise: the UAE
+# integrations are MIGS (gateway_type VPC), and a MIGS integration renders the
+# legacy iframe but cannot process a payment through it. UAE customers reached a
+# card form, paid nothing, and Paymob recorded no transaction at all — 10 online
+# orders, zero transactions on integration 118534 in three months, while Oman
+# (Unified Checkout, same gateway type) converted 16 of 29.
+#
+# Paymob has since registered the UAE integrations: /v1/intention/ now answers
+# 201 for 118534 and uae.checkout.paymob.com renders the hosted card page.
+# Verified 2026-08-29 against the live account.
+PAYMOB_LEGACY_REGIONS = os.getenv("PAYMOB_LEGACY_REGIONS", "")
 # Public site base URL used to build Paymob notification/redirection callbacks.
 PAYMOB_PUBLIC_BASE_URL = (
     os.getenv("PAYMOB_PUBLIC_BASE_URL")
