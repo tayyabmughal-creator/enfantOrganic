@@ -7,6 +7,7 @@ from io import BytesIO
 from pathlib import Path
 from xml.sax.saxutils import escape
 
+from django.conf import settings as dj_settings
 from django.core.files.base import ContentFile
 from django.utils import timezone
 
@@ -19,6 +20,7 @@ try:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import mm
+    from reportlab.lib.utils import ImageReader
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.platypus import (
@@ -185,13 +187,71 @@ def _get_barcode_flowable(text, width_mm=52, height_mm=14):
         return None
 
 
+def _media_bytes(ref):
+    """
+    Bytes behind a stored image reference — a "/media/…" path or a full URL.
+
+    Variant images are stored as root-relative media paths, so the path is read
+    off disk rather than fetched back through the web server, which on prod
+    would be the server issuing a request to itself while rendering a response.
+    """
+    ref = str(ref or "").strip()
+    if not ref:
+        return None
+
+    if ref.startswith(("http://", "https://")):
+        try:
+            with urllib.request.urlopen(ref, timeout=4) as resp:
+                return resp.read()
+        except Exception:
+            return None
+
+    root = str(getattr(dj_settings, "MEDIA_ROOT", "") or "")
+    if not root:
+        return None
+    media_url = str(getattr(dj_settings, "MEDIA_URL", "/media/") or "/media/")
+    relative = ref[len(media_url):] if ref.startswith(media_url) else ref.lstrip("/")
+    try:
+        base = Path(root).resolve()
+        path = (base / relative).resolve()
+        # The reference comes from admin-entered variant data, so it is not
+        # trusted to stay inside the media tree on its own.
+        if base not in path.parents and path != base:
+            return None
+        return path.read_bytes() if path.is_file() else None
+    except Exception:
+        return None
+
+
+def _image_flowable(img_bytes, size_mm):
+    """
+    Fit the shot inside a square box without distorting it.
+
+    The box used to be filled outright, which stretched every non-square shot —
+    and a squashed pouch is exactly the kind of thing that gets mis-picked.
+    """
+    box = size_mm * mm
+    try:
+        width, height = ImageReader(BytesIO(img_bytes)).getSize()
+        if width and height:
+            scale = min(box / width, box / height)
+            return Image(BytesIO(img_bytes), width=width * scale, height=height * scale)
+    except Exception:
+        pass
+    return Image(BytesIO(img_bytes), width=box, height=box)
+
+
 def _fetch_product_image(item, size_mm=14):
-    """Try to get product image bytes — local file first, then URL."""
+    """Image bytes for one order line — the bought variant's shot if it has one,
+    otherwise the product's own."""
     product = getattr(item, "product", None)
-    img_bytes = None
+
+    # The variant leads: on a product sold as bottle/refill/bundle, the parent
+    # image is the wrong thing to hand the warehouse.
+    img_bytes = _media_bytes(getattr(item, "variant_image_ref", ""))
 
     # 1. Local ImageField
-    if product and product.image_file:
+    if not img_bytes and product and product.image_file:
         try:
             product.image_file.open("rb")
             img_bytes = product.image_file.read()
@@ -210,7 +270,7 @@ def _fetch_product_image(item, size_mm=14):
     if not img_bytes:
         return None
     try:
-        return Image(BytesIO(img_bytes), width=size_mm * mm, height=size_mm * mm)
+        return _image_flowable(img_bytes, size_mm)
     except Exception:
         return None
 

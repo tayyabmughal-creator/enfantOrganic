@@ -53,7 +53,7 @@ from .orders import (
     PaymentTransactionSerializer,
     ReturnRequestSerializer,
 )
-from .localization import get_image_url
+from .localization import absolute_media_url, get_image_url
 
 
 logger = logging.getLogger(__name__)
@@ -378,6 +378,13 @@ class AdminOrderItemSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_product_image(self, obj):
+        # The bought variant's own shot leads. This list is what the warehouse
+        # picks from, and on a product sold as bottle/refill/bundle the parent
+        # image shows the wrong one of the three.
+        variant_image = obj.variant_image_ref
+        if variant_image:
+            return absolute_media_url(variant_image, self.context.get("request"))
+
         product = getattr(obj, "product", None)
         if not product:
             return ""

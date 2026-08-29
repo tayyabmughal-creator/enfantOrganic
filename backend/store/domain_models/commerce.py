@@ -647,6 +647,40 @@ class OrderItem(models.Model):
     def __str__(self):
         return f"{self.product_name} x {self.quantity}"
 
+    @property
+    def variant_image_ref(self):
+        """
+        The picture of the variant that was actually bought, "" if there is none.
+
+        A product with variants has one shot per variant, and the invoice is
+        what the warehouse packs from: showing the parent product's 700ml bottle
+        on an order for the 600ml refill pouch is how the wrong thing gets into
+        the box. Every variant in the catalogue carries its own image, and every
+        order line already records which one was chosen — it was only ever the
+        reading side that fell back to the parent.
+
+        The checkout snapshot leads because it is the picture the customer was
+        looking at when they ordered. The product's current variant row is the
+        fallback, for lines whose snapshot predates the image or was written
+        before a variant had one.
+        """
+        snapshot = self.price_snapshot if isinstance(self.price_snapshot, dict) else {}
+
+        variant = snapshot.get("variant")
+        if isinstance(variant, dict):
+            ref = str(variant.get("image") or "").strip()
+            if ref:
+                return ref
+
+        variant_id = str(snapshot.get("variant_id") or "").strip()
+        rows = getattr(self.product, "variants", None)
+        if variant_id and isinstance(rows, list):
+            for row in rows:
+                if isinstance(row, dict) and str(row.get("id") or "").strip() == variant_id:
+                    return str(row.get("image") or "").strip()
+
+        return ""
+
 
 class Coupon(models.Model):
     DISCOUNT_PERCENTAGE = "percentage"

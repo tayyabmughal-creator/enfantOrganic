@@ -5,23 +5,38 @@ def normalize_locale(locale):
     return locale if locale in SUPPORTED_LOCALES else "en"
 
 
-def get_image_url(obj, request=None, file_field_name="image_file", url_field_name="image"):
+def absolute_media_url(url, request=None):
+    """
+    Put a host in front of a stored "/media/…" path, the way get_image_url does.
+
+    Split out because not every image lives on a model field: variant images are
+    plain paths inside a JSON column, and they need the same host rules or the
+    admin renders them against whatever host answered the request.
+    """
     from django.conf import settings as django_settings
 
+    url = str(url or "").strip()
+    if not url or not url.startswith("/"):
+        return url
+
+    # SSR requests arrive via the internal Docker network (Host: backend:8000),
+    # so build_absolute_uri() produces the wrong host. Use the configured
+    # public site URL instead when available.
+    media_host = getattr(django_settings, "MEDIA_HOST_URL", "").rstrip("/")
+    if media_host:
+        return f"{media_host}{url}"
+    if request:
+        return request.build_absolute_uri(url)
+    return url
+
+
+def get_image_url(obj, request=None, file_field_name="image_file", url_field_name="image"):
     file_field = getattr(obj, file_field_name, None)
 
     if file_field:
         try:
             url = file_field.url  # e.g. /media/products/imported/p1-primary.jpeg
-            # SSR requests arrive via the internal Docker network (Host: backend:8000),
-            # so build_absolute_uri() produces the wrong host. Use the configured
-            # public site URL instead when available.
-            media_host = getattr(django_settings, "MEDIA_HOST_URL", "").rstrip("/")
-            if media_host and url.startswith("/"):
-                return f"{media_host}{url}"
-            if request:
-                return request.build_absolute_uri(url)
-            return url
+            return absolute_media_url(url, request)
         except ValueError:
             pass
 
