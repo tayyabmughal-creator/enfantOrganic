@@ -1398,9 +1398,12 @@
     padding-inline-end: 34px;
   }
 
+  /* Width only. An explicit height beats the base rule's aspect-ratio, and the
+     portrait tile it left behind is why a square pack shot was fitted to the
+     narrower side and sat small in a box of empty space — on a phone, which is
+     the only place these overrides apply and the only place anyone looked. */
   .cart-line-media {
     width: 68px;
-    height: 80px;
   }
 
   .cart-drawer-panel {
@@ -1472,7 +1475,6 @@
 
   .cart-line-media {
     width: 62px;
-    height: 74px;
   }
 
   .cart-line-name {

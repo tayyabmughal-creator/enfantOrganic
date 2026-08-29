@@ -33,6 +33,17 @@ const categoryCarousel = readFileSync(
   "utf8",
 );
 
+/** Every rule whose selector list contains `selector`, media queries included. */
+function allRuleBodies(css, selector) {
+  const stripped = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const bodies = [];
+  for (const [, selectors, body] of stripped.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const names = selectors.split(",").map((name) => name.trim());
+    if (names.includes(selector)) bodies.push(body);
+  }
+  return bodies;
+}
+
 /** The declarations of the first rule whose selector list contains `selector`. */
 function ruleBody(css, selector) {
   // Comments are stripped first: a rule preceded by one would otherwise carry
@@ -214,8 +225,72 @@ test("snap rails are scrolled by assignment, never smoothly", () => {
 });
 
 test("a tapped dot lights up without waiting for the scroll to settle", () => {
-  assert.match(drawer, /rail\.scrollLeft = direction \* index \* rail\.clientWidth;\s*\n(\s*\/\/[^\n]*\n)*\s*setSlide\(index\);/);
+  assert.match(
+    drawer,
+    /glideToSlide\(railRef\.current, index, glideRef, \{ instant: true \}\);\s*\n(\s*\/\/[^\n]*\n)*\s*setSlide\(index\);/,
+  );
   assert.match(categoryCarousel, /rail\.scrollLeft = \(isRtl \? -1 : 1\) \* index \* rail\.clientWidth;\s*\n(\s*\/\/[^\n]*\n)*\s*setPage\(index\);/);
+});
+
+/**
+ * The suggestions rotate on their own every 7 seconds. Sitting above the
+ * checkout button, where the shopper is reading totals rather than looking for
+ * something to swipe, the rail otherwise only ever showed its first card.
+ */
+test("the suggestions rail advances on a 7s timer and wraps", () => {
+  assert.match(drawer, /const AUTOPLAY_MS = 7000;/, "the rotation is no longer 7 seconds");
+  assert.match(
+    drawer,
+    /setInterval\(\(\) => \{[\s\S]*?\}, AUTOPLAY_MS\)/,
+    "nothing drives the rotation",
+  );
+  assert.match(
+    drawer,
+    /const next = \(current \+ 1\) % products\.length;/,
+    "the rail stops at the last suggestion instead of wrapping",
+  );
+});
+
+test("the rotation yields to the shopper's own finger", () => {
+  assert.match(
+    drawer,
+    /if \(!drawerOpen \|\| held \|\| products\.length < 2 \|\| !rail\) return undefined;/,
+    "the timer runs while a finger is on the rail, or while the drawer is shut",
+  );
+  assert.match(drawer, /onPointerDown=\{\(\) => setHeld\(true\)\}/);
+  for (const release of ["onPointerUp", "onPointerCancel", "onPointerLeave"]) {
+    assert.match(drawer, new RegExp(`${release}=\\{\\(\\) => setHeld\\(false\\)\\}`),
+      `${release} does not release the hold — the rotation would never resume`);
+  }
+  assert.match(
+    drawer,
+    /\}, \[drawerOpen, held, nudge, products\.length\]\);/,
+    "a tapped dot no longer restarts the timer, so the chosen card can slide straight off",
+  );
+});
+
+/**
+ * The glide eases scrollLeft by hand. scrollTo({behavior:"smooth"}) is dropped
+ * on a snap rail (see the test above), so the settle timer is what guarantees
+ * the rail lands on the slide even where requestAnimationFrame never runs.
+ */
+test("the glide lands on the slide even without animation frames", () => {
+  assert.match(drawer, /settle: setTimeout\(finish, GLIDE_MS \+ \d+\)/);
+  assert.match(
+    drawer,
+    /const finish = \(\) => \{\s*\n\s*rail\.scrollLeft = to;/,
+    "the settle step no longer pins the rail to the exact slide",
+  );
+  assert.match(
+    drawer,
+    /rail\.style\.scrollSnapType = "none";/,
+    "snap is left on during the glide, where it fights the easing",
+  );
+  assert.match(
+    drawer,
+    /rail\.style\.scrollSnapType = "";/,
+    "snap is never restored, so a finger swipe stops snapping afterwards",
+  );
 });
 
 test("repricing is not keyed on the cart array itself", () => {
@@ -227,4 +302,33 @@ test("repricing is not keyed on the cart array itself", () => {
     "the reprice effect depends on the cart array — that is an infinite loop",
   );
   assert.match(drawer, /\}, \[cartItems\.length, drawerOpen, locale, region, refreshCartPricing\]\)/);
+});
+
+/**
+ * The line item's tile is square everywhere, so a square pack shot fills it.
+ *
+ * The base rule was squared off, but the two phone overrides kept an explicit
+ * portrait height — and an explicit height beats aspect-ratio, so on a phone the
+ * shot was still fitted to the narrower side and sat small in a box of empty
+ * space. A phone is the only place those overrides apply, and the only place
+ * anyone was looking.
+ */
+test("the cart line's image tile is square at every width", () => {
+  const bodies = allRuleBodies(overlays, ".cart-line-media");
+  assert.ok(bodies.length >= 2, "the phone overrides for .cart-line-media are gone");
+
+  assert.match(bodies[0], /aspect-ratio:\s*1/, "the base tile is no longer square");
+  for (const body of bodies.slice(1)) {
+    assert.doesNotMatch(
+      body,
+      /(^|;)\s*height:\s*\d/,
+      "an explicit height overrides aspect-ratio and makes the tile portrait again",
+    );
+  }
+});
+
+test("the line image is contained, never cropped", () => {
+  const body = ruleBody(overlays, ".cart-line-item img");
+  assert.ok(body, ".cart-line-item img has no rule");
+  assert.match(body, /object-fit:\s*contain/, "cover crops the sides off a wide pack shot");
 });

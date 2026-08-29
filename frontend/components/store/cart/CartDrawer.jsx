@@ -138,11 +138,76 @@ function MilestoneBar({ subtotal, milestones, currency, locale }) {
  * One product fills the width at a time and the rest are a swipe away, with
  * dots so it reads as a carousel instead of a single lonely card.
  */
+const AUTOPLAY_MS = 7000;
+const GLIDE_MS = 450;
+
+/**
+ * Move the rail to a slide, easing scrollLeft by hand.
+ *
+ * Not scrollTo({behavior:"smooth"}): Chrome drops a smooth programmatic scroll
+ * on a scroll-snap rail and nothing moves at all — measured again on this very
+ * rail, where the smooth call left scrollLeft at 0 while a direct assignment
+ * moved it. Snap is lifted for the glide so it cannot fight the easing, and a
+ * settle timer puts the rail on the exact slide and restores snap even where
+ * requestAnimationFrame never runs, which is the case in a backgrounded tab.
+ *
+ * `handle` is a ref used to cancel a glide still in flight, so a tapped dot or
+ * the next tick never has to wait for the previous one.
+ */
+function glideToSlide(rail, index, handle, { instant = false } = {}) {
+  if (!rail || !rail.clientWidth) return;
+
+  if (handle.current) {
+    cancelAnimationFrame(handle.current.frame);
+    clearTimeout(handle.current.settle);
+  }
+
+  // Signed for RTL, where scrollLeft runs negative from the right edge.
+  const direction = getComputedStyle(rail).direction === "rtl" ? -1 : 1;
+  const to = direction * index * rail.clientWidth;
+  const from = rail.scrollLeft;
+
+  const finish = () => {
+    rail.scrollLeft = to;
+    rail.style.scrollSnapType = "";
+    handle.current = null;
+  };
+
+  if (instant || from === to) {
+    finish();
+    return;
+  }
+
+  rail.style.scrollSnapType = "none";
+  const started = performance.now();
+  const step = (now) => {
+    const p = Math.min(1, (now - started) / GLIDE_MS);
+    // easeInOutQuad — a swipe that starts and stops rather than a hard cut.
+    const eased = p < 0.5 ? 2 * p * p : 1 - ((-2 * p + 2) ** 2) / 2;
+    rail.scrollLeft = from + (to - from) * eased;
+    if (p < 1 && handle.current) {
+      handle.current.frame = requestAnimationFrame(step);
+    }
+  };
+
+  handle.current = {
+    frame: requestAnimationFrame(step),
+    settle: setTimeout(finish, GLIDE_MS + 60),
+  };
+}
+
 function CartRecommendations({ locale, region, cartItems, drawerOpen, onAdd }) {
   const isAr = locale === "ar";
   const [products, setProducts] = useState([]);
   const [slide, setSlide] = useState(0);
+  // Held while a finger is down on the rail: the shopper's own swipe outranks
+  // the timer, and yanking the rail out from under it feels broken.
+  const [held, setHeld] = useState(false);
+  // Bumped by a dot tap so the timer restarts: without it the next tick can be
+  // milliseconds away and the card the shopper just chose slides straight off.
+  const [nudge, setNudge] = useState(0);
   const railRef = useRef(null);
+  const glideRef = useRef(null);
   const slugKey = cartItems.map((item) => item.slug).sort().join(",");
 
   // Only ever fetched while the drawer is open. The drawer is mounted on every
@@ -163,6 +228,40 @@ function CartRecommendations({ locale, region, cartItems, drawerOpen, onAdd }) {
     return () => controller.abort();
   }, [drawerOpen, locale, region, slugKey]);
 
+  // Rotate every 7s. Left still, this rail only ever showed its first card:
+  // it sits above the checkout button, where a shopper is reading totals rather
+  // than looking for something to swipe.
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!drawerOpen || held || products.length < 2 || !rail) return undefined;
+
+    // Someone who asked for less motion still gets the rotation — it is how the
+    // suggestions are seen at all — but it lands rather than travels.
+    const instant =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+    const timer = setInterval(() => {
+      if (!rail.clientWidth) return;
+      // Read the position rather than the state: a finger may have moved the
+      // rail since the last tick, and the next card should follow the rail.
+      const current = Math.round(Math.abs(rail.scrollLeft) / rail.clientWidth);
+      const next = (current + 1) % products.length;
+      glideToSlide(rail, next, glideRef, { instant });
+      setSlide(next);
+    }, AUTOPLAY_MS);
+
+    return () => clearInterval(timer);
+  }, [drawerOpen, held, nudge, products.length]);
+
+  // A glide left running past unmount would keep writing to a detached node.
+  useEffect(() => () => {
+    if (!glideRef.current) return;
+    cancelAnimationFrame(glideRef.current.frame);
+    clearTimeout(glideRef.current.settle);
+    glideRef.current = null;
+  }, []);
+
   if (!products.length) return null;
 
   // Which slide is in view, from the rail's own scroll position, so the dots
@@ -174,16 +273,11 @@ function CartRecommendations({ locale, region, cartItems, drawerOpen, onAdd }) {
   };
 
   const goToSlide = (index) => {
-    const rail = railRef.current;
-    if (!rail) return;
-    // Signed for RTL, where scrollLeft runs negative from the right edge.
-    // Assigned, not scrollTo({behavior:"smooth"}) — Chrome drops smooth
-    // programmatic scrolls on a scroll-snap rail and nothing moves.
-    const direction = getComputedStyle(rail).direction === "rtl" ? -1 : 1;
-    rail.scrollLeft = direction * index * rail.clientWidth;
+    glideToSlide(railRef.current, index, glideRef, { instant: true });
     // Set here as well as from the scroll handler so the tapped dot lights up
     // immediately rather than after the rail has settled on a snap point.
     setSlide(index);
+    setNudge((n) => n + 1);
   };
 
   return (
@@ -193,7 +287,15 @@ function CartRecommendations({ locale, region, cartItems, drawerOpen, onAdd }) {
           ? (isAr ? "أضف إليها" : "Goes well with this")
           : (isAr ? "الأكثر مبيعًا" : "Popular right now")}
       </h4>
-      <div className="cart-recommendations-rail" ref={railRef} onScroll={onRailScroll}>
+      <div
+        className="cart-recommendations-rail"
+        ref={railRef}
+        onScroll={onRailScroll}
+        onPointerDown={() => setHeld(true)}
+        onPointerUp={() => setHeld(false)}
+        onPointerCancel={() => setHeld(false)}
+        onPointerLeave={() => setHeld(false)}
+      >
         {products.map((product) => {
           const outOfStock = product.stock_status && product.stock_status.is_in_stock === false;
           const href = buildStorePath(locale, `/product/${product.slug}`, region);
