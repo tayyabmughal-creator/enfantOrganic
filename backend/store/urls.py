@@ -56,6 +56,7 @@ from .views import (
     AdminOrderDetailView,
     AdminOrderItemsView,
     AdminOrderItemDetailView,
+    AdminOrderLineItemExportView,
     AdminOrderRefundView,
     AdminOrderInvoiceDownloadView,
     AdminOrderListView,
@@ -184,6 +185,9 @@ urlpatterns = [
     path("admin/categories/", AdminCategoryListCreateView.as_view(), name="admin-categories"),
     path("admin/categories/<slug:slug>/", AdminCategoryDetailView.as_view(), name="admin-category-detail"),
     path("admin/orders/", AdminOrderListView.as_view(), name="admin-orders"),
+    # Must stay above "admin/orders/<str:order_number>/" — "export" is a valid
+    # order_number as far as the path converter is concerned.
+    path("admin/orders/export/", AdminOrderLineItemExportView.as_view(), name="admin-orders-export"),
     path("admin/orders/drafts/", AdminDraftOrderCreateView.as_view(), name="admin-draft-orders-create"),
     path(
         "admin/orders/drafts/customer-search/",

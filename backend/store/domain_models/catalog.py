@@ -694,6 +694,14 @@ class Product(OrderedModel):
     slug = models.SlugField(unique=True, max_length=100)
     name_en = models.CharField(max_length=255, default="")
     name_ar = models.CharField(max_length=255, blank=True, default="")
+    # The trade codes. The storefront never shows them, but every report that
+    # leaves this system for a distributor, a retailer or an accountant is keyed
+    # on them, so they belong on the product rather than in a spreadsheet
+    # somebody keeps on the side. A product sold in variants carries a code per
+    # variant too (`variants[].sku` / `variants[].ean`); these are the fallback
+    # for the product as a whole.
+    sku = models.CharField(max_length=120, blank=True, default="", help_text="Internal stock code, e.g. ATNHP3.")
+    ean = models.CharField(max_length=64, blank=True, default="", help_text="Barcode / EAN-13, e.g. 8852525753631.")
     brand = models.CharField(max_length=120, blank=True, default="Enfant")
     unit = models.CharField(max_length=80, blank=True, default="")
     # Most units are measurements ("175 ml") that read the same in both languages,

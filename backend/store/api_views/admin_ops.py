@@ -3106,55 +3106,236 @@ class AdminCouponDetailView(StaffRetrieveUpdateDestroyView):
         )
 
 
+def filtered_admin_orders(query_params, *, base_queryset=None):
+    """Apply the Orders screen's filters to an ``Order`` queryset.
+
+    Shared by the paginated list and the line-item export so that "export"
+    always means exactly the rows the admin is looking at — the export used to
+    be built in the browser from the 25 rows of the current page, which is why
+    a full download took eight passes.
+    """
+    queryset = Order.objects.all() if base_queryset is None else base_queryset
+
+    search = _clean_text(query_params.get("search", ""))
+    if search:
+        queryset = queryset.filter(
+            Q(order_number__icontains=search)
+            | Q(customer_name__icontains=search)
+            | Q(customer_email__icontains=search)
+            | Q(customer_phone__icontains=search)
+            | Q(region__code__icontains=search)
+            | Q(region__name_en__icontains=search)
+            | Q(items__product_name__icontains=search)
+            | Q(items__product_slug__icontains=search)
+        ).distinct()
+
+    sales_channel_filter = _clean_text(query_params.get("sales_channel", "")).lower()
+    if sales_channel_filter in {Order.SALES_CHANNEL_ONLINE_STORE, Order.SALES_CHANNEL_DRAFT_ORDER}:
+        queryset = queryset.filter(sales_channel=sales_channel_filter)
+
+    status_filter = str(query_params.get("status", "") or "").strip()
+    if status_filter:
+        queryset = queryset.filter(status=status_filter)
+
+    payment_status_filter = str(query_params.get("payment_status", "") or "").strip()
+    if payment_status_filter:
+        queryset = queryset.filter(payment_status=payment_status_filter)
+
+    market_filter = query_params.get("market", "") or query_params.get("region", "") or ""
+    market_code = _resolve_market_code(market_filter)
+    if market_code:
+        queryset = queryset.filter(region__code=market_code)
+
+    start_raw = str(query_params.get("date_from", "") or "").strip()
+    end_raw = str(query_params.get("date_to", "") or "").strip()
+    start_date = parse_date(start_raw) if start_raw else None
+    end_date = parse_date(end_raw) if end_raw else None
+    if start_date:
+        queryset = queryset.filter(created_at__date__gte=start_date)
+    if end_date:
+        queryset = queryset.filter(created_at__date__lte=end_date)
+    return queryset
+
+
 class AdminOrderListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
     admin_read_capabilities = (CAP_ORDERS_VIEW,)
     serializer_class = AdminOrderSerializer
 
     def get_queryset(self):
-        queryset = Order.objects.select_related("region", "user").prefetch_related(
-            "items__product",
-            "transactions",
-            "status_history__actor",
-            "return_requests__reviewed_by",
+        return filtered_admin_orders(
+            self.request.query_params,
+            base_queryset=Order.objects.select_related("region", "user").prefetch_related(
+                "items__product",
+                "transactions",
+                "status_history__actor",
+                "return_requests__reviewed_by",
+            ),
         )
-        search = _clean_text(self.request.query_params.get("search", ""))
-        if search:
-            queryset = queryset.filter(
-                Q(order_number__icontains=search)
-                | Q(customer_name__icontains=search)
-                | Q(customer_email__icontains=search)
-                | Q(customer_phone__icontains=search)
-                | Q(region__code__icontains=search)
-                | Q(region__name_en__icontains=search)
-                | Q(items__product_name__icontains=search)
-                | Q(items__product_slug__icontains=search)
-            ).distinct()
-        sales_channel_filter = _clean_text(self.request.query_params.get("sales_channel", "")).lower()
-        if sales_channel_filter in {Order.SALES_CHANNEL_ONLINE_STORE, Order.SALES_CHANNEL_DRAFT_ORDER}:
-            queryset = queryset.filter(sales_channel=sales_channel_filter)
 
-        status_filter = self.request.query_params.get("status", "").strip()
-        if status_filter:
-            queryset = queryset.filter(status=status_filter)
-        market_filter = (
-            self.request.query_params.get("market", "")
-            or self.request.query_params.get("region", "")
-            or ""
+
+# Exactly the shape the client's reporting spreadsheet expects: one row per
+# product sold, order_number repeating across the lines of the same order.
+ORDER_LINE_EXPORT_HEADERS = [
+    "order_number",
+    "date",
+    "week_start",
+    "ean",
+    "sku",
+    "product_name",
+    "quantity",
+    "rsp_unit_price",
+    "cost_per_unit",
+    "tax_amount",
+    "line_total",
+    "payment_status",
+    "currency",
+]
+
+
+def _variant_row_for_item(item):
+    """The raw variant dict the line was sold from, or ``None``."""
+    snapshot = item.price_snapshot if isinstance(item.price_snapshot, dict) else {}
+    snapshot_variant = snapshot.get("variant")
+    if isinstance(snapshot_variant, dict) and (snapshot_variant.get("sku") or snapshot_variant.get("ean")):
+        return snapshot_variant
+
+    variant_id = str(snapshot.get("variant_id") or "").strip()
+    rows = getattr(item.product, "variants", None)
+    if variant_id and isinstance(rows, list):
+        for row in rows:
+            if isinstance(row, dict) and str(row.get("id") or "").strip() == variant_id:
+                return row
+    return snapshot_variant if isinstance(snapshot_variant, dict) else None
+
+
+def _trade_codes_for_item(item):
+    """(ean, sku) for an order line, most specific source first.
+
+    The codes are resolved live rather than read only from the line's own
+    snapshot on purpose: they were introduced after these orders were placed,
+    so filling a product's SKU in today has to make every past sale of it
+    export correctly, not just the next one.
+    """
+    variant = _variant_row_for_item(item) or {}
+    product = getattr(item, "product", None)
+
+    ean = str(variant.get("ean") or variant.get("barcode") or "").strip()
+    if not ean and product is not None:
+        ean = str(getattr(product, "ean", "") or "").strip()
+
+    sku = str(variant.get("sku") or "").strip()
+    if not sku:
+        sku = str(item.sku or "").strip()
+    if not sku and product is not None:
+        sku = str(getattr(product, "sku", "") or "").strip()
+    return ean, sku
+
+
+def _order_line_export_rows(orders_queryset):
+    """Yield one export row per order line, oldest order first."""
+    items = (
+        OrderItem.objects.filter(order__in=orders_queryset)
+        .select_related("order", "order__region", "product")
+        .order_by("order__created_at", "order_id", "id")
+    )
+    for item in items.iterator(chunk_size=500):
+        order = item.order
+        placed_on = timezone.localtime(order.created_at).date()
+        ean, sku = _trade_codes_for_item(item)
+        yield [
+            order.order_number,
+            placed_on.isoformat(),
+            # Monday of the week the order was placed, matching the client's file.
+            (placed_on - timedelta(days=placed_on.weekday())).isoformat(),
+            ean,
+            sku,
+            item.product_name,
+            item.quantity,
+            item.unit_price,
+            item.unit_cost_price,
+            item.tax_total,
+            item.line_total,
+            order.payment_status,
+            order.currency_code,
+        ]
+
+
+class AdminOrderLineItemExportView(APIView):
+    """Every order line matching the current Orders filters, in one file.
+
+    Not paginated and not built from the rendered page: the whole point is that
+    a shop with 200 orders downloads once instead of selecting 25 rows eight
+    times over.
+    """
+
+    permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
+    admin_read_capabilities = (CAP_ORDERS_VIEW,)
+
+    @extend_schema(responses={200: bytes})
+    def get(self, request):
+        # Left unordered on purpose: this only ever feeds an ``order__in``
+        # subquery, and a DISTINCT subquery carrying an ORDER BY over a column
+        # it does not select is a Postgres error. The rows are ordered below.
+        orders = filtered_admin_orders(request.query_params).order_by()
+        # NOTE: not "format" — DRF reserves that query param for content
+        # negotiation and would 404 before get() runs.
+        export_format = str(request.query_params.get("export_format") or "csv").strip().lower()
+        stamp = timezone.localdate()
+
+        if export_format in {"xlsx", "excel"}:
+            response = self._xlsx_response(orders, stamp)
+        else:
+            response = self._csv_response(orders, stamp)
+
+        try:
+            AdminAuditLog.objects.create(
+                actor=request.user if getattr(request.user, "pk", None) else None,
+                action="export",
+                resource_type="report",
+                resource_id="order-line-items",
+                after_snapshot={"format": export_format, "filters": dict(request.query_params.items())},
+                ip_address=(request.META.get("REMOTE_ADDR") or "")[:45],
+                user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:255],
+            )
+        except Exception:
+            logger.exception("Failed to write audit log for the order line-item export")
+
+        return response
+
+    def _csv_response(self, orders, stamp):
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = f'attachment; filename="order-line-items-{stamp}.csv"'
+        writer = csv.writer(response)
+        writer.writerow(ORDER_LINE_EXPORT_HEADERS)
+        for row in _order_line_export_rows(orders):
+            writer.writerow(row)
+        return response
+
+    def _xlsx_response(self, orders, stamp):
+        import openpyxl
+        from openpyxl.utils import get_column_letter
+
+        # write_only keeps the whole sheet off the heap; this export is unbounded
+        # by design and a year of orders is a lot of rows.
+        workbook = openpyxl.Workbook(write_only=True)
+        sheet = workbook.create_sheet("Order line items")
+        sheet.append(ORDER_LINE_EXPORT_HEADERS)
+        for index, header in enumerate(ORDER_LINE_EXPORT_HEADERS, start=1):
+            sheet.column_dimensions[get_column_letter(index)].width = max(14, len(header) + 4)
+        for row in _order_line_export_rows(orders):
+            # Decimals survive openpyxl, but the sheet reads better as numbers.
+            sheet.append([float(value) if isinstance(value, Decimal) else value for value in row])
+
+        buffer = io.BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
-        market_code = _resolve_market_code(market_filter)
-        if market_code:
-            queryset = queryset.filter(region__code=market_code)
-
-        start_raw = str(self.request.query_params.get("date_from", "") or "").strip()
-        end_raw = str(self.request.query_params.get("date_to", "") or "").strip()
-        start_date = parse_date(start_raw) if start_raw else None
-        end_date = parse_date(end_raw) if end_raw else None
-        if start_date:
-            queryset = queryset.filter(created_at__date__gte=start_date)
-        if end_date:
-            queryset = queryset.filter(created_at__date__lte=end_date)
-        return queryset
+        response["Content-Disposition"] = f'attachment; filename="order-line-items-{stamp}.xlsx"'
+        return response
 
 
 class AdminDraftOrderCreateView(AdminCapabilityMixin, APIView):

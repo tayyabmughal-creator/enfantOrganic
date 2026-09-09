@@ -91,6 +91,7 @@ def active_product_variants(product, locale="en", region=None):
         variants.append({
             "id": variant_id,
             "sku": str(raw.get("sku") or "").strip(),
+            "ean": str(raw.get("ean") or raw.get("barcode") or "").strip(),
             "title": title,
             "title_en": str(raw.get("title_en") or "").strip(),
             "title_ar": str(raw.get("title_ar") or "").strip(),

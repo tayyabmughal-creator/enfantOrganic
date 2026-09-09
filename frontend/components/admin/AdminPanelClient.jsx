@@ -194,6 +194,7 @@ const FIELD_CONFIGS = {
     ["slug","Slug","text"],["name_en","Name EN","text"],["name_ar","Name AR","text"],
     ["base_price","Price (OMR, base)","number"],["base_compare_at_price","Compare-at price (OMR)","number"],
     ["cost_price","Cost price (internal)","number"],
+    ["sku","SKU (stock code)","text"],["ean","EAN / barcode","text"],
     ["brand","Brand","text"],["unit","Unit / weight","text"],["categories","Categories","categories-select"],
     ["vendor_en","Vendor EN","text"],["vendor_ar","Vendor AR","text"],
     ["short_description_en","Short description EN","textarea"],["short_description_ar","Short description AR","textarea"],
@@ -514,7 +515,7 @@ const FIELD_CONFIGS = {
 };
 
 const CREATE_DEFAULTS = {
-  products:   { slug:"",name_en:"",name_ar:"",brand:"Enfant",unit:"",categories:[],cost_price:0,image:"",hover_image:"",dietary_tags:[],gallery:[],variants:[],details_en:[],details_ar:[],option_groups_en:[],option_groups_ar:[],seo_title_en:"",seo_title_ar:"",seo_description_en:"",seo_description_ar:"",canonical_url:"",og_title_en:"",og_title_ar:"",og_description_en:"",og_description_ar:"",og_image:"",meta_robots_index:true,meta_robots_follow:true,shopify_meta:{},stock_quantity:0,track_inventory:false,is_published:true,is_featured:false,sort_order:0 },
+  products:   { slug:"",name_en:"",name_ar:"",sku:"",ean:"",brand:"Enfant",unit:"",categories:[],cost_price:0,image:"",hover_image:"",dietary_tags:[],gallery:[],variants:[],details_en:[],details_ar:[],option_groups_en:[],option_groups_ar:[],seo_title_en:"",seo_title_ar:"",seo_description_en:"",seo_description_ar:"",canonical_url:"",og_title_en:"",og_title_ar:"",og_description_en:"",og_description_ar:"",og_image:"",meta_robots_index:true,meta_robots_follow:true,shopify_meta:{},stock_quantity:0,track_inventory:false,is_published:true,is_featured:false,sort_order:0 },
   categories: { slug:"",name_en:"",name_ar:"",description_en:"",description_ar:"",seo_title_en:"",seo_title_ar:"",seo_description_en:"",seo_description_ar:"",canonical_url:"",og_title_en:"",og_title_ar:"",og_description_en:"",og_description_ar:"",og_image:"",meta_robots_index:true,meta_robots_follow:true,image:"",sort_order:0 },
   deals:      { code:"",description:"",discount_type:"fixed",value:0,minimum_subtotal:0,max_uses:"",starts_at:"",ends_at:"",is_active:true },
   customers:  { username:"",email:"",password:"",first_name:"",last_name:"",is_active:true,is_staff:false },
@@ -724,6 +725,7 @@ function cleanProductVariants(value) {
           .replace(/[^a-z0-9]+/g, "-")
           .replace(/^-+|-+$/g, "") || `variant-${index + 1}`,
         sku,
+        ean: String(variant?.ean || "").trim(),
         title_en: titleEn,
         title_ar: titleAr,
         options,
@@ -864,6 +866,7 @@ export default function AdminPanelClient() {
   const [auditFilters, setAuditFilters] = useState({ action: "", resource_type: "" });
   // "" | "xlsx" | "zip" — which catalogue export is currently downloading.
   const [productExportBusy, setProductExportBusy] = useState("");
+  const [orderExportBusy, setOrderExportBusy] = useState("");
   const [customersTab, setCustomersTab] = useState("list");
 
   const capabilitySet = useMemo(() => new Set(adminMe?.capabilities || []), [adminMe]);
@@ -1627,6 +1630,60 @@ export default function AdminPanelClient() {
     }
   }
 
+  /**
+   * Every order line behind the current Orders filters, in one file.
+   *
+   * The old export was built in the browser from the rows the admin had ticked,
+   * and the list only renders a page at a time — 200 orders meant eight
+   * downloads to stitch together by hand. This one is filtered server-side, so
+   * what comes down is exactly the list on screen, however long it is, with one
+   * row per product sold rather than one per order.
+   */
+  async function exportOrderLineItems({ format = "csv", screenKey = activeKey } = {}) {
+    if (!canViewKey("orders")) {
+      showToast("You do not have permission to export orders.", "error");
+      return;
+    }
+    if (orderExportBusy) return;
+    setOrderExportBusy(format);
+    try {
+      const params = new URLSearchParams();
+      params.set("export_format", format);
+      if (screenKey === "orders") params.set("sales_channel", "online_store");
+      if (screenKey === "draft_orders") params.set("sales_channel", "draft_order");
+      if (debouncedSearchQuery) params.set("search", debouncedSearchQuery);
+      if (orderFilters.market && orderFilters.market !== "all") params.set("market", orderFilters.market);
+      const { dateFrom, dateTo } = buildOrdersDateFilterParams(orderFilters);
+      if (dateFrom) params.set("date_from", dateFrom);
+      if (dateTo) params.set("date_to", dateTo);
+
+      const res = await fetch(`${API_BASE}/admin/orders/export/?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        let detail = "Order export failed";
+        try {
+          const payload = await res.json();
+          detail = payload?.detail || detail;
+        } catch {}
+        throw new Error(detail);
+      }
+      const blob = await res.blob();
+      const stamp = new Date().toISOString().slice(0, 10);
+      const href = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = href;
+      a.download = `order-line-items-${stamp}.${format === "xlsx" ? "xlsx" : "csv"}`;
+      a.click();
+      window.URL.revokeObjectURL(href);
+      showToast("Orders exported — one row per product sold.", "success");
+    } catch (err) {
+      showToast(err.message, "error");
+    } finally {
+      setOrderExportBusy("");
+    }
+  }
+
   async function previewReport(type, params = {}) {
     if (!canViewKey("reports")) {
       throw new Error("You do not have permission to view reports.");
@@ -2011,6 +2068,12 @@ export default function AdminPanelClient() {
         onDownloadInvoice={downloadOrderInvoice}
         onExportProducts={activeKey === "products" && canViewKey("products") ? exportProducts : undefined}
         productExportBusy={productExportBusy}
+        onExportOrders={
+          (activeKey === "orders" || activeKey === "draft_orders") && canViewKey("orders")
+            ? (format) => exportOrderLineItems({ format, screenKey: activeKey })
+            : undefined
+        }
+        orderExportBusy={orderExportBusy}
         onBulkStatusChange={activeKey === "orders" ? async (orderNumbers, newStatus) => {
           await Promise.all(
             orderNumbers.map((num) =>

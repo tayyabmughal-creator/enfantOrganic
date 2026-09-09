@@ -20,6 +20,8 @@ export function CrudPanel({
   onBulkStatusChange,
   onExportProducts,
   productExportBusy,
+  onExportOrders,
+  orderExportBusy,
   titleFor,
   metaFor,
   labelFor,
@@ -44,6 +46,9 @@ export function CrudPanel({
         <div className="admin-panel-head-actions">
           {onExportProducts ? (
             <ProductExportControls onExport={onExportProducts} busy={productExportBusy} />
+          ) : null}
+          {onExportOrders ? (
+            <OrderExportControls onExport={onExportOrders} busy={orderExportBusy} />
           ) : null}
           {canCreate ? (
             <button type="button" className="admin-btn-primary" onClick={onCreate}>
@@ -221,6 +226,43 @@ function ProductExportControls({ onExport, busy }) {
   );
 }
 
+/**
+ * Full order-book export for the Orders module.
+ *
+ * Sits in the panel head rather than the selection bar because it deliberately
+ * ignores the selection: it downloads every order the filters above match, not
+ * the page of 25 that happens to be rendered. One row per product sold, so an
+ * order with three items comes out as three rows sharing an order number.
+ */
+function OrderExportControls({ onExport, busy }) {
+  const isBusy = Boolean(busy);
+  const hint = "Every order matching the filters above — one row per product sold, with SKU, EAN, qty, price, cost, tax and payment status.";
+  return (
+    <div className="admin-export-controls">
+      <button
+        type="button"
+        className="admin-btn-sm"
+        disabled={isBusy}
+        onClick={() => onExport("csv")}
+        title={hint}
+      >
+        <Icon name="download" size={14} />
+        {busy === "csv" ? "Preparing…" : "Export all (CSV)"}
+      </button>
+      <button
+        type="button"
+        className="admin-btn-sm"
+        disabled={isBusy}
+        onClick={() => onExport("xlsx")}
+        title={hint}
+      >
+        <Icon name="download" size={14} />
+        {busy === "xlsx" ? "Preparing…" : "Export all (Excel)"}
+      </button>
+    </div>
+  );
+}
+
 const ORDER_CHANNEL_LABELS = {
   online_store: "Online Store",
   draft_order: "Draft Orders",
@@ -372,8 +414,17 @@ function OrdersTable({ rows, canEdit, onEdit, onDownloadInvoice, onBulkStatusCha
             <option value="" disabled>Change status…</option>
             {BULK_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-          <button type="button" className="admin-btn-sm" disabled={bulkWorking} onClick={exportSelectedCsv}>
-            Export CSV
+          {/* Deliberately "selected", not "Export CSV": the full order book is
+              a separate button in the panel head, and confusing the two is how
+              a 200-order download turned into eight 25-row files. */}
+          <button
+            type="button"
+            className="admin-btn-sm"
+            disabled={bulkWorking}
+            onClick={exportSelectedCsv}
+            title="One row per selected order. For the whole list, use “Export all” at the top."
+          >
+            Export selected ({selectedOrders.size})
           </button>
           <button type="button" className="admin-btn-sm" onClick={() => setSelectedOrders(new Set())}>
             Clear
@@ -1588,6 +1639,7 @@ function normalizeProductVariants(value) {
   return raw.map((variant, index) => ({
     id: String(variant?.id || `variant-${index + 1}`),
     sku: String(variant?.sku || ""),
+    ean: String(variant?.ean || ""),
     title_en: String(variant?.title_en || ""),
     title_ar: String(variant?.title_ar || ""),
     options: variant?.options && typeof variant.options === "object" && !Array.isArray(variant.options)
@@ -1613,6 +1665,7 @@ function ProductVariantsManager({ field, value, editor, setEditor, onGalleryUplo
     {
       id: `variant-${variants.length + 1}`,
       sku: "",
+      ean: "",
       title_en: "",
       title_ar: "",
       options: { Size: "" },
@@ -1632,6 +1685,7 @@ function ProductVariantsManager({ field, value, editor, setEditor, onGalleryUplo
         ...source,
         id: `${source.id || "variant"}-copy-${variants.length + 1}`,
         sku: "",
+        ean: "",
         title_en: source.title_en ? `${source.title_en} Copy` : "",
       },
     ]);
@@ -1683,8 +1737,9 @@ function ProductVariantsManager({ field, value, editor, setEditor, onGalleryUplo
                   <button type="button" style={{ ...OPT_BTN, color: "#c0392b" }} onClick={() => removeVariant(index)} title="Remove">×</button>
                 </div>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 8, marginTop: 8 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: 8, marginTop: 8 }}>
                 <input className="admin-input" value={variant.sku} placeholder="SKU" onChange={(event) => patchVariant(index, { sku: event.target.value })} />
+                <input className="admin-input" value={variant.ean} placeholder="EAN / barcode" onChange={(event) => patchVariant(index, { ean: event.target.value })} />
                 <input className="admin-input" type="number" value={variant.price} placeholder="Price OMR" onChange={(event) => patchVariant(index, { price: event.target.value })} />
                 <input className="admin-input" type="number" value={variant.compare_at_price} placeholder="Compare OMR" onChange={(event) => patchVariant(index, { compare_at_price: event.target.value })} />
                 <input className="admin-input" type="number" min="0" step="0.001" value={variant.cost_price} placeholder="Unit cost" onChange={(event) => patchVariant(index, { cost_price: event.target.value })} />
