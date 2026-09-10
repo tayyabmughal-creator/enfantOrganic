@@ -212,6 +212,35 @@ class OrderLineItemExportTests(TestCase):
         self.assertEqual(row[3], "")
         self.assertEqual(row[4], "")
 
+    def test_a_variants_internal_id_is_not_passed_off_as_a_sku(self):
+        """Caught on the first real production export: 171 of 629 lines carried
+        `v3`/`variant-2` in the SKU column. Those are row handles inside the
+        variants JSON — an empty cell is honest, a fake code is not."""
+        unlabelled = Product.objects.create(
+            slug="enfant-fabric-wash",
+            name_en="ENFANT Gentle Baby Fabric Wash",
+            variants=[{"id": "v3", "title_en": "Refill Pouch"}],
+        )
+        order = self.make_order(number="EO-VID", region=self.oman, placed_on=timezone.now())
+        self.add_line(order, unlabelled, sku="v3", price_snapshot={"variant_id": "v3", "sku": "v3"})
+
+        _, row = self.export_rows()
+        self.assertEqual(row[4], "")
+
+    def test_a_real_variant_sku_that_happens_to_be_the_id_is_kept(self):
+        """Only the *unlabelled* fallback is suppressed: a variant whose SKU was
+        deliberately typed in still exports even if it matches its id."""
+        coded = Product.objects.create(
+            slug="enfant-coded-variant",
+            name_en="ENFANT Coded",
+            variants=[{"id": "ATNHP3", "sku": "ATNHP3", "title_en": "Single"}],
+        )
+        order = self.make_order(number="EO-VSKU", region=self.uae, placed_on=timezone.now())
+        self.add_line(order, coded, sku="ATNHP3", price_snapshot={"variant_id": "ATNHP3", "sku": "ATNHP3"})
+
+        _, row = self.export_rows()
+        self.assertEqual(row[4], "ATNHP3")
+
     # ── it answers to the list's filters ─────────────────────────────────────
     def test_the_export_is_not_capped_at_a_page(self):
         """The complaint that started this: 25 rows per download."""

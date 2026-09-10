@@ -3291,6 +3291,38 @@ ORDER_LINE_EXPORT_HEADERS = [
 ]
 
 
+def _real_sku(candidate, item):
+    """Drop a "SKU" that is really just the variant's internal id.
+
+    When a variant carries no SKU the checkout snapshot falls back to its id, so
+    order lines across the live catalogue are stamped `v3`, `variant-2` and
+    friends. Those are row handles inside a JSON blob, not trade codes — putting
+    one in the SKU column of a file the client uploads to a distributor is worse
+    than leaving the cell empty, because it looks like an answer.
+    """
+    value = str(candidate or "").strip()
+    if not value:
+        return ""
+
+    # A variant row that names this value as its SKU settles it: somebody typed
+    # it in deliberately, even in the odd case where it doubles as the row id.
+    rows = getattr(getattr(item, "product", None), "variants", None)
+    if isinstance(rows, list):
+        for row in rows:
+            if isinstance(row, dict) and value == str(row.get("sku") or "").strip():
+                return value
+        for row in rows:
+            if isinstance(row, dict) and value == str(row.get("id") or "").strip():
+                return ""
+
+    # No variant row to check against — the product may have been edited or
+    # deleted since. Matching the line's own variant_id is enough to distrust it.
+    snapshot = item.price_snapshot if isinstance(item.price_snapshot, dict) else {}
+    if value == str(snapshot.get("variant_id") or "").strip():
+        return ""
+    return value
+
+
 def _variant_row_for_item(item):
     """The raw variant dict the line was sold from, or ``None``."""
     snapshot = item.price_snapshot if isinstance(item.price_snapshot, dict) else {}
@@ -3322,7 +3354,7 @@ def _trade_codes_for_item(item):
     """
     snapshot = item.price_snapshot if isinstance(item.price_snapshot, dict) else {}
     ean = str(snapshot.get("ean") or "").strip()
-    sku = str(snapshot.get("sku") or "").strip()
+    sku = _real_sku(str(snapshot.get("sku") or ""), item)
     if ean and sku:
         return ean, sku
 
@@ -3335,9 +3367,9 @@ def _trade_codes_for_item(item):
             ean = str(getattr(product, "ean", "") or "").strip()
 
     if not sku:
-        sku = str(variant.get("sku") or "").strip()
+        sku = _real_sku(str(variant.get("sku") or ""), item)
         if not sku:
-            sku = str(item.sku or "").strip()
+            sku = _real_sku(str(item.sku or ""), item)
         if not sku and product is not None:
             sku = str(getattr(product, "sku", "") or "").strip()
     return ean, sku
