@@ -22,6 +22,7 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from store.api_views.admin_ops import ORDER_LINE_EXPORT_HEADERS
 from store.models import Order, OrderItem, Product, Region
 from store.services.admin_roles import ROLE_MANAGER, ensure_default_admin_roles
 
@@ -281,6 +282,189 @@ class OrderLineItemExportTests(TestCase):
         self.assertEqual(row[3], "8852525753631")
         self.assertEqual(row[6], 2)
         self.assertEqual(row[10], 9.20)
+
+    # ── snapshots vs live catalogue ──────────────────────────────────────────
+    def test_a_snapshotted_code_survives_the_product_being_recoded(self):
+        """The point of freezing them: re-coding a product must not rewrite what
+        last quarter's report says was sold."""
+        order = self.make_order(number="EO-FROZEN", region=self.uae, placed_on=timezone.now())
+        self.add_line(
+            order,
+            self.shampoo,
+            price_snapshot={"sku": "ATNHP3", "ean": "8852525753631"},
+        )
+
+        self.shampoo.sku = "REPLACED"
+        self.shampoo.ean = "0000000000000"
+        self.shampoo.save(update_fields=["sku", "ean"])
+
+        _, row = self.export_rows()
+        self.assertEqual(row[3], "8852525753631")
+        self.assertEqual(row[4], "ATNHP3")
+
+    def test_checkout_freezes_both_codes_on_the_line(self):
+        from store.services.costing import resolve_order_item_cost
+
+        snapshot = resolve_order_item_cost(self.shampoo, quantity=1)
+        self.assertEqual(snapshot["sku"], "ATNHP3")
+        self.assertEqual(snapshot["ean"], "8852525753631")
+
+    def test_a_variants_own_codes_beat_the_products(self):
+        from store.services.costing import resolve_order_item_cost
+
+        snapshot = resolve_order_item_cost(self.lotion, quantity=1, variant_id="v2")
+        self.assertEqual(snapshot["sku"], "ATNLP2-2")
+        self.assertEqual(snapshot["ean"], "8852525753778")
+
+    # ── the other filters ────────────────────────────────────────────────────
+    def test_the_currency_filter_reads_the_order_not_the_region(self):
+        emirati = self.make_order(number="EO-AED", region=self.uae, placed_on=timezone.now())
+        self.add_line(emirati, self.shampoo)
+        omani = self.make_order(number="EO-OMR", region=self.oman, placed_on=timezone.now())
+        self.add_line(omani, self.shampoo)
+
+        _, *rows = self.export_rows({"currency": "aed"})
+        self.assertEqual([row[0] for row in rows], ["EO-AED"])
+
+    def test_the_payment_status_filter_narrows_the_file(self):
+        paid = self.make_order(number="EO-PAID", region=self.uae, placed_on=timezone.now())
+        self.add_line(paid, self.shampoo)
+        unpaid = self.make_order(
+            number="EO-UNPAID", region=self.uae, placed_on=timezone.now(), payment_status=Order.PAYMENT_UNPAID
+        )
+        self.add_line(unpaid, self.shampoo)
+
+        _, *rows = self.export_rows({"payment_status": "unpaid"})
+        self.assertEqual([row[0] for row in rows], ["EO-UNPAID"])
+
+    def test_the_filename_carries_the_date_window(self):
+        order = self.make_order(number="EO-NAME", region=self.uae, placed_on=timezone.now())
+        self.add_line(order, self.shampoo)
+
+        response = self.api_client.get(EXPORT_URL, {"date_from": "2026-08-01", "date_to": "2026-08-31"})
+        self.assertIn(
+            'filename="enfant_full_order_report_2026-08-01_to_2026-08-31.csv"',
+            response["Content-Disposition"],
+        )
+
+    # ── the values themselves ────────────────────────────────────────────────
+    def test_commas_and_quotes_in_a_product_name_survive_the_csv(self):
+        awkward = Product.objects.create(
+            slug="enfant-wipes-quoted",
+            name_en='ENFANT "EXTRA MILD" WIPES, 3 PACKS',
+            sku="ATNW3",
+            ean="8852525941731",
+        )
+        order = self.make_order(number="EO-CSV", region=self.uae, placed_on=timezone.now())
+        self.add_line(order, awkward)
+
+        _, row = self.export_rows()
+        self.assertEqual(row[5], 'ENFANT "EXTRA MILD" WIPES, 3 PACKS')
+
+    def test_money_keeps_its_exact_decimal_digits(self):
+        """No float anywhere on the path: 0.1 + 0.2 problems in a finance file
+        are silent and cumulative."""
+        order = self.make_order(number="EO-MONEY", region=self.uae, placed_on=timezone.now())
+        self.add_line(order, self.shampoo, quantity=3, unit_price="4.35")
+
+        _, row = self.export_rows()
+        self.assertEqual(row[7], "4.35")
+        self.assertEqual(row[10], "13.05")
+        self.assertEqual(Decimal(row[10]), Decimal("4.35") * 3)
+
+    def test_an_ean_is_never_turned_into_a_number(self):
+        """Leading zeros and 13-digit codes must come out as written — the moment
+        one becomes an int or a float it is a different barcode."""
+        zero_led = Product.objects.create(slug="enfant-zero-ean", name_en="Zero EAN", sku="Z1", ean="0088525753631")
+        order = self.make_order(number="EO-EAN", region=self.uae, placed_on=timezone.now())
+        self.add_line(order, zero_led)
+
+        _, row = self.export_rows()
+        self.assertEqual(row[3], "0088525753631")
+
+        import openpyxl
+
+        response = self.api_client.get(EXPORT_URL, {"export_format": "xlsx"})
+        sheet = openpyxl.load_workbook(io.BytesIO(response.content)).active
+        _, xl_row = list(sheet.values)
+        self.assertIsInstance(xl_row[3], str)
+        self.assertEqual(xl_row[3], "0088525753631")
+
+    # ── the on-screen table ──────────────────────────────────────────────────
+    def test_the_preview_returns_the_same_rows_as_the_file(self):
+        order = self.make_order(number="EO-PREVIEW", region=self.uae, placed_on=timezone.now())
+        self.add_line(order, self.shampoo, quantity=2, unit_price="4.60")
+
+        response = self.api_client.get(
+            "/api/admin/reports/order-line-items/", {"preview": "1", "date_range": "all"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["columns"], ORDER_LINE_EXPORT_HEADERS)
+        self.assertEqual(response.data["count"], 1)
+        row = response.data["rows"][0]
+        self.assertEqual(row["order_number"], "EO-PREVIEW")
+        self.assertEqual(row["sku"], "ATNHP3")
+        # Strings, not floats — the table shows the digits the CSV will carry.
+        self.assertEqual(row["line_total"], "9.20")
+        self.assertIsInstance(row["ean"], str)
+
+    def test_the_preview_paginates_server_side(self):
+        for index in range(7):
+            order = self.make_order(number=f"EO-PG{index}", region=self.uae, placed_on=timezone.now())
+            self.add_line(order, self.shampoo)
+
+        first = self.api_client.get(
+            "/api/admin/reports/order-line-items/",
+            {"preview": "1", "date_range": "all", "page_size": "3"},
+        )
+        self.assertEqual(first.data["count"], 7)
+        self.assertEqual(first.data["total_pages"], 3)
+        self.assertEqual(len(first.data["rows"]), 3)
+
+        last = self.api_client.get(
+            "/api/admin/reports/order-line-items/",
+            {"preview": "1", "date_range": "all", "page_size": "3", "page": "3"},
+        )
+        self.assertEqual(len(last.data["rows"]), 1)
+
+    # ── the Reports tab reaches the same file ────────────────────────────────
+    def test_the_reports_tab_hands_over_the_same_file(self):
+        """Where the client actually went looking. They downloaded Reports →
+        Orders, got the old one-row-per-order summary, and reported the whole
+        feature as unchanged."""
+        order = self.make_order(number="EO-REPORT", region=self.uae, placed_on=timezone.now())
+        self.add_line(order, self.shampoo, quantity=2, unit_price="4.60")
+        self.add_line(order, self.lotion, quantity=1, unit_price="4.90")
+
+        response = self.api_client.get("/api/admin/reports/order-line-items/", {"date_range": "all"})
+        self.assertEqual(response.status_code, 200)
+        header, *rows = list(csv.reader(io.StringIO(response.content.decode("utf-8"))))
+        self.assertEqual(header, ORDER_LINE_EXPORT_HEADERS)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual([row[0] for row in rows], ["EO-REPORT", "EO-REPORT"])
+        self.assertEqual(rows[0][4], "ATNHP3")
+
+    def test_the_reports_tab_honours_its_own_date_picker(self):
+        old = self.make_order(number="EO-JULY", region=self.uae, placed_on=timezone.now() - timedelta(days=120))
+        self.add_line(old, self.shampoo)
+        today = self.make_order(number="EO-TODAY", region=self.uae, placed_on=timezone.now())
+        self.add_line(today, self.shampoo)
+
+        response = self.api_client.get("/api/admin/reports/order-line-items/", {"date_range": "today"})
+        _, *rows = list(csv.reader(io.StringIO(response.content.decode("utf-8"))))
+        self.assertEqual([row[0] for row in rows], ["EO-TODAY"])
+
+    def test_the_old_orders_report_is_still_the_summary_it_was(self):
+        """Kept deliberately: it answers a different question. It is only
+        relabelled in the UI so the two tiles cannot be mistaken again."""
+        order = self.make_order(number="EO-SUMMARY", region=self.uae, placed_on=timezone.now())
+        self.add_line(order, self.shampoo)
+        self.add_line(order, self.lotion)
+
+        response = self.api_client.get("/api/admin/reports/orders/")
+        header, *rows = list(csv.reader(io.StringIO(response.content.decode("utf-8"))))
+        self.assertEqual(header[:3], ["order_number", "customer", "phone"])
+        self.assertEqual(len(rows), 1)
 
     def test_a_signed_out_visitor_gets_nothing(self):
         self.api_client.force_authenticate(None)

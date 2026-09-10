@@ -1566,7 +1566,11 @@ export default function AdminPanelClient() {
       const a = document.createElement("a");
       a.href = href;
       const ext = params.export_format === "xlsx" ? "xlsx" : "csv";
-      a.download = `${type}.${ext}`;
+      // Prefer the name the server chose — the order report puts its date window
+      // in the filename, so two months' exports don't collide in Downloads.
+      const disposition = res.headers.get("Content-Disposition") || "";
+      const serverName = /filename="?([^"]+)"?/.exec(disposition)?.[1];
+      a.download = serverName || `${type}.${ext}`;
       a.click();
       window.URL.revokeObjectURL(href);
       showToast(`${type} report downloaded.`, "success");

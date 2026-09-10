@@ -2151,9 +2151,118 @@ class CogsCostResyncView(APIView):
         })
 
 
+def resolve_report_date_bounds(query_params):
+    """The Reports tab's own date picker, as (start, end) dates.
+
+    ``None, None`` means "all time". Kept at module level so every report type
+    reads the picker the same way.
+    """
+    today = timezone.localdate()
+    range_key = str(query_params.get("date_range") or "previous_month").strip().lower()
+    if range_key == "today":
+        return today, today
+    if range_key == "yesterday":
+        day = today - timedelta(days=1)
+        return day, day
+    if range_key == "month_to_date":
+        return today.replace(day=1), today
+    if range_key == "all":
+        return None, None
+    if range_key == "custom":
+        start = parse_date(str(query_params.get("start_date") or ""))
+        end = parse_date(str(query_params.get("end_date") or ""))
+        return start, end
+    first_this_month = today.replace(day=1)
+    previous_month_end = first_this_month - timedelta(days=1)
+    return previous_month_end.replace(day=1), previous_month_end
+
+
 class ReportCsvView(APIView):
     permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
     admin_read_capabilities = (CAP_REPORTS_VIEW,)
+
+    def _export_order_line_items(self, request, export_format):
+        """The Orders screen's line-item file, reached from the Reports tab.
+
+        Same rows, same columns; the only difference is that the date window
+        comes from the Reports date picker rather than the Orders filters. It
+        lives here because "order report" is what the client calls it and this
+        tab is where they go looking — the old one-row-per-order tile next to
+        it is now labelled a summary.
+        """
+        start_date, end_date = resolve_report_date_bounds(request.query_params)
+        # The report's own date picker wins over date_from/date_to so the two
+        # cannot disagree; every other filter is shared with the Orders screen.
+        orders = filtered_admin_orders(request.query_params).order_by()
+        if start_date:
+            orders = orders.filter(created_at__date__gte=start_date)
+        if end_date:
+            orders = orders.filter(created_at__date__lte=end_date)
+
+        if str(request.query_params.get("preview") or "").lower() in {"1", "true", "yes"}:
+            return self._preview_order_line_items(request, orders, start_date, end_date)
+
+        response = order_line_items_response(
+            orders,
+            export_format=export_format,
+            filename=order_line_items_filename(start_date=start_date, end_date=end_date),
+        )
+        try:
+            AdminAuditLog.objects.create(
+                actor=request.user if getattr(request.user, "pk", None) else None,
+                action="export",
+                resource_type="report",
+                resource_id="order-line-items",
+                after_snapshot={
+                    "format": export_format,
+                    "date_from": start_date.isoformat() if start_date else "",
+                    "date_to": end_date.isoformat() if end_date else "",
+                },
+                ip_address=(request.META.get("REMOTE_ADDR") or "")[:45],
+                user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:255],
+            )
+        except Exception:
+            logger.exception("Failed to write audit log for the order line-item report")
+        return response
+
+    def _preview_order_line_items(self, request, orders, start_date, end_date):
+        """One page of the same rows, as JSON, for the on-screen table.
+
+        Server-side paginated: the export is deliberately unbounded, but the
+        table above it must not try to render a year of order lines at once.
+        """
+        try:
+            page = max(int(request.query_params.get("page") or 1), 1)
+        except (TypeError, ValueError):
+            page = 1
+        try:
+            page_size = min(max(int(request.query_params.get("page_size") or 50), 1), 200)
+        except (TypeError, ValueError):
+            page_size = 50
+
+        items = order_line_items_queryset(orders)
+        total = items.count()
+        offset = (page - 1) * page_size
+        rows = [
+            dict(zip(ORDER_LINE_EXPORT_HEADERS, _order_line_row(item)))
+            for item in items[offset : offset + page_size]
+        ]
+        # Decimals are handed over as strings — the exact digits that reach the
+        # CSV — so nothing is rounded on its way through JSON.
+        for row in rows:
+            for key in ("rsp_unit_price", "cost_per_unit", "tax_amount", "line_total"):
+                row[key] = str(row[key])
+
+        return Response({
+            "columns": ORDER_LINE_EXPORT_HEADERS,
+            "count": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": max(1, (total + page_size - 1) // page_size),
+            "date_from": start_date.isoformat() if start_date else "",
+            "date_to": end_date.isoformat() if end_date else "",
+            "rows": rows,
+        })
 
     def _export_newsletter_xlsx(self, request, max_rows):
         import openpyxl
@@ -2229,6 +2338,9 @@ class ReportCsvView(APIView):
         if report_type == "newsletter" and export_format in {"xlsx", "excel"}:
             return self._export_newsletter_xlsx(request, max_rows)
 
+        if report_type == "order-line-items":
+            return self._export_order_line_items(request, export_format)
+
         response = HttpResponse(content_type="text/csv")
         response["Content-Disposition"] = f'attachment; filename="{report_type}-{timezone.localdate()}.csv"'
         writer = csv.writer(response)
@@ -2244,26 +2356,6 @@ class ReportCsvView(APIView):
             writer.writerow(row)
             rows_written += 1
             return True
-
-        def resolve_report_date_bounds():
-            today = timezone.localdate()
-            range_key = str(request.query_params.get("date_range") or "previous_month").strip().lower()
-            if range_key == "today":
-                return today, today
-            if range_key == "yesterday":
-                day = today - timedelta(days=1)
-                return day, day
-            if range_key == "month_to_date":
-                return today.replace(day=1), today
-            if range_key == "all":
-                return None, None
-            if range_key == "custom":
-                start = parse_date(str(request.query_params.get("start_date") or ""))
-                end = parse_date(str(request.query_params.get("end_date") or ""))
-                return start, end
-            first_this_month = today.replace(day=1)
-            previous_month_end = first_this_month - timedelta(days=1)
-            return previous_month_end.replace(day=1), previous_month_end
 
         if report_type == "orders":
             writer.writerow(["order_number", "customer", "phone", "status", "payment_status", "total", "currency"])
@@ -2308,7 +2400,7 @@ class ReportCsvView(APIView):
                 ]):
                     break
         elif report_type == "cost-of-goods":
-            start_date, end_date = resolve_report_date_bounds()
+            start_date, end_date = resolve_report_date_bounds(request.query_params)
             cogs_settings = SiteSettings.objects.first()
             include_unpaid = True if cogs_settings is None else bool(cogs_settings.cogs_include_unpaid)
             cogs_rows, cogs_total = build_cogs_report_rows(
@@ -3146,6 +3238,12 @@ def filtered_admin_orders(query_params, *, base_queryset=None):
     if market_code:
         queryset = queryset.filter(region__code=market_code)
 
+    # Read off the order, never off the admin's current region: a report of last
+    # year's AED sales has to stay AED no matter who opens it from where.
+    currency_filter = str(query_params.get("currency", "") or "").strip().upper()
+    if currency_filter:
+        queryset = queryset.filter(currency_code__iexact=currency_filter)
+
     start_raw = str(query_params.get("date_from", "") or "").strip()
     end_raw = str(query_params.get("date_to", "") or "").strip()
     start_date = parse_date(start_raw) if start_raw else None
@@ -3210,55 +3308,140 @@ def _variant_row_for_item(item):
 
 
 def _trade_codes_for_item(item):
-    """(ean, sku) for an order line, most specific source first.
+    """(ean, sku) for an order line — the line's own snapshot first.
 
-    The codes are resolved live rather than read only from the line's own
-    snapshot on purpose: they were introduced after these orders were placed,
-    so filling a product's SKU in today has to make every past sale of it
-    export correctly, not just the next one.
+    Orders placed from now on freeze both codes at checkout, next to the cost
+    price and for the same reason: re-coding a product must not silently rewrite
+    what last quarter's report says was sold.
+
+    The live product/variant is a *fallback*, not the primary source, and it
+    matters because these fields did not exist until 2026-09-09. Every order
+    before that carries no snapshot, so without the fallback the entire
+    back-catalogue would export blank forever however carefully the codes are
+    entered today.
     """
+    snapshot = item.price_snapshot if isinstance(item.price_snapshot, dict) else {}
+    ean = str(snapshot.get("ean") or "").strip()
+    sku = str(snapshot.get("sku") or "").strip()
+    if ean and sku:
+        return ean, sku
+
     variant = _variant_row_for_item(item) or {}
     product = getattr(item, "product", None)
 
-    ean = str(variant.get("ean") or variant.get("barcode") or "").strip()
-    if not ean and product is not None:
-        ean = str(getattr(product, "ean", "") or "").strip()
+    if not ean:
+        ean = str(variant.get("ean") or variant.get("barcode") or "").strip()
+        if not ean and product is not None:
+            ean = str(getattr(product, "ean", "") or "").strip()
 
-    sku = str(variant.get("sku") or "").strip()
     if not sku:
-        sku = str(item.sku or "").strip()
-    if not sku and product is not None:
-        sku = str(getattr(product, "sku", "") or "").strip()
+        sku = str(variant.get("sku") or "").strip()
+        if not sku:
+            sku = str(item.sku or "").strip()
+        if not sku and product is not None:
+            sku = str(getattr(product, "sku", "") or "").strip()
     return ean, sku
 
 
-def _order_line_export_rows(orders_queryset):
-    """Yield one export row per order line, oldest order first."""
-    items = (
+def order_line_items_queryset(orders_queryset):
+    """The order lines behind an order queryset, oldest order first.
+
+    select_related covers every column the row builder touches — order, its
+    region and the product — so a 5,000-line export is two queries, not 15,000.
+    """
+    return (
         OrderItem.objects.filter(order__in=orders_queryset)
         .select_related("order", "order__region", "product")
         .order_by("order__created_at", "order_id", "id")
     )
-    for item in items.iterator(chunk_size=500):
-        order = item.order
-        placed_on = timezone.localtime(order.created_at).date()
-        ean, sku = _trade_codes_for_item(item)
-        yield [
-            order.order_number,
-            placed_on.isoformat(),
-            # Monday of the week the order was placed, matching the client's file.
-            (placed_on - timedelta(days=placed_on.weekday())).isoformat(),
-            ean,
-            sku,
-            item.product_name,
-            item.quantity,
-            item.unit_price,
-            item.unit_cost_price,
-            item.tax_total,
-            item.line_total,
-            order.payment_status,
-            order.currency_code,
-        ]
+
+
+def _order_line_row(item):
+    order = item.order
+    placed_on = timezone.localtime(order.created_at).date()
+    ean, sku = _trade_codes_for_item(item)
+    return [
+        order.order_number,
+        placed_on.isoformat(),
+        # Monday of the week the order was placed, matching the client's file.
+        (placed_on - timedelta(days=placed_on.weekday())).isoformat(),
+        ean,
+        sku,
+        item.product_name,
+        item.quantity,
+        item.unit_price,
+        item.unit_cost_price,
+        item.tax_total,
+        item.line_total,
+        order.payment_status,
+        order.currency_code,
+    ]
+
+
+def _order_line_export_rows(orders_queryset):
+    """Yield one export row per order line, oldest order first."""
+    for item in order_line_items_queryset(orders_queryset).iterator(chunk_size=500):
+        yield _order_line_row(item)
+
+
+def order_line_items_filename(query_params=None, *, start_date=None, end_date=None):
+    """`enfant_full_order_report_<from>_to_<to>` — the window is in the name.
+
+    Two exports of different months otherwise land in Downloads with the same
+    name and the browser silently suffixes them (1), (2).
+    """
+    params = query_params or {}
+    start = start_date or parse_date(str(params.get("date_from", "") or "").strip())
+    end = end_date or parse_date(str(params.get("date_to", "") or "").strip())
+    if start and end:
+        return f"enfant_full_order_report_{start.isoformat()}_to_{end.isoformat()}"
+    if start:
+        return f"enfant_full_order_report_from_{start.isoformat()}"
+    if end:
+        return f"enfant_full_order_report_to_{end.isoformat()}"
+    return f"enfant_full_order_report_all_time_{timezone.localdate().isoformat()}"
+
+
+def order_line_items_response(orders_queryset, *, export_format="csv", filename="enfant_full_order_report"):
+    """Build the line-item file itself.
+
+    Shared by the Orders screen's "Export all" and the Reports tab's "Order
+    Products" tile — the client asked for this file from the Reports tab, found
+    the old one-row-per-order "Orders" report sitting there, and reasonably
+    concluded nothing had changed. Both doors now hand over the same file.
+    """
+    if export_format in {"xlsx", "excel"}:
+        import openpyxl
+        from openpyxl.utils import get_column_letter
+
+        # write_only keeps the whole sheet off the heap; this export is unbounded
+        # by design and a year of orders is a lot of rows.
+        workbook = openpyxl.Workbook(write_only=True)
+        sheet = workbook.create_sheet("Order line items")
+        for index, header in enumerate(ORDER_LINE_EXPORT_HEADERS, start=1):
+            sheet.column_dimensions[get_column_letter(index)].width = max(14, len(header) + 4)
+        sheet.append(ORDER_LINE_EXPORT_HEADERS)
+        for row in _order_line_export_rows(orders_queryset):
+            # Decimals survive openpyxl, but the sheet reads better as numbers.
+            sheet.append([float(value) if isinstance(value, Decimal) else value for value in row])
+
+        buffer = io.BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}.xlsx"'
+        return response
+
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="{filename}.csv"'
+    writer = csv.writer(response)
+    writer.writerow(ORDER_LINE_EXPORT_HEADERS)
+    for row in _order_line_export_rows(orders_queryset):
+        writer.writerow(row)
+    return response
 
 
 class AdminOrderLineItemExportView(APIView):
@@ -3281,12 +3464,12 @@ class AdminOrderLineItemExportView(APIView):
         # NOTE: not "format" — DRF reserves that query param for content
         # negotiation and would 404 before get() runs.
         export_format = str(request.query_params.get("export_format") or "csv").strip().lower()
-        stamp = timezone.localdate()
 
-        if export_format in {"xlsx", "excel"}:
-            response = self._xlsx_response(orders, stamp)
-        else:
-            response = self._csv_response(orders, stamp)
+        response = order_line_items_response(
+            orders,
+            export_format=export_format,
+            filename=order_line_items_filename(request.query_params),
+        )
 
         try:
             AdminAuditLog.objects.create(
@@ -3301,40 +3484,6 @@ class AdminOrderLineItemExportView(APIView):
         except Exception:
             logger.exception("Failed to write audit log for the order line-item export")
 
-        return response
-
-    def _csv_response(self, orders, stamp):
-        response = HttpResponse(content_type="text/csv")
-        response["Content-Disposition"] = f'attachment; filename="order-line-items-{stamp}.csv"'
-        writer = csv.writer(response)
-        writer.writerow(ORDER_LINE_EXPORT_HEADERS)
-        for row in _order_line_export_rows(orders):
-            writer.writerow(row)
-        return response
-
-    def _xlsx_response(self, orders, stamp):
-        import openpyxl
-        from openpyxl.utils import get_column_letter
-
-        # write_only keeps the whole sheet off the heap; this export is unbounded
-        # by design and a year of orders is a lot of rows.
-        workbook = openpyxl.Workbook(write_only=True)
-        sheet = workbook.create_sheet("Order line items")
-        sheet.append(ORDER_LINE_EXPORT_HEADERS)
-        for index, header in enumerate(ORDER_LINE_EXPORT_HEADERS, start=1):
-            sheet.column_dimensions[get_column_letter(index)].width = max(14, len(header) + 4)
-        for row in _order_line_export_rows(orders):
-            # Decimals survive openpyxl, but the sheet reads better as numbers.
-            sheet.append([float(value) if isinstance(value, Decimal) else value for value in row])
-
-        buffer = io.BytesIO()
-        workbook.save(buffer)
-        buffer.seek(0)
-        response = HttpResponse(
-            buffer.getvalue(),
-            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
-        response["Content-Disposition"] = f'attachment; filename="order-line-items-{stamp}.xlsx"'
         return response
 
 

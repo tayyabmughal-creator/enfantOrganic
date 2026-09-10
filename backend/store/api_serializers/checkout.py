@@ -1083,6 +1083,7 @@ class CheckoutCreateSerializer(serializers.Serializer):
                     "variant_id": prepared_item.get("variant_id", ""),
                     "variant": variant_snapshot,
                     "sku": cost_snapshot["sku"],
+                    "ean": cost_snapshot["ean"],
                     "unit_cost_price": str(cost_snapshot["unit_cost_price"]),
                     "line_cost_total": str(cost_snapshot["line_cost_total"]),
                     "cost_source": cost_snapshot["cost_source"],

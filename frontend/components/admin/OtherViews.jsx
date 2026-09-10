@@ -2,7 +2,20 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { AdminEmpty } from "./SharedUI";
 
-const REPORT_TYPES = ["orders", "customers", "inventory", "sales", "abandoned-carts", "cost-of-goods"];
+// Explicit labels rather than prettifying the type slug: "Orders" and "Order
+// Products" are one word apart and produce completely different files, and the
+// client downloaded the wrong one and reported the feature as not working.
+const REPORT_TYPES = [
+  { type: "order-line-items", label: "Order Products (detailed)", hint: "One row per product sold · SKU, EAN, qty, price, cost, tax" },
+  { type: "orders", label: "Orders (summary)", hint: "One row per order · no product detail" },
+  { type: "customers", label: "Customers", hint: "Download as CSV" },
+  { type: "inventory", label: "Inventory", hint: "Download as CSV" },
+  { type: "sales", label: "Sales", hint: "Revenue by month" },
+  { type: "abandoned-carts", label: "Abandoned Carts", hint: "Download as CSV" },
+  { type: "cost-of-goods", label: "Cost Of Goods", hint: "Uses the date range below" },
+];
+// The reports that read the date picker below rather than covering all time.
+const DATE_RANGED_REPORTS = new Set(["cost-of-goods", "order-line-items"]);
 const COGS_DATE_RANGES = [
   ["previous_month", "Previous month"],
   ["today", "Today"],
@@ -198,6 +211,217 @@ export function SettingsPanel({ data, onEdit, canEdit }) {
   return <StoreSettingsSection section="homepage" data={data} onEdit={onEdit} canEdit={canEdit} />;
 }
 
+const FULL_REPORT_COLUMNS = [
+  ["order_number", "Order #"],
+  ["date", "Date"],
+  ["week_start", "Week Start"],
+  ["ean", "EAN"],
+  ["sku", "SKU"],
+  ["product_name", "Product"],
+  ["quantity", "Qty"],
+  ["rsp_unit_price", "RSP"],
+  ["cost_per_unit", "Cost"],
+  ["tax_amount", "Tax"],
+  ["line_total", "Line Total"],
+  ["payment_status", "Payment"],
+  ["currency", "Currency"],
+];
+
+const FULL_REPORT_MARKETS = [["", "All markets"], ["om", "Oman"], ["ae", "UAE"], ["sa", "Saudi Arabia"]];
+const FULL_REPORT_CURRENCIES = [["", "All currencies"], ["OMR", "OMR"], ["AED", "AED"], ["SAR", "SAR"]];
+const FULL_REPORT_PAYMENT = [["", "Any payment status"], ["paid", "Paid"], ["unpaid", "Unpaid"], ["review", "Needs review"], ["refunded", "Refunded"]];
+
+/**
+ * Full Order Report — one row per product sold.
+ *
+ * Deliberately lives inside the existing Reports tab rather than as a new
+ * dashboard: this is the page the client goes to when they say "order report",
+ * and the one-row-per-order tile above it is what they kept downloading by
+ * mistake. Table and file come from the same endpoint and the same filters, so
+ * what is previewed here is exactly what the CSV contains.
+ */
+function FullOrderReport({ onDownload, onPreview }) {
+  const [range, setRange] = useState("all");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [market, setMarket] = useState("");
+  const [currency, setCurrency] = useState("");
+  const [paymentStatus, setPaymentStatus] = useState("");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [preview, setPreview] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [exporting, setExporting] = useState("");
+
+  const buildParams = useCallback(() => {
+    const params = { date_range: range };
+    if (range === "custom") {
+      if (startDate) params.start_date = startDate;
+      if (endDate) params.end_date = endDate;
+    }
+    if (market) params.market = market;
+    if (currency) params.currency = currency;
+    if (paymentStatus) params.payment_status = paymentStatus;
+    if (search.trim()) params.search = search.trim();
+    return params;
+  }, [range, startDate, endDate, market, currency, paymentStatus, search]);
+
+  const load = useCallback(async (nextPage = 1) => {
+    if (typeof onPreview !== "function") return;
+    setLoading(true);
+    setError("");
+    try {
+      const payload = await onPreview("order-line-items", { ...buildParams(), page: nextPage, page_size: 50 });
+      setPreview(payload);
+      setPage(nextPage);
+    } catch (err) {
+      setError(err?.message || "Could not load the report.");
+      setPreview(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [buildParams, onPreview]);
+
+  useEffect(() => {
+    void load(1);
+    // Mount only. The filters are applied by an explicit button, so depending on
+    // `load` here would re-query the whole report on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function exportFile(format) {
+    if (exporting) return;
+    setExporting(format);
+    try {
+      await onDownload("order-line-items", { ...buildParams(), export_format: format });
+    } finally {
+      setExporting("");
+    }
+  }
+
+  const rows = Array.isArray(preview?.rows) ? preview.rows : [];
+  const totalPages = Number(preview?.total_pages) || 1;
+
+  return (
+    <section className="admin-panel-card">
+      <div className="admin-panel-head">
+        <div>
+          <h3>Full Order Report</h3>
+          <span>
+            One row per product sold — an order with three items is three rows sharing its order number.
+            {preview?.count ? ` · ${preview.count} line${preview.count === 1 ? "" : "s"}` : ""}
+          </span>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button type="button" className="admin-btn-sm" disabled={Boolean(exporting)} onClick={() => exportFile("csv")}>
+            {exporting === "csv" ? "Preparing…" : "Export CSV"}
+          </button>
+          <button type="button" className="admin-btn-sm" disabled={Boolean(exporting)} onClick={() => exportFile("xlsx")}>
+            {exporting === "xlsx" ? "Preparing…" : "Export Excel"}
+          </button>
+        </div>
+      </div>
+
+      <div className="admin-report-filters">
+        <label>
+          <span>Date range</span>
+          <select value={range} onChange={(event) => setRange(event.target.value)}>
+            {COGS_DATE_RANGES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </label>
+        {range === "custom" ? (
+          <>
+            <label>
+              <span>Start date</span>
+              <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+            </label>
+            <label>
+              <span>End date</span>
+              <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+            </label>
+          </>
+        ) : null}
+        <label>
+          <span>Market</span>
+          <select value={market} onChange={(event) => setMarket(event.target.value)}>
+            {FULL_REPORT_MARKETS.map(([value, label]) => <option key={value || "all"} value={value}>{label}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Currency</span>
+          <select value={currency} onChange={(event) => setCurrency(event.target.value)}>
+            {FULL_REPORT_CURRENCIES.map(([value, label]) => <option key={value || "all"} value={value}>{label}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Payment status</span>
+          <select value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value)}>
+            {FULL_REPORT_PAYMENT.map(([value, label]) => <option key={value || "any"} value={value}>{label}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Order / customer / product</span>
+          <input
+            type="search"
+            placeholder="EO-20260810-0003…"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            onKeyDown={(event) => { if (event.key === "Enter") void load(1); }}
+          />
+        </label>
+        <button type="button" className="admin-btn-sm" disabled={loading} onClick={() => load(1)}>
+          {loading ? "Loading…" : "Apply filters"}
+        </button>
+      </div>
+
+      {error ? <div className="admin-form-error">{error}</div> : null}
+      {!error && loading ? <div className="admin-list-empty">Loading report…</div> : null}
+      {!error && !loading && rows.length ? (
+        <>
+          <div className="admin-orders-table-wrap">
+            <table className="admin-orders-table admin-cogs-table">
+              <thead>
+                <tr>{FULL_REPORT_COLUMNS.map(([key, label]) => <th key={key}>{label}</th>)}</tr>
+              </thead>
+              <tbody>
+                {rows.map((row, index) => (
+                  <tr key={`${row.order_number}-${row.sku || row.product_name}-${index}`}>
+                    <td>{row.order_number}</td>
+                    <td>{row.date}</td>
+                    <td>{row.week_start}</td>
+                    {/* Codes are identifiers, not numbers — shown as-is, never reformatted. */}
+                    <td>{row.ean || "—"}</td>
+                    <td>{row.sku || "—"}</td>
+                    <td>{row.product_name}</td>
+                    <td>{row.quantity}</td>
+                    <td>{row.rsp_unit_price}</td>
+                    <td>{row.cost_per_unit}</td>
+                    <td>{row.tax_amount}</td>
+                    <td>{row.line_total}</td>
+                    <td>{row.payment_status}</td>
+                    <td>{row.currency}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {totalPages > 1 ? (
+            <div className="admin-pagination">
+              <button type="button" className="admin-btn-sm" disabled={page <= 1 || loading} onClick={() => load(page - 1)}>← Prev</button>
+              <span>Page {page} of {totalPages}</span>
+              <button type="button" className="admin-btn-sm" disabled={page >= totalPages || loading} onClick={() => load(page + 1)}>Next →</button>
+            </div>
+          ) : null}
+        </>
+      ) : null}
+      {!error && !loading && !rows.length ? (
+        <div className="admin-list-empty">No order items found for these filters.</div>
+      ) : null}
+    </section>
+  );
+}
+
 export function Reports({ data, onDownload, onPreview, request }) {
   const [cogsRange, setCogsRange] = useState("previous_month");
   const [cogsStart, setCogsStart] = useState("");
@@ -247,10 +471,6 @@ export function Reports({ data, onDownload, onPreview, request }) {
     }
     return params;
   }, [cogsEnd, cogsRange, cogsStart]);
-  const downloadCogs = () => {
-    const params = buildCogsParams();
-    onDownload("cost-of-goods", params);
-  };
   const loadCogsPreview = useCallback(async () => {
     if (typeof onPreview !== "function") return;
     setCogsLoading(true);
@@ -309,19 +529,25 @@ export function Reports({ data, onDownload, onPreview, request }) {
           <span>Download reports as comma-separated files.</span>
         </div>
         <div className="admin-report-grid">
-          {REPORT_TYPES.map((type) => (
-            <button key={type} type="button" className="admin-report-btn" onClick={() => type === "cost-of-goods" ? downloadCogs() : onDownload(type)}>
+          {REPORT_TYPES.map(({ type, label, hint }) => (
+            <button
+              key={type}
+              type="button"
+              className="admin-report-btn"
+              title={hint}
+              onClick={() => (DATE_RANGED_REPORTS.has(type) ? onDownload(type, buildCogsParams()) : onDownload(type))}
+            >
               <span className="admin-report-icon">⇩</span>
               <div>
-                <strong>{type.replaceAll("-", " ").replace(/\b\w/g, (l) => l.toUpperCase())}</strong>
-                <span>Download as CSV</span>
+                <strong>{label}</strong>
+                <span>{hint}</span>
               </div>
             </button>
           ))}
         </div>
         <div className="admin-report-filters">
           <label>
-            <span>COGS date range</span>
+            <span>Date range (Order Products &amp; COGS)</span>
             <select value={cogsRange} onChange={(event) => setCogsRange(event.target.value)}>
               {COGS_DATE_RANGES.map(([value, label]) => (
                 <option key={value} value={value}>{label}</option>
@@ -529,6 +755,8 @@ export function Reports({ data, onDownload, onPreview, request }) {
           ) : null}
         </div>
       </section>
+
+      <FullOrderReport onDownload={onDownload} onPreview={onPreview} />
 
       <section className="admin-panel-card">
         <div className="admin-panel-head">

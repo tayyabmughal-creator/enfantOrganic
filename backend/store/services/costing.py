@@ -125,9 +125,23 @@ def resolve_order_item_cost(product, *, quantity=1, variant_snapshot=None, varia
         sku = str(variant_snapshot.get("sku") or "").strip()
     if not sku and isinstance(raw_variant, dict):
         sku = str(raw_variant.get("sku") or raw_variant.get("id") or "").strip()
+    if not sku:
+        sku = str(getattr(product, "sku", "") or "").strip()
+
+    # Frozen beside the cost and for the same reason: a report of what was sold
+    # in July must keep reading the code the item carried in July, whatever the
+    # catalogue says today. The variant's own barcode wins over the product's.
+    ean = ""
+    if isinstance(variant_snapshot, dict):
+        ean = str(variant_snapshot.get("ean") or variant_snapshot.get("barcode") or "").strip()
+    if not ean and isinstance(raw_variant, dict):
+        ean = str(raw_variant.get("ean") or raw_variant.get("barcode") or "").strip()
+    if not ean:
+        ean = str(getattr(product, "ean", "") or "").strip()
 
     return {
         "sku": sku,
+        "ean": ean,
         "unit_cost_price": unit_cost,
         "line_cost_total": quantize_cost(unit_cost * qty),
         "cost_source": "variant" if variant_unit_cost is not None else "product",
