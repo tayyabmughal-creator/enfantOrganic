@@ -36,7 +36,7 @@ import requests
 from django.conf import settings as django_settings
 from django.utils import timezone
 
-from ..models import MetaCapiEvent, SiteSettings
+from ..models import MetaCapiEvent, Region, SiteSettings
 from .sms_router import _normalize_phone
 
 logger = logging.getLogger(__name__)
@@ -131,14 +131,54 @@ COUNTRY_NAME_TO_ISO = {
 }
 
 
-def get_capi_config():
-    """
-    Resolve CAPI credentials: admin settings first, environment as fallback.
+def _region_capi_override(region_code):
+    """This market's own dataset, or ``None`` if it does not have one.
 
-    The admin panel wins so the client can rotate the token or change the test
-    event code without a redeploy — Meta reissues the test code every time the
-    Test Events tab is opened, so a hardcoded one is stale within the hour.
+    A market only overrides once it can actually deliver — a pixel *and* a token
+    of its own. Half-filled settings fall back to the global dataset rather than
+    silently dropping that market's events into a dataset that cannot receive
+    them, which would look identical to tracking simply having stopped.
     """
+    code = str(region_code or "").strip().lower()
+    if not code:
+        return None
+
+    region = Region.objects.filter(code=code).first()
+    if region is None:
+        return None
+
+    pixel = str(getattr(region, "facebook_pixel_id", "") or "").strip()
+    token = str(getattr(region, "meta_capi_access_token", "") or "").strip()
+    dataset_id = str(getattr(region, "meta_capi_dataset_id", "") or "").strip() or pixel
+    if not dataset_id or not token:
+        return None
+
+    return {
+        "enabled": True,
+        "access_token": token,
+        "dataset_id": dataset_id,
+        "test_event_code": str(getattr(region, "meta_capi_test_event_code", "") or "").strip(),
+        "region_code": code,
+    }
+
+
+def get_capi_config(region_code=""):
+    """
+    Resolve CAPI credentials: this market's own dataset, then the global one.
+
+    The admin panel wins over the environment so the client can rotate the token
+    or change the test event code without a redeploy — Meta reissues the test
+    code every time the Test Events tab is opened, so a hardcoded one is stale
+    within the hour.
+
+    ``region_code`` routes the event to the market's own dataset when one is
+    configured. Passing nothing keeps the old single-dataset behaviour, so every
+    caller that has no region to offer is unaffected.
+    """
+    override = _region_capi_override(region_code)
+    if override is not None:
+        return override
+
     site = SiteSettings.objects.first()
 
     def _pick(field, env_name):
@@ -161,6 +201,7 @@ def get_capi_config():
         "access_token": token,
         "dataset_id": dataset_id,
         "test_event_code": _pick("meta_capi_test_event_code", "META_CAPI_TEST_EVENT_CODE"),
+        "region_code": "",
     }
 
 
@@ -237,6 +278,7 @@ def send_event(
     event_time=None,
     order=None,
     action_source="website",
+    region_code="",
 ):
     """
     Deliver one event and record the outcome in ``MetaCapiEvent``.
@@ -251,7 +293,7 @@ def send_event(
     if not event_id:
         raise ValueError("event_id is required — it is the deduplication key")
 
-    config = get_capi_config()
+    config = get_capi_config(region_code)
 
     # get_or_create is the duplicate guard. The unique constraint on event_id
     # means a retried task, a refreshed thank-you page and a replayed payment
@@ -454,6 +496,10 @@ def send_purchase_for_order(order):
         event_source_url=order.meta_event_source_url,
         event_time=order.created_at,
         order=order,
+        # The order already knows which storefront it was placed on, so the
+        # Purchase lands in that market's dataset without anything upstream
+        # having to remember to say so.
+        region_code=region_code,
     )
 
 

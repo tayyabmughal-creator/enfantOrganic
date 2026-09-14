@@ -206,6 +206,10 @@ export default function DashboardView({ data, filters, onFiltersChange, onRefres
       delta: fmtDelta(null, deltaLabel),
       spark: revSeries,
       tone: "revenue",
+      // Reports totals the products alone, so it reads lower than this. Saying
+      // which is which on the card itself is what stops the two being compared
+      // as if one of them were broken.
+      note: "Whole invoice — products, shipping and VAT, less discounts",
     },
     {
       key: "monthly",
@@ -215,6 +219,7 @@ export default function DashboardView({ data, filters, onFiltersChange, onRefres
       delta: revDelta,
       spark: revSeries.slice(-6),
       tone: "monthly",
+      note: "Whole invoice — products, shipping and VAT, less discounts",
     },
     {
       key: "orders",
@@ -420,6 +425,7 @@ export default function DashboardView({ data, filters, onFiltersChange, onRefres
                 <Sparkline values={k.spark} up={k.delta.up !== false} />
               ) : null}
             </div>
+            {k.note ? <span className="admin-kpi-note">{k.note}</span> : null}
             <span
               className={`admin-kpi-delta ${
                 k.delta.up === null ? "flat" : k.delta.up ? "up" : "down"

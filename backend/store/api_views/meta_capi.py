@@ -95,15 +95,17 @@ class MetaCapiEventView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        region_code = str(request.data.get("region_code") or "").strip().lower()
+
         # Answer 200 with a no-op when CAPI is off so the storefront never sees
         # errors in the console for a feature the client has simply not enabled.
-        if not get_capi_config()["enabled"]:
+        # Asked per region: a market with its own dataset is live the moment that
+        # dataset is filled in, whether or not the global one ever was.
+        if not get_capi_config(region_code)["enabled"]:
             return Response({"status": "disabled"}, status=status.HTTP_200_OK)
 
         raw_user = request.data.get("user_data")
         raw_user = raw_user if isinstance(raw_user, dict) else {}
-
-        region_code = str(request.data.get("region_code") or "").strip().lower()
 
         # ViewContent and AddToCart fire long before checkout, so the browser has
         # no email to offer and Events Manager flagged the whole browse half of
@@ -155,6 +157,9 @@ class MetaCapiEventView(APIView):
             # sa. subdomains, so rebuilding a canonical URL here would no longer
             # match what the Pixel reported.
             "event_source_url": str(request.data.get("event_source_url") or "").strip()[:500],
+            # Routes the event to this market's dataset. The browser Pixel on
+            # that storefront is the same dataset, so the dedup pair still meets.
+            "region_code": region_code,
         }
 
         try:

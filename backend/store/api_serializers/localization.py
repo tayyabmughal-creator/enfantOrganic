@@ -67,11 +67,21 @@ def localized_link_items(items, locale):
     ]
 
 
-def serialize_site_settings(settings, locale):
+def serialize_site_settings(settings, locale, region=None):
     normalized = normalize_locale(locale)
 
     def _loc(field):
         return getattr(settings, f"{field}_{normalized}") or getattr(settings, f"{field}_en", "")
+
+    # A market that runs its own ad account gets its own pixel here, so the
+    # storefront loads that one and no other: an advertiser buying UAE traffic
+    # cannot have Oman conversions landing in the dataset they optimise against.
+    # Markets that have not set one keep loading the global pixel exactly as
+    # before.
+    facebook_pixel_id = (
+        str(getattr(region, "facebook_pixel_id", "") or "").strip()
+        or settings.facebook_pixel_id
+    )
 
     return {
         # Core
@@ -112,7 +122,7 @@ def serialize_site_settings(settings, locale):
         "youtube_url": settings.youtube_url,
         "tiktok_url": settings.tiktok_url,
         "whatsapp_number": settings.whatsapp_number,
-        "facebook_pixel_id": settings.facebook_pixel_id,
+        "facebook_pixel_id": facebook_pixel_id,
         "tiktok_pixel_id": settings.tiktok_pixel_id,
         "snapchat_pixel_id": settings.snapchat_pixel_id,
         "pinterest_tag_id": settings.pinterest_tag_id,

@@ -437,6 +437,50 @@ class OrderLineItemExportTests(TestCase):
         self.assertEqual(row["line_total"], "9.20")
         self.assertIsInstance(row["ean"], str)
 
+    def test_the_preview_names_the_products_that_still_have_no_codes(self):
+        """"EAN/SKU are still blank" has been re-reported three times. The cells
+        are blank because nobody has typed those codes in, so the report has to
+        say which products rather than leaving the blanks to speak for it."""
+        bare = Product.objects.create(slug="enfant-cotton-buds", name_en="Cotton Buds")
+        order = self.make_order(number="EO-CODES", region=self.uae, placed_on=timezone.now())
+        self.add_line(order, self.shampoo)   # fully coded
+        self.add_line(order, bare)           # no codes at all
+
+        response = self.api_client.get(
+            "/api/admin/reports/order-line-items/", {"preview": "1", "date_range": "all"}
+        )
+        missing = response.data["products_missing_codes"]
+
+        self.assertEqual([item["name"] for item in missing], ["Cotton Buds"])
+        self.assertFalse(missing[0]["deleted"])
+
+    def test_a_deleted_product_is_reported_as_unfixable_not_as_data_entry(self):
+        """No catalogue row is left to read a code from, so no amount of typing
+        will fill those cells — saying so stops it being chased."""
+        gone = Product.objects.create(slug="enfant-discontinued", name_en="Discontinued")
+        order = self.make_order(number="EO-GONE", region=self.oman, placed_on=timezone.now())
+        self.add_line(order, gone)
+        gone.delete()
+
+        response = self.api_client.get(
+            "/api/admin/reports/order-line-items/", {"preview": "1", "date_range": "all"}
+        )
+        missing = response.data["products_missing_codes"]
+
+        self.assertEqual(len(missing), 1)
+        self.assertEqual(missing[0]["slug"], "enfant-discontinued")
+        self.assertTrue(missing[0]["deleted"])
+
+    def test_a_fully_coded_report_reports_nothing_missing(self):
+        order = self.make_order(number="EO-CLEAN", region=self.uae, placed_on=timezone.now())
+        self.add_line(order, self.shampoo)
+        self.add_line(order, self.lotion)
+
+        response = self.api_client.get(
+            "/api/admin/reports/order-line-items/", {"preview": "1", "date_range": "all"}
+        )
+        self.assertEqual(response.data["products_missing_codes"], [])
+
     def test_the_preview_paginates_server_side(self):
         for index in range(7):
             order = self.make_order(number=f"EO-PG{index}", region=self.uae, placed_on=timezone.now())

@@ -2050,10 +2050,37 @@ def build_cogs_report_rows(start_date=None, end_date=None, include_unpaid=True):
         rows,
         orders_included=orders_included,
         include_unpaid=include_unpaid,
+        order_totals=_order_level_totals(sold_items),
     )
 
 
-def summarise_cogs_by_currency(rows, *, orders_included=0, include_unpaid=True):
+def _order_level_totals(sold_items):
+    """What the same orders billed, per currency, beyond the product lines.
+
+    The rows above total `line_total` — the products. The Dashboard totals
+    `grand_total` — the whole invoice. Neither is wrong, but the client reads
+    them side by side and sees two revenues, so the report has to be able to
+    show the arithmetic that joins them: products + shipping + VAT − discounts
+    − gift cards = what was actually charged.
+    """
+    orders = Order.objects.filter(id__in=sold_items.values("order_id"))
+    totals = {}
+    for row in orders.values("currency_code").annotate(
+        shipping=Sum("shipping_total"),
+        tax=Sum("tax_total"),
+        discounts=Sum("discount_total"),
+        gift_cards=Sum("gift_card_amount"),
+        order_revenue=Sum("grand_total"),
+    ):
+        currency = str(row.pop("currency_code") or "OMR").upper()
+        totals[currency] = {key: Decimal(value or 0) for key, value in row.items()}
+    return totals
+
+
+ORDER_LEVEL_KEYS = ("shipping", "tax", "discounts", "gift_cards", "order_revenue")
+
+
+def summarise_cogs_by_currency(rows, *, orders_included=0, include_unpaid=True, order_totals=None):
     """Total the COGS rows once per currency — never across them.
 
     OMR, AED and SAR are different units of account. Adding 382 AED to 5.80 OMR
@@ -2079,11 +2106,14 @@ def summarise_cogs_by_currency(rows, *, orders_included=0, include_unpaid=True):
         bucket["missing_cost"] = bucket["missing_cost"] or row["missing_cost"]
         bucket["estimated_cost"] = bucket["estimated_cost"] or row.get("estimated_cost", False)
 
+    order_totals = order_totals or {}
     by_currency = []
     for bucket in sorted(per_currency.values(), key=lambda item: -item["revenue"]):
         units = bucket["units_sold"]
+        billed = order_totals.get(str(bucket["currency"] or "OMR").upper(), {})
         by_currency.append({
             **bucket,
+            **{key: quantize_money(billed.get(key, Decimal("0"))) for key in ORDER_LEVEL_KEYS},
             "avg_unit_cost": quantize_cost(bucket["cost_of_goods"] / units) if units else Decimal("0.000"),
             "gross_profit": bucket["revenue"] - bucket["cost_of_goods"],
         })
@@ -2091,12 +2121,15 @@ def summarise_cogs_by_currency(rows, *, orders_included=0, include_unpaid=True):
     rates = analytics_to_omr_rates()
     converted_revenue = Decimal("0")
     converted_cogs = Decimal("0")
+    converted_order_level = {key: Decimal("0") for key in ORDER_LEVEL_KEYS}
     used_rates = {}
     for bucket in by_currency:
         rate = rates.get(str(bucket["currency"] or "OMR").upper(), Decimal("1.0"))
         used_rates[bucket["currency"]] = rate
         converted_revenue += bucket["revenue"] * rate
         converted_cogs += bucket["cost_of_goods"] * rate
+        for key in ORDER_LEVEL_KEYS:
+            converted_order_level[key] += bucket[key] * rate
 
     return {
         "by_currency": by_currency,
@@ -2106,6 +2139,7 @@ def summarise_cogs_by_currency(rows, *, orders_included=0, include_unpaid=True):
             "revenue": quantize_money(converted_revenue),
             "cost_of_goods": quantize_cost(converted_cogs),
             "gross_profit": quantize_money(converted_revenue - converted_cogs),
+            **{key: quantize_money(value) for key, value in converted_order_level.items()},
             "rates": {code: str(rate) for code, rate in used_rates.items()},
         },
         "currencies": [bucket["currency"] for bucket in by_currency],
@@ -2262,6 +2296,7 @@ class ReportCsvView(APIView):
             "date_from": start_date.isoformat() if start_date else "",
             "date_to": end_date.isoformat() if end_date else "",
             "rows": rows,
+            "products_missing_codes": products_missing_trade_codes(items),
         })
 
     def _export_newsletter_xlsx(self, request, max_rows):
@@ -2454,6 +2489,8 @@ class ReportCsvView(APIView):
                         "gross_profit": str(bucket["gross_profit"]),
                         "missing_cost": bucket["missing_cost"],
                         "estimated_cost": bucket.get("estimated_cost", False),
+                        # The bridge to the Dashboard's figure, in the same row.
+                        **{key: str(bucket.get(key, "0")) for key in ORDER_LEVEL_KEYS},
                     }
 
                 converted = cogs_total["converted"]
@@ -2471,6 +2508,7 @@ class ReportCsvView(APIView):
                         "revenue": str(converted["revenue"]),
                         "cost_of_goods": str(converted["cost_of_goods"]),
                         "gross_profit": str(converted["gross_profit"]),
+                        **{key: str(converted.get(key, "0")) for key in ORDER_LEVEL_KEYS},
                         "rates": converted["rates"],
                     },
                     "missing_cost": cogs_total["missing_cost"],
@@ -3373,6 +3411,38 @@ def _trade_codes_for_item(item):
         if not sku and product is not None:
             sku = str(getattr(product, "sku", "") or "").strip()
     return ean, sku
+
+
+def products_missing_trade_codes(item_queryset):
+    """Which products in this report still have no SKU/EAN to lend their lines.
+
+    A blank code column is the single thing the client has queried most about
+    this report, and the honest answer has never been on the screen: nothing in
+    the catalogue carried these codes until they were entered, and the ones
+    nobody has entered yet export blank however the code is written. Naming the
+    products turns "the report is broken" into a list of things to type in.
+
+    Two cheap queries rather than resolving codes line by line: the lines only
+    contribute their distinct slugs, and the catalogue answers for the rest.
+    """
+    slugs = set(item_queryset.values_list("product_slug", flat=True).distinct())
+    if not slugs:
+        return []
+
+    known = {
+        product.slug: product
+        for product in Product.objects.filter(slug__in=slugs).only("slug", "name_en", "sku", "ean")
+    }
+    missing = []
+    for slug in sorted(slugs):
+        product = known.get(slug)
+        if product is None:
+            # Sold under a slug the catalogue no longer has — no code can be
+            # resolved for it, and no amount of data entry will change that.
+            missing.append({"slug": slug, "name": slug, "deleted": True})
+        elif not str(product.sku or "").strip() or not str(product.ean or "").strip():
+            missing.append({"slug": slug, "name": product.name_en or slug, "deleted": False})
+    return missing
 
 
 def order_line_items_queryset(orders_queryset):

@@ -38,6 +38,56 @@ const APP_INTEGRATIONS = [
   { name: "Zapier",     abbr: "ZP", color: "#ff4a00", status: "available", desc: "Connect store events to 5,000+ apps." },
 ];
 
+const money = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toFixed(2) : "0.00";
+};
+
+// The Reports page totals what the products sold for; the Dashboard totals what
+// the invoices charged. The client read the two side by side, saw two revenues
+// and asked which one was wrong — neither is, so this shows the arithmetic that
+// joins them instead of asking him to take a sentence on trust.
+function RevenueReconciliation({ bucket, currency }) {
+  if (!bucket) return null;
+  const orderRevenue = Number(bucket.order_revenue);
+  if (!Number.isFinite(orderRevenue) || orderRevenue <= 0) return null;
+
+  const steps = [
+    ["Product revenue", bucket.revenue, "+"],
+    ["Shipping", bucket.shipping, "+"],
+    ["VAT", bucket.tax, "+"],
+    ["Discounts", bucket.discounts, "−"],
+    ["Gift cards", bucket.gift_cards, "−"],
+  ].filter(([label, value]) => label === "Product revenue" || Number(value) > 0);
+
+  return (
+    <div className="admin-cogs-reconcile">
+      <div className="admin-cogs-reconcile-head">
+        Why the Dashboard shows a bigger number
+      </div>
+      <div className="admin-cogs-reconcile-row">
+        {steps.map(([label, value, sign], index) => (
+          <span key={label} className="admin-cogs-reconcile-step">
+            {index > 0 ? <em className="admin-cogs-reconcile-op">{sign}</em> : null}
+            <span className="admin-cogs-reconcile-label">{label}</span>
+            <strong>{money(value)}</strong>
+          </span>
+        ))}
+        <span className="admin-cogs-reconcile-step is-result">
+          <em className="admin-cogs-reconcile-op">=</em>
+          <span className="admin-cogs-reconcile-label">Order revenue</span>
+          <strong>{money(orderRevenue)} {currency}</strong>
+        </span>
+      </div>
+      <div className="admin-cogs-reconcile-note">
+        Order revenue is the figure on the Dashboard — it is the whole invoice.
+        Product revenue above is the goods alone, which is the one that pairs
+        with cost of goods to give gross profit.
+      </div>
+    </div>
+  );
+}
+
 function SettingsCard({ title, subtitle, onEdit, canEdit, children }) {
   return (
     <section className="admin-panel-card admin-settings-card">
@@ -302,6 +352,9 @@ function FullOrderReport({ onDownload, onPreview }) {
 
   const rows = Array.isArray(preview?.rows) ? preview.rows : [];
   const totalPages = Number(preview?.total_pages) || 1;
+  const missingCodes = Array.isArray(preview?.products_missing_codes) ? preview.products_missing_codes : [];
+  const missingLive = missingCodes.filter((item) => !item.deleted);
+  const missingDeleted = missingCodes.filter((item) => item.deleted);
 
   return (
     <section className="admin-panel-card">
@@ -376,6 +429,34 @@ function FullOrderReport({ onDownload, onPreview }) {
       </div>
 
       {error ? <div className="admin-form-error">{error}</div> : null}
+      {/* A blank EAN/SKU cell is a product nobody has coded yet, not a broken
+          report — so the report says which products, by name, instead of
+          leaving the blanks to be read as a fault. */}
+      {!error && !loading && missingCodes.length ? (
+        <div className="admin-cogs-warning">
+          {missingLive.length ? (
+            <>
+              <strong>
+                {missingLive.length} product{missingLive.length === 1 ? " has" : "s have"} no EAN or SKU yet.
+              </strong>{" "}
+              Their rows export with those two columns blank until you fill them in under
+              Products → SKU / EAN. Every past sale of a product picks up its codes the
+              moment you save them — you do not have to re-export anything else:{" "}
+              {missingLive.map((item) => item.name).join(", ")}
+            </>
+          ) : null}
+          {missingDeleted.length ? (
+            <div style={{ marginTop: missingLive.length ? 8 : 0 }}>
+              <strong>
+                {missingDeleted.length} line{missingDeleted.length === 1 ? "" : "s"} sold a product that
+                has since been deleted
+              </strong>{" "}
+              ({missingDeleted.map((item) => item.slug).join(", ")}) — there is no catalogue
+              record left to read a code from, so those stay blank.
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       {!error && loading ? <div className="admin-list-empty">Loading report…</div> : null}
       {!error && !loading && rows.length ? (
         <>
@@ -631,6 +712,7 @@ export function Reports({ data, onDownload, onPreview, request }) {
                       <span className="admin-cogs-stat-value">{bucket.gross_profit} {bucket.currency}</span>
                     </div>
                   </div>
+                  <RevenueReconciliation bucket={bucket} currency={bucket.currency} />
                 </div>
               ))}
               {cogsTotals.length > 1 && cogsConverted ? (
@@ -657,6 +739,7 @@ export function Reports({ data, onDownload, onPreview, request }) {
                       <span className="admin-cogs-stat-value">{cogsConverted.gross_profit} {cogsConverted.currency}</span>
                     </div>
                   </div>
+                  <RevenueReconciliation bucket={cogsConverted} currency={cogsConverted.currency} />
                 </div>
               ) : null}
             </div>
@@ -2043,6 +2126,143 @@ function NewRegionForm({ request, onSaved }) {
   );
 }
 
+// One ad account per market means one dataset per market: UAE spend cannot be
+// optimised against a dataset that also carries Oman conversions. Filling this
+// in moves the market's browser Pixel *and* its server-side Conversions API to
+// its own dataset together — split them and Meta counts every purchase twice,
+// because the dedup pair only meets inside one dataset.
+function RegionMetaPixelCard({ region, request, onSaved }) {
+  const code = region.code;
+  const [open, setOpen] = useState(false);
+  const [pixel, setPixel] = useState(region.facebook_pixel_id || "");
+  const [dataset, setDataset] = useState(region.meta_capi_dataset_id || "");
+  const [token, setToken] = useState("");
+  const [testCode, setTestCode] = useState(region.meta_capi_test_event_code || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [note, setNote] = useState("");
+
+  const tokenStored = Boolean(region.meta_capi_access_token_set);
+  const live = Boolean((region.facebook_pixel_id || "").trim()) && tokenStored;
+
+  async function save({ clearToken = false } = {}) {
+    const cleanPixel = pixel.trim();
+    const cleanDataset = dataset.trim();
+    if (cleanPixel && !/^\d{6,}$/.test(cleanPixel)) {
+      setError("A pixel ID is all digits — copy it from Events Manager → Data sources.");
+      return;
+    }
+    if (cleanDataset && !/^\d{6,}$/.test(cleanDataset)) {
+      setError("A dataset ID is all digits. Leave it blank to reuse the pixel ID.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    setNote("");
+    try {
+      const body = {
+        facebook_pixel_id: cleanPixel,
+        meta_capi_dataset_id: cleanDataset,
+        meta_capi_test_event_code: testCode.trim(),
+      };
+      // A blank token field means "leave the stored one alone", the way every
+      // other credential on this panel behaves — clearing is its own button.
+      if (clearToken) body.clear_meta_capi_access_token = true;
+      else if (token.trim()) body.meta_capi_access_token = token.trim();
+
+      await request(`/admin/regions/${code}/`, { method: "PATCH", body: JSON.stringify(body) });
+      setToken("");
+      setNote(clearToken ? "Token removed." : "Saved.");
+      onSaved?.();
+    } catch {
+      setError("Save failed — try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="admin-settings-row admin-region-pixel">
+      <strong>Meta pixel &amp; Conversions API</strong>
+      <div className="admin-region-pixel-body">
+        <span className="admin-threshold-display">
+          <span>
+            {region.facebook_pixel_id
+              ? <>Pixel <code>{region.facebook_pixel_id}</code>{live ? " · server events on" : " · browser only"}</>
+              : "Using the global pixel from Site Settings"}
+          </span>
+          {request ? (
+            <button type="button" className="admin-btn admin-btn-xs admin-btn-ghost" onClick={() => setOpen((v) => !v)}>
+              {open ? "Close" : "Edit"}
+            </button>
+          ) : null}
+        </span>
+
+        {open && request ? (
+          <div className="admin-region-pixel-form">
+            <label>
+              <span>Pixel ID</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="Blank = use the global pixel"
+                value={pixel}
+                onChange={(event) => setPixel(event.target.value)}
+              />
+            </label>
+            <label>
+              <span>Dataset ID</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="Blank = same as the pixel ID"
+                value={dataset}
+                onChange={(event) => setDataset(event.target.value)}
+              />
+            </label>
+            <label>
+              <span>Conversions API token</span>
+              <input
+                type="password"
+                autoComplete="off"
+                placeholder={tokenStored ? "Stored — type to replace" : "System User token"}
+                value={token}
+                onChange={(event) => setToken(event.target.value)}
+              />
+            </label>
+            <label>
+              <span>Test event code</span>
+              <input
+                type="text"
+                placeholder="Only while testing — clear to go live"
+                value={testCode}
+                onChange={(event) => setTestCode(event.target.value)}
+              />
+            </label>
+            <div className="admin-region-pixel-actions">
+              <button type="button" className="admin-btn admin-btn-xs admin-btn-primary" disabled={saving} onClick={() => save()}>
+                {saving ? "Saving…" : "Save"}
+              </button>
+              {tokenStored ? (
+                <button type="button" className="admin-btn admin-btn-xs" disabled={saving} onClick={() => save({ clearToken: true })}>
+                  Remove token
+                </button>
+              ) : null}
+              {error ? <span className="admin-threshold-error">{error}</span> : null}
+              {note ? <span className="admin-form-note-inline">{note}</span> : null}
+            </div>
+            <p className="admin-region-pixel-help">
+              Set here, this market reports to its own dataset and stops reporting to the
+              global one — so this pixel only ever sees {code?.toUpperCase()} traffic. The
+              browser pixel needs only the ID; server-side events also need the token.
+            </p>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function RegionsView({ rows, request, onSaved }) {
   const [editingThreshold, setEditingThreshold] = useState({});
   const [savingThreshold, setSavingThreshold] = useState({});
@@ -2466,6 +2686,8 @@ export function RegionsView({ rows, request, onSaved }) {
                   </span>
                 )}
               </div>
+
+              <RegionMetaPixelCard region={region} request={request} onSaved={onSaved} />
             </div>
           </section>
         );

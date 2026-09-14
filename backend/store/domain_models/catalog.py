@@ -117,6 +117,33 @@ class Region(OrderedModel):
     )
     is_active = models.BooleanField(default=True)
 
+    # Meta pixel / Conversions API, per market.
+    #
+    # The store runs one ad account per market, and an advertiser optimising UAE
+    # spend cannot have Oman conversions in the same dataset — so the dataset has
+    # to follow the storefront the shopper is on, not the installation. Leave all
+    # four blank and this region keeps using the single global pixel in Site
+    # Settings, which is what every region did before these existed. Fill the
+    # pixel in and this region stops reporting to the global one entirely: its
+    # traffic goes to its own dataset and nowhere else, which is exactly what
+    # "only AE data in this pixel" means on both ends.
+    facebook_pixel_id = models.CharField(
+        max_length=50, blank=True, default="",
+        help_text="Overrides the global pixel for this market. Blank = use the global one.",
+    )
+    meta_capi_dataset_id = models.CharField(
+        max_length=50, blank=True, default="",
+        help_text="Leave blank to reuse this market's pixel ID.",
+    )
+    meta_capi_access_token = models.TextField(
+        blank=True, default="",
+        help_text="System User token for this market's dataset. Never exposed to the storefront.",
+    )
+    meta_capi_test_event_code = models.CharField(
+        max_length=50, blank=True, default="",
+        help_text="Set while verifying in Events Manager → Test Events. CLEAR IT to go live.",
+    )
+
     def __str__(self):
         return f"{self.name_en} ({self.currency_code})"
 

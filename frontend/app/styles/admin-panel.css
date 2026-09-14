@@ -715,6 +715,16 @@
 
 .kpi-spark { flex-shrink: 0; opacity: 0.85; }
 
+/* Says what the figure above actually counts. Only the revenue tiles carry one,
+   because they are the pair the Reports page can legitimately disagree with. */
+.admin-kpi-note {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: #8a9580;
+}
+
 .admin-kpi-delta {
   display: inline-flex;
   align-items: center;
@@ -2059,6 +2069,120 @@
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
+  color: var(--text-soft, #66705d);
+}
+
+/* The bridge between this page's product revenue and the Dashboard's order
+   revenue. It reads as one sentence of arithmetic, so it wraps as a sentence
+   does rather than breaking into a column of cards. */
+.admin-cogs-reconcile {
+  display: grid;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line, #dfe7d6);
+}
+
+.admin-cogs-reconcile-head {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-soft, #66705d);
+}
+
+.admin-cogs-reconcile-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 0.8rem;
+  color: var(--text, #191817);
+}
+
+.admin-cogs-reconcile-step {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.admin-cogs-reconcile-step.is-result strong {
+  color: var(--brand-dark, #607a42);
+}
+
+.admin-cogs-reconcile-op {
+  font-style: normal;
+  font-weight: 800;
+  color: var(--text-soft, #66705d);
+}
+
+.admin-cogs-reconcile-label {
+  color: var(--text-soft, #66705d);
+}
+
+.admin-cogs-reconcile-note {
+  font-size: 0.74rem;
+  line-height: 1.5;
+  color: var(--text-soft, #66705d);
+}
+
+/* Per-market Meta pixel / CAPI credentials, folded away until asked for — most
+   markets never override the global pixel, and four always-open inputs per
+   region would bury the settings people actually change. */
+.admin-region-pixel {
+  align-items: flex-start;
+}
+
+.admin-region-pixel-body {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.admin-region-pixel-form {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line, #dfe7d6);
+  border-radius: 12px;
+  background: rgba(96, 122, 66, 0.03);
+}
+
+.admin-region-pixel-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--text-soft, #66705d);
+}
+
+.admin-region-pixel-form input {
+  padding: 7px 10px;
+  border: 1px solid var(--line, #dfe7d6);
+  border-radius: 9px;
+  font-size: 0.84rem;
+  font-weight: 500;
+  color: var(--text, #191817);
+  background: #fff;
+}
+
+.admin-region-pixel-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-form-note-inline {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #267334;
+}
+
+.admin-region-pixel-help {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.5;
   color: var(--text-soft, #66705d);
 }
 

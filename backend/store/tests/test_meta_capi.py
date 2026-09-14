@@ -130,6 +130,118 @@ class MetaCapiConfigTests(TestCase):
         self.assertTrue(config["enabled"])
 
 
+class MetaCapiPerMarketDatasetTests(TestCase):
+    """A market with its own ad account needs its own dataset.
+
+    The client asked for pixel 1598059508733938 on the UAE storefront carrying
+    UAE traffic only. "Only AE data" has to hold on both ends: AE events go to
+    the AE dataset, and they stop going to the global one.
+    """
+
+    def setUp(self):
+        SiteSettings.objects.create(
+            brand_name="Enfant",
+            announcement_en="", announcement_ar="",
+            footer_about_en="", footer_about_ar="",
+            meta_capi_enabled=True,
+            meta_capi_access_token="global-token",
+            facebook_pixel_id="2127480041027733",
+        )
+        self.uae = Region.objects.create(
+            code="ae", name_en="UAE", name_ar="الإمارات", currency_code="AED",
+            shipping_threshold=Decimal("0.00"), contact_phone="971", address_en="Dubai", address_ar="دبي",
+            facebook_pixel_id="1598059508733938",
+            meta_capi_access_token="ae-token",
+        )
+        Region.objects.create(
+            code="om", name_en="Oman", name_ar="عمان", currency_code="OMR",
+            shipping_threshold=Decimal("0.00"), contact_phone="968", address_en="Muscat", address_ar="مسقط",
+        )
+
+    def test_a_market_with_its_own_pixel_reports_to_its_own_dataset(self):
+        config = meta_capi.get_capi_config("ae")
+        self.assertTrue(config["enabled"])
+        self.assertEqual(config["dataset_id"], "1598059508733938")
+        self.assertEqual(config["access_token"], "ae-token")
+
+    def test_a_market_without_one_still_uses_the_global_dataset(self):
+        config = meta_capi.get_capi_config("om")
+        self.assertEqual(config["dataset_id"], "2127480041027733")
+        self.assertEqual(config["access_token"], "global-token")
+
+    def test_no_region_at_all_is_the_old_behaviour_unchanged(self):
+        self.assertEqual(meta_capi.get_capi_config()["dataset_id"], "2127480041027733")
+
+    def test_a_pixel_without_a_token_falls_back_rather_than_dropping_events(self):
+        """Half-configured must not look identical to tracking having stopped."""
+        self.uae.meta_capi_access_token = ""
+        self.uae.save(update_fields=["meta_capi_access_token"])
+        config = meta_capi.get_capi_config("ae")
+        self.assertEqual(config["dataset_id"], "2127480041027733")
+
+    def test_a_separate_dataset_id_beats_the_markets_pixel_id(self):
+        self.uae.meta_capi_dataset_id = "9999999999"
+        self.uae.save(update_fields=["meta_capi_dataset_id"])
+        self.assertEqual(meta_capi.get_capi_config("ae")["dataset_id"], "9999999999")
+
+    def test_the_event_is_posted_to_the_markets_dataset_url(self):
+        with patch("store.services.meta_capi.requests.post", return_value=FakeResponse()) as post:
+            meta_capi.send_event(
+                event_name="AddToCart", event_id="ae-atc-1", user_data={}, region_code="ae",
+            )
+        self.assertIn("/1598059508733938/events", post.call_args.args[0])
+        self.assertEqual(post.call_args.kwargs["json"]["access_token"], "ae-token")
+
+    def test_an_oman_event_never_reaches_the_uae_dataset(self):
+        with patch("store.services.meta_capi.requests.post", return_value=FakeResponse()) as post:
+            meta_capi.send_event(
+                event_name="AddToCart", event_id="om-atc-1", user_data={}, region_code="om",
+            )
+        self.assertNotIn("1598059508733938", post.call_args.args[0])
+        self.assertIn("/2127480041027733/events", post.call_args.args[0])
+
+    def test_a_uae_purchase_routes_itself_from_the_order(self):
+        order = Order.objects.create(
+            order_number="EO-AE-1", region=self.uae,
+            customer_name="Buyer", customer_email="buyer@example.com", customer_phone="971500000000",
+            address_line_1="Road", city="Dubai", country="United Arab Emirates",
+            subtotal=Decimal("100.00"), grand_total=Decimal("100.00"), currency_code="AED",
+            status=Order.STATUS_PAID, payment_status=Order.PAYMENT_PAID,
+        )
+        with patch("store.services.meta_capi.requests.post", return_value=FakeResponse()) as post:
+            meta_capi.send_purchase_for_order(order)
+        self.assertIn("/1598059508733938/events", post.call_args.args[0])
+
+    def test_the_storefront_is_handed_its_markets_pixel(self):
+        from store.api_serializers.localization import serialize_site_settings
+
+        settings = SiteSettings.objects.first()
+        ae = serialize_site_settings(settings, "en", self.uae)
+        om = serialize_site_settings(settings, "en", Region.objects.get(code="om"))
+
+        self.assertEqual(ae["facebook_pixel_id"], "1598059508733938")
+        self.assertEqual(om["facebook_pixel_id"], "2127480041027733")
+
+    def test_the_markets_token_is_never_echoed_back_to_the_admin(self):
+        from store.api_serializers.admin_ops import AdminRegionSerializer
+
+        data = AdminRegionSerializer(self.uae).data
+        self.assertNotIn("meta_capi_access_token", data)
+        self.assertTrue(data["meta_capi_access_token_set"])
+
+    def test_saving_the_form_without_retyping_the_token_keeps_it(self):
+        from store.api_serializers.admin_ops import AdminRegionSerializer
+
+        serializer = AdminRegionSerializer(
+            self.uae, data={"meta_capi_test_event_code": "TEST123"}, partial=True
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        serializer.save()
+        self.uae.refresh_from_db()
+        self.assertEqual(self.uae.meta_capi_access_token, "ae-token")
+        self.assertEqual(self.uae.meta_capi_test_event_code, "TEST123")
+
+
 class FakeResponse:
     def __init__(self, ok=True, status_code=200, text='{"events_received":1}'):
         self.ok = ok

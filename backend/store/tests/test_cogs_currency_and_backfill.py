@@ -115,6 +115,57 @@ class CogsCurrencyTestCase(TestCase):
         self.assertEqual(converted["revenue"], Decimal("20.00"))
         self.assertIn("AED", converted["rates"])
 
+    def test_totals_carry_the_arithmetic_back_to_the_dashboard_figure(self):
+        """Products + shipping + VAT − discounts must land on the Dashboard's total.
+
+        The client put the two screens side by side, saw 4262.79 against 4295.94
+        and asked which one was lying. Neither was: Reports totals the goods and
+        the Dashboard totals the invoice. The report now has to carry the steps
+        between them, or the same question comes back every month.
+        """
+        order = self._order(self.oman, "OMR", Decimal("10.00"), Decimal("1"))
+        order.shipping_total = Decimal("2.00")
+        order.tax_total = Decimal("1.00")
+        order.discount_total = Decimal("3.00")
+        order.grand_total = Decimal("10.00")  # 10 goods + 2 ship + 1 VAT − 3 off
+        order.save(update_fields=["shipping_total", "tax_total", "discount_total", "grand_total"])
+        self._item(order, Decimal("10.00"), Decimal("2.000"))
+
+        _rows, totals = build_cogs_report_rows()
+        bucket = {b["currency"]: b for b in totals["by_currency"]}["OMR"]
+
+        self.assertEqual(bucket["revenue"], Decimal("10.00"))
+        self.assertEqual(bucket["shipping"], Decimal("2.00"))
+        self.assertEqual(bucket["tax"], Decimal("1.00"))
+        self.assertEqual(bucket["discounts"], Decimal("3.00"))
+        self.assertEqual(bucket["order_revenue"], Decimal("10.00"))
+        self.assertEqual(
+            bucket["revenue"] + bucket["shipping"] + bucket["tax"]
+            - bucket["discounts"] - bucket["gift_cards"],
+            bucket["order_revenue"],
+        )
+
+    def test_converted_total_reconciles_across_currencies_too(self):
+        omr = self._order(self.oman, "OMR", Decimal("10.00"), Decimal("1"))
+        omr.shipping_total = Decimal("2.00")
+        omr.grand_total = Decimal("12.00")
+        omr.save(update_fields=["shipping_total", "grand_total"])
+        self._item(omr, Decimal("10.00"), Decimal("2.000"))
+
+        aed = self._order(self.uae, "AED", Decimal("95.50"), Decimal("9.55"))
+        aed.shipping_total = Decimal("19.10")
+        aed.grand_total = Decimal("114.60")
+        aed.save(update_fields=["shipping_total", "grand_total"])
+        self._item(aed, Decimal("95.50"), Decimal("19.100"))
+
+        _rows, totals = build_cogs_report_rows()
+        converted = totals["converted"]
+
+        # 19.10 AED of shipping is 2.00 OMR, on top of the 2.00 OMR order's own.
+        self.assertEqual(converted["revenue"], Decimal("20.00"))
+        self.assertEqual(converted["shipping"], Decimal("4.00"))
+        self.assertEqual(converted["order_revenue"], Decimal("24.00"))
+
     def test_cost_reaches_the_row_in_that_row_s_currency(self):
         snapshot = resolve_order_item_cost(self.product, quantity=1, fx_rate=Decimal("9.55"))
         # 1.000 OMR of cost is 9.550 AED — not 1.000 sitting inside an AED row.

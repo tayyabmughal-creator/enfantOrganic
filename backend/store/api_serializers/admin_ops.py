@@ -891,9 +891,49 @@ class AdminRegionSerializer(serializers.ModelSerializer):
     carrier_options = serializers.SerializerMethodField(read_only=True)
     carrier_warnings = serializers.SerializerMethodField(read_only=True)
 
+    # This market's CAPI token can post conversions into the client's dataset,
+    # so it gets the same handling as a payment credential: accepted on write,
+    # never echoed back, and a blank save leaves the stored value alone — which
+    # is what happens every time the client saves any other field on this form.
+    meta_capi_access_token = serializers.CharField(
+        write_only=True, required=False, allow_blank=True, allow_null=True
+    )
+    clear_meta_capi_access_token = serializers.BooleanField(
+        write_only=True, required=False, default=False
+    )
+
     class Meta:
         model = Region
         fields = "__all__"
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data.pop("meta_capi_access_token", None)
+        data["meta_capi_access_token_set"] = bool(
+            str(getattr(instance, "meta_capi_access_token", "") or "").strip()
+        )
+        return data
+
+    def _apply_token_directive(self, validated_data, *, creating):
+        if validated_data.pop("clear_meta_capi_access_token", False):
+            validated_data["meta_capi_access_token"] = ""
+            return validated_data
+        if "meta_capi_access_token" in validated_data:
+            value = validated_data.get("meta_capi_access_token")
+            if value is None or str(value).strip() == "":
+                if creating:
+                    validated_data["meta_capi_access_token"] = ""
+                else:
+                    validated_data.pop("meta_capi_access_token", None)
+        return validated_data
+
+    def create(self, validated_data):
+        self._apply_token_directive(validated_data, creating=True)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        self._apply_token_directive(validated_data, creating=False)
+        return super().update(instance, validated_data)
 
     def validate_payment_enabled_providers(self, value):
         allowed = {choice[0] for choice in Region.PAYMENT_PROVIDER_CHOICES}

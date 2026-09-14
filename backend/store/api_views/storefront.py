@@ -152,7 +152,7 @@ class NavigationView(StorefrontContextMixin, APIView):
         settings = self.get_settings()
 
         ctx = {"locale": locale, "request": request}
-        serialized_settings = serialize_site_settings(settings, locale)
+        serialized_settings = serialize_site_settings(settings, locale, region)
 
         payload = {
             "locale": locale,
@@ -191,7 +191,7 @@ class HomePageView(StorefrontContextMixin, APIView):
         context = self.get_serializer_context()
         region = context["region"]
         settings = self.get_settings()
-        serialized_settings = serialize_site_settings(settings, locale)
+        serialized_settings = serialize_site_settings(settings, locale, region)
         qs = products_available_for_region(product_queryset(), region)
 
         sections = [
