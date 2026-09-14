@@ -131,33 +131,50 @@ COUNTRY_NAME_TO_ISO = {
 }
 
 
-def _region_capi_override(region_code):
-    """This market's own dataset, or ``None`` if it does not have one.
+def region_owns_its_dataset(region):
+    """Has this market been given a dataset of its own to report into?
 
-    A market only overrides once it can actually deliver — a pixel *and* a token
-    of its own. Half-filled settings fall back to the global dataset rather than
-    silently dropping that market's events into a dataset that cannot receive
-    them, which would look identical to tracking simply having stopped.
+    One predicate, because the browser Pixel and the server-side events have to
+    answer it identically. Deduplication only happens *inside* one dataset: if
+    the storefront loaded the market's pixel while the server kept posting to the
+    global one, every purchase would arrive as two unpaired halves in two
+    datasets, which is worse than not splitting the markets at all.
+
+    The pixel ID is what declares it, because the pixel is the only half the
+    browser can act on — a dataset ID with no pixel would move the server events
+    and leave the browser behind, which is the same split from the other side.
+    """
+    if region is None:
+        return False
+    return bool(str(getattr(region, "facebook_pixel_id", "") or "").strip())
+
+
+def _region_capi_override(region_code):
+    """This market's own CAPI config, or ``None`` to use the global one.
+
+    Once a market declares a pixel it owns its own events outright — including
+    the case where its token has not been pasted in yet, which comes back
+    ``enabled: False`` so those events are recorded as skipped rather than
+    quietly posted into the global dataset their browser copies have already
+    left. Skipped is visible in ``MetaCapiEvent``; mis-routed is not.
     """
     code = str(region_code or "").strip().lower()
     if not code:
         return None
 
     region = Region.objects.filter(code=code).first()
-    if region is None:
+    if not region_owns_its_dataset(region):
         return None
 
-    pixel = str(getattr(region, "facebook_pixel_id", "") or "").strip()
-    token = str(getattr(region, "meta_capi_access_token", "") or "").strip()
-    dataset_id = str(getattr(region, "meta_capi_dataset_id", "") or "").strip() or pixel
-    if not dataset_id or not token:
-        return None
+    pixel = str(region.facebook_pixel_id or "").strip()
+    token = str(region.meta_capi_access_token or "").strip()
+    dataset_id = str(region.meta_capi_dataset_id or "").strip() or pixel
 
     return {
-        "enabled": True,
+        "enabled": bool(token and dataset_id),
         "access_token": token,
         "dataset_id": dataset_id,
-        "test_event_code": str(getattr(region, "meta_capi_test_event_code", "") or "").strip(),
+        "test_event_code": str(region.meta_capi_test_event_code or "").strip(),
         "region_code": code,
     }
 
@@ -313,7 +330,16 @@ def send_event(
 
     if not config["enabled"]:
         log.status = MetaCapiEvent.STATUS_SKIPPED
-        log.error_message = "Meta CAPI is disabled or missing token/dataset ID"
+        if config.get("region_code"):
+            # The market has a pixel of its own, so its browser events have
+            # already moved. Say which half is missing rather than reporting it
+            # as CAPI being switched off store-wide, which it is not.
+            log.error_message = (
+                f"No Conversions API token for the '{config['region_code']}' market "
+                f"(dataset {config['dataset_id']})"
+            )
+        else:
+            log.error_message = "Meta CAPI is disabled or missing token/dataset ID"
         log.save(update_fields=["status", "error_message"])
         return log
 

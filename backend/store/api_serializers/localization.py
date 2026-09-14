@@ -78,9 +78,16 @@ def serialize_site_settings(settings, locale, region=None):
     # cannot have Oman conversions landing in the dataset they optimise against.
     # Markets that have not set one keep loading the global pixel exactly as
     # before.
+    #
+    # The same predicate the server-side events use, deliberately shared rather
+    # than restated: the browser Pixel and the Conversions API have to land in
+    # one dataset or Meta never pairs the two copies of a purchase.
+    from ..services.meta_capi import region_owns_its_dataset
+
     facebook_pixel_id = (
-        str(getattr(region, "facebook_pixel_id", "") or "").strip()
-        or settings.facebook_pixel_id
+        str(region.facebook_pixel_id or "").strip()
+        if region_owns_its_dataset(region)
+        else settings.facebook_pixel_id
     )
 
     return {

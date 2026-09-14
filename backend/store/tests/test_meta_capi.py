@@ -172,12 +172,25 @@ class MetaCapiPerMarketDatasetTests(TestCase):
     def test_no_region_at_all_is_the_old_behaviour_unchanged(self):
         self.assertEqual(meta_capi.get_capi_config()["dataset_id"], "2127480041027733")
 
-    def test_a_pixel_without_a_token_falls_back_rather_than_dropping_events(self):
-        """Half-configured must not look identical to tracking having stopped."""
+    def test_a_pixel_without_a_token_never_posts_into_the_global_dataset(self):
+        """The browser half has already moved to the AE pixel, so posting the
+        server half to the global dataset would leave every purchase as two
+        unpaired halves in two datasets. Deduplication only happens inside one
+        dataset — so the event is skipped, and says why."""
         self.uae.meta_capi_access_token = ""
         self.uae.save(update_fields=["meta_capi_access_token"])
+
         config = meta_capi.get_capi_config("ae")
-        self.assertEqual(config["dataset_id"], "2127480041027733")
+        self.assertEqual(config["dataset_id"], "1598059508733938")
+        self.assertFalse(config["enabled"])
+
+        with patch("store.services.meta_capi.requests.post") as post:
+            log = meta_capi.send_event(
+                event_name="AddToCart", event_id="ae-no-token", user_data={}, region_code="ae",
+            )
+        post.assert_not_called()
+        self.assertEqual(log.status, MetaCapiEvent.STATUS_SKIPPED)
+        self.assertIn("ae", log.error_message)
 
     def test_a_separate_dataset_id_beats_the_markets_pixel_id(self):
         self.uae.meta_capi_dataset_id = "9999999999"
@@ -221,6 +234,22 @@ class MetaCapiPerMarketDatasetTests(TestCase):
 
         self.assertEqual(ae["facebook_pixel_id"], "1598059508733938")
         self.assertEqual(om["facebook_pixel_id"], "2127480041027733")
+
+    def test_the_browser_and_the_server_halves_always_name_one_dataset(self):
+        """The pair only meets inside a single dataset. Whatever the config, the
+        pixel the storefront loads and the dataset the server posts to must be
+        the same number — or Meta sees two unpaired halves of every purchase."""
+        from store.api_serializers.localization import serialize_site_settings
+
+        settings = SiteSettings.objects.first()
+        for token in ("ae-token", ""):
+            with self.subTest(token=token or "missing"):
+                self.uae.meta_capi_access_token = token
+                self.uae.save(update_fields=["meta_capi_access_token"])
+
+                browser = serialize_site_settings(settings, "en", self.uae)["facebook_pixel_id"]
+                server = meta_capi.get_capi_config("ae")["dataset_id"]
+                self.assertEqual(browser, server)
 
     def test_the_markets_token_is_never_echoed_back_to_the_admin(self):
         from store.api_serializers.admin_ops import AdminRegionSerializer

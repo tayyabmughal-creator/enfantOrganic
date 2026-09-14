@@ -2188,7 +2188,7 @@ function RegionMetaPixelCard({ region, request, onSaved }) {
         <span className="admin-threshold-display">
           <span>
             {region.facebook_pixel_id
-              ? <>Pixel <code>{region.facebook_pixel_id}</code>{live ? " · server events on" : " · browser only"}</>
+              ? <>Pixel <code>{region.facebook_pixel_id}</code>{live ? " · server events on" : " · add a token to send server events"}</>
               : "Using the global pixel from Site Settings"}
           </span>
           {request ? (
@@ -2254,7 +2254,9 @@ function RegionMetaPixelCard({ region, request, onSaved }) {
             <p className="admin-region-pixel-help">
               Set here, this market reports to its own dataset and stops reporting to the
               global one — so this pixel only ever sees {code?.toUpperCase()} traffic. The
-              browser pixel needs only the ID; server-side events also need the token.
+              pixel ID moves the browser events on its own; until the token is added the
+              server-side events are held rather than sent to the old dataset, because
+              Meta can only pair the two copies of a purchase inside one dataset.
             </p>
           </div>
         ) : null}
