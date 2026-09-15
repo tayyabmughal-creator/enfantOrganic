@@ -77,7 +77,10 @@ from .views import (
     AdminApplyConversionView,
     AdminReturnRequestDetailView,
     AdminReturnRequestListView,
+    AdminReviewBulkActionView,
     AdminReviewDetailView,
+    AdminReviewExportView,
+    AdminReviewImportView,
     AdminReviewListView,
     AdminShippingRuleDetailView,
     AdminShippingRuleListCreateView,
@@ -230,6 +233,11 @@ urlpatterns = [
     path("admin/promotions/", AdminCouponListCreateView.as_view(), name="admin-promotions"),
     path("admin/promotions/<int:pk>/", AdminCouponDetailView.as_view(), name="admin-promotion-detail"),
     path("admin/reviews/images/", AdminReviewImageUploadView.as_view(), name="admin-review-image-upload"),
+    # These three must precede the <int:pk> detail route to read as their own
+    # endpoints rather than as review ids.
+    path("admin/reviews/export/", AdminReviewExportView.as_view(), name="admin-reviews-export"),
+    path("admin/reviews/import/", AdminReviewImportView.as_view(), name="admin-reviews-import"),
+    path("admin/reviews/bulk/", AdminReviewBulkActionView.as_view(), name="admin-reviews-bulk"),
     path("admin/reviews/", AdminReviewListView.as_view(), name="admin-reviews"),
     path("admin/reviews/<int:pk>/", AdminReviewDetailView.as_view(), name="admin-review-detail"),
     path("admin/returns/", AdminReturnRequestListView.as_view(), name="admin-returns"),

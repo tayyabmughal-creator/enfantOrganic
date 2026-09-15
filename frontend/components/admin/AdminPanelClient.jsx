@@ -5,6 +5,7 @@ import DashboardView from "./DashboardView";
 import AnalyticsView from "./AnalyticsView";
 import { StoreSettingsSection, SettingsPanel, Reports, AuditLogsPanel, IntegrationsView, PaymentGatewaysView, InventoryView, InsightsView, NewsletterPanel, PopupLeadsPanel, RegionsView, InstagramPostsPanel, HeroBannerPanel, NotificationHealthView, PlaceholderModule } from "./OtherViews";
 import { CrudPanel, CrudFormModal } from "./CrudViews";
+import ReviewsPanel from "./ReviewsPanel";
 import DraftOrderComposer from "./DraftOrderComposer";
 import { AdminToast } from "./SharedUI";
 import SkeletonLoader from "../SkeletonLoader";
@@ -584,6 +585,9 @@ function titleFor(item, key) {
   if (key === "hero_cards")  return item?.title_en || item?.title_ar || `Hero card ${item?.id}`;
   if (key === "cart_milestones") return item?.label_en || (item?.reward_type === "discount_percent" ? `${item?.discount_value}% off` : "Free shipping");
   if (key === "pages")       return item?.title_en || item?.title_ar || item?.slug || `Page ${item?.id}`;
+  // A review has no name_en/title_en, so it used to fall all the way through to
+  // "reviews item" — every row on the screen read the same.
+  if (key === "reviews")     return item?.customer_name || item?.title || `Review ${item?.id}`;
   return item?.order_number || item?.name_en || item?.title_en || item?.code || item?.email || item?.username || item?.provider_reference || item?.provider || `${key} item`;
 }
 
@@ -847,6 +851,9 @@ export default function AdminPanelClient() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [page, setPage]             = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  // How many records match the current filters, not how many are on screen —
+  // "select all 1,563 matching" has to name the real number.
+  const [totalRecords, setTotalRecords] = useState(0);
   const userPageClickRef            = useRef(false);
   const loadDataSeqRef              = useRef(0);
   const [searchQuery, setSearchQuery] = useState("");
@@ -858,6 +865,8 @@ export default function AdminPanelClient() {
     endDate: "",
   });
   const [orderFilters, setOrderFilters] = useState(ORDER_FILTER_DEFAULTS);
+  const [reviewFilters, setReviewFilters] = useState({ status: "", rating: "" });
+  const [reviewExportBusy, setReviewExportBusy] = useState("");
   const [inventoryThreshold, setInventoryThreshold] = useState(10);
   const [inventoryFocusSlug, setInventoryFocusSlug] = useState("");
   const [warehouseStocks, setWarehouseStocks] = useState([]);
@@ -1133,6 +1142,11 @@ export default function AdminPanelClient() {
         requestedPageSize = INVENTORY_PAGE_SIZE;
         params.set("page_size", String(requestedPageSize));
       }
+      if (screenKey === "reviews") {
+        const reviewFilterSource = options.reviewFilters || reviewFilters;
+        if (reviewFilterSource.status) params.set("status", reviewFilterSource.status);
+        if (reviewFilterSource.rating) params.set("rating", reviewFilterSource.rating);
+      }
       if (screenKey === "orders" || screenKey === "draft_orders") {
         const orderFilterSource = options.orderFilters || orderFilters;
         if (screenKey === "orders") params.set("sales_channel", "online_store");
@@ -1169,6 +1183,9 @@ export default function AdminPanelClient() {
           const apiPageSize = Number(raw.page_size);
           const pageSize = Number.isFinite(apiPageSize) && apiPageSize > 0 ? apiPageSize : requestedPageSize;
           setTotalPages(Math.max(1, Math.ceil(raw.count / pageSize)));
+          setTotalRecords(raw.count);
+        } else {
+          setTotalRecords(raw.results.length);
         }
       } else if (raw && typeof raw === "object" && "count" in raw && Array.isArray(raw.results)) {
         setData(raw.results);
@@ -1176,9 +1193,11 @@ export default function AdminPanelClient() {
         const apiPageSize = Number(raw.page_size);
         const pageSize = Number.isFinite(apiPageSize) && apiPageSize > 0 ? apiPageSize : requestedPageSize;
         setTotalPages(Number.isFinite(totalCount) ? Math.max(1, Math.ceil(totalCount / pageSize)) : 1);
+        setTotalRecords(Number.isFinite(totalCount) ? totalCount : 0);
       } else {
         setData(raw);
         setTotalPages(1);
+        setTotalRecords(Array.isArray(raw) ? raw.length : 0);
       }
     } catch (err) {
       if (mySeq === loadDataSeqRef.current) showToast(err.message, "error");
@@ -1688,6 +1707,105 @@ export default function AdminPanelClient() {
     }
   }
 
+  function reviewFilterParams() {
+    const params = new URLSearchParams();
+    if (debouncedSearchQuery) params.set("search", debouncedSearchQuery);
+    if (reviewFilters.status) params.set("status", reviewFilters.status);
+    if (reviewFilters.rating) params.set("rating", reviewFilters.rating);
+    return params;
+  }
+
+  /**
+   * The review book in one file. Filtered server-side, so what comes down is the
+   * list on screen however many pages it spans — or just the ticked rows when
+   * `ids` is passed.
+   */
+  async function exportReviews({ format = "csv", ids = [] } = {}) {
+    if (!canViewKey("reviews")) {
+      showToast("You do not have permission to export reviews.", "error");
+      return;
+    }
+    if (reviewExportBusy) return;
+    setReviewExportBusy(format);
+    try {
+      const params = reviewFilterParams();
+      params.set("export_format", format);
+      if (ids.length) params.set("ids", ids.join(","));
+
+      const res = await fetch(`${API_BASE}/admin/reviews/export/?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        let detail = "Review export failed";
+        try {
+          const payload = await res.json();
+          detail = payload?.detail || detail;
+        } catch {}
+        throw new Error(detail);
+      }
+      const blob = await res.blob();
+      const stamp = new Date().toISOString().slice(0, 10);
+      const href = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = href;
+      a.download = `enfant-reviews-${stamp}.${format === "xlsx" ? "xlsx" : "csv"}`;
+      a.click();
+      window.URL.revokeObjectURL(href);
+      const count = res.headers.get("X-Export-Reviews");
+      showToast(`Reviews exported${count ? ` — ${count} row${count === "1" ? "" : "s"}` : ""}.`, "success");
+    } catch (err) {
+      showToast(err.message, "error");
+    } finally {
+      setReviewExportBusy("");
+    }
+  }
+
+  async function importReviews(file, { dryRun = false, defaultApproved = true, updateExisting = true, backfillImages = true } = {}) {
+    const body = new FormData();
+    body.append("file", file);
+    body.append("dry_run", dryRun ? "1" : "0");
+    body.append("default_approved", defaultApproved ? "1" : "0");
+    body.append("update_existing", updateExisting ? "1" : "0");
+    body.append("backfill_images", backfillImages ? "1" : "0");
+
+    const stats = await request("/admin/reviews/import/", { method: "POST", body });
+    if (!dryRun) {
+      showToast(
+        `Import finished — ${stats.created} added, ${stats.updated} updated.`,
+        stats.created || stats.updated ? "success" : "info",
+      );
+      await loadScreen(active, { silent: true });
+    }
+    return stats;
+  }
+
+  async function bulkReviewAction({ action, ids = [], selectAll = false }) {
+    const payload = { action };
+    if (selectAll) {
+      payload.select_all = true;
+      // Same filters the list is showing, so the action reaches exactly the rows
+      // the admin was looking at.
+      if (debouncedSearchQuery) payload.search = debouncedSearchQuery;
+      if (reviewFilters.status) payload.status = reviewFilters.status;
+      if (reviewFilters.rating) payload.rating = reviewFilters.rating;
+    } else {
+      payload.ids = ids;
+    }
+    try {
+      const result = await request("/admin/reviews/bulk/", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      const verb = action === "delete" ? "deleted" : action === "approve" ? "approved" : "moved to pending";
+      showToast(`${result.changed} review${result.changed === 1 ? "" : "s"} ${verb}.`, "success");
+      await loadScreen(active, { silent: true });
+      return result;
+    } catch (err) {
+      showToast(err.message || "Bulk action failed.", "error");
+      throw err;
+    }
+  }
+
   async function previewReport(type, params = {}) {
     if (!canViewKey("reports")) {
       throw new Error("You do not have permission to view reports.");
@@ -1741,6 +1859,12 @@ export default function AdminPanelClient() {
     void loadScreen(active, { orderFilters });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderFilters, token, adminMe, activeKey]);
+
+  useEffect(() => {
+    if (!(token && adminMe && activeKey === "reviews" && active)) return;
+    void loadScreen(active, { reviewFilters });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewFilters, token, adminMe, activeKey]);
 
   useEffect(() => {
     if (!userPageClickRef.current) return;
@@ -2040,6 +2164,31 @@ export default function AdminPanelClient() {
         }
       </div>
     );
+    if (activeKey === "reviews") {
+      return (
+        <ReviewsPanel
+          rows={Array.isArray(data) ? data : []}
+          totalCount={totalRecords}
+          page={page}
+          totalPages={totalPages}
+          onPageChange={(p) => { userPageClickRef.current = true; setPage(p); }}
+          searchQuery={searchQuery}
+          onSearchChange={(q) => { setSearchQuery(q); setPage(1); }}
+          filters={reviewFilters}
+          onFiltersChange={(patch) => { setReviewFilters((prev) => ({ ...prev, ...patch })); setPage(1); }}
+          canCreate={canCreate}
+          canEdit={canEdit}
+          canDelete={canDelete}
+          onCreate={startCreate}
+          onEdit={openDetail}
+          onDelete={deleteRecord}
+          onExport={exportReviews}
+          exportBusy={reviewExportBusy}
+          onImport={importReviews}
+          onBulkAction={bulkReviewAction}
+        />
+      );
+    }
     if (activeKey === "newsletter")             return <NewsletterPanel data={data} />;
     if (activeKey === "notifications")          return <NotificationHealthView data={data} />;
     if (activeKey === "popup_leads")            return <PopupLeadsPanel data={data} onDownload={(params) => downloadReport("newsletter", params)} canExport={canViewKey("reports")} />;

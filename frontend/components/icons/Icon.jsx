@@ -367,6 +367,13 @@ const icons = {
       <path d="M4 18v1.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" fill="none" />
     </>
   ),
+  upload: (
+    <>
+      <path d="M12 15V4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="m7.5 8.5 4.5-4.5 4.5 4.5" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" fill="none" />
+      <path d="M4 18v1.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" fill="none" />
+    </>
+  ),
   activity: (
     <path d="M3 12h4l3-7 4 14 3-7h4" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" fill="none" />
   ),

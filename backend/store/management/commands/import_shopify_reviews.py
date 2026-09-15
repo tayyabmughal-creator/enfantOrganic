@@ -35,21 +35,11 @@ except ImportError as exc:
     raise ImportError("openpyxl is required: pip install openpyxl") from exc
 
 from store.models import Product, Review
-
-
 # Some products were re-slugged after their reviews were first imported, so the
 # handle in the Shopify export no longer resolves to a Product and every row for
-# them was being counted as skipped_no_slug. Map the export handle onto the slug
-# the product carries today. Verified by reviewer-name overlap against the rows
-# already in the database.
-HANDLE_ALIASES = {
-    "enfant-organic-plus-moisture-conditioner-for-kids": "Enfant-Organic-Kids-Hair-Conditioner",
-    "best-newborn-gift-set-uae-relaxing-night-routine": "newborn-baby-gift-set",
-    "enfant-organic-plus-extra-mild-face-body-wipes": "Enfant-Organic-Plus-Extra-Mild-Wipes",
-    "enfant-organic-body-wash-shampoo-500-ml": "enfant-organic-body-wash-shampoo",
-    "enfant-ultimate-newborn-essential-kit-uae-and-oman": "organic-newborn-essential-kit",
-    "enfant-ultra-care-organic-plus-shampoo-body-wash-uae-oman": "Ultra-Care-Shampoo",
-}
+# them was being counted as skipped_no_slug. The map lives with the admin
+# importer so both paths resolve a handle the same way.
+from store.services.review_io import HANDLE_ALIASES
 
 # Columns holding photos the customer attached to the review. "Reviewer Image
 # Url" is deliberately absent — that is the reviewer's avatar (Facebook / LINE

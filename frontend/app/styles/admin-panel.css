@@ -1071,6 +1071,138 @@
   min-width: 860px;
 }
 
+/* ─── Bulk selection bar ──────────────────────────────────────────────────── */
+
+/* Shared by the Orders and Reviews tables. It had no styling at all until the
+   Reviews screen needed one, so the Orders bar was a naked row of buttons. */
+.admin-bulk-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e5ead8;
+  background: #f1f6ea;
+  border-radius: 14px 14px 0 0;
+  font-size: 13px;
+  color: #3f4b38;
+}
+
+.admin-bulk-bar > span:first-child {
+  margin-right: 4px;
+}
+
+.admin-bulk-bar strong {
+  color: #2b3328;
+}
+
+.admin-select-sm {
+  padding: 6px 10px;
+  border: 1px solid #dbe4cd;
+  border-radius: 10px;
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  color: #3f4b38;
+  cursor: pointer;
+}
+
+/* ─── Reviews table ───────────────────────────────────────────────────────── */
+
+.admin-reviews-table {
+  min-width: 900px;
+}
+
+.admin-reviews-table .reviewer-col { width: 14%; }
+.admin-reviews-table .product-col  { width: 18%; }
+.admin-reviews-table .rating-col   { width: 9%; }
+.admin-reviews-table .review-col   { width: 30%; }
+.admin-reviews-table .status-col   { width: 10%; }
+.admin-reviews-table .date-col     { width: 11%; }
+.admin-reviews-table .actions-col  { width: 100px; }
+
+.admin-review-stars {
+  color: #c79a2a;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+.admin-review-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.admin-review-text strong {
+  font-size: 13px;
+  color: #2b3328;
+}
+
+.admin-review-text span {
+  font-size: 12px;
+  line-height: 1.45;
+  color: #6b7563;
+}
+
+/* ─── Review import dialog ────────────────────────────────────────────────── */
+
+.admin-modal--import {
+  width: min(100%, 680px);
+}
+
+.admin-import-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.admin-import-body input[type="file"] {
+  padding: 14px;
+  border: 1px dashed #c9d6b4;
+  border-radius: 14px;
+  background: #fbfdf8;
+  font-size: 13px;
+  width: 100%;
+}
+
+.admin-import-error {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #f2c7c7;
+  border-radius: 12px;
+  background: #fff0f0;
+  color: #b42318;
+  font-size: 13px;
+}
+
+.admin-import-result {
+  padding: 14px;
+  border: 1px solid #e5ead8;
+  border-radius: 14px;
+  background: #f7faf4;
+  font-size: 13px;
+  color: #3f4b38;
+}
+
+.admin-import-result ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  line-height: 1.6;
+}
+
+.admin-import-warning {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid #f2dfad;
+  border-radius: 12px;
+  background: #fff9e9;
+  color: #8a661a;
+  font-size: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
 .admin-abandoned-status {
   display: flex;
   flex-direction: column;

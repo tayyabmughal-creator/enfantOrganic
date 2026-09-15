@@ -153,6 +153,12 @@ from ..services.inventory_health import (
     serialize_inventory_health_products,
 )
 from ..services.payment_router import PaymentProviderError, refund as process_gateway_refund
+from ..services.review_io import (
+    ReviewImportError,
+    import_reviews,
+    review_export_response,
+)
+from ..services.reviews import recalculate_product_review_aggregates
 from ..services.shipment import (
     ShipmentServiceError,
     create_order_shipment,
@@ -4568,12 +4574,82 @@ class AdminReturnRequestDetailView(generics.RetrieveUpdateAPIView):
                 order.save(update_fields=["refund_status", "updated_at"])
 
 
+def _requested_review_ids(raw):
+    """Review ids from a JSON list or a comma-separated query param."""
+    if raw in (None, ""):
+        return []
+    values = raw if isinstance(raw, (list, tuple, set)) else str(raw).split(",")
+    ids = []
+    for value in values:
+        text = str(value).strip()
+        if text.isdigit():
+            ids.append(int(text))
+    return ids
+
+
+def filtered_admin_reviews(query_params):
+    """The review queryset behind the Reviews screen, its export and select-all.
+
+    One function so the three cannot disagree: "Export all" downloads exactly the
+    list on screen, and "select everything matching" approves exactly the same
+    rows — however many pages of 25 they span.
+    """
+    queryset = Review.objects.select_related("product", "user", "order").all()
+
+    search = _clean_text(query_params.get("search", ""))
+    if search:
+        queryset = queryset.filter(
+            Q(customer_name__icontains=search)
+            | Q(title__icontains=search)
+            | Q(comment__icontains=search)
+            | Q(product__name_en__icontains=search)
+            | Q(product__slug__icontains=search)
+        )
+
+    status_value = str(query_params.get("status", "") or "").strip().lower()
+    if status_value in {"approved", "published"}:
+        queryset = queryset.filter(is_approved=True)
+    elif status_value in {"pending", "unapproved", "unpublished"}:
+        queryset = queryset.filter(is_approved=False)
+    else:
+        approved = query_params.get("is_approved")
+        if approved not in (None, ""):
+            queryset = queryset.filter(
+                is_approved=str(approved).strip().lower() in {"1", "true", "yes", "on"}
+            )
+
+    rating = str(query_params.get("rating", "") or "").strip()
+    if rating.isdigit() and 1 <= int(rating) <= 5:
+        queryset = queryset.filter(rating=int(rating))
+
+    verified = query_params.get("is_verified_purchase")
+    if verified not in (None, ""):
+        queryset = queryset.filter(
+            is_verified_purchase=str(verified).strip().lower() in {"1", "true", "yes", "on"}
+        )
+
+    product = str(query_params.get("product", "") or "").strip()
+    if product:
+        queryset = (
+            queryset.filter(product_id=int(product))
+            if product.isdigit()
+            else queryset.filter(product__slug=product)
+        )
+
+    return queryset
+
+
 class AdminReviewListView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
     admin_read_capabilities = (CAP_REVIEWS_VIEW,)
     admin_write_capabilities = (CAP_REVIEWS_EDIT,)
     serializer_class = AdminReviewSerializer
     queryset = Review.objects.select_related("product", "user", "order").all()
+
+    def get_queryset(self):
+        # The screen has always sent ?search=, and until this existed the box sat
+        # there doing nothing over 1,500 reviews.
+        return filtered_admin_reviews(self.request.query_params)
 
 
 class AdminReviewDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -4582,6 +4658,194 @@ class AdminReviewDetailView(generics.RetrieveUpdateDestroyAPIView):
     admin_write_capabilities = (CAP_REVIEWS_EDIT,)
     serializer_class = AdminReviewSerializer
     queryset = Review.objects.select_related("product", "user", "order").all()
+    # Saving or deleting one review already recalculates its product's stars —
+    # store.signals does it on post_save/post_delete. Only the bulk paths below,
+    # which go through queryset.update(), have to ask for it themselves.
+
+
+class AdminReviewExportView(APIView):
+    """Every review matching the current filters, as CSV or Excel.
+
+    Deliberately not paginated: the point is one file, not 63 downloads of 25
+    rows. The same file is what the importer reads back, so an admin can export,
+    fix a batch of reviews in Excel, and import the file again.
+    """
+
+    permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
+    admin_read_capabilities = (CAP_REVIEWS_VIEW,)
+
+    @extend_schema(responses={200: bytes})
+    def get(self, request):
+        reviews = filtered_admin_reviews(request.query_params)
+        # NOTE: not "format" — DRF reserves that query param for content
+        # negotiation and would 404 before get() runs.
+        export_format = str(request.query_params.get("export_format") or "csv").strip().lower()
+
+        ids = _requested_review_ids(request.query_params.get("ids"))
+        if ids:
+            reviews = reviews.filter(pk__in=ids)
+
+        response = review_export_response(reviews, export_format=export_format)
+        response["X-Export-Reviews"] = str(reviews.count())
+
+        try:
+            AdminAuditLog.objects.create(
+                actor=request.user if getattr(request.user, "pk", None) else None,
+                action="export",
+                resource_type="review",
+                resource_id="reviews-export",
+                after_snapshot={
+                    "format": export_format,
+                    "filters": dict(request.query_params.items()),
+                },
+                ip_address=(request.META.get("REMOTE_ADDR") or "")[:45],
+                user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:255],
+            )
+        except Exception:
+            logger.exception("Failed to write audit log for the reviews export")
+
+        return response
+
+
+class AdminReviewImportView(APIView):
+    """Load a review spreadsheet — ours or a Judge.me export — into the store.
+
+    ``dry_run=1`` parses and reports without writing, which is the only safe way
+    to find out what a client's file actually contains before it lands in the
+    live catalogue.
+    """
+
+    permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
+    admin_read_capabilities = (CAP_REVIEWS_EDIT,)
+    admin_write_capabilities = (CAP_REVIEWS_EDIT,)
+    parser_classes = (MultiPartParser, FormParser)
+
+    @staticmethod
+    def _flag(data, name, default):
+        raw = data.get(name)
+        if raw is None or raw == "":
+            return default
+        return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+    @extend_schema(responses={200: dict})
+    def post(self, request):
+        upload = request.FILES.get("file") or request.FILES.get("files")
+        if upload is None:
+            return Response({"detail": "Attach a .csv or .xlsx file as 'file'."}, status=400)
+
+        dry_run = self._flag(request.data, "dry_run", False)
+        try:
+            stats = import_reviews(
+                upload,
+                filename=getattr(upload, "name", ""),
+                dry_run=dry_run,
+                default_approved=self._flag(request.data, "default_approved", True),
+                update_existing=self._flag(request.data, "update_existing", True),
+                backfill_images=self._flag(request.data, "backfill_images", True),
+            )
+        except ReviewImportError as exc:
+            return Response({"detail": str(exc)}, status=400)
+        except Exception:
+            logger.exception("Reviews import failed (file=%s)", getattr(upload, "name", ""))
+            return Response(
+                {"detail": "The file could not be imported. Check it opens in Excel and try again."},
+                status=400,
+            )
+
+        if not dry_run:
+            try:
+                AdminAuditLog.objects.create(
+                    actor=request.user if getattr(request.user, "pk", None) else None,
+                    action="import",
+                    resource_type="review",
+                    resource_id="reviews-import",
+                    after_snapshot={
+                        "file": getattr(upload, "name", ""),
+                        **{key: value for key, value in stats.items() if key != "messages"},
+                    },
+                    ip_address=(request.META.get("REMOTE_ADDR") or "")[:45],
+                    user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:255],
+                )
+            except Exception:
+                logger.exception("Failed to write audit log for the reviews import")
+
+        return Response(stats)
+
+
+class AdminReviewBulkActionView(APIView):
+    """Approve, unapprove or delete many reviews in one request.
+
+    ``ids`` covers the ticked rows. ``select_all`` applies the action to every
+    review matching the filters in the body instead — moderating 1,500 imported
+    reviews a page at a time is not moderation, it is data entry.
+    """
+
+    permission_classes = [permissions.IsAuthenticated, HasAdminCapability]
+    admin_read_capabilities = (CAP_REVIEWS_EDIT,)
+    admin_write_capabilities = (CAP_REVIEWS_EDIT,)
+
+    ACTIONS = {"approve", "unapprove", "delete"}
+
+    @extend_schema(responses={200: dict})
+    def post(self, request):
+        action = str(request.data.get("action") or "").strip().lower()
+        if action not in self.ACTIONS:
+            return Response(
+                {"detail": f"Unknown action '{action}'. Use one of: {', '.join(sorted(self.ACTIONS))}."},
+                status=400,
+            )
+
+        select_all = str(request.data.get("select_all") or "").strip().lower() in {"1", "true", "yes", "on"}
+        if select_all:
+            reviews = filtered_admin_reviews(request.data)
+        else:
+            ids = _requested_review_ids(request.data.get("ids"))
+            if not ids:
+                return Response({"detail": "Select at least one review."}, status=400)
+            reviews = Review.objects.filter(pk__in=ids)
+
+        product_ids = set(reviews.values_list("product_id", flat=True))
+        matched = reviews.count()
+        if not matched:
+            return Response({"action": action, "matched": 0, "changed": 0, "products_touched": 0})
+
+        if action == "delete":
+            changed, _ = reviews.delete()
+            changed = matched
+        else:
+            changed = reviews.update(is_approved=action == "approve", updated_at=timezone.now())
+
+        # Every one of these actions moves stars on or off a product page.
+        for product_id in product_ids:
+            recalculate_product_review_aggregates(product_id)
+
+        try:
+            AdminAuditLog.objects.create(
+                actor=request.user if getattr(request.user, "pk", None) else None,
+                action=f"review_bulk_{action}",
+                resource_type="review",
+                resource_id="reviews-bulk",
+                after_snapshot={
+                    "action": action,
+                    "matched": matched,
+                    "changed": changed,
+                    "select_all": select_all,
+                    "products_touched": len(product_ids),
+                },
+                ip_address=(request.META.get("REMOTE_ADDR") or "")[:45],
+                user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:255],
+            )
+        except Exception:
+            logger.exception("Failed to write audit log for the reviews bulk action")
+
+        return Response(
+            {
+                "action": action,
+                "matched": matched,
+                "changed": changed,
+                "products_touched": len(product_ids),
+            }
+        )
 
 
 class AdminCustomerListView(generics.ListCreateAPIView):
