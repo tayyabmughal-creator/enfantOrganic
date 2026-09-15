@@ -92,10 +92,11 @@ export default function ReviewsPanel({
     if (selectAllRef.current) selectAllRef.current.indeterminate = partiallySelected;
   }, [partiallySelected]);
 
-  // A filter change redraws the list under the selection, and "select everything
-  // matching" would then mean something else entirely. Drop it rather than let it
-  // quietly re-aim at a different set of reviews.
+  // A filter change redraws the list under the selection. Ticks made before it
+  // would survive into a list that no longer shows them — and "Delete 40" with
+  // 38 of them off screen is not something anyone meant to click. Start over.
   useEffect(() => {
+    setSelectedIds(new Set());
     setSelectAllMatching(false);
   }, [searchQuery, filters?.status, filters?.rating]);
 
