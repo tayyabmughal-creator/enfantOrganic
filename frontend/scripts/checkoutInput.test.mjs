@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   apiErrorMessage,
   normalizeCodeInput,
+  normalizeDigitsInput,
+  normalizeEmailInput,
   normalizePhoneInput,
   PHONE_PATTERN,
   toAsciiDigits,
@@ -42,4 +44,16 @@ test("nested DRF errors produce a readable, localised message", () => {
   );
   assert.equal(apiErrorMessage({ detail: "Request was throttled." }), "Request was throttled.");
   assert.equal(apiErrorMessage({}, { fallback: "x" }), "x");
+});
+
+test("email typed on an Arabic or Urdu keyboard passes the browser email check", () => {
+  assert.equal(normalizeEmailInput("fatima٩٩@example۔com"), "fatima99@example.com");
+  assert.equal(normalizeEmailInput(" ｓａｒａ@example.com "), "sara@example.com");
+  assert.equal(normalizeEmailInput("you@example.com"), "you@example.com");
+});
+
+test("numeric address parts keep Arabic words but use 0-9", () => {
+  assert.equal(normalizeDigitsInput("شقة ١٢"), "شقة 12");
+  assert.equal(normalizeDigitsInput("١١٢"), "112");
+  assert.equal(normalizeDigitsInput("Flat 4B"), "Flat 4B");
 });

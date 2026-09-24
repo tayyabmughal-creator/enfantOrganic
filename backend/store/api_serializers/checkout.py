@@ -30,8 +30,10 @@ from ..text_input import (
     is_valid_name,
     is_valid_phone,
     location_key,
+    normalize_address,
     normalize_code,
     normalize_email,
+    normalize_multiline,
     normalize_name,
     normalize_phone,
 )
@@ -78,7 +80,11 @@ class NormalizedCharField(serializers.CharField):
         super().__init__(*args, **kwargs)
 
     def to_internal_value(self, data):
-        return super().to_internal_value(self.normalizer(data))
+        value = super().to_internal_value(self.normalizer(data))
+        # A value made only of invisible marks passes DRF's raw blank check.
+        if value == "" and not self.allow_blank:
+            self.fail("blank")
+        return value
 
 
 class NormalizedEmailField(serializers.EmailField):
@@ -87,8 +93,9 @@ class NormalizedEmailField(serializers.EmailField):
 
 
 class CheckoutCustomerSerializer(serializers.Serializer):
-    # Phone and name accept Arabic-Indic / Persian digits, pasted bidi marks and
-    # iOS smart quotes; they are stored normalised (see store.text_input).
+    # Every text field accepts English or Arabic. Phone, email and the address
+    # parts take Arabic-Indic / Persian digits and pasted bidi marks, and are
+    # stored with 0-9 digits (see store.text_input).
     name = NormalizedCharField(normalizer=normalize_name, min_length=2, max_length=160)
     email = NormalizedEmailField(required=False, allow_blank=True)
     phone = NormalizedCharField(normalizer=normalize_phone, max_length=32)
@@ -106,17 +113,17 @@ class CheckoutCustomerSerializer(serializers.Serializer):
         return value
     sms_opt_in = serializers.BooleanField(required=False, default=False)
     whatsapp_opt_in = serializers.BooleanField(required=False, default=False)
-    address_line_1 = serializers.CharField(max_length=255)
-    address_line_2 = serializers.CharField(max_length=255, required=False, allow_blank=True)
-    building = serializers.CharField(max_length=120, required=False, allow_blank=True)
-    floor = serializers.CharField(max_length=60, required=False, allow_blank=True)
-    apartment = serializers.CharField(max_length=120, required=False, allow_blank=True)
-    landmark = serializers.CharField(max_length=255, required=False, allow_blank=True)
-    area = serializers.CharField(max_length=120, required=False, allow_blank=True)
-    city = serializers.CharField(max_length=120)
-    postcode = serializers.CharField(max_length=40, required=False, allow_blank=True)
-    country = serializers.CharField(max_length=120)
-    formatted_address = serializers.CharField(max_length=500, required=False, allow_blank=True)
+    address_line_1 = NormalizedCharField(normalizer=normalize_address, max_length=255)
+    address_line_2 = NormalizedCharField(normalizer=normalize_address, max_length=255, required=False, allow_blank=True)
+    building = NormalizedCharField(normalizer=normalize_address, max_length=120, required=False, allow_blank=True)
+    floor = NormalizedCharField(normalizer=normalize_address, max_length=60, required=False, allow_blank=True)
+    apartment = NormalizedCharField(normalizer=normalize_address, max_length=120, required=False, allow_blank=True)
+    landmark = NormalizedCharField(normalizer=normalize_address, max_length=255, required=False, allow_blank=True)
+    area = NormalizedCharField(normalizer=normalize_address, max_length=120, required=False, allow_blank=True)
+    city = NormalizedCharField(normalizer=normalize_address, max_length=120)
+    postcode = NormalizedCharField(normalizer=normalize_address, max_length=40, required=False, allow_blank=True)
+    country = NormalizedCharField(normalizer=normalize_address, max_length=120)
+    formatted_address = NormalizedCharField(normalizer=normalize_address, max_length=500, required=False, allow_blank=True)
     place_id = serializers.CharField(max_length=255, required=False, allow_blank=True)
     latitude = serializers.DecimalField(
         max_digits=9,
@@ -144,7 +151,7 @@ class CheckoutCustomerSerializer(serializers.Serializer):
         allow_null=True,
         write_only=True,
     )
-    location_notes = serializers.CharField(required=False, allow_blank=True)
+    location_notes = NormalizedCharField(normalizer=normalize_multiline, required=False, allow_blank=True)
 
     def validate(self, attrs):
         latitude = attrs.get("latitude")
@@ -804,7 +811,7 @@ class CheckoutCreateSerializer(serializers.Serializer):
         choices=CUSTOMER_PAYMENT_METHODS,
         default=Order.PAYMENT_COD,
     )
-    notes = serializers.CharField(required=False, allow_blank=True)
+    notes = NormalizedCharField(normalizer=normalize_multiline, required=False, allow_blank=True)
     coupon_code = serializers.CharField(required=False, allow_blank=True)
     gift_card_code = serializers.CharField(required=False, allow_blank=True)
     items = CheckoutItemInputSerializer(many=True)

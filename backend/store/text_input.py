@@ -103,7 +103,23 @@ def normalize_code(value):
 
 
 def normalize_email(value):
-    return _SPACES.sub("", unicodedata.normalize("NFKC", strip_invisible(value)))
+    """Emails typed on an Arabic/Urdu keyboard: Arabic digits -> 0-9, Urdu full stop -> '.'."""
+    text = to_ascii_digits(unicodedata.normalize("NFKC", strip_invisible(value)))
+    return _SPACES.sub("", text.replace("۔", "."))
+
+
+def normalize_address(value):
+    """Single-line address parts (street, building, floor, postcode...) in either script.
+
+    Words stay in the script the shopper typed; only digits become 0-9 so
+    couriers, invoices and SMS all read the same house/building number.
+    """
+    return unicodedata.normalize("NFC", to_ascii_digits(clean_text(value)))
+
+
+def normalize_multiline(value):
+    """Free-text notes: keep line breaks, drop invisible marks, digits -> 0-9."""
+    return unicodedata.normalize("NFC", to_ascii_digits(strip_invisible(value))).strip()
 
 
 def location_key(value):

@@ -28,6 +28,19 @@ export function normalizePhoneInput(value) {
     .replace(/\uff09/g, ")");
 }
 
+// The browser's type="email" check rejects Arabic digits, so convert them
+// before it runs. Also the Urdu full stop (۔) and stray spaces.
+export function normalizeEmailInput(value) {
+  return toAsciiDigits(String(value ?? "").normalize("NFKC").replace(INVISIBLE, ""))
+    .replace(/\u06d4/g, ".")
+    .replace(/\s+/g, "");
+}
+
+// Numeric-ish address parts. Words stay in whatever script was typed.
+export function normalizeDigitsInput(value) {
+  return toAsciiDigits(String(value ?? "").replace(INVISIBLE, ""));
+}
+
 export function normalizeCodeInput(value) {
   return toAsciiDigits(String(value ?? "").normalize("NFKC").replace(INVISIBLE, ""));
 }

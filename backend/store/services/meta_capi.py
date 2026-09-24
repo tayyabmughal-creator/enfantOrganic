@@ -37,6 +37,7 @@ from django.conf import settings as django_settings
 from django.utils import timezone
 
 from ..models import MetaCapiEvent, Region, SiteSettings
+from ..text_input import location_key
 from .sms_router import _normalize_phone
 
 logger = logging.getLogger(__name__)
@@ -106,7 +107,7 @@ def _norm_zip(value):
 
 def _norm_country(value):
     """Meta wants a lowercase ISO 3166-1 alpha-2 code, not a country name."""
-    raw = str(value or "").strip().lower()
+    raw = location_key(value)
     if not raw:
         return ""
     code = COUNTRY_NAME_TO_ISO.get(raw, raw if len(raw) == 2 else "")
@@ -128,6 +129,17 @@ COUNTRY_NAME_TO_ISO = {
     "kuwait": "kw",
     "qatar": "qa",
     "bahrain": "bh",
+    # Arabic checkout pre-fills and what shoppers type, folded by location_key
+    # (no diacritics, hamza/taa marbuta unified).
+    "عمان": "om",
+    "سلطنه عمان": "om",
+    "الامارات العربيه المتحده": "ae",
+    "الامارات": "ae",
+    "المملكه العربيه السعوديه": "sa",
+    "السعوديه": "sa",
+    "الكويت": "kw",
+    "قطر": "qa",
+    "البحرين": "bh",
 }
 
 

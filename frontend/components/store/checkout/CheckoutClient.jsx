@@ -22,6 +22,8 @@ import {
   apiErrorMessage,
   localizeApiMessage,
   normalizeCodeInput,
+  normalizeDigitsInput,
+  normalizeEmailInput,
   normalizePhoneInput,
   PHONE_PATTERN,
 } from "@/lib/checkoutInput";
@@ -33,6 +35,8 @@ const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
 const PAYMOB_APPLE_PAY_INTEGRATION_ID = process.env.NEXT_PUBLIC_PAYMOB_APPLE_PAY_INTEGRATION_ID || "";
 const AUTH_TOKEN_KEY = CUSTOMER_TOKEN_KEY;
 const GOOGLE_SCRIPT_ID = "enfant-google-maps-script";
+// Address parts that are mostly numbers: Arabic digits become 0-9 as typed.
+const DIGIT_FIELDS = new Set(["building", "floor", "apartment", "postcode"]);
 
 const REGION_SETTINGS = {
   om: {
@@ -724,6 +728,8 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
     let nextValue = type === "checkbox" ? checked : value;
     // Arabic / Persian digits and pasted bidi marks → plain 0-9 as the shopper types.
     if (name === "phone") nextValue = normalizePhoneInput(value);
+    if (name === "email") nextValue = normalizeEmailInput(value);
+    if (DIGIT_FIELDS.has(name)) nextValue = normalizeDigitsInput(value);
     if (name === "coupon_code" || name === "gift_card_code") nextValue = normalizeCodeInput(value);
     setForm((current) => ({ ...current, [name]: nextValue }));
     if (name === "coupon_code") {

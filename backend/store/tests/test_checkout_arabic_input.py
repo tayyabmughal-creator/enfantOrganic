@@ -173,3 +173,67 @@ class CheckoutArabicInputTests(TestCase):
         self.assertEqual(response.status_code, 201, response.content)
         self.assertEqual(AbandonedCart.objects.get(session_token="s-1").customer_phone, "+968 9123 4567")
         self.assertTrue(Order.objects.filter(customer_phone="+968 9123 4567").exists())
+
+    def test_every_field_typed_in_arabic_places_the_order(self):
+        payload = self._payload(
+            email="fatima٩٩@example۔com",
+            address_line_1="شارع ١٨ نوفمبر، مبنى ٢٣",
+            address_line_2="بالقرب من دوار القرم",
+            building="٢٣",
+            floor="٣",
+            apartment="شقة ١٢",
+            landmark="مقابل مسجد الخور",
+            area="القُرم",
+            postcode="١١٢",
+            location_notes="الباب الأزرق\nاتصل عند الوصول ٩١٢٣",
+        )
+        payload["notes"] = "التوصيل بعد الساعة ٥ مساءً"
+        serializer = CheckoutCreateSerializer(data=payload)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        order = serializer.save()
+        self.assertEqual(order.customer_email, "fatima99@example.com")
+        self.assertEqual(order.address_line_1, "شارع 18 نوفمبر، مبنى 23")
+        self.assertEqual(order.building, "23")
+        self.assertEqual(order.floor, "3")
+        self.assertEqual(order.apartment, "شقة 12")
+        self.assertEqual(order.postcode, "112")
+        self.assertEqual(order.area, "القُرم")
+        self.assertEqual(order.location_notes, "الباب الأزرق\nاتصل عند الوصول 9123")
+        self.assertEqual(order.notes, "التوصيل بعد الساعة 5 مساءً")
+
+    def test_same_order_in_english_still_works(self):
+        serializer = CheckoutCreateSerializer(
+            data=self._payload(
+                name="Fatima Al Balushi",
+                phone="+968 9123 4567",
+                email="fatima@example.com",
+                address_line_1="18 November Street, Bldg 23",
+                city="Muscat",
+                country="Oman",
+                postcode="112",
+            )
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        order = serializer.save()
+        self.assertEqual(order.address_line_1, "18 November Street, Bldg 23")
+        self.assertEqual(order.city, "Muscat")
+
+    def test_address_of_only_invisible_marks_is_blank(self):
+        serializer = CheckoutCreateSerializer(data=self._payload(address_line_1="‏‎"))
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("address_line_1", serializer.errors["customer"])
+
+
+class MetaCountryNameTests(SimpleTestCase):
+    def test_arabic_country_names_map_to_iso(self):
+        from store.services.meta_capi import _hash, _norm_country
+
+        for name, code in (
+            ("عُمان", "om"),
+            ("Oman", "om"),
+            ("الإمارات العربية المتحدة", "ae"),
+            ("المملكة العربية السعودية", "sa"),
+            ("om", "om"),
+        ):
+            with self.subTest(name=name):
+                self.assertEqual(_norm_country(name), _hash(code))
