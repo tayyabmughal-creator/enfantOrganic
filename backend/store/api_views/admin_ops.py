@@ -167,6 +167,7 @@ from ..services.shipment import (
     update_manual_tracking,
 )
 from ..services.stock import commit_reserved_inventory_for_order, reapply_order_inventory
+from ..text_input import normalize_phone
 
 
 logger = logging.getLogger(__name__)
@@ -5676,7 +5677,8 @@ class AbandonedCartCreateView(APIView):
         defaults = {
             "customer_name": data.get("customer_name", ""),
             "customer_email": data.get("customer_email", ""),
-            "customer_phone": data.get("customer_phone", ""),
+            # Same normalisation as checkout, so the cart matches its order by phone.
+            "customer_phone": normalize_phone(data.get("customer_phone", "")),
             "cart_items": data.get("cart_items", []),
             "subtotal": data.get("subtotal", 0),
             "currency_code": data.get("currency_code", "OMR"),

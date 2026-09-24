@@ -18,6 +18,13 @@ import { getAttributionSnapshot, getOrCreateSessionKey, trackEvent } from "@/lib
 import { buildStorePath, cartSavings, formatMoney, uiText } from "@/lib/storefront";
 import { API_BASE_URL as CONFIG_API_BASE_URL, CUSTOMER_TOKEN_KEY, safeRedirectUrl } from "@/lib/config";
 import { readJson } from "@/lib/http";
+import {
+  apiErrorMessage,
+  localizeApiMessage,
+  normalizeCodeInput,
+  normalizePhoneInput,
+  PHONE_PATTERN,
+} from "@/lib/checkoutInput";
 import { appendRegionQuery } from "@/lib/regionResolver";
 import { saveOrderLookupToken } from "@/lib/orderLookupToken";
 
@@ -149,7 +156,7 @@ function loadGoogleMapsScript({ apiKey, language, regionCode }) {
 function mapAddressToForm(address, regionKey, isAr) {
   return {
     name: address.full_name || "",
-    phone: address.phone || "",
+    phone: normalizePhoneInput(address.phone || ""),
     address_line_1: address.address_line_1 || "",
     address_line_2: address.address_line_2 || "",
     building: address.building || "",
@@ -714,7 +721,10 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
 
   const updateField = useCallback((event) => {
     const { name, value, type, checked } = event.target;
-    const nextValue = type === "checkbox" ? checked : value;
+    let nextValue = type === "checkbox" ? checked : value;
+    // Arabic / Persian digits and pasted bidi marks → plain 0-9 as the shopper types.
+    if (name === "phone") nextValue = normalizePhoneInput(value);
+    if (name === "coupon_code" || name === "gift_card_code") nextValue = normalizeCodeInput(value);
     setForm((current) => ({ ...current, [name]: nextValue }));
     if (name === "coupon_code") {
       setCouponMessage("");
@@ -913,13 +923,20 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
           }),
         });
         const data = await readJson(response, { isAr });
-        if (!response.ok) throw new Error(data.detail || JSON.stringify(data));
+        if (!response.ok) {
+          throw new Error(
+            apiErrorMessage(data, {
+              isAr,
+              fallback: isAr ? "تعذر التحقق من الكوبون." : "Unable to validate coupon.",
+            }),
+          );
+        }
         if (!data.valid) {
           // In silent mode (auto-revalidation while typing), keep the existing
           // couponPreview so shipping/totals don't flash to "—" mid-keystroke.
           if (!silent) {
             const text =
-              data.error || data.message || (isAr ? "الكوبون غير صالح." : "Coupon is not valid.");
+              localizeApiMessage(data.error || data.message, isAr) || (isAr ? "الكوبون غير صالح." : "Coupon is not valid.");
             // Mirror of the gift card path: this endpoint validates both, so the
             // failure can belong to the gift card field instead.
             const giftCardIsAtFault = data.error_field === "gift_card_code";
@@ -944,7 +961,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         if (!silent) {
           setCouponMessage(
             normalizedCouponCode
-              ? (data.message || (isAr ? "تم تطبيق الكوبون." : "Coupon applied."))
+              ? (localizeApiMessage(data.message, isAr) || (isAr ? "تم تطبيق الكوبون." : "Coupon applied."))
               : "",
           );
         }
@@ -1024,7 +1041,9 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
         if (!response.ok || !data.valid) {
           setCouponPreview(null);
           const text =
-            data.error || data.message || (isAr ? "بطاقة الهدية غير صالحة." : "Gift card is not valid.");
+            localizeApiMessage(data.error || data.message, isAr) ||
+            apiErrorMessage(data, { isAr }) ||
+            (isAr ? "بطاقة الهدية غير صالحة." : "Gift card is not valid.");
           // The endpoint checks the coupon too, so the failure may be about a
           // code in the *other* field. Showing it here blamed the gift card for
           // a coupon the customer had not touched.
@@ -1038,7 +1057,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
           return false;
         }
         setCouponPreview(data);
-        setGiftCardMessage(data.message || (isAr ? "تم تطبيق بطاقة الهدية." : "Gift card applied."));
+        setGiftCardMessage(localizeApiMessage(data.message, isAr) || (isAr ? "تم تطبيق بطاقة الهدية." : "Gift card applied."));
         return true;
       } catch (err) {
         setGiftCardMessage(err.message || (isAr ? "تعذر التحقق من بطاقة الهدية." : "Unable to validate gift card."));
@@ -1547,13 +1566,14 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
       });
       const data = await readJson(response, { isAr });
       if (!response.ok) {
-        // DRF validation errors are dicts like {"coupon_code": ["..."]} or {"detail": "..."}
-        let msg = data.detail;
-        if (!msg && data && typeof data === "object") {
-          const firstVal = Object.values(data)[0];
-          msg = Array.isArray(firstVal) ? firstVal[0] : firstVal;
-        }
-        throw new Error(String(msg || (isAr ? "حدث خطأ. حاول مرة أخرى." : "Something went wrong. Please try again.")));
+        // DRF validation errors nest, e.g. {"customer": {"phone": ["..."]}},
+        // {"coupon_code": ["..."]} or {"detail": "..."}.
+        throw new Error(
+          apiErrorMessage(data, {
+            isAr,
+            fallback: isAr ? "حدث خطأ. حاول مرة أخرى." : "Something went wrong. Please try again.",
+          }),
+        );
       }
       saveOrderLookupToken(data.order_number, data.lookup_token);
       createdOrderContext = {
@@ -1583,7 +1603,7 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
             provider: effectiveOnlineProvider,
           });
           setError(
-            payData.error ||
+            localizeApiMessage(payData.error, isAr) ||
               (isAr
                 ? `تعذر بدء الدفع الآن. تم حفظ الطلب ${data.order_number} ويمكنك إعادة المحاولة.`
                 : `Unable to start payment right now. Order ${data.order_number} is saved and can be retried.`),
@@ -1768,7 +1788,8 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                       required
                       autoComplete="tel"
                       className="field-ltr"
-                      pattern="^\+?[0-9 ()\-]{8,32}$"
+                      pattern={PHONE_PATTERN}
+                      title={isAr ? "مثال: +968 9123 4567" : "e.g. +968 9123 4567"}
                       minLength={8}
                       maxLength={32}
                       inputMode="tel"

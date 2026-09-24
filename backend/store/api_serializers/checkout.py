@@ -1,5 +1,4 @@
 import logging
-import re
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.core.validators import RegexValidator
@@ -7,11 +6,6 @@ from django.db import transaction
 from django.db.models import Q, Sum
 from django.utils import timezone
 from rest_framework import serializers
-
-# E.164-ish phone validator: optional leading +, 8–15 digits, allows separators
-# common in GCC numbers. Storage normalizes to a single sanitized string.
-PHONE_PATTERN = re.compile(r"^\+?[0-9 ()\-]{8,32}$")
-NAME_PATTERN = re.compile(r"^[\w\s'\.\-؀-ۿ]{2,160}$", re.UNICODE)
 
 from ..models import (
     AbandonedCart,
@@ -32,6 +26,15 @@ from ..services import carrier_router
 from ..services.abandoned_carts import recover_carts_for_order
 from ..services.costing import resolve_order_item_cost
 from ..services.stock import StockError, ensure_region_stock_available, reserve_and_deduct_stock_for_item
+from ..text_input import (
+    is_valid_name,
+    is_valid_phone,
+    location_key,
+    normalize_code,
+    normalize_email,
+    normalize_name,
+    normalize_phone,
+)
 from .catalog import active_product_variants
 
 # What a customer may choose at checkout. Deliberately narrower than
@@ -67,24 +70,40 @@ class CheckoutItemInputSerializer(serializers.Serializer):
     selected_options_text = serializers.CharField(required=False, allow_blank=True)
 
 
+class NormalizedCharField(serializers.CharField):
+    """CharField that normalises the raw input before length/format validators run."""
+
+    def __init__(self, *args, normalizer, **kwargs):
+        self.normalizer = normalizer
+        super().__init__(*args, **kwargs)
+
+    def to_internal_value(self, data):
+        return super().to_internal_value(self.normalizer(data))
+
+
+class NormalizedEmailField(serializers.EmailField):
+    def to_internal_value(self, data):
+        return super().to_internal_value(normalize_email(data))
+
+
 class CheckoutCustomerSerializer(serializers.Serializer):
-    name = serializers.CharField(min_length=2, max_length=160)
-    email = serializers.EmailField(required=False, allow_blank=True)
-    phone = serializers.CharField(min_length=8, max_length=32)
+    # Phone and name accept Arabic-Indic / Persian digits, pasted bidi marks and
+    # iOS smart quotes; they are stored normalised (see store.text_input).
+    name = NormalizedCharField(normalizer=normalize_name, min_length=2, max_length=160)
+    email = NormalizedEmailField(required=False, allow_blank=True)
+    phone = NormalizedCharField(normalizer=normalize_phone, max_length=32)
 
     def validate_name(self, value):
-        cleaned = (value or "").strip()
-        if not cleaned or len(cleaned) < 2:
+        if len(value) < 2:
             raise serializers.ValidationError("Name is required (min 2 characters).")
-        if not NAME_PATTERN.match(cleaned):
+        if not is_valid_name(value):
             raise serializers.ValidationError("Name contains unsupported characters.")
-        return cleaned
+        return value
 
     def validate_phone(self, value):
-        cleaned = (value or "").strip()
-        if not PHONE_PATTERN.match(cleaned):
+        if not is_valid_phone(value):
             raise serializers.ValidationError("Enter a valid phone number (digits, optional +, 8–15 digits).")
-        return cleaned
+        return value
     sms_opt_in = serializers.BooleanField(required=False, default=False)
     whatsapp_opt_in = serializers.BooleanField(required=False, default=False)
     address_line_1 = serializers.CharField(max_length=255)
@@ -259,7 +278,7 @@ def prepare_checkout_items(items_data, region, lock_products=False):
 
 
 def validate_coupon_for_checkout(coupon_code, region, subtotal, prepared_items, lock_coupon=False):
-    clean_code = coupon_code.strip().upper()
+    clean_code = normalize_code(coupon_code)
 
     if not clean_code:
         return None, Decimal("0.00")
@@ -399,7 +418,7 @@ def validate_gift_card_for_checkout(
     *,
     lock_gift_card=False,
 ):
-    clean_code = gift_card_code.strip().upper()
+    clean_code = normalize_code(gift_card_code)
     if not clean_code:
         return None, Decimal("0.00"), Decimal("0.00")
 
@@ -444,7 +463,7 @@ def validate_gift_card_for_checkout(
 
 
 def _normalized_location(value):
-    return str(value or "").strip().casefold()
+    return location_key(value)
 
 
 def resolve_shipping_rule(region, subtotal, *, city="", area=""):
@@ -858,7 +877,7 @@ class CheckoutCreateSerializer(serializers.Serializer):
             lock_products=True,
         )
 
-        coupon_code = validated_data.get("coupon_code", "").strip().upper()
+        coupon_code = normalize_code(validated_data.get("coupon_code", ""))
         coupon, coupon_discount = validate_coupon_for_checkout(
             coupon_code,
             region,
@@ -891,7 +910,7 @@ class CheckoutCreateSerializer(serializers.Serializer):
             discount_total=discount_total,
             shipping_total=shipping_quote["shipping_total"],
         )
-        gift_card_code = validated_data.get("gift_card_code", "").strip().upper()
+        gift_card_code = normalize_code(validated_data.get("gift_card_code", ""))
         gift_card, gift_card_amount, _gift_card_balance = validate_gift_card_for_checkout(
             gift_card_code,
             region,

@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 from ..models import Order
 from ..serializers import GuestOrderLookupSerializer, OrderSerializer
 from ..services.invoice import ensure_paid_order_invoice
+from ..text_input import normalize_email, normalize_phone
 
 ORDER_NOT_FOUND_DETAIL = "Order not found"
 
@@ -30,12 +31,13 @@ def _match_by_token(order_number, token):
 
 
 def _match_by_contact(order_number, email_or_phone):
-    clean_contact = (email_or_phone or "").strip()
-    if not clean_contact:
+    if not (email_or_phone or "").strip():
         return None
+    # Phones are stored with ASCII digits; a shopper may type the lookup in
+    # Arabic-Indic digits, so compare normalised forms.
     return (
-        Order.objects.filter(order_number=order_number, customer_email__iexact=clean_contact).first()
-        or Order.objects.filter(order_number=order_number, customer_phone=clean_contact).first()
+        Order.objects.filter(order_number=order_number, customer_email__iexact=normalize_email(email_or_phone)).first()
+        or Order.objects.filter(order_number=order_number, customer_phone=normalize_phone(email_or_phone)).first()
     )
 
 

@@ -7,6 +7,7 @@ import requests
 from django.conf import settings
 
 from ..models import WhatsAppLog
+from ..text_input import to_ascii_digits
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +31,10 @@ class WhatsAppCloudError(Exception):
 
 
 def _normalize_phone(value):
-    raw = str(value or "").strip()
+    raw = to_ascii_digits(str(value or "").strip())
     if not raw:
         return ""
-    cleaned = re.sub(r"[^\d+]", "", raw)
+    cleaned = re.sub(r"[^0-9+]", "", raw)
     if cleaned.startswith("00"):
         cleaned = f"+{cleaned[2:]}"
     if cleaned.startswith("+"):

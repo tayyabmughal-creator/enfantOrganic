@@ -22,6 +22,7 @@ from ..models import (
     WishlistItem,
 )
 from ..services.stock import get_region_available_stock
+from ..text_input import to_ascii_digits
 from .catalog import ProductCardSerializer
 
 
@@ -355,7 +356,7 @@ class NewsletterSubscriptionSerializer(serializers.ModelSerializer):
         if phone_raw:
             if country_code not in NEWSLETTER_PHONE_PATTERNS:
                 raise serializers.ValidationError({"country_code": "Select Oman, UAE, or Saudi Arabia."})
-            digits = re.sub(r"\D", "", phone_raw)
+            digits = re.sub(r"[^0-9]", "", to_ascii_digits(phone_raw))
             dial_digits = country_code.lstrip("+")
             # Try the raw digits plus versions with the 00/dial-code prefix and
             # leading zeros stripped, keeping the first form the country rule
