@@ -2370,6 +2370,42 @@ function FormField({ field, value, editor, setEditor, mode, onGalleryUpload }) {
       </label>
     );
   }
+  if (type === "video-upload") {
+    const currentVideoUrl = typeof value === "string" ? value : "";
+    const videoPreviewUrl = objectPreviewUrl || currentVideoUrl;
+    return (
+      <div className="admin-label admin-video-upload-field">
+        <span>{label}</span>
+        {videoPreviewUrl ? (
+          <video className="admin-video-preview" src={videoPreviewUrl} controls playsInline preload="metadata" />
+        ) : (
+          <small className="admin-field-help">No video uploaded. The floating player is hidden on the storefront.</small>
+        )}
+        <input
+          type="file"
+          className="admin-input"
+          accept="video/mp4,.mp4,video/webm,.webm"
+          disabled={disabled}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) setEditor({ ...editor, [name]: file });
+          }}
+        />
+        {value instanceof File ? <span className="admin-file-name">{value.name}</span> : null}
+        {currentVideoUrl ? (
+          <button
+            type="button"
+            className="admin-btn-secondary admin-video-remove"
+            disabled={disabled}
+            onClick={() => setEditor({ ...editor, [name]: "" })}
+          >
+            Remove current video
+          </button>
+        ) : null}
+        {helpText ? <small className="admin-field-help">{helpText}</small> : null}
+      </div>
+    );
+  }
   if (type === "file") {
     return (
       <label className="admin-label">

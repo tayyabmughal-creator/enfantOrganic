@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 
-const DISMISS_KEY = "enfant-floating-reference-video-dismissed";
+const DISMISS_KEY = "enfant-floating-video-dismissed-v1";
 
-export default function FloatingPromoVideo() {
+export default function FloatingPromoVideo({ videoUrl }) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -24,28 +24,30 @@ export default function FloatingPromoVideo() {
     setVisible(false);
   };
 
-  if (!visible) return null;
+  if (!videoUrl || !visible) return null;
+
+  const videoType = String(videoUrl).split("?")[0].toLowerCase().endsWith(".webm")
+    ? "video/webm"
+    : "video/mp4";
 
   return (
-    <aside className="floating-promo-video" aria-label="Reference baby skincare video">
+    <aside className="floating-promo-video" aria-label="Floating promotional video">
       <video
         autoPlay
         muted
         loop
         playsInline
         preload="metadata"
-        poster="/videos/reference-baby-skincare-poster.jpg"
-        aria-label="Sample video of a mother applying moisturizer to her baby"
+        aria-label="Promotional video"
       >
-        <source src="/videos/reference-baby-skincare.mp4" type="video/mp4" />
+        <source src={videoUrl} type={videoType} />
       </video>
-      <span className="floating-promo-video-label">Sample footage</span>
       <button
         type="button"
         className="floating-promo-video-close"
         onClick={dismiss}
-        aria-label="Close sample video"
-        title="Close sample video"
+        aria-label="Close video"
+        title="Close video"
       >
         <span aria-hidden="true">×</span>
       </button>

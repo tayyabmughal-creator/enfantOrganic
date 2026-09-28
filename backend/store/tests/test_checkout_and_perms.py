@@ -1483,6 +1483,66 @@ class CheckoutAndPermsTestCase(TestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    def test_admin_settings_floating_video_upload_sets_public_url(self):
+        import tempfile
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        user = self._create_staff_user("settings-floating-video", role_name=ROLE_MANAGER)
+        self._site_settings_with_paymob()
+        self.api_client.force_authenticate(user)
+        video = SimpleUploadedFile(
+            "Baby Care Sample.mp4",
+            b"\x00\x00\x00\x18ftypisom" + b"\x00" * 16,
+            content_type="video/mp4",
+        )
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with self.settings(MEDIA_ROOT=media_root, MEDIA_URL="/media/"):
+                response = self.api_client.patch(
+                    "/api/admin/settings/",
+                    {
+                        "floating_video_url": video,
+                        "announcement_en": "video upload test",
+                        "why_choose_links": json.dumps([
+                            {"label_en": "Why", "label_ar": "لماذا", "href": "/why"},
+                        ]),
+                    },
+                    format="multipart",
+                )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertRegex(
+            response.data["floating_video_url"],
+            r"^/media/settings/floating-video/baby-care-sample-[a-f0-9]{8}\.mp4$",
+        )
+        settings = SiteSettings.objects.first()
+        self.assertEqual(settings.floating_video_url, response.data["floating_video_url"])
+        self.assertEqual(settings.announcement_en, "video upload test")
+        self.assertIsInstance(settings.why_choose_links, list)
+
+    def test_admin_settings_floating_video_rejects_invalid_media(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        user = self._create_staff_user("settings-invalid-video", role_name=ROLE_MANAGER)
+        settings = self._site_settings_with_paymob()
+        self.api_client.force_authenticate(user)
+        fake_video = SimpleUploadedFile(
+            "not-a-video.mp4",
+            b"not a video file",
+            content_type="video/mp4",
+        )
+
+        response = self.api_client.patch(
+            "/api/admin/settings/",
+            {"floating_video_url": fake_video},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        settings.refresh_from_db()
+        self.assertEqual(settings.floating_video_url, "")
+
     def test_admin_settings_audit_redacts_paymob_secrets(self):
         user = self._create_staff_user("settings-paymob-audit", role_name=ROLE_MANAGER)
         settings = self._site_settings_with_paymob()

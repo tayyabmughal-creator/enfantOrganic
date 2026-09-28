@@ -90,6 +90,7 @@ function fallbackNavigation(locale, region) {
       text: "Enter Phone Number to get exclusive discount updates at very first",
       image: "/enfant/hero-gift-box-offer-v2.jpg",
     },
+    floating_video_url: "",
     instagram_title: isAr ? "تابعينا على إنستغرام" : "Follow us on Instagram",
     instagram_cta: isAr ? "مشاهدة الحساب" : "View profile",
     blog_title: isAr ? "من المدونة" : "From the Blog",

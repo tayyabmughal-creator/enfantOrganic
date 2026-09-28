@@ -168,19 +168,24 @@ test("product gallery uses a compact preview and line indicators instead of thum
   assert.match(premiumStyles, /\.gallery-image-indicator\s*\{[^}]*height:\s*3px/);
 });
 
-test("the global reference video is dismissible and stacks above WhatsApp", () => {
+test("the global video is admin-managed, dismissible, and stacks above WhatsApp", () => {
   const player = readFileSync(new URL("../components/layout/FloatingPromoVideo.jsx", import.meta.url), "utf8");
   const shell = readFileSync(new URL("../components/layout/StorefrontShell.jsx", import.meta.url), "utf8");
   const overlays = readFileSync(new URL("../app/styles/overlays.css", import.meta.url), "utf8");
   const checkoutStyles = readFileSync(new URL("../app/styles/checkout-order.css", import.meta.url), "utf8");
-  const video = new URL("../public/videos/reference-baby-skincare.mp4", import.meta.url);
+  const adminPanel = readFileSync(new URL("../components/admin/AdminPanelClient.jsx", import.meta.url), "utf8");
+  const adminForm = readFileSync(new URL("../components/admin/CrudViews.jsx", import.meta.url), "utf8");
 
-  assert.match(shell, /<FloatingPromoVideo\s*\/>/);
+  assert.match(shell, /<FloatingPromoVideo videoUrl=\{navigation\?\.settings\?\.floating_video_url\}\s*\/>/);
+  assert.match(player, /if \(!videoUrl \|\| !visible\) return null/);
+  assert.doesNotMatch(player, /reference-baby-skincare|Sample footage/);
   assert.match(player, /sessionStorage\.setItem\(DISMISS_KEY, "1"\)/);
   assert.match(player, /autoPlay[\s\S]*muted[\s\S]*playsInline/);
-  assert.match(player, /aria-label="Close sample video"/);
-  assert.match(player, /Sample footage/);
-  assert.ok(readFileSync(video).byteLength > 100_000, "reference video asset should be present and non-empty");
+  assert.match(player, /aria-label="Close video"/);
+  assert.match(adminPanel, /\["floating_video_url","Floating site video \(MP4\/WebM\)","video-upload"/);
+  assert.match(adminForm, /accept="video\/mp4,\.mp4,video\/webm,\.webm"/);
+  assert.match(adminForm, /objectPreviewUrl \|\| currentVideoUrl/);
+  assert.match(adminForm, /Remove current video/);
   assert.match(overlays, /\.floating-promo-video\s*\{[^}]*z-index:\s*39/);
   assert.match(overlays, /\.floating-promo-video\s*\{[^}]*bottom:\s*calc\(148px/);
   assert.match(overlays, /\[dir="rtl"\] \.floating-promo-video/);

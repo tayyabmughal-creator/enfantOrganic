@@ -334,6 +334,7 @@ class SiteSettings(models.Model):
         blank=True,
         default="/enfant/hero-gift-box-offer-v2.jpg",
     )
+    floating_video_url = models.CharField(max_length=500, blank=True, default="")
     cogs_include_unpaid = models.BooleanField(
         default=True,
         help_text=(

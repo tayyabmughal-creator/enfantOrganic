@@ -2515,6 +2515,22 @@
   font-weight: 600;
 }
 
+.admin-video-upload-field {
+  grid-column: 1 / -1;
+}
+
+.admin-video-preview {
+  display: block;
+  width: min(100%, 220px);
+  max-height: 300px;
+  border-radius: 8px;
+  background: #111;
+}
+
+.admin-video-remove {
+  justify-self: start;
+}
+
 .admin-field-help {
   font-size: 12px;
   line-height: 1.45;

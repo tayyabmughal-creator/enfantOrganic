@@ -5236,44 +5236,70 @@ class AdminSettingsView(APIView):
     def patch(self, request):
         settings = SiteSettings.objects.first()
         before_snapshot = snapshot_instance(settings) if settings else None
+        popup_upload = request.FILES.get("discount_popup_image_file")
+        video_upload = request.FILES.get("floating_video_url")
         data = request.data
-        upload = request.FILES.get("discount_popup_image_file")
-        if upload is not None:
+        if popup_upload is not None or video_upload is not None:
             import os
             import uuid
+            import json as json_module
             from django.conf import settings as dj_settings
             from django.core.files.storage import default_storage
-            from django.utils.text import slugify
-            from PIL import Image
-
-            try:
-                Image.open(upload).verify()
-                upload.seek(0)
-            except Exception:
-                return Response({"detail": f"'{upload.name}' is not a valid image."}, status=400)
-            base, ext = os.path.splitext(upload.name or "")
-            ext = ext.lower()
-            if ext not in {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}:
-                ext = ".jpg"
-            safe_base = slugify(base)[:60] or "popup"
-            target = f"settings/popup/{safe_base}-{uuid.uuid4().hex[:8]}{ext}"
-            try:
-                stored_path = default_storage.save(target, upload)
-            except Exception:
-                logger.exception("Discount popup image save failed (file=%s)", upload.name)
-                return Response(
-                    {"detail": f"Could not save '{upload.name}'. Please try a different file."},
-                    status=400,
-                )
-            # The file only exists to produce a URL — the model keeps storing a
-            # plain URL so env-provided/static paths keep working unchanged.
-            data = {k: v for k, v in request.data.items() if k != "discount_popup_image_file"}
-            data["discount_popup_image_url"] = f"{dj_settings.MEDIA_URL.rstrip('/')}/{stored_path}"
-            # Multipart flattens JSON fields to strings — restore them so a
-            # settings save that includes the image can't corrupt link lists.
-            import json as json_module
             from django.db.models import JSONField
+            from django.utils.text import slugify
 
+            uploaded_fields = {"discount_popup_image_file", "floating_video_url"}
+            data = {key: value for key, value in request.data.items() if key not in uploaded_fields}
+
+            if popup_upload is not None:
+                from PIL import Image
+
+                try:
+                    Image.open(popup_upload).verify()
+                    popup_upload.seek(0)
+                except Exception:
+                    return Response({"detail": f"'{popup_upload.name}' is not a valid image."}, status=400)
+                base, ext = os.path.splitext(popup_upload.name or "")
+                ext = ext.lower()
+                if ext not in {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}:
+                    ext = ".jpg"
+                safe_base = slugify(base)[:60] or "popup"
+                target = f"settings/popup/{safe_base}-{uuid.uuid4().hex[:8]}{ext}"
+                try:
+                    stored_path = default_storage.save(target, popup_upload)
+                except Exception:
+                    logger.exception("Discount popup image save failed (file=%s)", popup_upload.name)
+                    return Response(
+                        {"detail": f"Could not save '{popup_upload.name}'. Please try a different file."},
+                        status=400,
+                    )
+                data["discount_popup_image_url"] = f"{dj_settings.MEDIA_URL.rstrip('/')}/{stored_path}"
+
+            if video_upload is not None:
+                base, ext = os.path.splitext(video_upload.name or "")
+                ext = ext.lower()
+                video_header = video_upload.read(12)
+                video_upload.seek(0)
+                is_mp4 = ext == ".mp4" and len(video_header) >= 8 and video_header[4:8] == b"ftyp"
+                is_webm = ext == ".webm" and video_header.startswith(b"\x1a\x45\xdf\xa3")
+                if video_upload.size > 50 * 1024 * 1024:
+                    return Response({"detail": "Video must be 50 MB or smaller."}, status=400)
+                if not (is_mp4 or is_webm):
+                    return Response({"detail": "Upload a valid MP4 or WebM video."}, status=400)
+                safe_base = slugify(base)[:60] or "floating-video"
+                target = f"settings/floating-video/{safe_base}-{uuid.uuid4().hex[:8]}{ext}"
+                try:
+                    stored_path = default_storage.save(target, video_upload)
+                except Exception:
+                    logger.exception("Floating video save failed (file=%s)", video_upload.name)
+                    return Response(
+                        {"detail": f"Could not save '{video_upload.name}'. Please try a different file."},
+                        status=400,
+                    )
+                data["floating_video_url"] = f"{dj_settings.MEDIA_URL.rstrip('/')}/{stored_path}"
+
+            # Multipart flattens JSON fields to strings. Restore them whenever
+            # either upload is included so unrelated site settings stay intact.
             json_fields = {f.name for f in SiteSettings._meta.get_fields() if isinstance(f, JSONField)}
             for key in list(data.keys()):
                 if key in json_fields and isinstance(data[key], str):

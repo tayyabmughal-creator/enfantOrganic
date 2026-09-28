@@ -1544,23 +1544,6 @@
   object-fit: cover;
 }
 
-.floating-promo-video-label {
-  position: absolute;
-  top: 7px;
-  inset-inline-start: 7px;
-  max-width: calc(100% - 44px);
-  overflow: hidden;
-  padding: 4px 6px;
-  border-radius: 4px;
-  background: rgba(25, 24, 23, 0.68);
-  color: #fff;
-  font-size: 0.58rem;
-  font-weight: 700;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .floating-promo-video-close {
   position: absolute;
   top: 5px;

@@ -14,7 +14,7 @@ export default function StorefrontShell({ children, locale, navigation }) {
       <main className="storefront-main">{children}</main>
       <Footer locale={locale} navigation={navigation} />
       <FloatingWhatsApp locale={locale} navigation={navigation} />
-      <FloatingPromoVideo />
+      <FloatingPromoVideo videoUrl={navigation?.settings?.floating_video_url} />
       <DiscountPopup locale={locale} navigation={navigation} />
       <AnalyticsConsentBanner locale={locale} />
     </div>

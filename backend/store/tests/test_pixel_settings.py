@@ -62,6 +62,16 @@ class PixelSettingsSerializationTests(TestCase):
         self.assertEqual(settings["tiktok_pixel_id"], "")
         self.assertEqual(settings["snapchat_pixel_id"], "")
 
+    def test_navigation_exposes_admin_uploaded_floating_video_url(self):
+        SiteSettings.objects.update(floating_video_url="/media/settings/floating-video/promo.mp4")
+        self.assertEqual(
+            self.get_settings()["floating_video_url"],
+            "/media/settings/floating-video/promo.mp4",
+        )
+
+    def test_navigation_keeps_floating_video_hidden_until_configured(self):
+        self.assertEqual(self.get_settings()["floating_video_url"], "")
+
     def test_navigation_never_leaks_private_integration_tokens(self):
         # Pixel IDs are public identifiers; access tokens are not and must
         # never appear in the public navigation payload.

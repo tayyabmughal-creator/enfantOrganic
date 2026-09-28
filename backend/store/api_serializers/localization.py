@@ -103,6 +103,7 @@ def serialize_site_settings(settings, locale, region=None):
             "text": _loc("discount_popup_text"),
             "image": settings.discount_popup_image_url,
         },
+        "floating_video_url": settings.floating_video_url,
         # Content sections
         "instagram_title": _loc("instagram_title"),
         "instagram_cta": _loc("instagram_cta"),
