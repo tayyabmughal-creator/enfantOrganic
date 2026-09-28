@@ -2010,6 +2010,10 @@
   body:has(.checkout-mobile-cta) .floating-whatsapp {
     bottom: calc(90px + env(safe-area-inset-bottom, 0px));
   }
+
+  body:has(.checkout-mobile-cta) .floating-promo-video {
+    bottom: calc(154px + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 /* On very narrow phones two columns get cramped — fall back to one. */

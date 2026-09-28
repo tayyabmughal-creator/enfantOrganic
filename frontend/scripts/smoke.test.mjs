@@ -168,6 +168,25 @@ test("product gallery uses a compact preview and line indicators instead of thum
   assert.match(premiumStyles, /\.gallery-image-indicator\s*\{[^}]*height:\s*3px/);
 });
 
+test("the global reference video is dismissible and stacks above WhatsApp", () => {
+  const player = readFileSync(new URL("../components/layout/FloatingPromoVideo.jsx", import.meta.url), "utf8");
+  const shell = readFileSync(new URL("../components/layout/StorefrontShell.jsx", import.meta.url), "utf8");
+  const overlays = readFileSync(new URL("../app/styles/overlays.css", import.meta.url), "utf8");
+  const checkoutStyles = readFileSync(new URL("../app/styles/checkout-order.css", import.meta.url), "utf8");
+  const video = new URL("../public/videos/reference-baby-skincare.mp4", import.meta.url);
+
+  assert.match(shell, /<FloatingPromoVideo\s*\/>/);
+  assert.match(player, /sessionStorage\.setItem\(DISMISS_KEY, "1"\)/);
+  assert.match(player, /autoPlay[\s\S]*muted[\s\S]*playsInline/);
+  assert.match(player, /aria-label="Close sample video"/);
+  assert.match(player, /Sample footage/);
+  assert.ok(readFileSync(video).byteLength > 100_000, "reference video asset should be present and non-empty");
+  assert.match(overlays, /\.floating-promo-video\s*\{[^}]*z-index:\s*39/);
+  assert.match(overlays, /\.floating-promo-video\s*\{[^}]*bottom:\s*calc\(148px/);
+  assert.match(overlays, /\[dir="rtl"\] \.floating-promo-video/);
+  assert.match(checkoutStyles, /body:has\(\.checkout-mobile-cta\) \.floating-promo-video/);
+});
+
 test("no page compares the raw locale param against a normalized locale", async () => {
   // The route segment is now "en-om", while normalizeLocale() returns "en", so any
   // surviving `localeParam !== <normalized>` guard calls notFound() on every request.
