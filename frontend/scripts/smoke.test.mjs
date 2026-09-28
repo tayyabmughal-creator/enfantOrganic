@@ -192,6 +192,24 @@ test("the global video is admin-managed, dismissible, and stacks above WhatsApp"
   assert.match(checkoutStyles, /body:has\(\.checkout-mobile-cta\) \.floating-promo-video/);
 });
 
+test("the product video panel is admin-configured, optional, and limited to three clips", () => {
+  const productDetail = readFileSync(new URL("../components/store/product/ProductDetailClient.jsx", import.meta.url), "utf8");
+  const productPage = readFileSync(new URL("../app/[locale]/product/[slug]/page.jsx", import.meta.url), "utf8");
+  const adminPanel = readFileSync(new URL("../components/admin/AdminPanelClient.jsx", import.meta.url), "utf8");
+  const adminForm = readFileSync(new URL("../components/admin/CrudViews.jsx", import.meta.url), "utf8");
+  const premiumStyles = readFileSync(new URL("../app/styles/product-premium.css", import.meta.url), "utf8");
+
+  assert.match(productPage, /productVideoPanel=\{navigation\?\.settings\?\.product_video_panel\}/);
+  assert.match(productDetail, /productVideoPanel\?\.enabled && productVideoUrls\.length/);
+  assert.match(productDetail, /\.slice\(0, 3\)/);
+  assert.match(productDetail, /className="product-video-panel"/);
+  assert.match(adminPanel, /product_video_panel_enabled/);
+  assert.match(adminPanel, /product_video_3_url_file/);
+  assert.match(adminPanel, /\["product_video_3_url","Product video 3 direct link \(MP4\/WebM\)","url"/);
+  assert.match(adminForm, /const currentVideoUrl = linkedUrlField\s*\?\s*existingPreviewUrl/);
+  assert.match(premiumStyles, /\.product-video-panel\s*\{[^}]*repeat\(3, minmax\(0, 1fr\)\)/);
+});
+
 test("no page compares the raw locale param against a normalized locale", async () => {
   // The route segment is now "en-om", while normalizeLocale() returns "en", so any
   // surviving `localeParam !== <normalized>` guard calls notFound() on every request.

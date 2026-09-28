@@ -72,6 +72,24 @@ class PixelSettingsSerializationTests(TestCase):
     def test_navigation_keeps_floating_video_hidden_until_configured(self):
         self.assertEqual(self.get_settings()["floating_video_url"], "")
 
+    def test_navigation_exposes_only_configured_product_video_slots(self):
+        SiteSettings.objects.update(
+            product_video_panel_enabled=True,
+            product_video_1_url="/media/product-videos/one.mp4",
+            product_video_2_url="",
+            product_video_3_url="https://cdn.example.com/three.webm",
+        )
+        self.assertEqual(
+            self.get_settings()["product_video_panel"],
+            {
+                "enabled": True,
+                "videos": [
+                    "/media/product-videos/one.mp4",
+                    "https://cdn.example.com/three.webm",
+                ],
+            },
+        )
+
     def test_navigation_never_leaks_private_integration_tokens(self):
         # Pixel IDs are public identifiers; access tokens are not and must
         # never appear in the public navigation payload.

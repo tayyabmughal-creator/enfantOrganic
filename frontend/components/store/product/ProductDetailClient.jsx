@@ -361,7 +361,7 @@ function UrgencyStrip({ urgency, locale }) {
   );
 }
 
-export default function ProductDetailClient({ locale, product, region, deliveryEta, urgency }) {
+export default function ProductDetailClient({ locale, product, region, deliveryEta, urgency, productVideoPanel }) {
   const { addItem, flyToCart } = useStore();
   const addBtnRef = useRef(null);
   const t = uiText(locale);
@@ -400,6 +400,10 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
   const reviewCount = Number(product.review_count || customerReviews.length || 0);
   const compareAmount = Number(selectedPricing?.compare_amount || 0);
   const showComparePrice = compareAmount > Number(selectedPricing?.amount || 0);
+  const productVideoUrls = Array.isArray(productVideoPanel?.videos)
+    ? productVideoPanel.videos.filter((url) => typeof url === "string" && url.trim()).slice(0, 3)
+    : [];
+  const showProductVideoPanel = Boolean(productVideoPanel?.enabled && productVideoUrls.length);
 
   const [showMobileBar, setShowMobileBar] = useState(false);
   const actionsRef = useRef(null);
@@ -909,6 +913,27 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
               </div>
             </div>
           </div>
+
+          {showProductVideoPanel ? (
+            <div className="product-video-panel" role="group" aria-label={isAr ? "فيديوهات المنتج" : "Product videos"}>
+              {productVideoUrls.map((videoUrl, index) => {
+                const videoType = videoUrl.split("?")[0].toLowerCase().endsWith(".webm")
+                  ? "video/webm"
+                  : "video/mp4";
+                return (
+                  <video
+                    key={`${videoUrl}-${index}`}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    aria-label={isAr ? `فيديو المنتج ${index + 1}` : `Product video ${index + 1}`}
+                  >
+                    <source src={videoUrl} type={videoType} />
+                  </video>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
 
         {/* ── Accordion ───────────────────────────────────────── */}

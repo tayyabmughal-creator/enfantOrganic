@@ -91,6 +91,7 @@ function fallbackNavigation(locale, region) {
       image: "/enfant/hero-gift-box-offer-v2.jpg",
     },
     floating_video_url: "",
+    product_video_panel: { enabled: false, videos: [] },
     instagram_title: isAr ? "تابعينا على إنستغرام" : "Follow us on Instagram",
     instagram_cta: isAr ? "مشاهدة الحساب" : "View profile",
     blog_title: isAr ? "من المدونة" : "From the Blog",

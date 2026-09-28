@@ -167,6 +167,24 @@
   gap: 18px;
 }
 
+/* Product video tiles replace the former trust-benefit row. */
+.product-video-panel {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(223, 231, 214, 0.7);
+}
+
+.product-video-panel video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  border-radius: 8px;
+  background: #161916;
+  object-fit: cover;
+}
+
 /* ── Typography ───────────────────────────────────────────────────────── */
 .product-meta-row {
   display: flex;

@@ -104,6 +104,18 @@ def serialize_site_settings(settings, locale, region=None):
             "image": settings.discount_popup_image_url,
         },
         "floating_video_url": settings.floating_video_url,
+        "product_video_panel": {
+            "enabled": settings.product_video_panel_enabled,
+            "videos": [
+                video_url
+                for video_url in (
+                    settings.product_video_1_url,
+                    settings.product_video_2_url,
+                    settings.product_video_3_url,
+                )
+                if video_url
+            ],
+        },
         # Content sections
         "instagram_title": _loc("instagram_title"),
         "instagram_cta": _loc("instagram_cta"),

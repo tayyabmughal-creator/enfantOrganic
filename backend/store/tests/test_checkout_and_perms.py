@@ -1543,6 +1543,99 @@ class CheckoutAndPermsTestCase(TestCase):
         settings.refresh_from_db()
         self.assertEqual(settings.floating_video_url, "")
 
+    def test_admin_settings_product_video_slot_upload_sets_url_and_toggle(self):
+        import tempfile
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        user = self._create_staff_user("settings-product-video", role_name=ROLE_MANAGER)
+        settings = self._site_settings_with_paymob()
+        self.api_client.force_authenticate(user)
+        videos = {
+            "product_video_1_url_file": SimpleUploadedFile(
+                "Routine One.mp4", b"\x00\x00\x00\x18ftypisom" + b"\x00" * 16, content_type="video/mp4"
+            ),
+            "product_video_2_url_file": SimpleUploadedFile(
+                "Product Routine.webm", b"\x1a\x45\xdf\xa3" + b"\x00" * 20, content_type="video/webm"
+            ),
+            "product_video_3_url_file": SimpleUploadedFile(
+                "Routine Three.mp4", b"\x00\x00\x00\x18ftypisom" + b"\x00" * 16, content_type="video/mp4"
+            ),
+        }
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with self.settings(MEDIA_ROOT=media_root, MEDIA_URL="/media/"):
+                response = self.api_client.patch(
+                    "/api/admin/settings/",
+                    {
+                        "product_video_panel_enabled": "true",
+                        **videos,
+                    },
+                    format="multipart",
+                )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        for slot, expected_name, extension in (
+            (1, "routine-one", "mp4"),
+            (2, "product-routine", "webm"),
+            (3, "routine-three", "mp4"),
+        ):
+            self.assertRegex(
+                response.data[f"product_video_{slot}_url"],
+                rf"^/media/settings/product-videos/{expected_name}-[a-f0-9]{{8}}\.{extension}$",
+            )
+        settings.refresh_from_db()
+        self.assertTrue(settings.product_video_panel_enabled)
+        self.assertEqual(settings.product_video_2_url, response.data["product_video_2_url"])
+
+    def test_admin_settings_product_video_panel_can_be_disabled(self):
+        user = self._create_staff_user("settings-product-video-toggle", role_name=ROLE_MANAGER)
+        settings = self._site_settings_with_paymob()
+        settings.product_video_panel_enabled = True
+        settings.product_video_1_url = "https://cdn.example.com/clip.mp4"
+        settings.save(update_fields=["product_video_panel_enabled", "product_video_1_url"])
+        self.api_client.force_authenticate(user)
+
+        response = self.api_client.patch(
+            "/api/admin/settings/",
+            {"product_video_panel_enabled": False},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        settings.refresh_from_db()
+        self.assertFalse(settings.product_video_panel_enabled)
+        self.assertEqual(settings.product_video_1_url, "https://cdn.example.com/clip.mp4")
+
+    def test_admin_settings_product_video_link_rejects_unsafe_scheme(self):
+        user = self._create_staff_user("settings-product-video-url", role_name=ROLE_MANAGER)
+        self._site_settings_with_paymob()
+        self.api_client.force_authenticate(user)
+
+        response = self.api_client.patch(
+            "/api/admin/settings/",
+            {"product_video_1_url": "javascript:alert(1)"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_admin_settings_product_video_accepts_direct_https_link(self):
+        user = self._create_staff_user("settings-product-video-link", role_name=ROLE_MANAGER)
+        settings = self._site_settings_with_paymob()
+        self.api_client.force_authenticate(user)
+        video_url = "https://cdn.example.com/product-routine.webm"
+
+        response = self.api_client.patch(
+            "/api/admin/settings/",
+            {"product_video_1_url": video_url},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        settings.refresh_from_db()
+        self.assertEqual(settings.product_video_1_url, video_url)
+
     def test_admin_settings_audit_redacts_paymob_secrets(self):
         user = self._create_staff_user("settings-paymob-audit", role_name=ROLE_MANAGER)
         settings = self._site_settings_with_paymob()

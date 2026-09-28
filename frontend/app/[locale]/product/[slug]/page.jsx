@@ -193,6 +193,7 @@ export default async function LocalizedProductPage({ params, searchParams }) {
             text: navigation?.settings?.urgency_text || "",
             endsAt: navigation?.settings?.urgency_ends_at || "",
           }}
+          productVideoPanel={navigation?.settings?.product_video_panel}
         />
       </section>
       <section className="section container">

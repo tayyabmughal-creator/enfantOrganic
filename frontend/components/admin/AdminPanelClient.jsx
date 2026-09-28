@@ -389,6 +389,13 @@ const FIELD_CONFIGS = {
     ["discount_popup_image_url","Discount popup image URL","text"],
     ["discount_popup_image_file","Upload popup image (replaces URL above)","file"],
     ["floating_video_url","Floating site video (MP4/WebM)","video-upload",null,{helpText:"Upload an MP4 or WebM up to 50 MB. It appears site-wide after upload; clear it to hide the player."}],
+    ["product_video_panel_enabled","Show product page video panel","checkbox",null,{helpText:"Turn this off to hide all three product videos without deleting their links or uploads."}],
+    ["product_video_1_url","Product video 1 direct link (MP4/WebM)","url",null,{helpText:"Use a direct HTTPS URL ending in .mp4 or .webm, or upload the video below."}],
+    ["product_video_1_url_file","Upload product video 1 (MP4/WebM)","video-upload",null,{helpText:"MP4 or WebM, up to 50 MB."}],
+    ["product_video_2_url","Product video 2 direct link (MP4/WebM)","url",null,{helpText:"Use a direct HTTPS URL ending in .mp4 or .webm, or upload the video below."}],
+    ["product_video_2_url_file","Upload product video 2 (MP4/WebM)","video-upload",null,{helpText:"MP4 or WebM, up to 50 MB."}],
+    ["product_video_3_url","Product video 3 direct link (MP4/WebM)","url",null,{helpText:"Use a direct HTTPS URL ending in .mp4 or .webm, or upload the video below."}],
+    ["product_video_3_url_file","Upload product video 3 (MP4/WebM)","video-upload",null,{helpText:"MP4 or WebM, up to 50 MB."}],
     ["instagram_title_en","Instagram title EN","text"],["instagram_title_ar","Instagram title AR","text"],
     ["instagram_cta_en","Instagram CTA EN","text"],["instagram_cta_ar","Instagram CTA AR","text"],
     ["blog_title_en","Blog title EN","text"],["blog_title_ar","Blog title AR","text"],
@@ -793,6 +800,7 @@ function buildPayload(editor, key, mode) {
     if (k === "password" && !v) return true;
     // Never re-submit an existing file path as a string (backend FileField rejects it).
     if (type === "file" && !(v instanceof File)) return true;
+    if (type === "video-upload" && k.endsWith("_file") && !(v instanceof File)) return true;
     if (v === null || v === undefined) return true;
     if (v === "" && !isEdit) return true;
     return false;

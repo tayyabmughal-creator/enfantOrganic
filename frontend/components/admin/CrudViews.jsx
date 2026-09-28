@@ -165,6 +165,7 @@ export function CrudPanel({
                   </div>
                 );
               })}
+                  key={value instanceof File ? `${name}-${value.name}` : name}
             </>
           )
         ) : <AdminEmpty label={label} />}
@@ -2371,17 +2372,25 @@ function FormField({ field, value, editor, setEditor, mode, onGalleryUpload }) {
     );
   }
   if (type === "video-upload") {
-    const currentVideoUrl = typeof value === "string" ? value : "";
+    const currentVideoUrl = linkedUrlField
+      ? existingPreviewUrl
+      : typeof value === "string" ? value : "";
     const videoPreviewUrl = objectPreviewUrl || currentVideoUrl;
+    const clearVideo = () => {
+      const nextEditor = { ...editor, [name]: "" };
+      if (linkedUrlField && !(value instanceof File)) nextEditor[linkedUrlField] = "";
+      setEditor(nextEditor);
+    };
     return (
       <div className="admin-label admin-video-upload-field">
         <span>{label}</span>
         {videoPreviewUrl ? (
           <video className="admin-video-preview" src={videoPreviewUrl} controls playsInline preload="metadata" />
         ) : (
-          <small className="admin-field-help">No video uploaded. The floating player is hidden on the storefront.</small>
+          <small className="admin-field-help">No video selected.</small>
         )}
         <input
+          key={value instanceof File ? `${name}-${value.name}` : name}
           type="file"
           className="admin-input"
           accept="video/mp4,.mp4,video/webm,.webm"
@@ -2392,14 +2401,14 @@ function FormField({ field, value, editor, setEditor, mode, onGalleryUpload }) {
           }}
         />
         {value instanceof File ? <span className="admin-file-name">{value.name}</span> : null}
-        {currentVideoUrl ? (
+        {currentVideoUrl || value instanceof File ? (
           <button
             type="button"
             className="admin-btn-secondary admin-video-remove"
             disabled={disabled}
-            onClick={() => setEditor({ ...editor, [name]: "" })}
+            onClick={clearVideo}
           >
-            Remove current video
+            {value instanceof File ? "Clear video selection" : "Remove current video"}
           </button>
         ) : null}
         {helpText ? <small className="admin-field-help">{helpText}</small> : null}

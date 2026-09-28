@@ -5237,9 +5237,19 @@ class AdminSettingsView(APIView):
         settings = SiteSettings.objects.first()
         before_snapshot = snapshot_instance(settings) if settings else None
         popup_upload = request.FILES.get("discount_popup_image_file")
-        video_upload = request.FILES.get("floating_video_url")
+        video_upload_fields = {
+            "floating_video_url": "floating_video_url",
+            "product_video_1_url_file": "product_video_1_url",
+            "product_video_2_url_file": "product_video_2_url",
+            "product_video_3_url_file": "product_video_3_url",
+        }
+        video_uploads = [
+            (target_field, request.FILES.get(upload_field))
+            for upload_field, target_field in video_upload_fields.items()
+            if request.FILES.get(upload_field) is not None
+        ]
         data = request.data
-        if popup_upload is not None or video_upload is not None:
+        if popup_upload is not None or video_uploads:
             import os
             import uuid
             import json as json_module
@@ -5248,7 +5258,7 @@ class AdminSettingsView(APIView):
             from django.db.models import JSONField
             from django.utils.text import slugify
 
-            uploaded_fields = {"discount_popup_image_file", "floating_video_url"}
+            uploaded_fields = {"discount_popup_image_file", *video_upload_fields}
             data = {key: value for key, value in request.data.items() if key not in uploaded_fields}
 
             if popup_upload is not None:
@@ -5275,7 +5285,7 @@ class AdminSettingsView(APIView):
                     )
                 data["discount_popup_image_url"] = f"{dj_settings.MEDIA_URL.rstrip('/')}/{stored_path}"
 
-            if video_upload is not None:
+            for video_field, video_upload in video_uploads:
                 base, ext = os.path.splitext(video_upload.name or "")
                 ext = ext.lower()
                 video_header = video_upload.read(12)
@@ -5287,16 +5297,17 @@ class AdminSettingsView(APIView):
                 if not (is_mp4 or is_webm):
                     return Response({"detail": "Upload a valid MP4 or WebM video."}, status=400)
                 safe_base = slugify(base)[:60] or "floating-video"
-                target = f"settings/floating-video/{safe_base}-{uuid.uuid4().hex[:8]}{ext}"
+                video_folder = "floating-video" if video_field == "floating_video_url" else "product-videos"
+                target = f"settings/{video_folder}/{safe_base}-{uuid.uuid4().hex[:8]}{ext}"
                 try:
                     stored_path = default_storage.save(target, video_upload)
                 except Exception:
-                    logger.exception("Floating video save failed (file=%s)", video_upload.name)
+                    logger.exception("Settings video save failed (field=%s, file=%s)", video_field, video_upload.name)
                     return Response(
                         {"detail": f"Could not save '{video_upload.name}'. Please try a different file."},
                         status=400,
                     )
-                data["floating_video_url"] = f"{dj_settings.MEDIA_URL.rstrip('/')}/{stored_path}"
+                data[video_field] = f"{dj_settings.MEDIA_URL.rstrip('/')}/{stored_path}"
 
             # Multipart flattens JSON fields to strings. Restore them whenever
             # either upload is included so unrelated site settings stay intact.

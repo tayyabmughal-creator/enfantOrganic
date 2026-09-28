@@ -1121,6 +1121,36 @@ class AdminSiteSettingsSerializer(serializers.ModelSerializer):
     clear_paymob_apple_pay_integration_id = serializers.BooleanField(write_only=True, required=False, default=False)
     clear_paymob_apple_pay_iframe_id = serializers.BooleanField(write_only=True, required=False, default=False)
 
+    @staticmethod
+    def _validate_product_video_url(value):
+        value = str(value or "").strip()
+        if not value:
+            return value
+        from urllib.parse import urlparse
+
+        parsed = urlparse(value)
+        is_direct_video = (
+            parsed.scheme == "https"
+            and bool(parsed.netloc)
+            and parsed.path.lower().endswith((".mp4", ".webm"))
+        )
+        is_uploaded_media = (
+            parsed.path.startswith("/media/settings/product-videos/")
+            and parsed.path.lower().endswith((".mp4", ".webm"))
+        )
+        if not (is_direct_video or is_uploaded_media):
+            raise serializers.ValidationError("Enter a direct HTTPS MP4/WebM link or upload a video file.")
+        return value
+
+    def validate_product_video_1_url(self, value):
+        return self._validate_product_video_url(value)
+
+    def validate_product_video_2_url(self, value):
+        return self._validate_product_video_url(value)
+
+    def validate_product_video_3_url(self, value):
+        return self._validate_product_video_url(value)
+
     class Meta:
         model = SiteSettings
         fields = "__all__"
