@@ -13,13 +13,6 @@ import { API_BASE_URL, CUSTOMER_TOKEN_KEY } from "@/lib/config";
 import { trackEvent } from "@/lib/eventTracking";
 import { hasHtml, sanitizeHtml } from "@/lib/safeHtml";
 import { buildStorePath, formatMoney, uiText } from "@/lib/storefront";
-import {
-  addWishlistProduct,
-  ensureWishlistSlugs,
-  hasWishlistSession,
-  removeWishlistProduct,
-  subscribeWishlist,
-} from "@/lib/wishlist";
 
 const DESC_ICONS = ["leaf", "shield", "check", "sparkle"];
 
@@ -393,9 +386,6 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
   const [notifySubmitting, setNotifySubmitting] = useState(false);
   const [notifySuccess, setNotifySuccess] = useState("");
   const [notifyError, setNotifyError] = useState("");
-  const [isWishlisted, setIsWishlisted] = useState(false);
-  const [isWishSubmitting, setIsWishSubmitting] = useState(false);
-  const [wishFeedback, setWishFeedback] = useState("");
   const [showAllReviews, setShowAllReviews] = useState(false);
   const [reviewFormOpen, setReviewFormOpen] = useState(false);
   const lastTrackedViewItemRef = useRef("");
@@ -417,11 +407,6 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
   const [showMobileBar, setShowMobileBar] = useState(false);
   const actionsRef = useRef(null);
 
-  const socialProofPills = [
-    { icon: "heart", label: isAr ? "محبوب من عائلات إنفانت" : "Loved by Enfant families" },
-    { icon: "check", label: product.organic_certification_name || (isAr ? "عناية موثوقة يوميًا" : "Trusted everyday care") },
-  ];
-
   // The market's own delivery promise when the admin has set one; otherwise the
   // generic wording, rather than inventing a lead time nobody committed to.
   const etaMin = Number(deliveryEta?.min) || 0;
@@ -431,12 +416,6 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
         ? (etaMin && etaMin !== etaMax ? `التوصيل خلال ${etaMin}-${etaMax} يوم` : `التوصيل خلال ${etaMax} يوم`)
         : (etaMin && etaMin !== etaMax ? `Delivery in ${etaMin}-${etaMax} days` : `Delivery in ${etaMax} days`))
     : t.freeShipping;
-
-  const trustFeatures = [
-    { icon: "truck", title: isAr ? "شحن سريع" : "Fast shipping", copy: deliveryCopy },
-    { icon: "check", title: isAr ? "منتج أصلي" : "Original product", copy: t.originalProducts },
-    { icon: "shield", title: isAr ? "دفع آمن" : "Secure payment", copy: t.securePayment },
-  ];
 
   const paymentLogos = [
     {
@@ -491,36 +470,6 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
     if (typeof window !== "undefined") {
       setCurrentUrl(window.location.href);
     }
-  }, [locale, product.slug, region]);
-
-  useEffect(() => {
-    let active = true;
-
-    async function syncWishlist() {
-      if (!hasWishlistSession()) {
-        if (active) setIsWishlisted(false);
-        return;
-      }
-      try {
-        const slugs = await ensureWishlistSlugs({ region, locale });
-        if (active) setIsWishlisted(slugs.has(product.slug));
-      } catch {
-        if (active) setIsWishlisted(false);
-      }
-    }
-
-    syncWishlist();
-
-    const unsubscribe = subscribeWishlist((detail) => {
-      if (detail?.region !== region) return;
-      const nextSlugs = new Set(detail?.slugs || []);
-      setIsWishlisted(nextSlugs.has(product.slug));
-    });
-
-    return () => {
-      active = false;
-      unsubscribe();
-    };
   }, [locale, product.slug, region]);
 
   useEffect(() => {
@@ -678,42 +627,6 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
       setCopyFeedback(isAr ? "تعذر نسخ الرابط." : "Unable to copy the link.");
     }
     window.setTimeout(() => setCopyFeedback(""), 2200);
-  };
-
-  const showWishFeedback = (message) => {
-    setWishFeedback(message);
-    window.setTimeout(() => setWishFeedback(""), 2200);
-  };
-
-  const handleWishlistToggle = async () => {
-    if (isWishSubmitting) return;
-    setIsWishSubmitting(true);
-
-    try {
-      if (isWishlisted) {
-        await removeWishlistProduct(product.slug, { locale, region });
-        showWishFeedback(isAr ? "تمت إزالة المنتج من المفضلة." : "Removed from wishlist.");
-      } else {
-        await addWishlistProduct(product.slug, { locale, region });
-        showWishFeedback(isAr ? "تم حفظ المنتج في المفضلة." : "Saved to wishlist.");
-      }
-    } catch (error) {
-      if (error?.code === "AUTH_REQUIRED") {
-        showWishFeedback(
-          isAr
-            ? "يرجى تسجيل الدخول لحفظ المنتجات في المفضلة."
-            : "Please sign in to save items to your wishlist.",
-        );
-      } else {
-        showWishFeedback(
-          isAr
-            ? "تعذر تحديث المفضلة. حاول مرة أخرى."
-            : "Unable to update wishlist. Please try again.",
-        );
-      }
-    } finally {
-      setIsWishSubmitting(false);
-    }
   };
 
   const submitBackInStockRequest = async (event) => {
@@ -962,32 +875,7 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
             )}
           </div>
 
-          {/* Trust Grid */}
-          <div className="product-trust-grid">
-            {trustFeatures.map((feature) => (
-              <div key={feature.title} className="product-trust-item">
-                <span className="product-trust-icon">
-                  <Icon name={feature.icon} size={18} />
-                </span>
-                <div>
-                  <strong>{feature.title}</strong>
-                  <span>{feature.copy}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Social Proof */}
-          <div className="product-proof-row">
-            {socialProofPills.map((pill) => (
-              <span key={pill.label} className="product-proof-pill">
-                <Icon name={pill.icon} size={14} />
-                {pill.label}
-              </span>
-            ))}
-          </div>
-
-          {/* Footer: Payment + Wishlist */}
+          {/* Footer: Payment */}
           <div className="product-summary-footer">
             <div className="product-payment-block">
               <p>{isAr ? "خيارات دفع آمنة" : "Secure checkout"}</p>
@@ -1002,75 +890,11 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
 
             <div className="product-summary-side-actions">
               <div className="product-utility-row">
-                <button
-                  type="button"
-                  className={`product-wishlist-button${isWishlisted ? " is-active" : ""}`}
-                  onClick={handleWishlistToggle}
-                  disabled={isWishSubmitting}
-                >
-                  <Icon name="heart" size={18} />
-                  <span>{isAr ? "المفضلة" : "Wishlist"}</span>
-                </button>
                 <Link className="product-continue-link" href={buildStorePath(locale, "/collections", region)}>
                   {t.continueShopping}
                 </Link>
               </div>
-              {wishFeedback ? <p className="product-wishlist-feedback">{wishFeedback}</p> : null}
             </div>
-          </div>
-
-          {/* Share */}
-          <div className="summary-block product-share-block">
-            <div className="product-share-header">
-              <h4>{isAr ? "شاركي المنتج" : "Share this product"}</h4>
-              <span className="product-share-label">
-                <Icon name="link" size={14} />
-                {isAr ? "مشاركة سريعة" : "Quick share"}
-              </span>
-            </div>
-            <div className="product-share-actions">
-              <button
-                type="button"
-                className="product-share-button"
-                onClick={() => {
-                  const url = encodeURIComponent(getShareUrl());
-                  const text = encodeURIComponent(shareTitle);
-                  openShareLink(`https://wa.me/?text=${text}%20${url}`);
-                }}
-              >
-                WhatsApp
-              </button>
-              <button
-                type="button"
-                className="product-share-button"
-                onClick={() => {
-                  const url = encodeURIComponent(getShareUrl());
-                  openShareLink(`https://www.facebook.com/sharer/sharer.php?u=${url}`);
-                }}
-              >
-                Facebook
-              </button>
-              <button
-                type="button"
-                className="product-share-button"
-                onClick={() => {
-                  const url = encodeURIComponent(getShareUrl());
-                  const text = encodeURIComponent(shareTitle);
-                  openShareLink(`https://twitter.com/intent/tweet?text=${text}&url=${url}`);
-                }}
-              >
-                X
-              </button>
-              <button
-                type="button"
-                className="product-share-button"
-                onClick={copyProductLink}
-              >
-                <Icon name="link" size={14} />
-                <span>{isAr ? "نسخ الرابط" : "Copy link"}</span>
-              </button>
-            </div>
-            {copyFeedback ? <p className="product-share-feedback">{copyFeedback}</p> : null}
           </div>
         </div>
 
