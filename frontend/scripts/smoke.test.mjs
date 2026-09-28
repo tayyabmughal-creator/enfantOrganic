@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 
 import {
   buildStorePath,
@@ -143,6 +144,28 @@ test("page view dedupe key ignores region-only query churn", () => {
     buildPageViewTrackingKey("/en/products", new URLSearchParams("utm_source=instagram&region=ae")),
     "/en/products?utm_source=instagram",
   );
+});
+
+test("generic brand/category labels are not shown in product detail or product cards", () => {
+  const productDetail = readFileSync(new URL("../components/store/product/ProductDetailClient.jsx", import.meta.url), "utf8");
+  const productCard = readFileSync(new URL("../components/cards/ProductCard.jsx", import.meta.url), "utf8");
+  const quickView = readFileSync(new URL("../components/store/product/QuickViewModal.jsx", import.meta.url), "utf8");
+
+  assert.doesNotMatch(productDetail, /product\.badge\s*\|\|\s*product\.category\?\.name/);
+  assert.doesNotMatch(productDetail, /summary-badge\}\>\{product\.badge \|\| product\.category\?\.name\}/);
+  assert.doesNotMatch(productCard, /product\.badge\s*\|\|\s*product\.category\?\.name/);
+  assert.doesNotMatch(quickView, /quickViewProduct\.badge \|\| quickViewProduct\.vendor/);
+});
+
+test("product gallery uses a compact preview and line indicators instead of thumbnail boxes", () => {
+  const productDetail = readFileSync(new URL("../components/store/product/ProductDetailClient.jsx", import.meta.url), "utf8");
+  const premiumStyles = readFileSync(new URL("../app/styles/product-premium.css", import.meta.url), "utf8");
+
+  assert.match(productDetail, /className="gallery-next-preview"/);
+  assert.match(productDetail, /className=\{`gallery-image-indicator/);
+  assert.doesNotMatch(productDetail, /className=\{`thumb-button/);
+  assert.match(premiumStyles, /\.main-product-image-shell\s*\{[^}]*500px/);
+  assert.match(premiumStyles, /\.gallery-image-indicator\s*\{[^}]*height:\s*3px/);
 });
 
 test("no page compares the raw locale param against a normalized locale", async () => {

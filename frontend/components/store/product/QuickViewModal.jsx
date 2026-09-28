@@ -131,9 +131,11 @@ export default function QuickViewModal() {
           <div className="quick-view-copy">
             <div className="quick-view-header">
               <div className="quick-view-title-block">
-                <span className="summary-badge">
-                  {quickViewProduct.badge || quickViewProduct.vendor}
-                </span>
+                {quickViewProduct.badge ? (
+                  <span className="summary-badge">
+                    {quickViewProduct.badge}
+                  </span>
+                ) : null}
                 <h3>{quickViewProduct.name}</h3>
               </div>
               <button type="button" className="icon-link" onClick={closeQuickView}>

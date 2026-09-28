@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 import Icon from "@/components/icons/Icon";
 import SiteImage from "@/components/ui/SiteImage";
@@ -365,7 +364,6 @@ function UrgencyStrip({ urgency, locale }) {
 export default function ProductDetailClient({ locale, product, region, deliveryEta, urgency }) {
   const { addItem, flyToCart } = useStore();
   const addBtnRef = useRef(null);
-  const router = useRouter();
   const t = uiText(locale);
   const isAr = locale === "ar";
   const galleryImages = Array.from(
@@ -400,7 +398,6 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
     ? Number(selectedVariantStock) <= 0
     : Boolean(product?.stock_status?.track_inventory) && !Boolean(product?.stock_status?.is_in_stock);
   const reviewCount = Number(product.review_count || customerReviews.length || 0);
-  const vendorLabel = String(product.vendor || product.brand || "ENFANT ORGANICS").toUpperCase();
   const compareAmount = Number(selectedPricing?.compare_amount || 0);
   const showComparePrice = compareAmount > Number(selectedPricing?.amount || 0);
 
@@ -585,11 +582,6 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
     flyToCart(addBtnRef.current);
   };
 
-  const buyCurrentProduct = () => {
-    addItem({ ...product, pricing: selectedPricing, image: selectedVariant?.image || product.image, locale }, quantity, selectedOptions, selectedVariant);
-    router.push(buildStorePath(locale, "/checkout", region));
-  };
-
   const getShareUrl = () => {
     if (currentUrl) {
       return currentUrl;
@@ -691,21 +683,45 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
                 sizes="(max-width: 900px) 100vw, 50vw"
               />
             </div>
+            {galleryImages.length > 1 ? (() => {
+              const activeImageIndex = Math.max(0, galleryImages.indexOf(selectedImage));
+              const nextImageIndex = (activeImageIndex + 1) % galleryImages.length;
+              return (
+                <button
+                  type="button"
+                  className="gallery-next-preview"
+                  onClick={() => setSelectedImage(galleryImages[nextImageIndex])}
+                  aria-label={isAr ? "عرض الصورة التالية" : "View next product image"}
+                >
+                  <SiteImage
+                    src={galleryImages[nextImageIndex]}
+                    alt=""
+                    width={112}
+                    height={112}
+                    loading="lazy"
+                    sizes="56px"
+                  />
+                  <span>{nextImageIndex + 1}/{galleryImages.length}</span>
+                </button>
+              );
+            })() : null}
             <div className="image-zoom-hint">
               <Icon name="search" size={14} />
               <span>{isAr ? "تكبير" : "Hover to zoom"}</span>
             </div>
           </div>
           {galleryImages.length > 1 ? (
-            <div className="thumb-list" aria-label={isAr ? "صور المنتج" : "Product gallery"}>
-              {galleryImages.map((image) => (
+            <div className="gallery-image-indicators" role="group" aria-label={isAr ? "صور المنتج" : "Product gallery"}>
+              {galleryImages.map((image, index) => (
                 <button
-                  key={image}
+                  key={`${image}-${index}`}
                   type="button"
-                  className={`thumb-button ${selectedImage === image ? "is-active" : ""}`}
+                  className={`gallery-image-indicator ${selectedImage === image ? "is-active" : ""}`}
                   onClick={() => setSelectedImage(image)}
+                  aria-label={isAr ? `الصورة ${index + 1} من ${galleryImages.length}` : `View image ${index + 1} of ${galleryImages.length}`}
+                  aria-pressed={selectedImage === image}
                 >
-                  <SiteImage src={image} alt={product.name} width={120} height={120} loading="lazy" sizes="120px" />
+                  <span />
                 </button>
               ))}
             </div>
@@ -716,10 +732,11 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
         <div className="product-summary">
           {/* Header */}
           <div className="summary-block product-summary-header">
-            <div className="product-meta-row">
-              <span className="summary-eyebrow">{vendorLabel}</span>
-              <span className="summary-badge">{product.badge || product.category?.name}</span>
-            </div>
+            {product.badge ? (
+              <div className="product-meta-row">
+                <span className="summary-badge">{product.badge}</span>
+              </div>
+            ) : null}
 
             <h1>{product.name}</h1>
 
@@ -866,10 +883,6 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
                 <button ref={addBtnRef} type="button" className="secondary-action product-cart-action" onClick={() => addCurrentProduct()}>
                   <Icon name="bag" size={18} />
                   <span>{t.addToCart}</span>
-                </button>
-                <button type="button" className="primary-action product-buy-action" onClick={buyCurrentProduct}>
-                  <Icon name="sparkle" size={17} />
-                  <span>{isAr ? "اشترِ الآن" : "Buy it now"}</span>
                 </button>
               </div>
             )}
@@ -1039,9 +1052,6 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
           </div>
           <button type="button" className="secondary-action product-cart-action" onClick={() => addCurrentProduct()}>
             <Icon name="bag" size={18} />
-          </button>
-          <button type="button" className="primary-action product-buy-action" onClick={buyCurrentProduct}>
-            <span>{isAr ? "اشترِ الآن" : "Buy Now"}</span>
           </button>
         </div>
       )}

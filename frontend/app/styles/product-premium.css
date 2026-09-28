@@ -5,17 +5,18 @@
 
 /* ── Image Gallery ────────────────────────────────────────────────────── */
 .main-product-image-shell {
-  border-radius: 28px;
+  width: min(100%, 500px);
+  justify-self: center;
+  border-radius: 18px;
   border: 1px solid rgba(146, 171, 105, 0.1);
   background: linear-gradient(145deg, #ffffff 0%, #f9fbf6 100%);
-  box-shadow:
-    0 32px 72px rgba(25, 24, 23, 0.05),
-    0 8px 24px rgba(25, 24, 23, 0.025);
+  box-shadow: none;
   overflow: hidden;
   position: relative;
 }
 
 .main-product-image {
+  aspect-ratio: 1 / 1;
   border: none;
   border-radius: 0;
   background: transparent;
@@ -23,6 +24,9 @@
 }
 
 .main-product-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
   transition: transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
   will-change: transform;
 }
@@ -62,18 +66,71 @@
   opacity: 1;
 }
 
-/* Thumbnails */
-.thumb-list {
-  gap: 12px;
+/* Minimal gallery position line with a tappable next-image preview. */
+.gallery-image-indicators {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  width: min(100%, 500px);
+  justify-self: center;
+  padding: 2px 0;
 }
 
-.thumb-button {
-  border-radius: 16px;
-  border: 2px solid transparent;
+.gallery-image-indicator {
+  flex: 1 1 0;
+  max-width: 48px;
+  min-width: 12px;
+  height: 3px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(96, 122, 66, 0.2);
+  padding: 0;
+  cursor: pointer;
+}
+
+.gallery-image-indicator span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.gallery-image-indicator.is-active {
+  background: var(--brand-dark);
+}
+
+.gallery-next-preview {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 56px;
+  height: 56px;
+  padding: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
   background: #fff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 10px rgba(25, 24, 23, 0.16);
   overflow: hidden;
+  cursor: pointer;
+}
+
+.gallery-next-preview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.gallery-next-preview span {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: rgba(25, 24, 23, 0.72);
+  color: #fff;
+  font-size: 0.62rem;
+  line-height: 1.2;
 }
 
 .thumb-button:hover {
@@ -139,21 +196,21 @@
 
 .summary-block h1,
 .quick-view-header h3 {
-  font-size: clamp(1.45rem, 2.2vw, 2.1rem);
-  line-height: 1.12;
-  letter-spacing: -0.025em;
+  font-size: clamp(1.22rem, 1.6vw, 1.48rem);
+  line-height: 1.22;
+  letter-spacing: -0.02em;
   font-weight: 600;
 }
 
 /* ── Web/Desktop Product Title ── Premium Impact ── */
 @media (min-width: 1181px) {
   .product-summary-header.summary-block h1 {
-    font-size: clamp(1.9rem, 2.6vw, 2.55rem);
-    line-height: 1.06;
+    font-size: clamp(1.5rem, 2vw, 1.9rem);
+    line-height: 1.12;
     letter-spacing: -0.035em;
     font-weight: 700;
     color: #1a2314;
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
+    text-shadow: none;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -161,15 +218,15 @@
 
 @media (min-width: 1400px) {
   .product-summary-header.summary-block h1 {
-    font-size: clamp(2rem, 2.4vw, 2.7rem);
-    line-height: 1.04;
+    font-size: clamp(1.7rem, 2.1vw, 2.2rem);
+    line-height: 1.08;
     letter-spacing: -0.04em;
   }
 }
 
 .product-short-copy {
-  font-size: 0.95rem;
-  line-height: 1.65;
+  font-size: 0.8rem;
+  line-height: 1.6;
   color: var(--text-soft);
   margin: 4px 0 0;
 }
@@ -210,7 +267,7 @@
 }
 
 .product-pricing--premium strong {
-  font-size: clamp(1.6rem, 2.4vw, 2.1rem);
+  font-size: clamp(1.3rem, 1.8vw, 1.55rem);
   font-weight: 700;
   color: var(--text);
   letter-spacing: -0.03em;
@@ -245,13 +302,13 @@
 
 /* ── Variant Pills ────────────────────────────────────────────────────── */
 .option-pill {
-  min-height: 46px;
-  padding: 0 22px;
-  border-radius: 12px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 9px;
   border: 1.5px solid var(--line);
   background: #fff;
   color: var(--text);
-  font-size: 0.92rem;
+  font-size: 0.8rem;
   font-weight: 650;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
@@ -297,8 +354,8 @@
 
 /* ── Quantity ─────────────────────────────────────────────────────────── */
 .quantity-control {
-  min-height: 52px;
-  border-radius: 14px;
+  min-height: 38px;
+  border-radius: 10px;
   border: 1.5px solid var(--line);
   background: #fff;
   padding: 4px;
@@ -306,18 +363,22 @@
 }
 
 .quantity-control span {
-  font-size: 1.08rem;
+  font-size: 0.9rem;
   font-weight: 700;
-  min-width: 48px;
+  min-width: 34px;
 }
 
 .quantity-control button {
-  width: 42px;
-  height: 42px;
-  border-radius: 11px;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
   background: var(--surface-soft);
   color: var(--text);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.product-option-block .option-pills {
+  gap: 6px;
 }
 
 .quantity-control button:hover {
@@ -390,7 +451,7 @@
 .product-trust-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .product-trust-item {
@@ -1000,25 +1061,7 @@
   }
 
   .main-product-image-shell {
-    border-radius: 20px;
-  }
-
-  .thumb-list {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-bottom: 6px;
-    gap: 10px;
-    scrollbar-width: none;
-  }
-
-  .thumb-list::-webkit-scrollbar {
-    display: none;
-  }
-
-  .thumb-button {
-    width: 76px;
-    min-width: 76px;
-    border-radius: 14px;
+    border-radius: 18px;
   }
 
   .product-summary {
