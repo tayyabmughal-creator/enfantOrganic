@@ -374,6 +374,56 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
   const editorialReviews = Array.isArray(product.reviews) ? product.reviews : [];
   const customerReviews = Array.isArray(product.customer_reviews) ? product.customer_reviews : [];
   const [selectedImage, setSelectedImage] = useState(galleryImages[0] || product.image);
+  // A variant's own photo is not always part of the gallery; lead with it then.
+  const slideImages = selectedImage && !galleryImages.includes(selectedImage)
+    ? [selectedImage, ...galleryImages]
+    : galleryImages;
+  const galleryTrackRef = useRef(null);
+  const slideSyncFrameRef = useRef(0);
+  const pendingSlideScrollRef = useRef("");
+
+  // Scroll the phone rail so `index` sits at its start edge. Measured with
+  // rects so the same delta works in RTL, and assigned (not smooth) because
+  // Chrome drops smooth programmatic scrolls on snap containers.
+  const scrollTrackTo = (index) => {
+    const track = galleryTrackRef.current;
+    const slide = track?.children?.[index];
+    if (!track || !slide || track.scrollWidth <= track.clientWidth) return;
+    const isRtl = getComputedStyle(track).direction === "rtl";
+    const trackRect = track.getBoundingClientRect();
+    const slideRect = slide.getBoundingClientRect();
+    const padStart = parseFloat(getComputedStyle(track).paddingInlineStart) || 0;
+    track.scrollLeft += isRtl
+      ? slideRect.right - (trackRect.right - padStart)
+      : slideRect.left - (trackRect.left + padStart);
+  };
+
+  const showSlide = (image) => {
+    setSelectedImage(image);
+    scrollTrackTo(slideImages.indexOf(image));
+  };
+
+  const syncSlideFromScroll = () => {
+    cancelAnimationFrame(slideSyncFrameRef.current);
+    slideSyncFrameRef.current = requestAnimationFrame(() => {
+      const track = galleryTrackRef.current;
+      if (!track) return;
+      const isRtl = getComputedStyle(track).direction === "rtl";
+      const trackRect = track.getBoundingClientRect();
+      let closest = 0;
+      let closestDistance = Infinity;
+      Array.from(track.children).forEach((slide, index) => {
+        const rect = slide.getBoundingClientRect();
+        const distance = Math.abs(isRtl ? trackRect.right - rect.right : rect.left - trackRect.left);
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closest = index;
+        }
+      });
+      const image = slideImages[closest];
+      if (image && image !== selectedImage) setSelectedImage(image);
+    });
+  };
   const [openAccordion, setOpenAccordion] = useState("description");
   const toggleAccordion = (key) => setOpenAccordion(prev => prev === key ? "" : key);
   const [quantity, setQuantity] = useState(1);
@@ -463,9 +513,17 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
 
   useEffect(() => {
     if (selectedVariant?.image) {
+      pendingSlideScrollRef.current = selectedVariant.image;
       setSelectedImage(selectedVariant.image);
     }
   }, [selectedVariant?.id, selectedVariant?.image]);
+
+  // Bring the rail round to a variant's photo once it has rendered as a slide.
+  useEffect(() => {
+    if (!pendingSlideScrollRef.current || pendingSlideScrollRef.current !== selectedImage) return;
+    pendingSlideScrollRef.current = "";
+    scrollTrackTo(slideImages.indexOf(selectedImage));
+  }, [selectedImage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -674,38 +732,52 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
     <>
       <div className="product-layout">
         {/* ── Gallery ─────────────────────────────────────────── */}
-        <div className={`gallery-layout ${galleryImages.length === 1 ? "is-single" : ""}`}>
+        <div className={`gallery-layout ${slideImages.length === 1 ? "is-single" : ""}`}>
           <div className="main-product-image-shell">
-            <div className={`main-product-image ${galleryImages.length === 1 ? "is-single" : ""}`}>
-              {/* LCP element on product pages — must not be lazy. */}
-              <SiteImage
-                src={selectedImage}
-                alt={product.name}
-                width={900}
-                height={900}
-                priority
-                sizes="(max-width: 900px) 100vw, 50vw"
-              />
+            {/* Desktop shows only the active slide; phones get a swipe rail with
+                the next image peeking in so shoppers know there is more. */}
+            <div
+              ref={galleryTrackRef}
+              className={`gallery-track ${slideImages.length === 1 ? "is-single" : ""}`}
+              onScroll={syncSlideFromScroll}
+            >
+              {slideImages.map((image, index) => (
+                <div
+                  key={`${image}-${index}`}
+                  className={`main-product-image gallery-slide ${image === selectedImage ? "is-active" : ""} ${slideImages.length === 1 ? "is-single" : ""}`}
+                >
+                  {/* First slide is the LCP element on product pages — must not be lazy. */}
+                  <SiteImage
+                    src={image}
+                    alt={index === 0 ? product.name : `${product.name} ${index + 1}`}
+                    width={900}
+                    height={900}
+                    priority={index === 0}
+                    loading={index === 0 ? undefined : "lazy"}
+                    sizes="(max-width: 640px) 88vw, (max-width: 900px) 100vw, 50vw"
+                  />
+                </div>
+              ))}
             </div>
-            {galleryImages.length > 1 ? (() => {
-              const activeImageIndex = Math.max(0, galleryImages.indexOf(selectedImage));
-              const nextImageIndex = (activeImageIndex + 1) % galleryImages.length;
+            {slideImages.length > 1 ? (() => {
+              const activeImageIndex = Math.max(0, slideImages.indexOf(selectedImage));
+              const nextImageIndex = (activeImageIndex + 1) % slideImages.length;
               return (
                 <button
                   type="button"
                   className="gallery-next-preview"
-                  onClick={() => setSelectedImage(galleryImages[nextImageIndex])}
+                  onClick={() => showSlide(slideImages[nextImageIndex])}
                   aria-label={isAr ? "عرض الصورة التالية" : "View next product image"}
                 >
                   <SiteImage
-                    src={galleryImages[nextImageIndex]}
+                    src={slideImages[nextImageIndex]}
                     alt=""
                     width={112}
                     height={112}
                     loading="lazy"
                     sizes="56px"
                   />
-                  <span>{nextImageIndex + 1}/{galleryImages.length}</span>
+                  <span>{nextImageIndex + 1}/{slideImages.length}</span>
                 </button>
               );
             })() : null}
@@ -714,15 +786,15 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
               <span>{isAr ? "تكبير" : "Hover to zoom"}</span>
             </div>
           </div>
-          {galleryImages.length > 1 ? (
+          {slideImages.length > 1 ? (
             <div className="gallery-image-indicators" role="group" aria-label={isAr ? "صور المنتج" : "Product gallery"}>
-              {galleryImages.map((image, index) => (
+              {slideImages.map((image, index) => (
                 <button
                   key={`${image}-${index}`}
                   type="button"
                   className={`gallery-image-indicator ${selectedImage === image ? "is-active" : ""}`}
-                  onClick={() => setSelectedImage(image)}
-                  aria-label={isAr ? `الصورة ${index + 1} من ${galleryImages.length}` : `View image ${index + 1} of ${galleryImages.length}`}
+                  onClick={() => showSlide(image)}
+                  aria-label={isAr ? `الصورة ${index + 1} من ${slideImages.length}` : `View image ${index + 1} of ${slideImages.length}`}
                   aria-pressed={selectedImage === image}
                 >
                   <span />

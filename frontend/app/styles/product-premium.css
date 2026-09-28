@@ -1429,3 +1429,83 @@
     width: 100%;
   }
 }
+
+/* ── Gallery track ────────────────────────────────────────────────────
+   Wider screens show only the active slide inside the framed shell. */
+.gallery-track {
+  display: block;
+}
+
+.gallery-slide:not(.is-active) {
+  display: none;
+}
+
+.gallery-track.is-single .gallery-slide {
+  display: block;
+}
+
+/* Phones: the image starts right under the header, and the gallery is a
+   swipe rail whose next photo peeks in at the edge so shoppers know there
+   are more (client reference: Polynae). */
+@media (max-width: 640px) {
+  .product-breadcrumbs {
+    display: none;
+  }
+
+  .product-breadcrumbs + .section {
+    padding-top: 8px;
+  }
+
+  .gallery-layout {
+    min-width: 0;
+    gap: 10px;
+  }
+
+  .main-product-image-shell {
+    width: auto;
+    margin-inline: calc(50% - 50vw);
+    border: 0;
+    border-radius: 0;
+    background: none;
+    overflow: visible;
+  }
+
+  .gallery-track {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    padding-inline: 16px;
+    scroll-padding-inline: 16px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .gallery-track::-webkit-scrollbar {
+    display: none;
+  }
+
+  .gallery-slide,
+  .gallery-slide:not(.is-active) {
+    display: block;
+    flex: 0 0 88%;
+    scroll-snap-align: start;
+    border: 1px solid rgba(146, 171, 105, 0.14);
+    border-radius: 16px;
+    background: linear-gradient(145deg, #ffffff 0%, #f9fbf6 100%);
+  }
+
+  .gallery-track.is-single .gallery-slide {
+    flex-basis: 100%;
+  }
+
+  .main-product-image:hover img {
+    transform: none;
+  }
+
+  .gallery-next-preview,
+  .image-zoom-hint {
+    display: none;
+  }
+}

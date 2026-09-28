@@ -168,6 +168,17 @@ test("product gallery uses a compact preview and line indicators instead of thum
   assert.match(premiumStyles, /\.gallery-image-indicator\s*\{[^}]*height:\s*3px/);
 });
 
+test("on phones the gallery starts under the header and peeks the next photo", () => {
+  const productDetail = readFileSync(new URL("../components/store/product/ProductDetailClient.jsx", import.meta.url), "utf8");
+  const premiumStyles = readFileSync(new URL("../app/styles/product-premium.css", import.meta.url), "utf8");
+  const phone = premiumStyles.slice(premiumStyles.lastIndexOf("@media (max-width: 640px)"));
+
+  assert.match(productDetail, /slideImages\.map\(/);
+  assert.match(phone, /\.product-breadcrumbs\s*\{\s*display:\s*none/);
+  assert.match(phone, /\.gallery-track\s*\{[^}]*scroll-snap-type:\s*x mandatory/);
+  assert.match(phone, /flex:\s*0 0 88%/);
+});
+
 test("the global video is admin-managed, dismissible, and stacks above WhatsApp", () => {
   const player = readFileSync(new URL("../components/layout/FloatingPromoVideo.jsx", import.meta.url), "utf8");
   const shell = readFileSync(new URL("../components/layout/StorefrontShell.jsx", import.meta.url), "utf8");
