@@ -165,7 +165,6 @@ export function CrudPanel({
                   </div>
                 );
               })}
-                  key={value instanceof File ? `${name}-${value.name}` : name}
             </>
           )
         ) : <AdminEmpty label={label} />}
