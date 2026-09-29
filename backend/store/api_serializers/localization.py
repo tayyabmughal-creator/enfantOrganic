@@ -124,6 +124,11 @@ def serialize_site_settings(settings, locale, region=None):
         "free_gift_subtitle": _loc("free_gift_subtitle"),
         "urgency_text": _loc("urgency_text"),
         "urgency_ends_at": settings.urgency_ends_at.isoformat() if settings.urgency_ends_at else "",
+        "trust_bar_items": [
+            {"icon": item.get("icon", ""), "text": item.get(f"text_{normalized}", item.get("text_en", ""))}
+            for item in (settings.trust_bar_items or [])
+            if item.get("text_en") or item.get("text_ar")
+        ],
         # Link groups
         "why_choose_links": localized_link_items(settings.why_choose_links, normalized),
         "policy_links": localized_link_items(settings.policy_links, normalized),

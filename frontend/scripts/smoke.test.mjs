@@ -157,13 +157,22 @@ test("generic brand/category labels are not shown in product detail or product c
   assert.doesNotMatch(quickView, /quickViewProduct\.badge \|\| quickViewProduct\.vendor/);
 });
 
-test("product gallery uses a compact preview and line indicators instead of thumbnail boxes", () => {
+test("product gallery uses a compact preview and line indicators on mobile, vertical thumb strip on desktop", () => {
   const productDetail = readFileSync(new URL("../components/store/product/ProductDetailClient.jsx", import.meta.url), "utf8");
   const premiumStyles = readFileSync(new URL("../app/styles/product-premium.css", import.meta.url), "utf8");
+  const catalogStyles = readFileSync(new URL("../app/styles/catalog-product.css", import.meta.url), "utf8");
 
+  // Mobile: dot indicators and corner preview still render in JSX
   assert.match(productDetail, /className="gallery-next-preview"/);
   assert.match(productDetail, /className=\{`gallery-image-indicator/);
-  assert.doesNotMatch(productDetail, /className=\{`thumb-button/);
+  // Desktop: vertical thumb strip is rendered; hidden on mobile via CSS
+  assert.match(productDetail, /className="thumb-list"/);
+  assert.match(productDetail, /className=\{`thumb-button/);
+  // Desktop: indicators and preview hidden via CSS breakpoint
+  assert.match(premiumStyles, /\.gallery-image-indicators\s*\{[\s\S]*?display:\s*none/);
+  assert.match(premiumStyles, /\.gallery-next-preview\s*\{[\s\S]*?display:\s*none/);
+  // Desktop: gallery grid puts thumb strip on the left
+  assert.match(catalogStyles, /\.gallery-layout\s*\{[\s\S]*?grid-template-columns:\s*84px 1fr/);
   assert.match(premiumStyles, /\.main-product-image-shell\s*\{[^}]*500px/);
   assert.match(premiumStyles, /\.gallery-image-indicator\s*\{[^}]*height:\s*3px/);
 });
@@ -219,6 +228,35 @@ test("the product video panel is admin-configured, optional, and limited to thre
   assert.match(adminPanel, /\["product_video_3_url","Product video 3 direct link \(MP4\/WebM\)","url"/);
   assert.match(adminForm, /const currentVideoUrl = linkedUrlField\s*\?\s*existingPreviewUrl/);
   assert.match(premiumStyles, /\.product-video-panel\s*\{[^}]*repeat\(3, minmax\(0, 1fr\)\)/);
+});
+
+test("product pages show percentage savings and prominent Add to Cart + Buy Now buttons", () => {
+  const productDetail = readFileSync(new URL("../components/store/product/ProductDetailClient.jsx", import.meta.url), "utf8");
+  const premiumStyles = readFileSync(new URL("../app/styles/product-premium.css", import.meta.url), "utf8");
+  const catalogStyles = readFileSync(new URL("../app/styles/catalog-product.css", import.meta.url), "utf8");
+
+  // Discount badge uses discountPercent variable
+  assert.match(productDetail, /\$\{discountPercent\}% off/);
+  // Sticky bar has price-main wrapper with discount badge
+  assert.match(productDetail, /mobile-sticky-price-main[\s\S]*?product-discount-badge/);
+  // Add to Cart label shown in button
+  assert.match(productDetail, /<span>\{t\.addToCart\}<\/span>/);
+  // Buy Now button with buyCurrentProduct handler
+  assert.match(productDetail, /className="product-buy-action" onClick=\{.*buyCurrentProduct/);
+  // Mobile sticky has actions wrapper
+  assert.match(productDetail, /className="mobile-sticky-actions"/);
+  // Desktop CTA: 2-column grid (1fr 1fr)
+  assert.match(premiumStyles, /\.product-cta-stack\s*\{[\s\S]*?grid-template-columns:\s*1fr 1fr/);
+  // Quantity block aligns to start (in catalog-product.css desktop breakpoint)
+  assert.match(catalogStyles, /\.product-quantity-block\s*\{[\s\S]*?align-self:\s*flex-start/);
+});
+
+test("product option labels sit close to their size values", () => {
+  const premiumStyles = readFileSync(new URL("../app/styles/product-premium.css", import.meta.url), "utf8");
+
+  // flex column with tight gap overrides the parent grid
+  assert.match(premiumStyles, /\.product-option-block\s*\{[\s\S]*?gap:\s*4px/);
+  assert.match(premiumStyles, /\.product-option-block h4\s*\{[\s\S]*?margin:\s*0/);
 });
 
 test("no page compares the raw locale param against a normalized locale", async () => {

@@ -363,6 +363,11 @@ class SiteSettings(models.Model):
     urgency_text_ar = models.CharField(max_length=255, blank=True, default="")
     urgency_ends_at = models.DateTimeField(null=True, blank=True)
 
+    # Home page trust bar — shown right below the banner.
+    # Each item: {icon: "truck"|"shield"|"leaf"|"star", text_en: "...", text_ar: "..."}
+    # Empty list hides the bar entirely.
+    trust_bar_items = models.JSONField(default=list, blank=True)
+
     why_choose_links = models.JSONField(default=list, blank=True)
     policy_links = models.JSONField(default=list, blank=True)
     static_links = models.JSONField(default=list, blank=True)

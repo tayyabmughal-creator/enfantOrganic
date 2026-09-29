@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import Icon from "@/components/icons/Icon";
 import SiteImage from "@/components/ui/SiteImage";
@@ -364,6 +365,7 @@ function UrgencyStrip({ urgency, locale }) {
 export default function ProductDetailClient({ locale, product, region, deliveryEta, urgency, productVideoPanel }) {
   const { addItem, flyToCart } = useStore();
   const addBtnRef = useRef(null);
+  const router = useRouter();
   const t = uiText(locale);
   const isAr = locale === "ar";
   const galleryImages = Array.from(
@@ -448,8 +450,12 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
     ? Number(selectedVariantStock) <= 0
     : Boolean(product?.stock_status?.track_inventory) && !Boolean(product?.stock_status?.is_in_stock);
   const reviewCount = Number(product.review_count || customerReviews.length || 0);
+  const currentAmount = Number(selectedPricing?.amount || 0);
   const compareAmount = Number(selectedPricing?.compare_amount || 0);
-  const showComparePrice = compareAmount > Number(selectedPricing?.amount || 0);
+  const showComparePrice = compareAmount > currentAmount;
+  const discountPercent = showComparePrice
+    ? Math.round((1 - currentAmount / compareAmount) * 100)
+    : 0;
   const productVideoUrls = Array.isArray(productVideoPanel?.videos)
     ? productVideoPanel.videos.filter((url) => typeof url === "string" && url.trim()).slice(0, 3)
     : [];
@@ -644,6 +650,11 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
     flyToCart(addBtnRef.current);
   };
 
+  const buyCurrentProduct = () => {
+    addItem({ ...product, pricing: selectedPricing, image: selectedVariant?.image || product.image, locale }, quantity, selectedOptions, selectedVariant);
+    router.push(buildStorePath(locale, "/checkout", region));
+  };
+
   const getShareUrl = () => {
     if (currentUrl) {
       return currentUrl;
@@ -733,6 +744,22 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
       <div className="product-layout">
         {/* ── Gallery ─────────────────────────────────────────── */}
         <div className={`gallery-layout ${slideImages.length === 1 ? "is-single" : ""}`}>
+          {/* Vertical thumbnail strip — shown on desktop, hidden on mobile */}
+          {galleryImages.length > 1 ? (
+            <div className="thumb-list">
+              {galleryImages.map((image, index) => (
+                <button
+                  key={`thumb-${image}-${index}`}
+                  type="button"
+                  className={`thumb-button ${selectedImage === image ? "is-active" : ""}`}
+                  onClick={() => setSelectedImage(image)}
+                  aria-label={isAr ? `الصورة ${index + 1}` : `Image ${index + 1}`}
+                >
+                  <SiteImage src={image} alt="" width={120} height={120} loading="lazy" sizes="80px" />
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div className="main-product-image-shell">
             {/* Desktop shows only the active slide; phones get a swipe rail with
                 the next image peeking in so shoppers know there is more. */}
@@ -854,8 +881,8 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
                 </span>
               ) : null}
               {showComparePrice ? (
-                <span className="save-badge">
-                  {isAr ? "وفر" : "Save"} {Math.round((1 - Number(selectedPricing?.amount || 0) / compareAmount) * 100)}%
+                <span className="product-discount-badge">
+                  {isAr ? `${discountPercent}% خصم` : `${discountPercent}% off`}
                 </span>
               ) : null}
             </div>
@@ -956,9 +983,12 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
               </div>
             ) : (
               <div className="product-cta-stack">
-                <button ref={addBtnRef} type="button" className="secondary-action product-cart-action" onClick={() => addCurrentProduct()}>
-                  <Icon name="bag" size={18} />
+                <button ref={addBtnRef} type="button" className="product-cart-action product-cart-action--primary" onClick={() => addCurrentProduct()}>
+                  <Icon name="bag" size={20} />
                   <span>{t.addToCart}</span>
+                </button>
+                <button type="button" className="product-buy-action" onClick={() => buyCurrentProduct()}>
+                  <span>{t.buyNow}</span>
                 </button>
               </div>
             )}
@@ -1142,14 +1172,22 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
       {!isOutOfStock && (
         <div className={`mobile-product-sticky-bar ${showMobileBar ? "is-visible" : ""}`}>
           <div className="mobile-sticky-price">
-            <strong>{formatMoney(selectedPricing, locale)}</strong>
+            <div className="mobile-sticky-price-main">
+              <strong>{formatMoney(selectedPricing, locale)}</strong>
+              {showComparePrice ? (
+                <span className="product-discount-badge">{isAr ? `${discountPercent}% خصم` : `${discountPercent}% off`}</span>
+              ) : null}
+            </div>
             {showComparePrice && (
-              <span>{formatMoney({ ...selectedPricing, amount: compareAmount, prefix: "" }, locale)}</span>
+              <span className="mobile-sticky-compare">{formatMoney({ ...selectedPricing, amount: compareAmount, prefix: "" }, locale)}</span>
             )}
           </div>
-          <button type="button" className="secondary-action product-cart-action" onClick={() => addCurrentProduct()}>
-            <Icon name="bag" size={18} />
-          </button>
+          <div className="mobile-sticky-actions">
+            <button type="button" className="product-cart-action product-cart-action--primary" onClick={() => addCurrentProduct()}>
+              <Icon name="bag" size={16} />
+              <span>{t.addToCart}</span>
+            </button>
+          </div>
         </div>
       )}
     </>

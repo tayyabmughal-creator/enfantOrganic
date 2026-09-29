@@ -41,6 +41,7 @@ const translations = {
     freeShipping: "Free shipping",
     securePayment: "Secure payment",
     originalProducts: "Original products",
+    buyNow: "Buy Now",
   },
   ar: {
     products: "منتجاتنا",
@@ -82,6 +83,7 @@ const translations = {
     freeShipping: "شحن مجاني",
     securePayment: "دفع آمن",
     originalProducts: "منتجات أصلية",
+    buyNow: "اشتر الآن",
   },
 };
 

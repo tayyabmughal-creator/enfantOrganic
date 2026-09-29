@@ -80,6 +80,11 @@ SITE_SETTINGS = {
     "address_ar": "IFZA Business Park - Building A02 - Dubai Silicon Oasis - Industrial Area - Dubai - United Arab Emirates",
     "facebook_pixel_id": "2127480041027733",
     "snapchat_pixel_id": "a43535d8-5748-44f7-87c4-f712db4a5cb4",
+    "trust_bar_items": [
+        {"icon": "truck", "text_en": "Fast Shipping", "text_ar": "شحن سريع"},
+        {"icon": "leaf", "text_en": "Original Product", "text_ar": "منتج أصلي"},
+        {"icon": "shield", "text_en": "Secure Payment", "text_ar": "دفع آمن"},
+    ],
 }
 
 REGIONS = [
