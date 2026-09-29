@@ -194,6 +194,7 @@ export default async function LocalizedProductPage({ params, searchParams }) {
             endsAt: navigation?.settings?.urgency_ends_at || "",
           }}
           productVideoPanel={navigation?.settings?.product_video_panel}
+          fbtProducts={Array.isArray(productPage.fbt_products) ? productPage.fbt_products : []}
         />
       </section>
       <section className="section container">

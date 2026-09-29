@@ -458,6 +458,18 @@ class ProductAdmin(admin.ModelAdmin):
             },
         ),
         (
+            "Frequently Bought Together",
+            {
+                "fields": ("fbt_slugs",),
+                "classes": ("collapse",),
+                "description": (
+                    "List of product slugs to show as bundle upsells on this product's page. "
+                    'JSON array of slugs, e.g. ["complete-care-cream", "baby-shampoo"]. '
+                    "Leave empty to hide the section. Max 2 companion slugs recommended."
+                ),
+            },
+        ),
+        (
             "Advanced",
             {
                 "fields": (

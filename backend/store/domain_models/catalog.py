@@ -805,6 +805,9 @@ class Product(OrderedModel):
     meta_robots_index = models.BooleanField(default=True)
     meta_robots_follow = models.BooleanField(default=True)
     shopify_meta = models.JSONField(default=dict, blank=True)
+    # Frequently Bought Together — list of product slugs shown as bundle upsells
+    # on this product's detail page. e.g. ["complete-care-cream", "baby-shampoo"]
+    fbt_slugs = models.JSONField(default=list, blank=True)
 
     def __str__(self):
         return self.name_en

@@ -583,6 +583,7 @@ class ProductDetailSerializer(ProductCardSerializer):
             "seo_description",
             "seo",
             "shopify_meta",
+            "fbt_slugs",
         )
 
     def get_description(self, obj):

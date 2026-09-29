@@ -362,7 +362,7 @@ function UrgencyStrip({ urgency, locale }) {
   );
 }
 
-export default function ProductDetailClient({ locale, product, region, deliveryEta, urgency, productVideoPanel }) {
+export default function ProductDetailClient({ locale, product, region, deliveryEta, urgency, productVideoPanel, fbtProducts }) {
   const { addItem, flyToCart } = useStore();
   const addBtnRef = useRef(null);
   const router = useRouter();
@@ -460,6 +460,11 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
     ? productVideoPanel.videos.filter((url) => typeof url === "string" && url.trim()).slice(0, 3)
     : [];
   const showProductVideoPanel = Boolean(productVideoPanel?.enabled && productVideoUrls.length);
+
+  // Frequently Bought Together
+  const fbtList = Array.isArray(fbtProducts) ? fbtProducts.filter(Boolean) : [];
+  const showFbt = fbtList.length > 0;
+  const [fbtTier, setFbtTier] = useState(1); // 1 = just this product, 2 = +1 companion, 3 = +2 companions
 
   const [showMobileBar, setShowMobileBar] = useState(false);
   const actionsRef = useRef(null);
@@ -653,6 +658,18 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
   const buyCurrentProduct = () => {
     addItem({ ...product, pricing: selectedPricing, image: selectedVariant?.image || product.image, locale }, quantity, selectedOptions, selectedVariant);
     router.push(buildStorePath(locale, "/checkout", region));
+  };
+
+  const addFbtBundle = () => {
+    // Always add the main product
+    addItem({ ...product, pricing: selectedPricing, image: selectedVariant?.image || product.image, locale }, 1, selectedOptions, selectedVariant);
+    // Add companion products for the selected tier
+    const companions = fbtList.slice(0, fbtTier - 1);
+    companions.forEach((companion) => {
+      const companionPricing = Array.isArray(companion.pricing) ? companion.pricing[0] : companion.pricing;
+      addItem({ ...companion, pricing: companionPricing, locale }, 1, {}, null);
+    });
+    flyToCart(addBtnRef.current);
   };
 
   const getShareUrl = () => {
@@ -1036,6 +1053,117 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
               })}
             </div>
           ) : null}
+
+          {/* ── Frequently Bought Together ───────────────────── */}
+          {showFbt ? (() => {
+            const mainPrice = Number(selectedPricing?.amount || 0);
+            const mainCompare = Number(selectedPricing?.compare_amount || mainPrice);
+            const mainSave = mainCompare > mainPrice ? Math.round((1 - mainPrice / mainCompare) * 100) : 0;
+
+            const tiers = [
+              { tier: 1, label: isAr ? "فقط هذا المنتج" : "Just this product", products: [product], badge: null },
+              fbtList.length >= 1 ? {
+                tier: 2,
+                label: isAr ? `هذا المنتج + ${fbtList[0].name}` : `This + ${fbtList[0].name}`,
+                products: [product, fbtList[0]],
+                badge: isAr ? "الأكثر شيوعاً" : "MOST POPULAR",
+              } : null,
+              fbtList.length >= 2 ? {
+                tier: 3,
+                label: isAr ? `هذا المنتج + ${fbtList[0].name} + ${fbtList[1].name}` : `This + ${fbtList[0].name} + ${fbtList[1].name}`,
+                products: [product, fbtList[0], fbtList[1]],
+                badge: isAr ? "أفضل قيمة" : "BEST VALUE",
+              } : null,
+            ].filter(Boolean);
+
+            const getPricing = (p, idx) => {
+              if (idx === 0) return { amount: mainPrice, compare: mainCompare, save: mainSave };
+              const pr = p.pricing;
+              const amt = Number(pr?.amount || 0);
+              const cmp = Number(pr?.compare_amount || amt);
+              const sv = cmp > amt ? Math.round((1 - amt / cmp) * 100) : 0;
+              return { amount: amt, compare: cmp, save: sv };
+            };
+
+            const tierTotal = (tierProducts) =>
+              tierProducts.reduce((sum, p, i) => sum + getPricing(p, i).amount, 0);
+            const tierCompare = (tierProducts) =>
+              tierProducts.reduce((sum, p, i) => sum + getPricing(p, i).compare, 0);
+
+            const currency = selectedPricing?.currency_code || "";
+            const prefix = selectedPricing?.prefix || "";
+            const fmt = (n) => `${prefix}${n.toFixed(3)}`;
+
+            return (
+              <div className="fbt-section">
+                <h4 className="fbt-title">
+                  {isAr ? "اشتر معاً ووفّر أكثر" : "Frequently Bought Together"}
+                </h4>
+                <div className="fbt-tiers">
+                  {tiers.map(({ tier, products: tierProducts, badge }) => {
+                    const total = tierTotal(tierProducts);
+                    const compare = tierCompare(tierProducts);
+                    const totalSave = compare > total ? Math.round((1 - total / compare) * 100) : 0;
+                    const isSelected = fbtTier === tier;
+                    return (
+                      <label key={tier} className={`fbt-tier${isSelected ? " is-selected" : ""}${badge === (isAr ? "الأكثر شيوعاً" : "MOST POPULAR") ? " is-popular" : ""}`}>
+                        <input
+                          type="radio"
+                          name="fbt-tier"
+                          value={tier}
+                          checked={isSelected}
+                          onChange={() => setFbtTier(tier)}
+                          className="fbt-radio"
+                        />
+                        <div className="fbt-tier-inner">
+                          {badge ? <span className="fbt-badge">{badge}</span> : null}
+                          <div className="fbt-images">
+                            {tierProducts.map((p, i) => (
+                              <span key={i} className="fbt-img-wrap">
+                                {i > 0 ? <span className="fbt-plus" aria-hidden="true">+</span> : null}
+                                <SiteImage src={p.image} alt={p.name || ""} width={64} height={64} loading="lazy" sizes="56px" className="fbt-img" />
+                              </span>
+                            ))}
+                          </div>
+                          <div className="fbt-tier-info">
+                            <div className="fbt-price-row">
+                              <span className="fbt-price">{fmt(total)} {currency}</span>
+                              {compare > total ? (
+                                <span className="fbt-compare">{fmt(compare)}</span>
+                              ) : null}
+                              {totalSave > 0 ? (
+                                <span className="fbt-save">{isAr ? `${totalSave}% خصم` : `${totalSave}% off`}</span>
+                              ) : null}
+                            </div>
+                            <div className="fbt-per-item">
+                              {tierProducts.map((p, i) => {
+                                const { amount, save } = getPricing(p, i);
+                                return (
+                                  <span key={i} className="fbt-item-pill">
+                                    {p.name} — {prefix}{amount.toFixed(3)}
+                                    {save > 0 ? <em> ({save}% {isAr ? "خصم" : "off"})</em> : null}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+                <button
+                  type="button"
+                  className="fbt-add-btn"
+                  onClick={addFbtBundle}
+                  aria-label={isAr ? "أضف الحزمة إلى السلة" : "Add bundle to cart"}
+                >
+                  <Icon name="bag" size={20} />
+                  <span>{isAr ? "أضف الحزمة إلى السلة" : "Add Bundle to Cart"}</span>
+                </button>
+              </div>
+            );
+          })() : null}
         </div>
 
         {/* ── Accordion ───────────────────────────────────────── */}

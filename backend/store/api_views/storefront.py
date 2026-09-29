@@ -483,14 +483,32 @@ class ProductDetailView(StorefrontContextMixin, APIView):
         # category cannot fill the row on its own.
         related = related_products_for(product, region, limit=8)
 
+        # Frequently Bought Together — fetch companion products in slug order,
+        # limited to 2 so the bundle UI stays legible.
+        fbt_slugs = list(product.fbt_slugs or [])[:2]
+        fbt_products = []
+        if fbt_slugs:
+            companions = products_available_for_region(
+                product_queryset().filter(slug__in=fbt_slugs),
+                region,
+            )
+            companion_map = {p.slug: p for p in companions}
+            for slug in fbt_slugs:
+                if slug in companion_map:
+                    fbt_products.append(
+                        ProductCardSerializer(companion_map[slug], context=context).data
+                    )
+
         category_name = CategorySerializer(primary_category, context=context).data["name"] if primary_category else ""
+        product_data = ProductDetailSerializer(product, context=context).data
         payload = {
             "breadcrumbs": [
                 {"label": "Home" if locale == "en" else "الرئيسية", "href": f"/{locale}"},
                 {"label": category_name, "href": f"/{locale}/collections"},
-                {"label": ProductDetailSerializer(product, context=context).data["name"], "href": f"/{locale}/product/{product.slug}"},
+                {"label": product_data["name"], "href": f"/{locale}/product/{product.slug}"},
             ],
-            "product": ProductDetailSerializer(product, context=context).data,
+            "product": product_data,
+            "fbt_products": fbt_products,
             "related_products": ProductCardSerializer(related, many=True, context=context).data,
             "unavailable_for_region": unavailable_for_region,
         }
