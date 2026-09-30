@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import VideoLightbox from "@/components/ui/VideoLightbox";
 
 const DISMISS_KEY = "enfant-floating-video-dismissed-v1";
 
 export default function FloatingPromoVideo({ videoUrl }) {
   const [visible, setVisible] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const videoRef = useRef(null);
+  const collapse = useCallback(() => setExpanded(false), []);
 
   useEffect(() => {
     try {
@@ -14,6 +19,16 @@ export default function FloatingPromoVideo({ videoUrl }) {
       setVisible(true);
     }
   }, []);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (expanded) {
+      video.pause();
+    } else {
+      video.play().catch(() => {});
+    }
+  }, [expanded]);
 
   const dismiss = () => {
     try {
@@ -33,6 +48,7 @@ export default function FloatingPromoVideo({ videoUrl }) {
   return (
     <aside className="floating-promo-video" aria-label="Floating promotional video">
       <video
+        ref={videoRef}
         autoPlay
         muted
         loop
@@ -44,6 +60,13 @@ export default function FloatingPromoVideo({ videoUrl }) {
       </video>
       <button
         type="button"
+        className="floating-promo-video-open"
+        onClick={() => setExpanded(true)}
+        aria-label="Play video with sound"
+        title="Play video with sound"
+      />
+      <button
+        type="button"
         className="floating-promo-video-close"
         onClick={dismiss}
         aria-label="Close video"
@@ -51,6 +74,7 @@ export default function FloatingPromoVideo({ videoUrl }) {
       >
         <span aria-hidden="true">×</span>
       </button>
+      {expanded ? <VideoLightbox src={videoUrl} onClose={collapse} label="Promotional video" /> : null}
     </aside>
   );
 }

@@ -164,70 +164,71 @@
   .hero-banner-track { transition: none; }
 }
 
-/* ── Home trust bar — right under banner ─────────────────────── */
+/* ── Home trust cards — right under banner ───────────────────── */
 .home-trust-bar-section {
-  background: #f7faf3;
-  border-top: 1px solid rgba(96, 122, 66, 0.12);
-  border-bottom: 1px solid rgba(96, 122, 66, 0.12);
-  padding: 14px 0;
+  padding: 22px 0 6px;
 }
 
 .home-trust-bar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 8px 32px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
 }
 
 .home-trust-item {
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 8px;
+  padding: 22px 20px 24px;
+  text-align: center;
+  background: #fafaf7;
+  border: 1px solid rgba(96, 122, 66, 0.16);
+  border-radius: 16px;
 }
 
 .home-trust-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: rgba(96, 122, 66, 0.1);
-  flex-shrink: 0;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 4px;
 }
 
-.home-trust-icon svg {
-  width: 18px;
-  height: 18px;
-  stroke: #4a6b36;
+.home-trust-icon svg,
+.home-trust-image {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
 }
 
 .home-trust-text {
-  font-size: 0.88rem;
+  margin: 0;
+  font-size: 1.05rem;
   font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
   color: var(--text);
-  white-space: nowrap;
 }
 
-@media (max-width: 640px) {
+.home-trust-desc {
+  margin: 0;
+  max-width: 34ch;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text-soft);
+}
+
+@media (max-width: 860px) {
   .home-trust-bar {
-    gap: 8px 20px;
-    justify-content: flex-start;
+    grid-template-columns: 1fr;
+    gap: 12px;
   }
 
-  .home-trust-text {
-    font-size: 0.82rem;
-  }
-
-  .home-trust-icon {
-    width: 30px;
-    height: 30px;
-  }
-
-  .home-trust-icon svg {
-    width: 15px;
-    height: 15px;
+  .home-trust-item {
+    padding: 18px 16px 20px;
   }
 }
 
@@ -1637,7 +1638,7 @@
 /* The compare price on a card is a bare <span>, so this has to stay loose —
    but it must not reach the savings badge, which is a span in the same box and
    was being struck through and greyed out along with it. */
-.product-pricing span:not(.save-badge) {
+.product-pricing span:not(.save-badge):not(.product-discount-badge) {
   color: #96a28a;
   text-decoration: line-through;
 }

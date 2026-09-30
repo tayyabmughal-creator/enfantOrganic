@@ -386,6 +386,8 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
   // Mobile only: the order summary starts collapsed so the form is reachable
   // without a long scroll. Desktop keeps it permanently expanded via CSS.
   const [summaryOpen, setSummaryOpen] = useState(false);
+  const [endDiscountOpen, setEndDiscountOpen] = useState(false);
+  const [endSummaryOpen, setEndSummaryOpen] = useState(false);
 
   useEffect(() => {
     if (!PAYMOB_APPLE_PAY_INTEGRATION_ID) return;
@@ -1681,6 +1683,20 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
 
   // Headline amount shown on the collapsed mobile summary bar and the sticky
   // bottom CTA — mirrors whatever the grand-total row renders.
+  // The discount field sits inside the order form on phones: Enter there must
+  // apply the code, not place the order.
+  const submitCouponOnEnter = (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      validateCouponCode();
+    }
+  };
+
+  const cartItemCount = useMemo(
+    () => cartItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0),
+    [cartItems],
+  );
+
   const summaryTotalLabel = useMemo(
     () =>
       couponPreview?.valid
@@ -2061,6 +2077,109 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                 ) : null}
               </div>
 
+              {/* ── Order total + Add discount, repeated at the end of the form on
+                  phones so the shopper sees it right where they finish. ── */}
+              <div className="checkout-end-summary">
+                <div className="checkout-end-discount">
+                  {couponPreview?.coupon_code ? (
+                    <p className="checkout-end-applied">
+                      <span>{isAr ? "تم تطبيق الكود" : "Code applied"}:</span>{" "}
+                      <strong>{couponPreview.coupon_code}</strong>{" "}
+                      <button type="button" className="checkout-inline-clear" onClick={removeCouponCode}>
+                        {isAr ? "إزالة" : "Remove"}
+                      </button>
+                    </p>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="checkout-add-discount"
+                    aria-expanded={endDiscountOpen}
+                    aria-controls="checkout-end-discount-field"
+                    onClick={() => setEndDiscountOpen((open) => !open)}
+                  >
+                    <Icon name="tag" size={16} />
+                    <span>{isAr ? "إضافة خصم" : "Add discount"}</span>
+                  </button>
+                  {endDiscountOpen ? (
+                    <div className="coupon-field" id="checkout-end-discount-field">
+                      <div className="coupon-row">
+                        <input
+                          id="coupon_code_end"
+                          name="coupon_code"
+                          value={form.coupon_code}
+                          onChange={updateField}
+                          onKeyDown={submitCouponOnEnter}
+                          placeholder={isAr ? "كود الخصم" : "Discount code"}
+                          aria-label={isAr ? "كود الخصم" : "Discount code"}
+                          className="field-ltr"
+                          autoComplete="off"
+                        />
+                        <button type="button" onClick={() => validateCouponCode()} disabled={validatingCoupon}>
+                          {validatingCoupon ? "..." : isAr ? "تطبيق" : "Apply"}
+                        </button>
+                      </div>
+                      {couponMessage ? (
+                        <p className={couponPreview?.valid ? "form-success" : "form-error"}>{couponMessage}</p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+
+                <button
+                  type="button"
+                  className="checkout-end-total"
+                  aria-expanded={endSummaryOpen}
+                  onClick={() => setEndSummaryOpen((open) => !open)}
+                >
+                  {cartItems[0]?.image ? (
+                    <SiteImage src={cartItems[0].image} alt="" width={56} height={56} loading="lazy" sizes="56px" />
+                  ) : null}
+                  <span className="checkout-end-total-text">
+                    <strong>{isAr ? "الإجمالي" : "Total"}</strong>
+                    <small>
+                      {isAr ? `${cartItemCount} منتج` : `${cartItemCount} ${cartItemCount === 1 ? "item" : "items"}`}
+                    </small>
+                  </span>
+                  <span className="checkout-end-total-amount">
+                    {summaryTotalLabel}
+                    <Icon name="chevronDown" size={16} className="checkout-end-chevron" />
+                  </span>
+                </button>
+
+                {endSummaryOpen ? (
+                  <div className="checkout-end-breakdown">
+                    {cartItems.map((item) => (
+                      <div key={item.lineId} className="checkout-end-breakdown-row">
+                        <span>{item.name} × {item.quantity}</span>
+                        <strong>
+                          {formatMoney({ ...item.pricing, amount: item.pricing.amount * item.quantity, prefix: "" }, locale)}
+                        </strong>
+                      </div>
+                    ))}
+                    <div className="checkout-end-breakdown-row">
+                      <span>{t.subtotal}</span>
+                      <strong>{formatMoney(summaryPricing, locale)}</strong>
+                    </div>
+                    {couponPreview?.valid && Number(couponPreview.discount_amount) > 0 ? (
+                      <div className="checkout-end-breakdown-row">
+                        <span>{isAr ? "الخصم" : "Discount"}</span>
+                        <strong className="summary-amount--discount">-{previewMoney(couponPreview.discount_amount)}</strong>
+                      </div>
+                    ) : null}
+                    <div className="checkout-end-breakdown-row">
+                      <span>{t.shipping}</span>
+                      <strong>
+                        {couponPreview?.valid
+                          ? (Number(couponPreview.shipping_amount) > 0
+                              ? previewMoney(couponPreview.shipping_amount)
+                              : (isAr ? "مجاناً" : "Free"))
+                          : "—"}
+                      </strong>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
               {currencyMismatch && !repricingInFlight ? (
                 <div className="currency-mismatch-alert">
                   <p className="form-error" style={{ margin: 0 }}>
@@ -2149,6 +2268,39 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
                   </b>
                 </div>
               ))}
+            </div>
+
+            <div className="checkout-aside-coupon checkout-aside-coupon--top">
+              <div className="coupon-field">
+                <label htmlFor="coupon_code_aside" className="coupon-label-sr">
+                  {isAr ? "كود الخصم" : "Discount code"}
+                </label>
+                <div className="coupon-row">
+                  <input
+                    id="coupon_code_aside"
+                    name="coupon_code"
+                    value={form.coupon_code}
+                    onChange={updateField}
+                    onKeyDown={submitCouponOnEnter}
+                    placeholder={isAr ? "كود الخصم" : "Discount code"}
+                    className="field-ltr"
+                    autoComplete="off"
+                  />
+                  <button type="button" onClick={() => validateCouponCode()} disabled={validatingCoupon}>
+                    {validatingCoupon ? "..." : isAr ? "تطبيق" : "Apply"}
+                  </button>
+                </div>
+                {couponMessage ? (
+                  <p className={couponPreview?.valid ? "form-success" : "form-error"}>
+                    {couponMessage}
+                  </p>
+                ) : null}
+                {form.coupon_code ? (
+                  <button type="button" className="checkout-inline-clear" onClick={removeCouponCode}>
+                    {isAr ? "إزالة الكود" : "Remove code"}
+                  </button>
+                ) : null}
+              </div>
             </div>
 
             <div className="subtotal-row">
@@ -2265,93 +2417,6 @@ export default function CheckoutClient({ locale, region, regionConfig: regionSet
               </>
             )}
 
-            <div className="checkout-aside-coupon">
-              <div className="checkout-discount-switcher" role="tablist" aria-label={isAr ? "طرق الخصم" : "Discount methods"}>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={activeDiscountField === "coupon"}
-                  className={`checkout-discount-tab ${activeDiscountField === "coupon" ? "is-active" : ""}`}
-                  onClick={() => setActiveDiscountField("coupon")}
-                >
-                  <span>{isAr ? "كوبون" : "Coupon"}</span>
-                  {/* Only when the server actually accepted it. Keyed off the
-                      typed text, this read "Added" over a rejected code — the
-                      badge sat next to its own error message. */}
-                  {couponPreview?.coupon_code ? (
-                    <span className="checkout-discount-tab-badge">{isAr ? "مضاف" : "Added"}</span>
-                  ) : null}
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={activeDiscountField === "gift_card"}
-                  className={`checkout-discount-tab ${activeDiscountField === "gift_card" ? "is-active" : ""}`}
-                  onClick={() => setActiveDiscountField("gift_card")}
-                >
-                  <span>{isAr ? "بطاقة هدية" : "Gift card"}</span>
-                  {couponPreview?.gift_card_code ? (
-                    <span className="checkout-discount-tab-badge">{isAr ? "مضاف" : "Added"}</span>
-                  ) : null}
-                </button>
-              </div>
-
-              {activeDiscountField === "coupon" ? (
-                <div className="coupon-field">
-                  <label htmlFor="coupon_code_aside">{isAr ? "كود الخصم" : "Coupon"}</label>
-                  <div className="coupon-row">
-                    <input
-                      id="coupon_code_aside"
-                      name="coupon_code"
-                      value={form.coupon_code}
-                      onChange={updateField}
-                      placeholder={isAr ? "كود الخصم" : "Coupon code"}
-                      className="field-ltr"
-                    />
-                    <button type="button" onClick={validateCouponCode} disabled={validatingCoupon}>
-                      {validatingCoupon ? "..." : isAr ? "تطبيق" : "Apply"}
-                    </button>
-                  </div>
-                  {couponMessage ? (
-                    <p className={couponPreview?.valid ? "form-success" : "form-error"}>
-                      {couponMessage}
-                    </p>
-                  ) : null}
-                  {form.coupon_code ? (
-                    <button type="button" className="checkout-inline-clear" onClick={removeCouponCode}>
-                      {isAr ? "إزالة الكوبون" : "Remove coupon"}
-                    </button>
-                  ) : null}
-                </div>
-              ) : (
-                <div className="coupon-field">
-                  <label htmlFor="gift_card_code_aside">{isAr ? "بطاقة هدية" : "Gift card"}</label>
-                  <div className="coupon-row">
-                    <input
-                      id="gift_card_code_aside"
-                      name="gift_card_code"
-                      value={form.gift_card_code}
-                      onChange={updateField}
-                      placeholder={isAr ? "كود بطاقة الهدية" : "Gift card code"}
-                      className="field-ltr"
-                    />
-                    <button type="button" onClick={validateGiftCardCode} disabled={validatingGiftCard}>
-                      {validatingGiftCard ? "..." : isAr ? "تطبيق" : "Apply"}
-                    </button>
-                  </div>
-                  {giftCardMessage ? (
-                    <p className={couponPreview?.valid ? "form-success" : "form-error"}>
-                      {giftCardMessage}
-                    </p>
-                  ) : null}
-                  {form.gift_card_code ? (
-                    <button type="button" className="checkout-inline-clear" onClick={removeGiftCardCode}>
-                      {isAr ? "إزالة بطاقة الهدية" : "Remove gift card"}
-                    </button>
-                  ) : null}
-                </div>
-              )}
-            </div>
             </div>
 
             <button

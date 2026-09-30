@@ -12,6 +12,7 @@ import HeroBannerCarousel from "@/components/store/HeroBannerCarousel";
 import NewsletterForm from "@/components/store/NewsletterForm";
 import ProductRail from "@/components/store/ProductRail";
 import TestimonialsSlider from "@/components/store/TestimonialsSlider";
+import TrustIcon from "@/components/store/home/TrustIcon";
 import { getHomePageData, getNavigationData } from "@/lib/api";
 import { resolveServerRegion } from "@/lib/regionResolver";
 import { buildSeoMetadata, SITE_NAME, toAbsoluteUrl, buildLocalizedPath } from "@/lib/seo";
@@ -226,24 +227,11 @@ export default async function LocalizedHomePage({ params, searchParams }) {
           <div className="container home-trust-bar">
             {navigation.settings.trust_bar_items.map((item, idx) => (
               <div key={idx} className="home-trust-item">
-                <span className="home-trust-icon" aria-hidden="true">
-                  {item.icon === "truck" && (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 3h15v13H1zM16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-                  )}
-                  {item.icon === "shield" && (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                  )}
-                  {item.icon === "leaf" && (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 8C8 10 5.9 16.17 3.82 22a10.94 10.94 0 0 0 3.33-4.26C7.86 21.5 12 22 14 20c6-5 4-14 3-16z"/></svg>
-                  )}
-                  {item.icon === "star" && (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                  )}
-                  {item.icon === "check" && (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                  )}
+                <span className="home-trust-icon">
+                  <TrustIcon name={item.icon} image={item.image} />
                 </span>
-                <span className="home-trust-text">{item.text}</span>
+                <h3 className="home-trust-text">{item.text}</h3>
+                {item.description ? <p className="home-trust-desc">{item.description}</p> : null}
               </div>
             ))}
           </div>

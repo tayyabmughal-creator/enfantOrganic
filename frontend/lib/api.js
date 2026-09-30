@@ -250,6 +250,10 @@ export function getProductBySlug(slug, locale, region) {
   return request(`/products/${slug}/`, locale, region);
 }
 
+export function getAllReviews(locale, region, params = {}) {
+  return request("/reviews/all/", locale, region, params);
+}
+
 export function getBlogList(locale, region) {
   return request("/blog/", locale, region);
 }

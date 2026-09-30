@@ -195,6 +195,8 @@ export default async function LocalizedProductPage({ params, searchParams }) {
           }}
           productVideoPanel={navigation?.settings?.product_video_panel}
           fbtProducts={Array.isArray(productPage.fbt_products) ? productPage.fbt_products : []}
+          socialProofItems={navigation?.settings?.social_proof_items}
+          reviewsShowcase={navigation?.settings?.reviews_showcase}
         />
       </section>
       <section className="section container">

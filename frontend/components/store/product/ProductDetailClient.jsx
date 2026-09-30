@@ -6,6 +6,14 @@ import { useRouter } from "next/navigation";
 
 import Icon from "@/components/icons/Icon";
 import SiteImage from "@/components/ui/SiteImage";
+import ProductVideoTile from "@/components/store/product/ProductVideoTile";
+import ProductReviewsSection from "@/components/store/product/ProductReviewsSection";
+import { ProductReviewShowcase } from "@/components/store/product/ProductReviewShowcase";
+import {
+  ProductComparisonSection,
+  ProductFeaturesSection,
+  ProductHowItWorksSection,
+} from "@/components/store/product/ProductPageSections";
 import { useStore } from "@/components/store/cart/StoreProvider";
 import { buildAnalyticsItem, pushDataLayerEvent } from "@/lib/analytics";
 import { fbqTrack, snaptrTrack, ttqTrack } from "@/components/store/analytics/AnalyticsScripts";
@@ -82,6 +90,15 @@ function parseDescSections(description) {
       : rest.join(" ").trim() || first;
     return { icon: pickIcon(first + " " + body, i), title, body };
   }).filter(Boolean);
+}
+
+function AccordionPlus() {
+  return (
+    <svg className="detail-accordion-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+      <path d="M5 12h14" />
+      <path className="detail-accordion-icon-v" d="M12 5v14" />
+    </svg>
+  );
 }
 
 function DescriptionText({ description }) {
@@ -329,9 +346,8 @@ function WriteReviewModal({ slug, locale, open, onClose }) {
   );
 }
 
-// An offer strip between the reviews and the price — the position the client
-// asked for. Empty text hides it; a deadline turns it into a live countdown.
-function UrgencyStrip({ urgency, locale }) {
+// An offer strip right under the price — the position the client asked for. Empty text hides it; a deadline turns it into a live countdown.
+function UrgencyStrip({ urgency, locale, discountPercent = 0 }) {
   const text = String(urgency?.text || "").trim();
   const endsAt = urgency?.endsAt ? new Date(urgency.endsAt) : null;
   const hasDeadline = endsAt && !Number.isNaN(endsAt.getTime());
@@ -355,14 +371,16 @@ function UrgencyStrip({ urgency, locale }) {
 
   return (
     <div className="product-urgency-strip">
-      <span aria-hidden="true">🔥</span>
+      {discountPercent > 0 ? (
+        <span className="product-urgency-badge">{locale === "ar" ? `${discountPercent}% خصم` : `${discountPercent}% OFF`}</span>
+      ) : null}
       <span className="product-urgency-text">{text}</span>
       {countdown ? <span className="product-urgency-countdown">{countdown}</span> : null}
     </div>
   );
 }
 
-export default function ProductDetailClient({ locale, product, region, deliveryEta, urgency, productVideoPanel, fbtProducts }) {
+export default function ProductDetailClient({ locale, product, region, deliveryEta, urgency, productVideoPanel, fbtProducts, socialProofItems, reviewsShowcase }) {
   const { addItem, flyToCart } = useStore();
   const addBtnRef = useRef(null);
   const router = useRouter();
@@ -436,7 +454,6 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
   const [notifySubmitting, setNotifySubmitting] = useState(false);
   const [notifySuccess, setNotifySuccess] = useState("");
   const [notifyError, setNotifyError] = useState("");
-  const [showAllReviews, setShowAllReviews] = useState(false);
   const [reviewFormOpen, setReviewFormOpen] = useState(false);
   const lastTrackedViewItemRef = useRef("");
   const lastPixelViewItemRef = useRef("");
@@ -478,6 +495,43 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
         ? (etaMin && etaMin !== etaMax ? `التوصيل خلال ${etaMin}-${etaMax} يوم` : `التوصيل خلال ${etaMax} يوم`)
         : (etaMin && etaMin !== etaMax ? `Delivery in ${etaMin}-${etaMax} days` : `Delivery in ${etaMax} days`))
     : t.freeShipping;
+
+  const accordionSections = [
+    product.usage_instructions
+      ? {
+          key: "how",
+          title: isAr ? "طريقة الاستخدام" : "How it works",
+          body: <DescriptionText description={product.usage_instructions} />,
+        }
+      : null,
+    product.ingredients
+      ? {
+          key: "ingredients",
+          title: isAr ? "المكونات" : "Ingredients",
+          body: <DescriptionText description={product.ingredients} />,
+        }
+      : null,
+    {
+      key: "shipping",
+      title: isAr ? "الشحن والتوصيل" : "Shipping & Delivery",
+      body: (
+        <div className="product-desc-text">
+          {etaMax > 0 ? <p>{deliveryCopy}</p> : null}
+          <p>
+            {isAr ? "تعرف على تفاصيل التوصيل في " : "See full delivery details in our "}
+            <Link href={buildStorePath(locale, "/shipping-policy", region)}>
+              {isAr ? "سياسة الشحن" : "Shipping Policy"}
+            </Link>
+            {isAr ? " و" : " and "}
+            <Link href={buildStorePath(locale, "/return-policy", region)}>
+              {isAr ? "سياسة الإرجاع" : "Return Policy"}
+            </Link>
+            .
+          </p>
+        </div>
+      ),
+    },
+  ].filter(Boolean);
 
   const paymentLogos = [
     {
@@ -885,8 +939,6 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
               </button>
             </div>
 
-            <UrgencyStrip urgency={urgency} locale={locale} />
-
             <div className="product-pricing large product-pricing--premium">
               <strong>{formatMoney(selectedPricing, locale)}</strong>
               {showComparePrice ? (
@@ -903,6 +955,8 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
                 </span>
               ) : null}
             </div>
+
+            <UrgencyStrip urgency={urgency} locale={locale} discountPercent={discountPercent} />
 
             {product.short_description ? (
               <p className="product-short-copy">{product.short_description}</p>
@@ -1011,6 +1065,19 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
             )}
           </div>
 
+          {showProductVideoPanel ? (
+            <div className="product-video-panel" role="group" aria-label={isAr ? "فيديوهات المنتج" : "Product videos"}>
+              {productVideoUrls.map((videoUrl, index) => (
+                <ProductVideoTile
+                  key={`${videoUrl}-${index}`}
+                  src={videoUrl}
+                  label={isAr ? `تشغيل فيديو المنتج ${index + 1}` : `Play product video ${index + 1}`}
+                  closeLabel={isAr ? "إغلاق الفيديو" : "Close video"}
+                />
+              ))}
+            </div>
+          ) : null}
+
           {/* Footer: Payment */}
           <div className="product-summary-footer">
             <div className="product-payment-block">
@@ -1032,27 +1099,6 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
               </div>
             </div>
           </div>
-
-          {showProductVideoPanel ? (
-            <div className="product-video-panel" role="group" aria-label={isAr ? "فيديوهات المنتج" : "Product videos"}>
-              {productVideoUrls.map((videoUrl, index) => {
-                const videoType = videoUrl.split("?")[0].toLowerCase().endsWith(".webm")
-                  ? "video/webm"
-                  : "video/mp4";
-                return (
-                  <video
-                    key={`${videoUrl}-${index}`}
-                    controls
-                    playsInline
-                    preload="metadata"
-                    aria-label={isAr ? `فيديو المنتج ${index + 1}` : `Product video ${index + 1}`}
-                  >
-                    <source src={videoUrl} type={videoType} />
-                  </video>
-                );
-              })}
-            </div>
-          ) : null}
 
           {/* ── Frequently Bought Together ───────────────────── */}
           {showFbt ? (() => {
@@ -1177,7 +1223,7 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
               aria-expanded={openAccordion === "description"}
             >
               <span>{t.description}</span>
-              <svg className="detail-accordion-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              <AccordionPlus />
             </button>
             <div className="detail-accordion-body">
               <div className="detail-accordion-inner">
@@ -1186,115 +1232,59 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
             </div>
           </div>
 
-          {/* Reviews */}
-          <div className={`detail-accordion-item${openAccordion === "reviews" ? " is-open" : ""}`}>
-            <button
-              type="button"
-              className="detail-accordion-header"
-              onClick={() => toggleAccordion("reviews")}
-              aria-expanded={openAccordion === "reviews"}
-            >
-              <span>{t.reviews}{reviewCount > 0 ? ` (${reviewCount})` : ""}</span>
-              <svg className="detail-accordion-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-            <div className="detail-accordion-body">
-              <div className="detail-accordion-inner">
-                <div className="review-summary-bar">
-                  <div className="review-summary-score">
-                    {/* rating defaults to 5.0 on a product nobody has reviewed —
-                        printing that next to "no reviews yet" would be a lie. */}
-                    {reviewCount > 0 ? (
-                      <>
-                        <strong>{Number(product.rating || 5).toFixed(1)}</strong>
-                        <StarRating rating={product.rating || 5} size={16} />
-                        <span className="review-summary-count">
-                          {isAr ? `بناءً على ${reviewCount} مراجعة` : `Based on ${reviewCount} reviews`}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="review-summary-count">
-                        {isAr
-                          ? "لا توجد مراجعات بعد — كوني أول من يشارك رأيه"
-                          : "No reviews yet — be the first to share yours"}
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    className="review-write-btn"
-                    onClick={() => setReviewFormOpen(true)}
-                  >
-                    {isAr ? "اكتب مراجعة" : "Write a Review"}
-                  </button>
-                </div>
-                <div className="review-list">
-                  {customerReviews.length
-                    ? (() => {
-                        const displayed = showAllReviews ? customerReviews : customerReviews.slice(0, 5);
-                        return (
-                          <>
-                            {displayed.map((review) => (
-                              <article key={`${review.customer_name}-${review.created_at}`} className="product-review-item">
-                                <div className="product-review-head">
-                                  <strong>{review.customer_name}</strong>
-                                  <span className="product-review-rating">
-                                    {"★".repeat(Math.max(1, Math.min(5, Number(review.rating || 5))))}
-                                  </span>
-                                </div>
-                                {review.title ? <h5>{review.title}</h5> : null}
-                                <p>{review.comment}</p>
-                                {Array.isArray(review.images) && review.images.length ? (
-                                  <div className="product-review-images" aria-label={isAr ? "صور المراجعة" : "Review photos"}>
-                                    {review.images.map((image) => (
-                                      <SiteImage key={image} src={image} alt="" width={96} height={96} loading="lazy" sizes="96px" />
-                                    ))}
-                                  </div>
-                                ) : null}
-                              </article>
-                            ))}
-                            {customerReviews.length > 5 && (
-                              <button
-                                type="button"
-                                className="review-view-all-btn"
-                                onClick={() => setShowAllReviews((v) => !v)}
-                              >
-                                {showAllReviews
-                                  ? (isAr ? "عرض أقل" : "Show Less")
-                                  : (isAr ? `عرض الكل (${customerReviews.length})` : `View All (${customerReviews.length})`)}
-                              </button>
-                            )}
-                          </>
-                        );
-                      })()
-                    : editorialReviews.length
-                      ? editorialReviews.map((review) => (
-                          <article key={`${review.name}-${review.copy}`} className="product-review-item">
-                            <strong>{review.name}</strong>
-                            <p>{review.copy}</p>
-                          </article>
-                        ))
-                      : (
-                        <article className="product-review-item">
-                          <strong>{isAr ? "لا توجد مراجعات بعد" : "No reviews yet"}</strong>
-                          <p>
-                            {isAr
-                              ? "كوني أول من يشارك تجربته مع هذا المنتج."
-                              : "Be the first to share feedback on this product."}
-                          </p>
-                        </article>
-                      )}
-                </div>
-                <WriteReviewModal
-                  slug={product.slug}
-                  locale={locale}
-                  open={reviewFormOpen}
-                  onClose={() => setReviewFormOpen(false)}
-                />
+          {accordionSections.map((section) => (
+            <div key={section.key} className={`detail-accordion-item${openAccordion === section.key ? " is-open" : ""}`}>
+              <button
+                type="button"
+                className="detail-accordion-header"
+                onClick={() => toggleAccordion(section.key)}
+                aria-expanded={openAccordion === section.key}
+              >
+                <span>{section.title}</span>
+                <AccordionPlus />
+              </button>
+              <div className="detail-accordion-body">
+                <div className="detail-accordion-inner">{section.body}</div>
               </div>
             </div>
-          </div>
+          ))}
+
+        </div>
+
+        {/* ── Product page sections (admin-managed per product) ── */}
+        <div className="product-extra-sections">
+          <ProductFeaturesSection features={product.page_sections?.features} productName={product.name} />
+          <ProductHowItWorksSection
+            section={product.page_sections?.how_it_works}
+            proofItems={socialProofItems}
+            isAr={isAr}
+          />
+          <ProductComparisonSection section={product.page_sections?.comparison} isAr={isAr} />
+          <ProductReviewShowcase
+            showcase={reviewsShowcase}
+            reviewCount={reviewCount}
+            isAr={isAr}
+            readMoreHref={buildStorePath(locale, "/reviews", region)}
+          />
+          <ProductReviewsSection
+            reviews={customerReviews}
+            editorialReviews={editorialReviews}
+            rating={product.rating}
+            reviewCount={reviewCount}
+            photos={reviewsShowcase?.photos}
+            isAr={isAr}
+            onWrite={() => setReviewFormOpen(true)}
+            allReviewsHref={buildStorePath(locale, "/reviews", region)}
+          />
         </div>
       </div>
+
+      <WriteReviewModal
+        slug={product.slug}
+        locale={locale}
+        open={reviewFormOpen}
+        onClose={() => setReviewFormOpen(false)}
+      />
 
       {/* ── Mobile Sticky Bar ───────────────────────────────── */}
       {!isOutOfStock && (

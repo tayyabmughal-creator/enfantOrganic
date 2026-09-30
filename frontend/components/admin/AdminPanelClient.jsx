@@ -215,6 +215,8 @@ const FIELD_CONFIGS = {
     ["shopify_meta","Shopify/extra meta JSON","json"],
     ["image","Image URL","text"],["image_file","Image File","file"],
     ["hover_image","Hover image URL","text"],["hover_image_file","Hover Image File","file"],
+    ["fbt_slugs","Frequently bought together (JSON list of up to 2 product slugs, e.g. [\"complete-care-cream\"])","json"],
+    ["page_sections","Product page sections","page-sections"],
     ["gallery","Gallery images","gallery"],["variants","Variants","product-variants"],["option_groups_en","Options EN","option-groups"],["option_groups_ar","Options AR","option-groups"],
     ["details_en","Details EN JSON","json"],["details_ar","Details AR JSON","json"],
     ["dietary_tags","Dietary tags JSON","json"],["stock_quantity","Stock","number"],
@@ -401,6 +403,9 @@ const FIELD_CONFIGS = {
     ["blog_title_en","Blog title EN","text"],["blog_title_ar","Blog title AR","text"],
     ["urgency_text_en","Product page offer strip EN","text"],["urgency_text_ar","Product page offer strip AR","text"],
     ["urgency_ends_at","Offer ends at (leave blank for no countdown)","datetime-local"],
+    ["reviews_showcase","Reviews showcase (product pages and Read more reviews page)","reviews-showcase"],
+    ["social_proof_items","Product page proof ticker JSON (scrolling line under How it works; [{text_en, text_ar}], empty [] hides)","json"],
+    ["trust_bar_items","Home trust cards JSON (icon: truck|shield|leaf|star|check, optional image URL; text_en/ar, desc_en/ar; empty [] hides)","json"],
     ["free_gift_title_en","Free gift title EN","text"],["free_gift_title_ar","Free gift title AR","text"],
     ["free_gift_subtitle_en","Free gift subtitle EN","textarea"],["free_gift_subtitle_ar","Free gift subtitle AR","textarea"],
     ["why_choose_links","Why Choose Us menu","link-list"],
@@ -659,6 +664,8 @@ function localInputToUtc(value) {
 
 function stringify(value, type) {
   if (type === "gallery") return Array.isArray(value) ? value : [];
+  if (type === "reviews-showcase") return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  if (type === "page-sections") return value && typeof value === "object" && !Array.isArray(value) ? value : {};
   // The link editor works on real rows, not on a JSON string.
   if (type === "link-list") return Array.isArray(value) ? value : [];
   if (type === "product-variants") return Array.isArray(value) ? value : [];
@@ -813,7 +820,7 @@ function buildPayload(editor, key, mode) {
       if (shouldSkip(k, v, type)) continue;
       if (type === "product-variants") fd.append(k, JSON.stringify(cleanProductVariants(v)));
       else if (type === "option-groups") fd.append(k, JSON.stringify(cleanOptionGroups(v)));
-      else if (type === "json" || type === "gallery") fd.append(k, JSON.stringify(typeof v === "string" ? JSON.parse(v || "null") : v));
+      else if (type === "json" || type === "gallery" || type === "page-sections" || type === "reviews-showcase") fd.append(k, JSON.stringify(typeof v === "string" ? JSON.parse(v || "null") : v));
       else if (type === "link-list") fd.append(k, JSON.stringify(cleanLinkList(v)));
       else if (type === "categories-select") { const ids = Array.isArray(v) ? v : []; ids.forEach((id) => fd.append(k, id)); if (ids.length === 0) fd.append(k, ""); }
       else if (k === "product_slugs") { const slugs = Array.isArray(v) ? v : []; slugs.forEach((slug) => fd.append(k, slug)); if (slugs.length === 0) fd.append(k, ""); }
@@ -829,7 +836,7 @@ function buildPayload(editor, key, mode) {
     if (shouldSkip(k, v, type)) continue;
     if (type === "product-variants") payload[k] = cleanProductVariants(v);
     else if (type === "option-groups") payload[k] = cleanOptionGroups(v);
-    else if (type === "json" || type === "gallery") payload[k] = typeof v === "string" ? JSON.parse(v || "null") : v;
+    else if (type === "json" || type === "gallery" || type === "page-sections" || type === "reviews-showcase") payload[k] = typeof v === "string" ? JSON.parse(v || "null") : v;
     else if (type === "link-list") payload[k] = cleanLinkList(v);
     else if (type === "categories-select") payload[k] = Array.isArray(v) ? v : [];
     else if (k === "product_slugs") payload[k] = Array.isArray(v) ? v : [];

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import Icon from "@/components/icons/Icon";
 import { AdminEmpty, statusTone } from "./SharedUI";
+import PageSectionsField from "./PageSectionsField";
+import ReviewsShowcaseField from "./ReviewsShowcaseField";
 
 // ─── Shared Utility Functions ────────────────────────────────────────────────
 // Note: FIELD_CONFIGS and helpers must be exported from AdminPanelClient or passed as props.
@@ -2322,6 +2324,12 @@ function FormField({ field, value, editor, setEditor, mode, onGalleryUpload }) {
   }
   if (type === "category-products") {
     return <CategoryProductsField field={field} value={value} editor={editor} setEditor={setEditor} disabled={disabled} />;
+  }
+  if (type === "reviews-showcase") {
+    return <ReviewsShowcaseField field={field} value={value} editor={editor} setEditor={setEditor} />;
+  }
+  if (type === "page-sections") {
+    return <PageSectionsField field={field} value={value} editor={editor} setEditor={setEditor} onGalleryUpload={onGalleryUpload} />;
   }
   if (type === "gallery") {
     return <GalleryManager field={field} value={value} editor={editor} setEditor={setEditor} mode={mode} onGalleryUpload={onGalleryUpload} />;

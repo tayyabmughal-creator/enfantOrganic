@@ -259,6 +259,90 @@ test("product option labels sit close to their size values", () => {
   assert.match(premiumStyles, /\.product-option-block h4\s*\{[\s\S]*?margin:\s*0/);
 });
 
+test("product detail accordion has plus icons and description, how it works, ingredients, shipping sections", () => {
+  const productDetail = readFileSync(new URL("../components/store/product/ProductDetailClient.jsx", import.meta.url), "utf8");
+  const premiumStyles = readFileSync(new URL("../app/styles/product-premium.css", import.meta.url), "utf8");
+
+  assert.match(productDetail, /function AccordionPlus\(\)/);
+  assert.doesNotMatch(productDetail, /detail-accordion-chevron/);
+  assert.match(productDetail, /product\.usage_instructions/);
+  assert.match(productDetail, /"How it works"/);
+  assert.match(productDetail, /product\.ingredients/);
+  assert.match(productDetail, /"Shipping & Delivery"/);
+  assert.match(productDetail, /accordionSections\.map\(/);
+  assert.match(premiumStyles, /\.detail-accordion-item\.is-open \.detail-accordion-icon-v\s*\{[^}]*scaleY\(0\)/);
+});
+
+test("product page sections (features, how it works, comparison) are wired end to end", () => {
+  const productDetail = readFileSync(new URL("../components/store/product/ProductDetailClient.jsx", import.meta.url), "utf8");
+  const sections = readFileSync(new URL("../components/store/product/ProductPageSections.jsx", import.meta.url), "utf8");
+  const productPage = readFileSync(new URL("../app/[locale]/product/[slug]/page.jsx", import.meta.url), "utf8");
+  const adminPanel = readFileSync(new URL("../components/admin/AdminPanelClient.jsx", import.meta.url), "utf8");
+  const adminForm = readFileSync(new URL("../components/admin/CrudViews.jsx", import.meta.url), "utf8");
+  const premiumStyles = readFileSync(new URL("../app/styles/product-premium.css", import.meta.url), "utf8");
+
+  assert.match(productPage, /socialProofItems=\{navigation\?\.settings\?\.social_proof_items\}/);
+  assert.match(productDetail, /product\.page_sections\?\.features/);
+  assert.match(productDetail, /<ProductHowItWorksSection[\s\S]*?proofItems=\{socialProofItems\}/);
+  assert.match(productDetail, /<ProductComparisonSection/);
+  assert.match(sections, /export function ProductFeaturesSection/);
+  assert.match(sections, /product-proof-track/);
+  assert.match(sections, /\[0, 1\]\.map/);
+  assert.match(adminPanel, /\["page_sections","Product page sections","page-sections"\]/);
+  assert.match(adminPanel, /\["social_proof_items"/);
+  assert.match(adminPanel, /\["fbt_slugs"/);
+  assert.match(adminForm, /type === "page-sections"/);
+  assert.match(premiumStyles, /\.product-proof-track\s*\{[^}]*animation:\s*product-proof-scroll/);
+  assert.match(premiumStyles, /\[dir="rtl"\] \.product-proof-track\s*\{[^}]*product-proof-scroll-rtl/);
+  assert.match(premiumStyles, /\.product-hiw-rail\s*\{[^}]*scroll-snap-type:\s*x mandatory/);
+});
+
+test("reviews: showcase strip, full review section, all-reviews page and urgency banner", () => {
+  const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+  const detail = read("../components/store/product/ProductDetailClient.jsx");
+  const reviews = read("../components/store/product/ProductReviewsSection.jsx");
+  const showcase = read("../components/store/product/ProductReviewShowcase.jsx");
+  const reviewsPage = read("../app/[locale]/reviews/page.jsx");
+  const productPage = read("../app/[locale]/product/[slug]/page.jsx");
+  const admin = read("../components/admin/AdminPanelClient.jsx");
+  const styles = read("../app/styles/product-premium.css");
+
+  assert.match(productPage, /reviewsShowcase=\{navigation\?\.settings\?\.reviews_showcase\}/);
+  assert.match(detail, /<ProductReviewShowcase[\s\S]*?readMoreHref=\{buildStorePath\(locale, "\/reviews", region\)\}/);
+  assert.match(detail, /<ProductReviewsSection/);
+  assert.doesNotMatch(detail, /openAccordion === "reviews"/);
+  assert.match(reviews, /Would recommend|would recommend this product/);
+  assert.match(reviews, /Read All Reviews/);
+  assert.match(reviews, /NEXT_BATCH = 20/);
+  assert.match(reviews, /reverse/);
+  assert.match(showcase, /Read more reviews/);
+  assert.match(reviewsPage, /getAllReviews/);
+  assert.match(admin, /"reviews-showcase"/);
+  assert.match(styles, /\[dir="rtl"\] \.review-marquee-track\s*\{[^}]*review-marquee-left-rtl/);
+  assert.match(styles, /\.review-marquee\.is-reverse \.review-marquee-track\s*\{[^}]*review-marquee-right/);
+  // urgency banner sits right after the price, before the short copy
+  assert.match(detail, /product-pricing large product-pricing--premium[\s\S]*?<UrgencyStrip[\s\S]*?product-short-copy/);
+  assert.match(styles, /\.product-urgency-strip\s*\{[^}]*background:\s*linear-gradient\(90deg,\s*#161a12/);
+});
+
+test("checkout: only a discount code (no gift card), field above the totals, and Add discount at the end", () => {
+  const checkout = readFileSync(new URL("../components/store/checkout/CheckoutClient.jsx", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../app/styles/checkout-order.css", import.meta.url), "utf8");
+
+  assert.doesNotMatch(checkout, /checkout-discount-switcher|checkout-discount-tab|gift_card_code_aside/);
+  // the discount field sits between the item list and the subtotal row
+  assert.match(checkout, /className="summary-lines"[\s\S]*?checkout-aside-coupon--top[\s\S]*?<span>\{t\.subtotal\}<\/span>/);
+  // Enter inside the form must apply the code, not place the order
+  assert.match(checkout, /const submitCouponOnEnter[\s\S]*?event\.preventDefault\(\);[\s\S]*?validateCouponCode\(\)/);
+  assert.match(checkout, /className="checkout-end-summary"/);
+  assert.match(checkout, /className="checkout-add-discount"/);
+  assert.match(checkout, /id="coupon_code_end"/);
+  assert.match(checkout, /cartItemCount/);
+  // the end-of-form block is a phone-only addition
+  assert.match(styles, /\.checkout-end-summary\s*\{\s*display:\s*none/);
+  assert.match(styles, /@media \(max-width: 860px\)\s*\{\s*\.checkout-end-summary\s*\{\s*display:\s*grid/);
+});
+
 test("no page compares the raw locale param against a normalized locale", async () => {
   // The route segment is now "en-om", while normalizeLocale() returns "en", so any
   // surviving `localeParam !== <normalized>` guard calls notFound() on every request.
