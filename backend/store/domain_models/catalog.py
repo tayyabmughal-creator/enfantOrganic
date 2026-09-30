@@ -13,6 +13,15 @@ def default_supported_payment_methods():
     return {"cards": [], "wallets": [], "local": []}
 
 
+def default_social_proof_items():
+    return [
+        {"text_en": "300,000+ Happy parents", "text_ar": "أكثر من 300,000 أب وأم سعداء"},
+        {"text_en": "4.7 Average rating", "text_ar": "متوسط تقييم 4.7"},
+        {"text_en": "1M+ products sold worldwide", "text_ar": "أكثر من مليون منتج مباع حول العالم"},
+        {"text_en": "ECOCERT Certified · Dermatologically tested", "text_ar": "معتمد من ECOCERT · مختبر جلديًا"},
+    ]
+
+
 class Region(OrderedModel):
     PAYMENT_PROVIDER_PAYMOB = "paymob"
     PAYMENT_PROVIDER_PAYTABS = "paytabs"
@@ -366,7 +375,29 @@ class SiteSettings(models.Model):
     # Home page trust bar — shown right below the banner.
     # Each item: {icon: "truck"|"shield"|"leaf"|"star", text_en: "...", text_ar: "..."}
     # Empty list hides the bar entirely.
-    trust_bar_items = models.JSONField(default=list, blank=True)
+    trust_bar_items = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Home page trust bar items shown below the banner. "
+            "Each item: {icon, text_en, text_ar}. Leave empty to hide."
+        ),
+    )
+    # Scrolling proof line under "How it works" on every product page.
+    # Each item: {text_en, text_ar}. Empty list hides the ticker.
+    social_proof_items = models.JSONField(
+        default=default_social_proof_items,
+        blank=True,
+        help_text="Scrolling proof ticker on product pages. Each item: {text_en, text_ar}. Leave empty to hide.",
+    )
+    # Reviews showcase on product pages and the "Read more reviews" page:
+    # {enabled, count_text_*, title_*, subtitle_*, button_*, images:[{image_en, image_ar}],
+    #  photos:[{image}]}. See api_serializers.localization.resolve_reviews_showcase.
+    reviews_showcase = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Reviews showcase (moving images, photo strip, headings). Edited from the admin panel.",
+    )
 
     why_choose_links = models.JSONField(default=list, blank=True)
     policy_links = models.JSONField(default=list, blank=True)
@@ -807,7 +838,25 @@ class Product(OrderedModel):
     shopify_meta = models.JSONField(default=dict, blank=True)
     # Frequently Bought Together — list of product slugs shown as bundle upsells
     # on this product's detail page. e.g. ["complete-care-cream", "baby-shampoo"]
-    fbt_slugs = models.JSONField(default=list, blank=True)
+    fbt_slugs = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Frequently Bought Together — list of product slugs to show as "
+            "bundle upsells on this product page. "
+            'e.g. ["complete-care-cream", "baby-shampoo"]. Leave empty to hide the section.'
+        ),
+    )
+    # Product page sections shown under the accordion: features, how it works
+    # and the comparison table. See api_serializers.catalog.resolve_page_sections.
+    page_sections = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "Product page sections: {features, how_it_works, comparison}. "
+            "Edited from the admin panel; leave empty to hide them."
+        ),
+    )
 
     def __str__(self):
         return self.name_en

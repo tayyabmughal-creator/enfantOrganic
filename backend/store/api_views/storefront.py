@@ -1,4 +1,4 @@
-from django.db.models import Count, DecimalField, IntegerField, OuterRef, Q, Subquery, Sum, Value
+from django.db.models import Avg, Count, DecimalField, IntegerField, OuterRef, Q, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
@@ -703,3 +703,65 @@ def apply_catalog_filters(queryset, request, region):
         queryset = queryset.order_by(*stock_first, *(queryset.query.order_by or ["sort_order", "id"]))
 
     return queryset.distinct()
+
+
+class ReviewListView(StorefrontContextMixin, APIView):
+    """Public, paginated list of approved reviews for the "Read more reviews" page."""
+
+    permission_classes = [permissions.AllowAny]
+    DEFAULT_PAGE_SIZE = 12
+    MAX_PAGE_SIZE = 30
+
+    @staticmethod
+    def _int(value, default, minimum, maximum):
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            return default
+        return max(minimum, min(maximum, number))
+
+    def get(self, request):
+        from ..api_serializers.catalog import _review_images
+        from ..api_serializers.localization import get_image_url, localized
+
+        locale = self.get_locale()
+        page = self._int(request.query_params.get("page"), 1, 1, 10_000)
+        page_size = self._int(request.query_params.get("page_size"), self.DEFAULT_PAGE_SIZE, 1, self.MAX_PAGE_SIZE)
+
+        queryset = Review.objects.filter(is_approved=True, product__is_published=True).select_related("product")
+        slug = str(request.query_params.get("product") or "").strip()
+        if slug:
+            queryset = queryset.filter(product__slug=slug)
+
+        total = queryset.count()
+        average = queryset.aggregate(value=Avg("rating"))["value"]
+        start = (page - 1) * page_size
+        rows = list(queryset.order_by("-created_at", "-id")[start : start + page_size])
+
+        results = [
+            {
+                "customer_name": review.customer_name,
+                "rating": review.rating,
+                "title": review.title,
+                "comment": review.comment,
+                "images": _review_images(review.images),
+                "is_verified_purchase": review.is_verified_purchase,
+                "created_at": review.created_at,
+                "product": {
+                    "slug": review.product.slug,
+                    "name": localized(review.product, "name", locale),
+                    "image": get_image_url(review.product, request, "image_file", "image"),
+                },
+            }
+            for review in rows
+        ]
+        return Response(
+            {
+                "total": total,
+                "average_rating": round(float(average), 1) if average is not None else None,
+                "page": page,
+                "page_size": page_size,
+                "has_next": start + page_size < total,
+                "reviews": results,
+            }
+        )

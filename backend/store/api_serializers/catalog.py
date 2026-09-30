@@ -17,7 +17,7 @@ from ..models import (
     Tag,
     Testimonial,
 )
-from .localization import get_image_url, localized, localized_json, normalize_locale
+from .localization import absolute_media_url, get_image_url, localized, localized_json, normalize_locale
 from ..services.payment_router import get_region_provider_options, get_region_provider_warnings
 from ..services.carrier_router import get_region_carrier_options, get_region_carrier_warnings
 from ..services.stock import get_region_available_stock, get_region_warehouses
@@ -546,6 +546,88 @@ class ProductCardSerializer(serializers.ModelSerializer):
         }
 
 
+PAGE_SECTION_ICONS = {"leaf", "shield", "drop", "heart", "sparkle", "check", "star", "clock"}
+
+
+def _section_text(item, key, locale):
+    return str(item.get(f"{key}_{locale}") or item.get(f"{key}_en") or "").strip()
+
+
+def _section_image(url, request):
+    return absolute_media_url(str(url or "").strip(), request)
+
+
+def resolve_page_sections(raw, locale, request=None):
+    """Locale-resolved, sanitised view of Product.page_sections for the storefront."""
+    locale = normalize_locale(locale)
+    if not isinstance(raw, dict):
+        return {}
+    out = {}
+
+    features = raw.get("features")
+    if isinstance(features, dict) and features.get("enabled", True):
+        items = []
+        for item in features.get("items") or []:
+            if not isinstance(item, dict):
+                continue
+            title = _section_text(item, "title", locale)
+            text = _section_text(item, "text", locale)
+            if not (title or text):
+                continue
+            icon = str(item.get("icon") or "")
+            items.append({"icon": icon if icon in PAGE_SECTION_ICONS else "leaf", "title": title, "text": text})
+            if len(items) == 4:
+                break
+        if items:
+            out["features"] = {
+                "image": _section_image(features.get("image"), request),
+                "title": _section_text(features, "title", locale),
+                "items": items,
+            }
+
+    how = raw.get("how_it_works")
+    if isinstance(how, dict) and how.get("enabled", True):
+        steps = []
+        for step in (how.get("steps") or [])[:8]:
+            if not isinstance(step, dict):
+                continue
+            image = _section_image(step.get(f"image_{locale}") or step.get("image_en"), request)
+            if image:
+                steps.append({"image": image})
+        if steps:
+            out["how_it_works"] = {
+                "title": _section_text(how, "title", locale),
+                "subtitle": _section_text(how, "subtitle", locale),
+                "steps": steps,
+            }
+
+    comparison = raw.get("comparison")
+    if isinstance(comparison, dict) and comparison.get("enabled", True):
+        rows = []
+        for row in comparison.get("rows") or []:
+            if not isinstance(row, dict):
+                continue
+            label = _section_text(row, "label", locale)
+            if not label:
+                continue
+            cells = []
+            for key in ("us", "other"):
+                value = row.get(key)
+                cells.append(value if isinstance(value, bool) else (str(value or "").strip() or False))
+            rows.append({"label": label, "us": cells[0], "other": cells[1]})
+            if len(rows) == 5:
+                break
+        if rows:
+            out["comparison"] = {
+                "title": _section_text(comparison, "title", locale),
+                "subtitle": _section_text(comparison, "subtitle", locale),
+                "us_label": _section_text(comparison, "us_label", locale),
+                "other_label": _section_text(comparison, "other_label", locale),
+                "rows": rows,
+            }
+    return out
+
+
 class ProductDetailSerializer(ProductCardSerializer):
     description = serializers.SerializerMethodField()
     ingredients = serializers.SerializerMethodField()
@@ -560,6 +642,7 @@ class ProductDetailSerializer(ProductCardSerializer):
     seo_title = serializers.SerializerMethodField()
     seo_description = serializers.SerializerMethodField()
     seo = serializers.SerializerMethodField()
+    page_sections = serializers.SerializerMethodField()
 
     class Meta(ProductCardSerializer.Meta):
         fields = ProductCardSerializer.Meta.fields + (
@@ -584,7 +667,11 @@ class ProductDetailSerializer(ProductCardSerializer):
             "seo",
             "shopify_meta",
             "fbt_slugs",
+            "page_sections",
         )
+
+    def get_page_sections(self, obj):
+        return resolve_page_sections(obj.page_sections, self.context.get("locale"), self.context.get("request"))
 
     def get_description(self, obj):
         return localized(obj, "description", self.context.get("locale"))

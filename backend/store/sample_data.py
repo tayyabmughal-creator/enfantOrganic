@@ -81,9 +81,27 @@ SITE_SETTINGS = {
     "facebook_pixel_id": "2127480041027733",
     "snapchat_pixel_id": "a43535d8-5748-44f7-87c4-f712db4a5cb4",
     "trust_bar_items": [
-        {"icon": "truck", "text_en": "Fast Shipping", "text_ar": "شحن سريع"},
-        {"icon": "leaf", "text_en": "Original Product", "text_ar": "منتج أصلي"},
-        {"icon": "shield", "text_en": "Secure Payment", "text_ar": "دفع آمن"},
+        {
+            "icon": "truck",
+            "text_en": "Fast Shipping",
+            "text_ar": "شحن سريع",
+            "desc_en": "Quick delivery across the GCC, right to your door.",
+            "desc_ar": "توصيل سريع إلى جميع دول الخليج حتى باب منزلك.",
+        },
+        {
+            "icon": "leaf",
+            "text_en": "Original Product",
+            "text_ar": "منتج أصلي",
+            "desc_en": "100% authentic Enfant Organic baby care, dermatologically tested.",
+            "desc_ar": "منتجات إنفانت أورغانيك أصلية 100% ومختبرة جلديًا.",
+        },
+        {
+            "icon": "shield",
+            "text_en": "Secure Payment",
+            "text_ar": "دفع آمن",
+            "desc_en": "Pay safely by card, Apple Pay or cash on delivery.",
+            "desc_ar": "ادفع بأمان بالبطاقة أو Apple Pay أو الدفع عند الاستلام.",
+        },
     ],
 }
 

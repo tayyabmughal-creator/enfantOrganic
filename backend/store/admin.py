@@ -205,7 +205,7 @@ class SiteSettingsAdmin(admin.ModelAdmin):
         ("SEO & Legal", {"fields": ("seo_title_en", "seo_title_ar", "seo_description_en", "seo_description_ar", "og_image_url", "return_policy_en", "return_policy_ar", "privacy_policy_en", "privacy_policy_ar")}),
         ("Navigation", {"fields": ("nav_links", "static_links")}),
         ("Footer & Social", {"fields": ("footer_about_en", "footer_about_ar", "copyright_en", "copyright_ar", "policy_links", "facebook_url", "instagram_url", "twitter_url", "youtube_url", "tiktok_url", "whatsapp_number", "contact_email", "contact_phone", "address_en", "address_ar")}),
-        ("Homepage Content", {"fields": ("announcement_en", "announcement_ar", "newsletter_title_en", "newsletter_title_ar", "newsletter_subtitle_en", "newsletter_subtitle_ar", "instagram_title_en", "instagram_title_ar", "instagram_cta_en", "instagram_cta_ar", "blog_title_en", "blog_title_ar", "free_gift_title_en", "free_gift_title_ar", "free_gift_subtitle_en", "free_gift_subtitle_ar", "why_choose_links")}),
+        ("Homepage Content", {"fields": ("announcement_en", "announcement_ar", "newsletter_title_en", "newsletter_title_ar", "newsletter_subtitle_en", "newsletter_subtitle_ar", "instagram_title_en", "instagram_title_ar", "instagram_cta_en", "instagram_cta_ar", "blog_title_en", "blog_title_ar", "free_gift_title_en", "free_gift_title_ar", "free_gift_subtitle_en", "free_gift_subtitle_ar", "why_choose_links", "trust_bar_items", "social_proof_items", "reviews_showcase")}),
         ("Paymob", {"fields": ("paymob_api_key", "paymob_integration_id", "paymob_iframe_id", "paymob_hmac_secret", "paymob_currency", "paymob_apple_pay_integration_id", "paymob_apple_pay_iframe_id"), "classes": ("collapse",)}),
         ("PayTabs", {"fields": ("paytabs_profile_id", "paytabs_server_key", "paytabs_region"), "classes": ("collapse",)}),
         ("HyperPay", {"fields": ("hyperpay_entity_id", "hyperpay_access_token"), "classes": ("collapse",)}),
@@ -460,7 +460,7 @@ class ProductAdmin(admin.ModelAdmin):
         (
             "Frequently Bought Together",
             {
-                "fields": ("fbt_slugs",),
+                "fields": ("fbt_slugs", "page_sections"),
                 "classes": ("collapse",),
                 "description": (
                     "List of product slugs to show as bundle upsells on this product's page. "

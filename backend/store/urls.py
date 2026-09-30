@@ -13,7 +13,7 @@ from .api_views.brevo import BrevoWebhookView
 from .api_views.meta_capi import MetaCapiEventView
 from .api_views.regions import RegionDetectView
 from .api_views.whatsapp import WhatsAppWebhookView
-from .api_views.storefront import BlogDetailView, BlogListView, CmsPageDetailView
+from .api_views.storefront import BlogDetailView, BlogListView, CmsPageDetailView, ReviewListView
 from .views import (
     AbandonedCartCreateView,
     AnalyticsEventCreateView,
@@ -134,6 +134,7 @@ urlpatterns = [
     path("cart-recommendations/", CartRecommendationsView.as_view(), name="cart-recommendations"),
     path("products/", ProductListView.as_view(), name="products"),
     path("products/<slug:slug>/reviews/", ProductReviewCreateView.as_view(), name="product-review-create"),
+    path("reviews/all/", ReviewListView.as_view(), name="review-list"),
     path("products/<slug:slug>/", ProductDetailView.as_view(), name="product-detail"),
     path("search/suggestions/", SearchSuggestionsView.as_view(), name="search-suggestions"),
     path("blog/", BlogListView.as_view(), name="blog-list"),

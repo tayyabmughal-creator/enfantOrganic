@@ -67,6 +67,44 @@ def localized_link_items(items, locale):
     ]
 
 
+def _showcase_text(raw, key, locale):
+    return str(raw.get(f"{key}_{locale}") or raw.get(f"{key}_en") or "").strip()
+
+
+def resolve_reviews_showcase(raw, locale):
+    """Locale-resolved reviews showcase, or {} when it is off or empty."""
+    locale = normalize_locale(locale)
+    if not isinstance(raw, dict) or raw.get("enabled") is False:
+        return {}
+
+    images = []
+    for item in raw.get("images") or []:
+        if not isinstance(item, dict):
+            continue
+        url = str(item.get(f"image_{locale}") or item.get("image_en") or "").strip()
+        if url:
+            images.append(absolute_media_url(url))
+        if len(images) == 12:
+            break
+
+    photos = []
+    for item in raw.get("photos") or []:
+        url = str(item.get("image") if isinstance(item, dict) else item or "").strip()
+        if url:
+            photos.append(absolute_media_url(url))
+        if len(photos) == 12:
+            break
+
+    return {
+        "count_text": _showcase_text(raw, "count_text", locale),
+        "title": _showcase_text(raw, "title", locale),
+        "subtitle": _showcase_text(raw, "subtitle", locale),
+        "button": _showcase_text(raw, "button", locale),
+        "images": images,
+        "photos": photos,
+    }
+
+
 def serialize_site_settings(settings, locale, region=None):
     normalized = normalize_locale(locale)
 
@@ -125,9 +163,20 @@ def serialize_site_settings(settings, locale, region=None):
         "urgency_text": _loc("urgency_text"),
         "urgency_ends_at": settings.urgency_ends_at.isoformat() if settings.urgency_ends_at else "",
         "trust_bar_items": [
-            {"icon": item.get("icon", ""), "text": item.get(f"text_{normalized}", item.get("text_en", ""))}
+            {
+                "icon": item.get("icon", ""),
+                "image": item.get("image", ""),
+                "text": item.get(f"text_{normalized}") or item.get("text_en", ""),
+                "description": item.get(f"desc_{normalized}") or item.get("desc_en", ""),
+            }
             for item in (settings.trust_bar_items or [])
-            if item.get("text_en") or item.get("text_ar")
+            if isinstance(item, dict) and (item.get("text_en") or item.get("text_ar"))
+        ],
+        "reviews_showcase": resolve_reviews_showcase(settings.reviews_showcase, normalized),
+        "social_proof_items": [
+            {"text": item.get(f"text_{normalized}") or item.get("text_en", "")}
+            for item in (settings.social_proof_items or [])
+            if isinstance(item, dict) and (item.get("text_en") or item.get("text_ar"))
         ],
         # Link groups
         "why_choose_links": localized_link_items(settings.why_choose_links, normalized),

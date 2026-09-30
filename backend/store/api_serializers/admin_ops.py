@@ -116,6 +116,20 @@ class AdminProductSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Cost price cannot be negative.")
         return value
 
+    def validate_page_sections(self, value):
+        if value in (None, ""):
+            return {}
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Page sections must be an object.")
+        return value
+
+    def validate_fbt_slugs(self, value):
+        if value in (None, ""):
+            return []
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            raise serializers.ValidationError("Frequently bought together must be a list of product slugs.")
+        return value
+
     def validate_variants(self, value):
         if value in (None, ""):
             return []
@@ -1154,6 +1168,13 @@ class AdminSiteSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = SiteSettings
         fields = "__all__"
+
+    def validate_reviews_showcase(self, value):
+        if value in (None, ""):
+            return {}
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Reviews showcase must be an object.")
+        return value
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
