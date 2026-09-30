@@ -275,6 +275,14 @@ const FULL_REPORT_COLUMNS = [
   ["line_total", "Line Total"],
   ["payment_status", "Payment"],
   ["currency", "Currency"],
+  ["order_subtotal", "Order Subtotal"],
+  ["shipping_fee", "Shipping"],
+  ["discount_amount", "Discount"],
+  ["discount_percent", "Discount %"],
+  ["discount_source", "Discount Type"],
+  ["discount_code", "Promo Code"],
+  ["gift_card_amount", "Gift Card"],
+  ["order_total", "Order Total"],
 ];
 
 const FULL_REPORT_MARKETS = [["", "All markets"], ["om", "Oman"], ["ae", "UAE"], ["sa", "Saudi Arabia"]];
@@ -482,6 +490,15 @@ function FullOrderReport({ onDownload, onPreview }) {
                     <td>{row.line_total}</td>
                     <td>{row.payment_status}</td>
                     <td>{row.currency}</td>
+                    {/* Order-level money sits on each order's first line only, so the columns sum correctly. */}
+                    <td>{row.order_subtotal}</td>
+                    <td>{row.shipping_fee}</td>
+                    <td>{row.discount_amount}</td>
+                    <td>{row.discount_percent ? `${row.discount_percent}%` : ""}</td>
+                    <td>{row.discount_source}</td>
+                    <td>{row.discount_code}</td>
+                    <td>{row.gift_card_amount}</td>
+                    <td>{row.order_total}</td>
                   </tr>
                 ))}
               </tbody>

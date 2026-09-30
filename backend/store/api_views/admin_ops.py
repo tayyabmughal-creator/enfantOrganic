@@ -21,7 +21,7 @@ from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 
 from django.db import transaction
-from django.db.models import Count, Sum, Q, Exists, OuterRef, F
+from django.db.models import Count, Sum, Min, Q, Exists, OuterRef, F
 from django.db.models.functions import TruncMonth
 from django.db.utils import OperationalError, ProgrammingError
 
@@ -2285,13 +2285,13 @@ class ReportCsvView(APIView):
         total = items.count()
         offset = (page - 1) * page_size
         rows = [
-            dict(zip(ORDER_LINE_EXPORT_HEADERS, _order_line_row(item)))
-            for item in items[offset : offset + page_size]
+            dict(zip(ORDER_LINE_EXPORT_HEADERS, values))
+            for values in order_line_rows_for_items(items[offset : offset + page_size])
         ]
         # Decimals are handed over as strings — the exact digits that reach the
         # CSV — so nothing is rounded on its way through JSON.
         for row in rows:
-            for key in ("rsp_unit_price", "cost_per_unit", "tax_amount", "line_total"):
+            for key in ORDER_LINE_MONEY_KEYS:
                 row[key] = str(row[key])
 
         return Response({
@@ -3333,7 +3333,91 @@ ORDER_LINE_EXPORT_HEADERS = [
     "line_total",
     "payment_status",
     "currency",
+    # Order-level money, written once per order (on its first line) so that a
+    # plain SUM down any of these columns gives the true figure. Repeating the
+    # shipping fee on every line would multiply it by the number of products.
+    "order_subtotal",
+    "shipping_fee",
+    "discount_amount",
+    "discount_percent",
+    "discount_source",
+    "discount_code",
+    "gift_card_amount",
+    "order_total",
 ]
+
+ORDER_LINE_MONEY_KEYS = (
+    "rsp_unit_price",
+    "cost_per_unit",
+    "tax_amount",
+    "line_total",
+    "order_subtotal",
+    "shipping_fee",
+    "discount_amount",
+    "discount_percent",
+    "gift_card_amount",
+    "order_total",
+)
+
+
+def _format_percent(value):
+    """20.00 -> "20", 12.50 -> "12.5" — how the client writes "20% off"."""
+    text = f"{Decimal(value).quantize(Decimal('0.01'))}"
+    return text.rstrip("0").rstrip(".") if "." in text else text
+
+
+def _order_discount_details(order, coupons):
+    """(percent, source, code) describing why this order was discounted.
+
+    The order only stores the total discount and the coupon code, so the source
+    is inferred the same way checkout decides it: a coupon suppresses cart
+    milestone rewards (resolve_milestone_rewards), so a discounted order with no
+    coupon code can only have earned it from a cart milestone.
+    """
+    discount = Decimal(order.discount_total or 0)
+    subtotal = Decimal(order.subtotal or 0)
+    code = str(order.coupon_code or "").strip().upper()
+    coupon = coupons.get(code) if code else None
+
+    if coupon is not None and coupon.discount_type == Coupon.DISCOUNT_FREE_SHIPPING:
+        return "", "Coupon (free shipping)", code
+    if discount <= 0:
+        return ("", "Coupon", code) if code else ("", "", "")
+
+    if coupon is not None and coupon.discount_type == Coupon.DISCOUNT_PERCENTAGE:
+        percent = _format_percent(coupon.value)
+    elif subtotal > 0:
+        # Fixed-amount coupons and milestones: the effective share of the cart.
+        percent = _format_percent(discount * 100 / subtotal)
+    else:
+        percent = ""
+    source = "Coupon" if code else "Cart milestone"
+    return percent, source, code
+
+
+def _coupons_for_codes(codes):
+    """Coupons by upper-cased code; a code may have been typed in any case."""
+    codes = {str(code or "").strip().upper() for code in codes} - {""}
+    if not codes:
+        return {}
+    match = Q()
+    for code in codes:
+        match |= Q(code__iexact=code)
+    return {coupon.code.upper(): coupon for coupon in Coupon.objects.filter(match)}
+
+
+def _order_level_cells(order, coupons):
+    percent, source, code = _order_discount_details(order, coupons)
+    return [
+        order.subtotal,
+        order.shipping_total,
+        order.discount_total,
+        percent,
+        source,
+        code,
+        order.gift_card_amount,
+        order.grand_total,
+    ]
 
 
 def _real_sku(candidate, item):
@@ -3465,7 +3549,7 @@ def order_line_items_queryset(orders_queryset):
     )
 
 
-def _order_line_row(item):
+def _order_line_row(item, *, first_in_order=False, coupons=None):
     order = item.order
     placed_on = timezone.localtime(order.created_at).date()
     ean, sku = _trade_codes_for_item(item)
@@ -3484,13 +3568,46 @@ def _order_line_row(item):
         item.line_total,
         order.payment_status,
         order.currency_code,
+        *(_order_level_cells(order, coupons or {}) if first_in_order else [""] * 8),
+    ]
+
+
+def order_line_rows_for_items(items):
+    """Rows for an already-sliced list of lines (the on-screen preview page).
+
+    A page can start in the middle of an order, so "first line" is decided by
+    the order's lowest item id — the same line the full export puts it on.
+    """
+    items = list(items)
+    order_ids = {item.order_id for item in items}
+    first_ids = set(
+        OrderItem.objects.filter(order_id__in=order_ids)
+        .values("order_id")
+        .annotate(first_id=Min("id"))
+        .values_list("first_id", flat=True)
+    )
+    coupons = _coupons_for_codes(item.order.coupon_code for item in items)
+    return [
+        _order_line_row(item, first_in_order=item.id in first_ids, coupons=coupons)
+        for item in items
     ]
 
 
 def _order_line_export_rows(orders_queryset):
-    """Yield one export row per order line, oldest order first."""
+    """Yield one export row per order line, oldest order first.
+
+    Lines come ordered by (order, id), so the first line of each order is simply
+    the first one seen with a new order id — that line carries the order's
+    shipping, discount and total.
+    """
+    coupons = _coupons_for_codes(
+        orders_queryset.exclude(coupon_code="").values_list("coupon_code", flat=True).distinct()
+    )
+    previous_order_id = None
     for item in order_line_items_queryset(orders_queryset).iterator(chunk_size=500):
-        yield _order_line_row(item)
+        first = item.order_id != previous_order_id
+        previous_order_id = item.order_id
+        yield _order_line_row(item, first_in_order=first, coupons=coupons)
 
 
 def order_line_items_filename(query_params=None, *, start_date=None, end_date=None):
@@ -3530,9 +3647,13 @@ def order_line_items_response(orders_queryset, *, export_format="csv", filename=
         for index, header in enumerate(ORDER_LINE_EXPORT_HEADERS, start=1):
             sheet.column_dimensions[get_column_letter(index)].width = max(14, len(header) + 4)
         sheet.append(ORDER_LINE_EXPORT_HEADERS)
+        percent_index = ORDER_LINE_EXPORT_HEADERS.index("discount_percent")
         for row in _order_line_export_rows(orders_queryset):
             # Decimals survive openpyxl, but the sheet reads better as numbers.
-            sheet.append([float(value) if isinstance(value, Decimal) else value for value in row])
+            row = [float(value) if isinstance(value, Decimal) else value for value in row]
+            if row[percent_index]:
+                row[percent_index] = float(row[percent_index])
+            sheet.append(row)
 
         buffer = io.BytesIO()
         workbook.save(buffer)

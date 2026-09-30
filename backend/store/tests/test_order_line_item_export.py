@@ -23,7 +23,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from store.api_views.admin_ops import ORDER_LINE_EXPORT_HEADERS
-from store.models import Order, OrderItem, Product, Region
+from store.models import Coupon, Order, OrderItem, Product, Region
 from store.services.admin_roles import ROLE_MANAGER, ensure_default_admin_roles
 
 User = get_user_model()
@@ -164,6 +164,8 @@ class OrderLineItemExportTests(TestCase):
                 "order_number", "date", "week_start", "ean", "sku", "product_name",
                 "quantity", "rsp_unit_price", "cost_per_unit", "tax_amount",
                 "line_total", "payment_status", "currency",
+                "order_subtotal", "shipping_fee", "discount_amount", "discount_percent",
+                "discount_source", "discount_code", "gift_card_amount", "order_total",
             ],
         )
         self.assertEqual(row[7], "3.99")            # rsp_unit_price
@@ -171,6 +173,83 @@ class OrderLineItemExportTests(TestCase):
         self.assertEqual(row[9], "0.00")            # tax_amount
         self.assertEqual(row[10], "11.97")          # line_total
         self.assertEqual(row[11], "unpaid")
+
+    # ── shipping + discounts (order-level money) ─────────────────────────────
+    def col(self, row, name):
+        return row[ORDER_LINE_EXPORT_HEADERS.index(name)]
+
+    def test_shipping_is_in_the_file_and_the_sum_matches_what_was_charged(self):
+        """The client's example: 11.12 OMR of products + 2.00 shipping = 13.12."""
+        order = self.make_order(number="EO-SHIP", region=self.oman, placed_on=timezone.now())
+        Order.objects.filter(pk=order.pk).update(
+            subtotal=Decimal("11.12"), shipping_total=Decimal("2.00"), grand_total=Decimal("13.12")
+        )
+        self.add_line(order, self.shampoo, quantity=1, unit_price="6.90")
+        self.add_line(order, self.lotion, quantity=1, unit_price="4.22")
+
+        _, first, second = self.export_rows()
+        self.assertEqual(self.col(first, "shipping_fee"), "2.00")
+        self.assertEqual(self.col(first, "order_total"), "13.12")
+        self.assertEqual(self.col(first, "order_subtotal"), "11.12")
+        # Only once per order — repeating it would double the shipping in a SUM.
+        self.assertEqual(self.col(second, "shipping_fee"), "")
+        self.assertEqual(self.col(second, "order_total"), "")
+        lines = sum(Decimal(self.col(r, "line_total")) for r in (first, second))
+        self.assertEqual(lines + Decimal(self.col(first, "shipping_fee")), Decimal("13.12"))
+
+    def test_a_percentage_coupon_names_its_code_and_percent(self):
+        Coupon.objects.create(code="SAVE20", discount_type=Coupon.DISCOUNT_PERCENTAGE, value=Decimal("20"))
+        order = self.make_order(number="EO-COUPON", region=self.oman, placed_on=timezone.now())
+        Order.objects.filter(pk=order.pk).update(
+            subtotal=Decimal("10.00"), discount_total=Decimal("2.00"), coupon_code="save20",
+            shipping_total=Decimal("2.00"), grand_total=Decimal("10.00"),
+        )
+        self.add_line(order, self.shampoo, quantity=1, unit_price="10.00")
+
+        _, row = self.export_rows()
+        self.assertEqual(self.col(row, "discount_amount"), "2.00")
+        self.assertEqual(self.col(row, "discount_percent"), "20")
+        self.assertEqual(self.col(row, "discount_source"), "Coupon")
+        self.assertEqual(self.col(row, "discount_code"), "SAVE20")
+        self.assertEqual(self.col(row, "order_total"), "10.00")
+
+    def test_a_discount_without_a_coupon_came_from_a_cart_milestone(self):
+        order = self.make_order(number="EO-MILESTONE", region=self.uae, placed_on=timezone.now())
+        Order.objects.filter(pk=order.pk).update(
+            subtotal=Decimal("200.00"), discount_total=Decimal("20.00"), grand_total=Decimal("180.00")
+        )
+        self.add_line(order, self.shampoo, quantity=4, unit_price="50.00")
+
+        _, row = self.export_rows()
+        self.assertEqual(self.col(row, "discount_percent"), "10")
+        self.assertEqual(self.col(row, "discount_source"), "Cart milestone")
+        self.assertEqual(self.col(row, "discount_code"), "")
+
+    def test_an_undiscounted_order_leaves_the_discount_description_blank(self):
+        order = self.make_order(number="EO-PLAIN", region=self.oman, placed_on=timezone.now())
+        self.add_line(order, self.shampoo)
+
+        _, row = self.export_rows()
+        self.assertEqual(self.col(row, "discount_amount"), "0.00")
+        self.assertEqual(self.col(row, "discount_percent"), "")
+        self.assertEqual(self.col(row, "discount_source"), "")
+
+    def test_the_preview_puts_order_money_on_the_first_line_even_mid_page(self):
+        order = self.make_order(number="EO-PAGED", region=self.oman, placed_on=timezone.now())
+        Order.objects.filter(pk=order.pk).update(shipping_total=Decimal("2.00"))
+        self.add_line(order, self.shampoo)
+        self.add_line(order, self.lotion)
+
+        second_page = self.api_client.get(
+            "/api/admin/reports/order-line-items/",
+            {"preview": "1", "date_range": "all", "page": "2", "page_size": "1"},
+        )
+        self.assertEqual(second_page.data["rows"][0]["shipping_fee"], "")
+        first_page = self.api_client.get(
+            "/api/admin/reports/order-line-items/",
+            {"preview": "1", "date_range": "all", "page": "1", "page_size": "1"},
+        )
+        self.assertEqual(first_page.data["rows"][0]["shipping_fee"], "2.00")
 
     # ── the trade codes ──────────────────────────────────────────────────────
     def test_a_plain_line_takes_the_products_codes(self):
