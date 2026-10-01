@@ -208,6 +208,9 @@ function StarRating({ rating = 5, size = 16 }) {
 // is guest-first and often phone-only, so nothing was ever submitted.
 // The form lives in a dialog opened from the top of the reviews section: nobody
 // scrolls past every review to find a "write one" link at the bottom.
+const REVIEW_MAX_PHOTOS = 4;
+const REVIEW_MAX_PHOTO_MB = 6;
+
 function WriteReviewModal({ slug, locale, open, onClose }) {
   const isAr = locale === "ar";
   const [form, setForm] = useState({
@@ -216,8 +219,60 @@ function WriteReviewModal({ slug, locale, open, onClose }) {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(null);
   const [error, setError] = useState("");
+  const [photos, setPhotos] = useState([]);
+  const [photoError, setPhotoError] = useState("");
 
   const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
+
+  function addPhotos(event) {
+    const picked = Array.from(event.target.files || []);
+    event.target.value = "";
+    const next = [...photos];
+    let message = "";
+    for (const file of picked) {
+      if (!file.type.startsWith("image/")) {
+        message = isAr ? "اختر ملفات صور فقط." : "Please choose image files only.";
+        continue;
+      }
+      if (file.size > REVIEW_MAX_PHOTO_MB * 1024 * 1024) {
+        message = isAr
+          ? `الصورة أكبر من ${REVIEW_MAX_PHOTO_MB} ميجابايت.`
+          : `A photo is larger than ${REVIEW_MAX_PHOTO_MB} MB.`;
+        continue;
+      }
+      if (next.length >= REVIEW_MAX_PHOTOS) {
+        message = isAr
+          ? `يمكنك إضافة ${REVIEW_MAX_PHOTOS} صور كحد أقصى.`
+          : `You can add up to ${REVIEW_MAX_PHOTOS} photos.`;
+        break;
+      }
+      next.push({
+        id: `${Date.now()}-${next.length}-${file.name}`,
+        file,
+        preview: URL.createObjectURL(file),
+      });
+    }
+    setPhotos(next);
+    setPhotoError(message);
+  }
+
+  function removePhoto(id) {
+    setPhotos((current) => {
+      const hit = current.find((photo) => photo.id === id);
+      if (hit) URL.revokeObjectURL(hit.preview);
+      return current.filter((photo) => photo.id !== id);
+    });
+    setPhotoError("");
+  }
+
+  useEffect(() => {
+    if (open) return;
+    setPhotos((current) => {
+      current.forEach((photo) => URL.revokeObjectURL(photo.preview));
+      return current.length ? [] : current;
+    });
+    setPhotoError("");
+  }, [open]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -233,11 +288,24 @@ function WriteReviewModal({ slug, locale, open, onClose }) {
     setSubmitting(true);
     setError("");
     try {
-      const response = await fetch(`${API_BASE_URL}/products/${encodeURIComponent(slug)}/reviews/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, rating: Number(form.rating) }),
-      });
+      const payload = { ...form, rating: Number(form.rating) };
+      let options;
+      if (photos.length) {
+        // Photos need a multipart body; the browser sets its boundary header.
+        const body = new FormData();
+        Object.entries(payload).forEach(([key, value]) => {
+          if (value !== "" && value != null) body.append(key, String(value));
+        });
+        photos.forEach((photo) => body.append("images", photo.file));
+        options = { method: "POST", body };
+      } else {
+        options = {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        };
+      }
+      const response = await fetch(`${API_BASE_URL}/products/${encodeURIComponent(slug)}/reviews/`, options);
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         // DRF returns {field: [message]}; show the first thing it objected to.
@@ -315,6 +383,37 @@ function WriteReviewModal({ slug, locale, open, onClose }) {
               <span>{isAr ? "مراجعتك" : "Your review"}</span>
               <textarea value={form.comment} onChange={set("comment")} required rows={4} maxLength={4000} />
             </label>
+            <div className="review-photos">
+              <span className="review-photos-label">{isAr ? "أضف صورًا (اختياري)" : "Add photos (optional)"}</span>
+              <div className="review-photos-row">
+                {photos.map((photo) => (
+                  <div key={photo.id} className="review-photo-thumb">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={photo.preview} alt="" />
+                    <button
+                      type="button"
+                      onClick={() => removePhoto(photo.id)}
+                      aria-label={isAr ? "إزالة الصورة" : "Remove photo"}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+                {photos.length < REVIEW_MAX_PHOTOS ? (
+                  <label className="review-photo-add">
+                    <input type="file" accept="image/*" multiple onChange={addPhotos} />
+                    <span aria-hidden="true">+</span>
+                    <small>{isAr ? "إضافة صورة" : "Add photo"}</small>
+                  </label>
+                ) : null}
+              </div>
+              <small className="review-form-help">
+                {isAr
+                  ? `حتى ${REVIEW_MAX_PHOTOS} صور، ${REVIEW_MAX_PHOTO_MB} ميجابايت لكل صورة.`
+                  : `Up to ${REVIEW_MAX_PHOTOS} photos, ${REVIEW_MAX_PHOTO_MB} MB each.`}
+              </small>
+              {photoError ? <div className="review-form-error">{photoError}</div> : null}
+            </div>
             <div className="review-form-row">
               <label>
                 <span>{isAr ? "رقم الطلب (اختياري)" : "Order number (optional)"}</span>

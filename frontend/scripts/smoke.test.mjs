@@ -343,6 +343,24 @@ test("checkout: only a discount code (no gift card), field above the totals, and
   assert.match(styles, /@media \(max-width: 860px\)\s*\{\s*\.checkout-end-summary\s*\{\s*display:\s*grid/);
 });
 
+test("write-a-review accepts photos and the reviews section has filters, sort and photo cards", () => {
+  const detail = readFileSync(new URL("../components/store/product/ProductDetailClient.jsx", import.meta.url), "utf8");
+  const section = readFileSync(new URL("../components/store/product/ProductReviewsSection.jsx", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../app/styles/product-premium.css", import.meta.url), "utf8");
+
+  assert.match(detail, /REVIEW_MAX_PHOTOS = 4/);
+  assert.match(detail, /body\.append\("images", photo\.file\)/);
+  assert.match(detail, /className="review-photo-add"/);
+  // JSON path is kept when no photo is chosen
+  assert.match(detail, /"Content-Type": "application\/json"/);
+  assert.match(section, /reviews-filter-btn/);
+  assert.match(section, /className="reviews-sort"/);
+  assert.match(section, /With photos only/);
+  assert.match(section, /ImageLightbox/);
+  assert.match(section, /Read more/);
+  assert.match(styles, /\.review-card\s*\{[^}]*grid-template-columns:\s*44px/);
+});
+
 test("no page compares the raw locale param against a normalized locale", async () => {
   // The route segment is now "en-om", while normalizeLocale() returns "en", so any
   // surviving `localeParam !== <normalized>` guard calls notFound() on every request.
