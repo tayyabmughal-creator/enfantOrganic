@@ -4,6 +4,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -41,6 +42,7 @@ from ..services.search import apply_ranked_product_search
 from ..api_serializers.account import PublicReviewCreateSerializer
 from ..services.stock import sort_out_of_stock_last_for_region
 from .context import StorefrontContextMixin, product_queryset
+from ..services.review_photos import store_review_photos
 
 
 def _homepage_testimonials(locale):
@@ -338,6 +340,7 @@ class ProductReviewCreateView(APIView):
     permission_classes = [permissions.AllowAny]
     throttle_scope = "review_submit"
     serializer_class = PublicReviewCreateSerializer
+    parser_classes = (JSONParser, MultiPartParser, FormParser)
 
     @extend_schema(request=PublicReviewCreateSerializer, responses=dict)
     def post(self, request, slug):
@@ -363,6 +366,9 @@ class ProductReviewCreateView(APIView):
                 order_query = order_query.none()
             order = order_query.first()
 
+        # Photos are validated and stored only once the text itself is accepted.
+        photo_urls = store_review_photos(request.FILES.getlist("images"))
+
         review = Review.objects.create(
             product=product,
             user=request.user if request.user.is_authenticated else None,
@@ -371,6 +377,7 @@ class ProductReviewCreateView(APIView):
             rating=data["rating"],
             title=data.get("title", ""),
             comment=data["comment"],
+            images=photo_urls,
             is_verified_purchase=order is not None,
             is_approved=False,
         )

@@ -1,8 +1,13 @@
+import shutil
+import tempfile
 from decimal import Decimal
+from io import BytesIO
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.test import SimpleTestCase, TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import SimpleTestCase, TestCase, override_settings
+from PIL import Image
 from rest_framework.test import APIClient
 
 from store.api_serializers.localization import resolve_reviews_showcase
@@ -218,3 +223,77 @@ class ReviewListApiTests(TestCase):
         self.assertEqual(response.data["total"], 15)
         self.assertEqual(response.data["reviews"][0]["product"]["name"], "كريم")
         self.assertEqual(self.client.get("/api/reviews/all/", {"product": "nope"}).data["total"], 0)
+
+
+def _image_file(name="photo.png", size=(64, 48), fmt="PNG", color=(200, 30, 30)):
+    buffer = BytesIO()
+    Image.new("RGB", size, color).save(buffer, format=fmt)
+    return SimpleUploadedFile(name, buffer.getvalue(), content_type=f"image/{fmt.lower()}")
+
+
+class ReviewPhotoUploadTests(TestCase):
+    def setUp(self):
+        self.media = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.media, True)
+        self.override = override_settings(MEDIA_ROOT=self.media, MEDIA_URL="/media/")
+        self.override.enable()
+        self.addCleanup(self.override.disable)
+        self.client = APIClient()
+        self.product = Product.objects.create(slug="photo-cream", name_en="Photo Cream", name_ar="كريم", is_published=True)
+        self.url = "/api/products/photo-cream/reviews/"
+        self.fields = {"customer_name": "Sara", "rating": 5, "comment": "Lovely cream for baby skin."}
+
+    def test_review_with_photos_is_stored_reencoded_and_waits_for_approval(self):
+        response = self.client.post(
+            self.url,
+            {**self.fields, "images": [_image_file("a.png"), _image_file("b.jpg", fmt="JPEG")]},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        review = Review.objects.get(pk=response.data["id"])
+        self.assertFalse(review.is_approved)
+        self.assertEqual(len(review.images), 2)
+        for url in review.images:
+            self.assertTrue(url.startswith("/media/reviews/customer/"))
+            self.assertTrue(url.endswith(".webp"))
+        stored = [p for p in __import__("pathlib").Path(self.media, "reviews", "customer").glob("*.webp")]
+        self.assertEqual(len(stored), 2)
+        self.assertEqual(Image.open(stored[0]).format, "WEBP")
+
+    def test_review_without_photos_still_works_as_json(self):
+        response = self.client.post(self.url, self.fields, format="json")
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(Review.objects.get(pk=response.data["id"]).images, [])
+
+    def test_too_many_photos_are_rejected_and_nothing_is_saved(self):
+        files = [_image_file(f"{i}.png") for i in range(5)]
+        response = self.client.post(self.url, {**self.fields, "images": files}, format="multipart")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Review.objects.count(), 0)
+
+    def test_non_image_is_rejected_and_good_photos_before_it_are_not_kept(self):
+        bad = SimpleUploadedFile("evil.png", b"<?php echo 1; ?>", content_type="image/png")
+        response = self.client.post(
+            self.url, {**self.fields, "images": [_image_file("ok.png"), bad]}, format="multipart"
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("images", response.data)
+        self.assertEqual(Review.objects.count(), 0)
+        self.assertFalse(__import__("pathlib").Path(self.media, "reviews", "customer").exists())
+
+    def test_oversized_photo_is_rejected(self):
+        from store.services import review_photos
+
+        original = review_photos.MAX_PHOTO_BYTES
+        review_photos.MAX_PHOTO_BYTES = 100
+        self.addCleanup(setattr, review_photos, "MAX_PHOTO_BYTES", original)
+        response = self.client.post(self.url, {**self.fields, "images": [_image_file(size=(400, 400))]}, format="multipart")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("MB", str(response.data["images"][0]))
+
+    def test_invalid_text_does_not_store_photos(self):
+        response = self.client.post(
+            self.url, {"customer_name": "S", "rating": 5, "comment": "x", "images": [_image_file()]}, format="multipart"
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(__import__("pathlib").Path(self.media, "reviews", "customer").exists())
