@@ -15,10 +15,38 @@ def default_supported_payment_methods():
 
 def default_social_proof_items():
     return [
-        {"text_en": "300,000+ Happy parents", "text_ar": "أكثر من 300,000 أب وأم سعداء"},
-        {"text_en": "4.7 Average rating", "text_ar": "متوسط تقييم 4.7"},
-        {"text_en": "1M+ products sold worldwide", "text_ar": "أكثر من مليون منتج مباع حول العالم"},
-        {"text_en": "ECOCERT Certified · Dermatologically tested", "text_ar": "معتمد من ECOCERT · مختبر جلديًا"},
+        {
+            "text_en": "300,000+ Happy parents",
+            "text_ar": "أكثر من 300,000 أب وأم سعداء",
+            "value_en": "300,000+",
+            "value_ar": "+300,000",
+            "label_en": "Happy parents",
+            "label_ar": "أب وأم سعداء",
+        },
+        {
+            "text_en": "4.7 Average rating",
+            "text_ar": "متوسط تقييم 4.7",
+            "value_en": "4.7 ★★★★★",
+            "value_ar": "4.7 ★★★★★",
+            "label_en": "Average rating",
+            "label_ar": "متوسط التقييم",
+        },
+        {
+            "text_en": "1M+ products sold worldwide",
+            "text_ar": "أكثر من مليون منتج مباع حول العالم",
+            "value_en": "1M+",
+            "value_ar": "+1 مليون",
+            "label_en": "Products sold worldwide",
+            "label_ar": "منتج مباع حول العالم",
+        },
+        {
+            "text_en": "ECOCERT Certified · Dermatologically tested",
+            "text_ar": "معتمد من ECOCERT · مختبر جلديًا",
+            "value_en": "ECOCERT",
+            "value_ar": "ECOCERT",
+            "label_en": "Certified · Dermatologically tested",
+            "label_ar": "معتمد · مختبر جلديًا",
+        },
     ]
 
 
@@ -388,7 +416,7 @@ class SiteSettings(models.Model):
     social_proof_items = models.JSONField(
         default=default_social_proof_items,
         blank=True,
-        help_text="Scrolling proof ticker on product pages. Each item: {text_en, text_ar}. Leave empty to hide.",
+        help_text="Scrolling proof ticker on product pages. Each item: {value_en, label_en, value_ar, label_ar} (big number + small caption); {text_en, text_ar} still works. Leave empty to hide.",
     )
     # Reviews showcase on product pages and the "Read more reviews" page:
     # {enabled, count_text_*, title_*, subtitle_*, button_*, images:[{image_en, image_ar}],

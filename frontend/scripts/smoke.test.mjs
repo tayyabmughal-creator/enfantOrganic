@@ -314,7 +314,7 @@ test("reviews: showcase strip, full review section, all-reviews page and urgency
   assert.match(reviews, /Would recommend|would recommend this product/);
   assert.match(reviews, /Read All Reviews/);
   assert.match(reviews, /NEXT_BATCH = 20/);
-  assert.match(reviews, /reverse/);
+  assert.match(reviews, /reviews-photo-rail/);
   assert.match(showcase, /Read more reviews/);
   assert.match(reviewsPage, /getAllReviews/);
   assert.match(admin, /"reviews-showcase"/);
@@ -356,9 +356,128 @@ test("write-a-review accepts photos and the reviews section has filters, sort an
   assert.match(section, /reviews-filter-btn/);
   assert.match(section, /className="reviews-sort"/);
   assert.match(section, /With photos only/);
-  assert.match(section, /ImageLightbox/);
+  assert.match(section, /ReviewPhotoLightbox/);
+  // phone order: score, bars, recommend line, then photos (recommend sits above the photos)
+  assert.match(styles, /grid-template-areas:\s*"score"\s*"bars"\s*"recommend"\s*"gallery"/);
+  assert.match(styles, /\.reviews-photo-tile\s*\{[^}]*flex:\s*0 0 132px/);
+  assert.match(styles, /\.review-lightbox-dialog\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1\.6fr\)/);
+  const lightbox = readFileSync(new URL("../components/store/product/ReviewPhotoLightbox.jsx", import.meta.url), "utf8");
+  assert.match(lightbox, /review-lightbox-counter/);
+  assert.match(lightbox, /REVIEWING/);
+  assert.match(lightbox, /Verified Buyer/);
+  assert.match(detail, /productName=\{product\.name\}/);
   assert.match(section, /Read more/);
   assert.match(styles, /\.review-card\s*\{[^}]*grid-template-columns:\s*44px/);
+});
+
+test("product page: features and how-it-works use the full width like the reference", () => {
+  const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+  const sections = read("../components/store/product/ProductPageSections.jsx");
+  const rail = read("../components/store/product/ProductHowItWorksRail.jsx");
+  const styles = read("../app/styles/product-premium.css");
+
+  assert.match(sections, /export function MarkedTitle/);
+  assert.match(sections, /product-features-title/);
+  assert.match(sections, /<ProductHowItWorksRail/);
+  assert.match(rail, /product-hiw-num/);
+  assert.match(rail, /product-hiw-caption/);
+  assert.match(rail, /scrollBy/);
+  // two columns on desktop: title + features on one side, the picture on the other
+  assert.match(styles, /\.product-features-section\.has-media\s*\{[^}]*grid-template-areas:\s*"title media"\s*"grid media"/);
+  // no narrow centred column any more
+  assert.doesNotMatch(styles, /\.product-hiw-frame\s*\{[^}]*max-width:\s*720px/);
+  assert.doesNotMatch(styles, /\.product-features-grid\s*\{[^}]*max-width:\s*720px/);
+  // 3.3 cards across on desktop, so the next card peeks in
+  assert.match(styles, /\.product-hiw-slide\s*\{[^}]*flex-basis:\s*calc\(\(100% - 28px - 40px\) \/ 3\.3\)/);
+});
+
+test("product page: stat band ticker, roomy section gaps and a comparison table with lines in every column", () => {
+  const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+  const sections = read("../components/store/product/ProductPageSections.jsx");
+  const styles = read("../app/styles/product-premium.css");
+
+  assert.match(sections, /<strong>\{item\.value \|\| item\.text\}<\/strong>/);
+  assert.match(sections, /product-compare-heading/);
+  assert.match(styles, /\.product-proof-item\s*\{[^}]*flex-direction:\s*column/);
+  assert.match(styles, /\.product-proof-item span\s*\{[^}]*text-transform:\s*uppercase/);
+  assert.match(styles, /\.product-extra-sections\s*\{[^}]*gap:\s*clamp\(64px, 8vw, 112px\)/);
+  // the row line sits on each cell so the highlighted "Us" column keeps its lines
+  assert.match(styles, /\.product-compare-row \+ \.product-compare-row \.product-compare-cell\s*\{[^}]*border-top:/);
+  assert.match(styles, /\.product-compare-heading\s*\{[^}]*margin-bottom:\s*30px/);
+});
+
+test("discount popup is one centred column: wide picture, brand, message, form", () => {
+  const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+  const popup = read("../components/store/DiscountPopup.jsx");
+  const styles = read("../app/styles/overlays.css");
+
+  // picture first, then the brand, then the message and the form
+  assert.match(popup, /discount-popup-media[\s\S]*?discount-popup-brand[\s\S]*?<p>\{text\}<\/p>[\s\S]*?discount-popup-form/);
+  assert.match(styles, /\.discount-popup\s*\{[^}]*flex-direction:\s*column/);
+  assert.match(styles, /\.discount-popup\s*\{[^}]*text-align:\s*center/);
+  assert.match(styles, /\.discount-popup-media\s*\{[^}]*aspect-ratio:\s*16 \/ 9/);
+  // the box follows the uploaded picture's shape (square to 16:9) and the picture fills it
+  assert.match(styles, /\.discount-popup-media img\s*\{[^}]*object-fit:\s*cover/);
+  assert.doesNotMatch(styles, /discount-popup-media-blur|filter:\s*blur/);
+  assert.match(popup, /Math\.min\(16 \/ 9, Math\.max\(1,/);
+});
+
+test("reviews showcase: full width, big uncropped cards and a small button", () => {
+  const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+  const showcase = read("../components/store/product/ProductReviewShowcase.jsx");
+  const styles = read("../app/styles/product-premium.css");
+
+  assert.match(showcase, /review-showcase-head[\s\S]*?<ReviewMarquee[\s\S]*?review-showcase-cta/);
+  assert.doesNotMatch(styles, /\.review-showcase\s*\{[^}]*max-width:\s*720px/);
+  // cards grow with the screen so the text inside the review pictures can be read
+  assert.match(styles, /\.review-marquee--card \.review-marquee-item\s*\{[^}]*width:\s*240px/);
+  assert.match(styles, /\.review-marquee--card \.review-marquee-item\s*\{[^}]*width:\s*304px/);
+  // the picture is shown whole, not cropped to a fixed ratio
+  assert.doesNotMatch(styles, /\.review-marquee--card \.review-marquee-item img\s*\{[^}]*aspect-ratio/);
+  assert.match(styles, /\.review-showcase-btn\s*\{[^}]*padding:\s*8px 18px/);
+});
+
+test("product page: sale bar has no badge, and the photo strip uses only this product's own review photos", () => {
+  const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+  const detail = read("../components/store/product/ProductDetailClient.jsx");
+  const reviews = read("../components/store/product/ProductReviewsSection.jsx");
+  const admin = read("../components/admin/ReviewsShowcaseField.jsx");
+  const styles = read("../app/styles/product-premium.css");
+
+  // the % badge sits next to the price; the dark sale bar keeps only text + countdown
+  assert.doesNotMatch(detail, /product-urgency-badge/);
+  assert.doesNotMatch(styles, /product-urgency-badge/);
+  assert.match(detail, /<UrgencyStrip urgency=\{urgency\} \/>/);
+  // one shared strip of photos on every product is gone
+  assert.doesNotMatch(detail, /reviewsShowcase\?\.photos/);
+  assert.doesNotMatch(reviews, /reviewsShowcase|photos\?\.length/);
+  assert.match(reviews, /sortReviews\(reviews, "recent"\)\.forEach/);
+  assert.doesNotMatch(admin, /Customer photo strip/);
+});
+
+test("sale countdown reads the clock only after mount (no server/client hydration mismatch)", () => {
+  const detail = readFileSync(new URL("../components/store/product/ProductDetailClient.jsx", import.meta.url), "utf8");
+  assert.match(detail, /const \[remaining, setRemaining\] = useState\(null\)/);
+  assert.doesNotMatch(detail, /useState\(\(\) => \(hasDeadline \? endsAt - Date\.now\(\)/);
+  assert.match(detail, /hasDeadline && remaining !== null/);
+});
+
+test("home: Instagram section is a swipeable row of big rounded posts", () => {
+  const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+  const page = read("../app/[locale]/page.jsx");
+  const feed = read("../components/store/home/InstagramFeed.jsx");
+  const styles = read("../app/styles/home.css");
+
+  assert.match(page, /<InstagramFeed posts=\{instagramPosts\}/);
+  assert.doesNotMatch(page, /className="instagram-grid"/);
+  assert.match(feed, /className="instagram-rail"/);
+  assert.match(feed, /scrollBy/);
+  assert.match(styles, /\.instagram-header h3\s*\{[^}]*text-transform:\s*uppercase/);
+  assert.match(styles, /\.instagram-rail\s*\{[^}]*scroll-snap-type:\s*x mandatory/);
+  // four posts across on desktop, about a post and a half on a phone
+  assert.match(styles, /\.instagram-tile\s*\{[^}]*flex:\s*0 0 calc\(\(100% - 32px - 78px\) \/ 4\)/);
+  assert.match(styles, /\.instagram-tile\s*\{[^}]*flex-basis:\s*62vw/);
+  assert.match(styles, /\[dir="rtl"\] \.instagram-header h3\s*\{\s*letter-spacing:\s*0/);
 });
 
 test("no page compares the raw locale param against a normalized locale", async () => {

@@ -4,7 +4,7 @@ export const revalidate = 120; // 2 minutes — admin changes reflect quickly
 
 import ArtDirectedImage from "@/components/ui/ArtDirectedImage";
 import SiteImage from "@/components/ui/SiteImage";
-import Icon from "@/components/icons/Icon";
+import InstagramFeed from "@/components/store/home/InstagramFeed";
 import JsonLd from "@/components/seo/JsonLd";
 import StorefrontShell from "@/components/layout/StorefrontShell";
 import CategoryCarousel from "@/components/store/CategoryCarousel";
@@ -476,24 +476,7 @@ export default async function LocalizedHomePage({ params, searchParams }) {
           </a>
         </div>
         {instagramPosts.length ? (
-          <div className="instagram-grid">
-            {instagramPosts.map((post, index) => (
-              <a
-                key={`${post.href}-${index}`}
-                href={post.href}
-                className="instagram-tile"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <SiteImage src={post.image} alt="Enfant Instagram" fill sizes="(max-width: 639px) 50vw, (max-width: 1023px) 33vw, 25vw" />
-                <div className="instagram-logo-overlay">
-                  <div className="instagram-logo-circle">
-                    <Icon name="instagram" size={42} />
-                  </div>
-                </div>
-              </a>
-            ))}
-          </div>
+          <InstagramFeed posts={instagramPosts} isAr={isAr} />
         ) : (
           <div className="store-empty-state">
             <strong>{isAr ? "تحديثات إنستغرام قريبًا" : "Instagram updates are coming soon"}</strong>

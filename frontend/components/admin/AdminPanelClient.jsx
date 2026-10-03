@@ -404,7 +404,7 @@ const FIELD_CONFIGS = {
     ["urgency_text_en","Product page offer strip EN","text"],["urgency_text_ar","Product page offer strip AR","text"],
     ["urgency_ends_at","Offer ends at (leave blank for no countdown)","datetime-local"],
     ["reviews_showcase","Reviews showcase (product pages and Read more reviews page)","reviews-showcase"],
-    ["social_proof_items","Product page proof ticker JSON (scrolling line under How it works; [{text_en, text_ar}], empty [] hides)","json"],
+    ["social_proof_items","Product page proof ticker JSON (scrolling stats under How it works; [{value_en, label_en, value_ar, label_ar}], empty [] hides)","json"],
     ["trust_bar_items","Home trust cards JSON (icon: truck|shield|leaf|star|check, optional image URL; text_en/ar, desc_en/ar; empty [] hides)","json"],
     ["free_gift_title_en","Free gift title EN","text"],["free_gift_title_ar","Free gift title AR","text"],
     ["free_gift_subtitle_en","Free gift subtitle EN","textarea"],["free_gift_subtitle_ar","Free gift subtitle AR","textarea"],

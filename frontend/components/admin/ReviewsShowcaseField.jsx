@@ -25,18 +25,17 @@ export default function ReviewsShowcaseField({ field, value, editor, setEditor }
   const label = field[1];
   const data = { enabled: true, ...(value && typeof value === "object" && !Array.isArray(value) ? value : {}) };
   const images = Array.isArray(data.images) && data.images.length ? data.images : [{ image_en: "", image_ar: "" }];
-  const photos = Array.isArray(data.photos) ? data.photos : [];
 
   const commit = (patch) => setEditor({ ...editor, [name]: { ...data, ...patch } });
   const setImage = (index, patch) => commit({ images: images.map((item, i) => (i === index ? { ...item, ...patch } : item)) });
-  const setPhoto = (index, image) => commit({ photos: photos.map((item, i) => (i === index ? { image } : item)) });
 
   return (
     <div className="admin-label full-width">
       <span>{label}</span>
       <small className="admin-field-help">
         Used on every product page and on the &ldquo;Read more reviews&rdquo; page. Leave Arabic fields empty to reuse the
-        English text or image.
+        English text or image. The customer photos above each product&rsquo;s review list come from that product&rsquo;s
+        own reviews, so there is nothing to upload for them here.
       </small>
 
       <div style={{ ...BLOCK, marginTop: 10 }}>
@@ -76,24 +75,6 @@ export default function ReviewsShowcaseField({ field, value, editor, setEditor }
         {images.length < MAX_IMAGES ? (
           <button type="button" className="admin-btn-secondary" style={{ width: "fit-content" }} onClick={() => commit({ images: [...images, { image_en: "", image_ar: "" }] })}>
             + Add image
-          </button>
-        ) : null}
-      </details>
-
-      <details style={{ ...BLOCK, marginTop: 10 }}>
-        <summary style={{ fontWeight: 700, cursor: "pointer" }}>Customer photo strip (above the review list; falls back to photos from reviews)</summary>
-        {photos.map((item, index) => (
-          <div key={index} style={{ ...BLOCK, background: "#fafafa" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <strong>Photo {index + 1}</strong>
-              <button type="button" className="admin-btn-secondary" onClick={() => commit({ photos: photos.filter((_, i) => i !== index) })}>Remove</button>
-            </div>
-            <ImageInput label="Photo" value={item.image} onChange={(image) => setPhoto(index, image)} uploader={uploadImage} />
-          </div>
-        ))}
-        {photos.length < MAX_IMAGES ? (
-          <button type="button" className="admin-btn-secondary" style={{ width: "fit-content" }} onClick={() => commit({ photos: [...photos, { image: "" }] })}>
-            + Add photo
           </button>
         ) : null}
       </details>

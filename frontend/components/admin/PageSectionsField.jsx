@@ -178,7 +178,7 @@ export default function PageSectionsField({ field, value, editor, setEditor, onG
       </details>
 
       <details style={{ ...BLOCK, marginTop: 10 }}>
-        <summary style={{ fontWeight: 700, cursor: "pointer" }}>2 · How it works (swipeable images)</summary>
+        <summary style={{ fontWeight: 700, cursor: "pointer" }}>2 · How it works (swipeable step cards)</summary>
         <Enabled checked={how.enabled !== false} onChange={(enabled) => setHow({ enabled })} label="Show this section" />
         <div style={ROW2}>
           <Text label="Heading (EN)" value={how.title_en} placeholder="How it works" onChange={(title_en) => setHow({ title_en })} />
@@ -191,18 +191,26 @@ export default function PageSectionsField({ field, value, editor, setEditor, onG
         {steps.map((step, index) => (
           <div key={index} style={{ ...BLOCK, background: "#fafafa" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <strong>Image {index + 1}</strong>
+              <strong>Step {index + 1}</strong>
               {steps.length > 1 ? (
                 <button type="button" className="admin-btn-secondary" onClick={() => setHow({ steps: steps.filter((_, i) => i !== index) })}>Remove</button>
               ) : null}
             </div>
             <ImageInput label="English image" value={step.image_en} onChange={(image_en) => setStep(index, { image_en })} slug={slug} onGalleryUpload={onGalleryUpload} />
             <ImageInput label="Arabic image (optional)" value={step.image_ar} onChange={(image_ar) => setStep(index, { image_ar })} slug={slug} onGalleryUpload={onGalleryUpload} />
+            <div style={ROW2}>
+              <Text label="Step title (EN, optional)" value={step.title_en} onChange={(title_en) => setStep(index, { title_en })} />
+              <Text label="Step title (AR, optional)" value={step.title_ar} onChange={(title_ar) => setStep(index, { title_ar })} />
+            </div>
+            <div style={ROW2}>
+              <Text textarea label="Step text (EN, optional)" value={step.text_en} onChange={(text_en) => setStep(index, { text_en })} />
+              <Text textarea label="Step text (AR, optional)" value={step.text_ar} onChange={(text_ar) => setStep(index, { text_ar })} />
+            </div>
           </div>
         ))}
         {steps.length < MAX_STEPS ? (
           <button type="button" className="admin-btn-secondary" style={{ width: "fit-content" }} onClick={() => setHow({ steps: [...steps, { image_en: "", image_ar: "" }] })}>
-            + Add image
+            + Add step
           </button>
         ) : null}
         <small className="admin-field-help">

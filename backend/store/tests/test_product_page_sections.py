@@ -54,6 +54,35 @@ class ResolvePageSectionsTests(SimpleTestCase):
         },
     }
 
+    def test_how_it_works_steps_carry_optional_title_and_text_per_locale(self):
+        result = resolve_page_sections(
+            {
+                "how_it_works": {
+                    "steps": [
+                        {
+                            "image_en": "https://cdn.example/a.jpg",
+                            "title_en": "Apply to clean skin",
+                            "title_ar": "ضعي على بشرة نظيفة",
+                            "text_en": "A small amount.",
+                        },
+                        {"image_en": "https://cdn.example/b.jpg"},
+                    ]
+                }
+            },
+            "en",
+        )
+        first, second = result["how_it_works"]["steps"]
+        self.assertEqual(first["title"], "Apply to clean skin")
+        self.assertEqual(first["text"], "A small amount.")
+        self.assertEqual((second["title"], second["text"]), ("", ""))
+        arabic = resolve_page_sections(
+            {"how_it_works": {"steps": [{"image_en": "https://cdn.example/a.jpg", "title_en": "EN", "title_ar": "AR", "text_en": "EN text"}]}},
+            "ar",
+        )
+        step = arabic["how_it_works"]["steps"][0]
+        self.assertEqual(step["title"], "AR")
+        self.assertEqual(step["text"], "EN text")  # falls back to English
+
     def test_english_resolution(self):
         result = resolve_page_sections(self.RAW, "en")
         self.assertEqual(result["features"]["title"], "Skin that bounces back.")
@@ -145,6 +174,31 @@ class PageSectionsApiTests(TestCase):
         self.assertIn("how_it_works", self.product.page_sections)
         bad = self.client.patch(f"/api/admin/products/{self.product.slug}/", {"page_sections": ["nope"]}, format="json")
         self.assertEqual(bad.status_code, 400)
+
+    def test_social_proof_items_split_into_value_and_label(self):
+        from store.api_serializers.localization import resolve_social_proof_items
+
+        items = resolve_social_proof_items(
+            [
+                {"text_en": "1M+ products sold worldwide", "text_ar": "ar"},
+                {"text_en": "ECOCERT Certified"},
+                {"value_en": "83%", "label_en": "Choose to subscribe", "value_ar": "٨٣٪", "label_ar": "يشتركون"},
+                {"text_en": "", "text_ar": ""},
+                "junk",
+            ],
+            "en",
+        )
+        self.assertEqual(items[0], {"text": "1M+ products sold worldwide", "value": "1M+", "label": "products sold worldwide"})
+        self.assertEqual((items[1]["value"], items[1]["label"]), ("ECOCERT Certified", ""))
+        self.assertEqual((items[2]["value"], items[2]["label"]), ("83%", "Choose to subscribe"))
+        self.assertEqual(len(items), 3)
+        arabic = resolve_social_proof_items([{"value_en": "83%", "label_en": "x", "value_ar": "٨٣٪", "label_ar": "يشتركون"}], "ar")
+        self.assertEqual((arabic[0]["value"], arabic[0]["label"]), ("٨٣٪", "يشتركون"))
+
+    def test_default_ticker_items_all_have_value_and_label_in_both_languages(self):
+        for item in default_social_proof_items():
+            for key in ("value_en", "label_en", "value_ar", "label_ar"):
+                self.assertTrue(item[key], key)
 
     def test_navigation_exposes_social_proof_ticker(self):
         SiteSettings.objects.get_or_create(pk=1)

@@ -105,6 +105,32 @@ def resolve_reviews_showcase(raw, locale):
     }
 
 
+def resolve_social_proof_items(raw, locale):
+    """Ticker items as {text, value, label}.
+
+    An item can carry its own {value, label} pair (big number + caption). One that only
+    has text is split on its first word when that word holds a digit ("1M+ products
+    sold" -> "1M+" / "products sold"); otherwise the whole text is the value.
+    """
+    items = []
+    for item in raw or []:
+        if not isinstance(item, dict):
+            continue
+        text = str(item.get(f"text_{locale}") or item.get("text_en") or "").strip()
+        value = str(item.get(f"value_{locale}") or item.get("value_en") or "").strip()
+        label = str(item.get(f"label_{locale}") or item.get("label_en") or "").strip()
+        if not (text or value):
+            continue
+        if not value:
+            first, _, rest = text.partition(" ")
+            if rest and any(char.isdigit() for char in first):
+                value, label = first, rest.strip()
+            else:
+                value, label = text, ""
+        items.append({"text": text or " ".join(part for part in (value, label) if part), "value": value, "label": label})
+    return items
+
+
 def serialize_site_settings(settings, locale, region=None):
     normalized = normalize_locale(locale)
 
@@ -173,11 +199,7 @@ def serialize_site_settings(settings, locale, region=None):
             if isinstance(item, dict) and (item.get("text_en") or item.get("text_ar"))
         ],
         "reviews_showcase": resolve_reviews_showcase(settings.reviews_showcase, normalized),
-        "social_proof_items": [
-            {"text": item.get(f"text_{normalized}") or item.get("text_en", "")}
-            for item in (settings.social_proof_items or [])
-            if isinstance(item, dict) and (item.get("text_en") or item.get("text_ar"))
-        ],
+        "social_proof_items": resolve_social_proof_items(settings.social_proof_items, normalized),
         # Link groups
         "why_choose_links": localized_link_items(settings.why_choose_links, normalized),
         "policy_links": localized_link_items(settings.policy_links, normalized),

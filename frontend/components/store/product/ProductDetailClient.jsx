@@ -446,14 +446,17 @@ function WriteReviewModal({ slug, locale, open, onClose }) {
 }
 
 // An offer strip right under the price — the position the client asked for. Empty text hides it; a deadline turns it into a live countdown.
-function UrgencyStrip({ urgency, locale, discountPercent = 0 }) {
+function UrgencyStrip({ urgency }) {
   const text = String(urgency?.text || "").trim();
   const endsAt = urgency?.endsAt ? new Date(urgency.endsAt) : null;
   const hasDeadline = endsAt && !Number.isNaN(endsAt.getTime());
-  const [remaining, setRemaining] = useState(() => (hasDeadline ? endsAt - Date.now() : 0));
+  // The clock is read only after mount: the server and the first client render must
+  // print the same text, and "now" differs between them.
+  const [remaining, setRemaining] = useState(null);
 
   useEffect(() => {
     if (!hasDeadline) return undefined;
+    setRemaining(endsAt - Date.now());
     const timer = setInterval(() => setRemaining(endsAt - Date.now()), 1000);
     return () => clearInterval(timer);
     // endsAt is derived from a string prop, so compare on that.
@@ -461,18 +464,15 @@ function UrgencyStrip({ urgency, locale, discountPercent = 0 }) {
 
   if (!text) return null;
   // A deadline that has passed takes the strip with it rather than showing 00:00.
-  if (hasDeadline && remaining <= 0) return null;
+  if (hasDeadline && remaining !== null && remaining <= 0) return null;
 
   const pad = (value) => String(Math.floor(value)).padStart(2, "0");
-  const countdown = hasDeadline
+  const countdown = hasDeadline && remaining !== null
     ? `${pad(remaining / 86400000)}d ${pad((remaining / 3600000) % 24)}h ${pad((remaining / 60000) % 60)}m ${pad((remaining / 1000) % 60)}s`
     : "";
 
   return (
     <div className="product-urgency-strip">
-      {discountPercent > 0 ? (
-        <span className="product-urgency-badge">{locale === "ar" ? `${discountPercent}% خصم` : `${discountPercent}% OFF`}</span>
-      ) : null}
       <span className="product-urgency-text">{text}</span>
       {countdown ? <span className="product-urgency-countdown">{countdown}</span> : null}
     </div>
@@ -1055,7 +1055,7 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
               ) : null}
             </div>
 
-            <UrgencyStrip urgency={urgency} locale={locale} discountPercent={discountPercent} />
+            <UrgencyStrip urgency={urgency} />
 
             {product.short_description ? (
               <p className="product-short-copy">{product.short_description}</p>
@@ -1370,7 +1370,8 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
             editorialReviews={editorialReviews}
             rating={product.rating}
             reviewCount={reviewCount}
-            photos={reviewsShowcase?.photos}
+            productName={product.name}
+            productImage={galleryImages[0] || product.image}
             isAr={isAr}
             onWrite={() => setReviewFormOpen(true)}
             allReviewsHref={buildStorePath(locale, "/reviews", region)}

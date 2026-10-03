@@ -2095,6 +2095,338 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 14px;
+  margin-bottom: 26px;
+  text-align: center;
+}
+
+.instagram-header h3 {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: clamp(0.95rem, 1.4vw, 1.1rem);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+[dir="rtl"] .instagram-header h3 {
+  letter-spacing: 0;
+}
+
+.instagram-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 28px;
+  border-radius: 999px;
+  background: #e8a020;
+  color: white;
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 200ms ease, transform 140ms ease, box-shadow 200ms ease;
+  box-shadow: 0 4px 16px rgba(232, 160, 32, 0.28);
+}
+
+.instagram-cta:hover {
+  background: #cf8e14;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(232, 160, 32, 0.36);
+}
+
+/* Big rounded posts in a swipeable row; the row fades out at both edges. */
+.instagram-feed {
+  position: relative;
+}
+
+.instagram-rail {
+  display: flex;
+  gap: 26px;
+  padding: 4px 16px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 16px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 2.5%, #000 97.5%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 2.5%, #000 97.5%, transparent);
+}
+
+.instagram-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.instagram-tile {
+  position: relative;
+  flex: 0 0 calc((100% - 32px - 78px) / 4);
+  aspect-ratio: 4 / 5;
+  display: block;
+  overflow: hidden;
+  border-radius: 26px;
+  background: #d8edca;
+  scroll-snap-align: start;
+}
+
+.instagram-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 320ms ease;
+}
+
+.instagram-tile:hover img {
+  transform: scale(1.04);
+}
+
+.instagram-arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  display: none;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  padding: 0 0 3px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--text);
+  box-shadow: 0 6px 18px rgba(30, 40, 20, 0.18);
+  font-size: 1.7rem;
+  line-height: 1;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.instagram-arrow.is-prev {
+  inset-inline-start: 4px;
+}
+
+.instagram-arrow.is-next {
+  inset-inline-end: 4px;
+}
+
+[dir="rtl"] .instagram-arrow {
+  transform: translateY(-50%) scaleX(-1);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .instagram-arrow {
+    display: grid;
+  }
+}
+
+@media (max-width: 1023px) {
+  .instagram-rail {
+    gap: 18px;
+  }
+
+  .instagram-tile {
+    flex-basis: calc((100% - 32px - 36px) / 3);
+    border-radius: 22px;
+  }
+}
+
+@media (max-width: 639px) {
+  .instagram-rail {
+    gap: 12px;
+    padding-inline: 14px;
+    scroll-padding-inline: 14px;
+  }
+
+  .instagram-tile {
+    flex-basis: 62vw;
+    border-radius: 20px;
+  }
+
+  .instagram-header {
+    margin-bottom: 18px;
+  }
+}
+
+.blog-grid {
+  display: grid;
+  gap: clamp(12px, 1.4vw, 18px);
+}
+
+.review-carousel {
+  display: grid;
+  gap: 12px;
+}
+
+.review-carousel-controls {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.review-carousel-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid rgba(96, 122, 66, 0.26);
+  background: #ffffff;
+  color: var(--brand-dark);
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(25, 24, 23, 0.08);
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.review-carousel-btn:hover:not(:disabled),
+.review-carousel-btn:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(96, 122, 66, 0.55);
+  box-shadow: 0 12px 24px rgba(25, 24, 23, 0.12);
+  outline: none;
+}
+
+.review-carousel-btn:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.review-grid {
+  grid-auto-flow: column;
+  grid-auto-columns: calc((100% - (clamp(12px, 1.4vw, 18px) * 2)) / 3);
+  grid-template-columns: none;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 2px;
+  padding-bottom: 8px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.review-grid:focus-visible {
+  outline: 2px solid rgba(96, 122, 66, 0.45);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
+.review-grid::-webkit-scrollbar {
+  height: 6px;
+}
+
+.review-grid::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(96, 122, 66, 0.24);
+}
+
+@media (max-width: 640px) {
+  .our-story {
+    padding: 24px 16px;
+  }
+
+  .our-story-lede {
+    display: none;
+  }
+
+  .our-story-node {
+    flex: 0 0 auto;
+    width: 168px;
+    min-width: 0;
+  }
+
+  .our-story-photo {
+    width: 58px;
+    height: 58px;
+  }
+
+  .our-story-node::before {
+    top: 34px;
+  }
+
+  .review-grid {
+    grid-auto-columns: calc((100% - clamp(12px, 1.4vw, 18px)) / 2);
+  }
+
+  .review-card {
+    padding: 16px;
+  }
+
+  /* Two cards share the viewport here, so the third grid column left the stars
+     nothing to sit in and they collided with the name — worse in Arabic, where
+     the name runs the other way. They drop to their own row under the name. */
+  .review-card-head {
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 8px;
+    row-gap: 4px;
+  }
+
+  .review-avatar {
+    width: 36px;
+    height: 36px;
+    font-size: 0.78rem;
+  }
+
+  .review-card-copy strong {
+    font-size: 0.86rem;
+  }
+
+  .review-card-head .review-stars {
+    grid-column: 2;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+}
+
+.review-card {
+  padding: 22px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--line);
+  background: white;
+  box-shadow: var(--shadow);
+  scroll-snap-align: start;
+}
+
+.review-card-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.review-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #ffe9b6, #fff7e7);
+  color: var(--brand-dark);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.review-card-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.review-card-copy strong {
+  font-size: 0.96rem;
+}
+
+.review-card-copy span {
+  color: var(--text-soft);
+  font-size: 0.82rem;
+}
+
+.instagram-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 16px;
   margin-bottom: 20px;
   text-align: center;

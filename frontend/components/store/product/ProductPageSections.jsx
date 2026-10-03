@@ -1,4 +1,5 @@
 import SiteImage from "@/components/ui/SiteImage";
+import ProductHowItWorksRail from "@/components/store/product/ProductHowItWorksRail";
 
 const ICON_PATHS = {
   leaf: <path d="M17 8C8 10 5.9 16.17 3.82 22a10.94 10.94 0 0 0 3.33-4.26C7.86 21.5 12 22 14 20c6-5 4-14 3-16z" />,
@@ -16,6 +17,18 @@ const ICON_PATHS = {
   ),
 };
 
+// Headline with its last word(s) sitting on a soft highlighter stroke.
+export function MarkedTitle({ text }) {
+  const words = String(text || "").trim().split(/\s+/).filter(Boolean);
+  if (words.length < 2) return <>{text}</>;
+  const marked = words.length <= 3 ? 1 : 2;
+  return (
+    <>
+      {words.slice(0, -marked).join(" ")} <span className="product-title-mark">{words.slice(-marked).join(" ")}</span>
+    </>
+  );
+}
+
 function FeatureIcon({ name }) {
   return (
     <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -27,13 +40,17 @@ function FeatureIcon({ name }) {
 export function ProductFeaturesSection({ features, productName }) {
   if (!features?.items?.length) return null;
   return (
-    <section className="product-extra-section product-features-section">
+    <section className={`product-extra-section product-features-section${features.image ? " has-media" : ""}`}>
+      {features.title ? (
+        <h3 className="product-section-heading product-features-title">
+          <MarkedTitle text={features.title} />
+        </h3>
+      ) : null}
       {features.image ? (
         <div className="product-features-media">
-          <SiteImage src={features.image} alt={features.title || productName || ""} width={900} height={900} sizes="(max-width: 900px) 100vw, 900px" />
+          <SiteImage src={features.image} alt={features.title || productName || ""} width={900} height={900} sizes="(max-width: 900px) 100vw, 560px" />
         </div>
       ) : null}
-      {features.title ? <h3 className="product-extra-title">{features.title}</h3> : null}
       <ul className="product-features-grid">
         {features.items.map((item, index) => (
           <li key={`${item.title}-${index}`} className="product-feature">
@@ -51,32 +68,15 @@ export function ProductFeaturesSection({ features, productName }) {
 
 export function ProductHowItWorksSection({ section, proofItems, isAr }) {
   if (!section?.steps?.length) return null;
-  const proof = Array.isArray(proofItems) ? proofItems.filter((item) => item?.text) : [];
+  const proof = Array.isArray(proofItems) ? proofItems.filter((item) => item?.value || item?.text) : [];
   const heading = section.title || (isAr ? "كيف يعمل" : "How it works");
   return (
     <section className="product-extra-section product-hiw-section">
-      <h3 className="product-extra-title">{heading}</h3>
+      <h3 className="product-section-heading product-hiw-heading">
+        <MarkedTitle text={heading} />
+      </h3>
       {section.subtitle ? <p className="product-extra-subtitle">{section.subtitle}</p> : null}
-      <div className="product-hiw-frame">
-        <div className="product-hiw-rail" tabIndex={0} role="group" aria-label={heading}>
-          {section.steps.map((step, index) => (
-            <div key={`${step.image}-${index}`} className="product-hiw-slide">
-              <SiteImage
-                src={step.image}
-                alt={isAr ? `${heading} - الخطوة ${index + 1}` : `${heading} - step ${index + 1}`}
-                width={900}
-                height={1100}
-                sizes="(max-width: 900px) 88vw, 560px"
-              />
-            </div>
-          ))}
-        </div>
-        {section.steps.length > 1 ? (
-          <span className="product-hiw-hint" aria-hidden="true">
-            {isAr ? "اسحب" : "SWIPE"}
-          </span>
-        ) : null}
-      </div>
+      <ProductHowItWorksRail steps={section.steps} heading={heading} isAr={isAr} />
       {proof.length ? (
         <div className="product-proof-ticker">
           <div className="product-proof-track">
@@ -84,7 +84,8 @@ export function ProductHowItWorksSection({ section, proofItems, isAr }) {
               <ul key={copy} className="product-proof-list" aria-hidden={copy === 1 ? "true" : undefined}>
                 {proof.map((item, index) => (
                   <li key={`${copy}-${index}`} className="product-proof-item">
-                    {item.text}
+                    <strong>{item.value || item.text}</strong>
+                    {item.label ? <span>{item.label}</span> : null}
                   </li>
                 ))}
               </ul>
@@ -119,7 +120,9 @@ export function ProductComparisonSection({ section, isAr }) {
   const heading = section.title || (isAr ? "كيف نتفوق" : "How we stack up");
   return (
     <section className="product-extra-section product-compare-section">
-      <h3 className="product-extra-title">{heading}</h3>
+      <h3 className="product-section-heading product-compare-heading">
+        <MarkedTitle text={heading} />
+      </h3>
       {section.subtitle ? <p className="product-extra-subtitle">{section.subtitle}</p> : null}
       <div className="product-compare-table" role="table" aria-label={heading}>
         <div className="product-compare-row product-compare-head" role="row">

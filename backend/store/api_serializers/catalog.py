@@ -593,7 +593,13 @@ def resolve_page_sections(raw, locale, request=None):
                 continue
             image = _section_image(step.get(f"image_{locale}") or step.get("image_en"), request)
             if image:
-                steps.append({"image": image})
+                steps.append(
+                    {
+                        "image": image,
+                        "title": _section_text(step, "title", locale),
+                        "text": _section_text(step, "text", locale),
+                    }
+                )
         if steps:
             out["how_it_works"] = {
                 "title": _section_text(how, "title", locale),

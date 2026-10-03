@@ -53,18 +53,22 @@ export function ProductReviewShowcase({ showcase, reviewCount, isAr, readMoreHre
   const title = showcase.title || (isAr ? "مراجعات حقيقية من عملاء حقيقيين" : "Real reviews from real customers");
   return (
     <section className="product-extra-section review-showcase">
-      {countText ? (
-        <p className="review-showcase-count">
-          <StarRow rating={5} size={15} />
-          <span>{countText}</span>
-        </p>
-      ) : null}
-      <h3 className="review-showcase-title">{title}</h3>
-      {showcase.subtitle ? <p className="review-showcase-subtitle">{showcase.subtitle}</p> : null}
+      <header className="review-showcase-head">
+        {countText ? (
+          <p className="review-showcase-count">
+            <StarRow rating={5} size={15} />
+            <span>{countText}</span>
+          </p>
+        ) : null}
+        <h3 className="review-showcase-title">{title}</h3>
+        {showcase.subtitle ? <p className="review-showcase-subtitle">{showcase.subtitle}</p> : null}
+      </header>
       <ReviewMarquee images={showcase.images} label={title} />
-      <Link className="review-showcase-btn" href={readMoreHref}>
-        {showcase.button || (isAr ? "اقرأ المزيد من المراجعات" : "Read more reviews")}
-      </Link>
+      <div className="review-showcase-cta">
+        <Link className="review-showcase-btn" href={readMoreHref}>
+          {showcase.button || (isAr ? "اقرأ المزيد من المراجعات" : "Read more reviews")}
+        </Link>
+      </div>
     </section>
   );
 }

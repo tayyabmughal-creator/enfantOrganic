@@ -7,6 +7,7 @@ import { API_BASE_URL } from "@/lib/config";
 import SiteImage from "@/components/ui/SiteImage";
 
 const DISCOUNT_POPUP_SESSION_KEY = "enfant-discount-popup-dismissed";
+const DEFAULT_LOGO_SRC = "/enfant/enfant-logo.png";
 
 // Only the markets this storefront ships to — kept in sync with the backend
 // allowlist in backend/store/api_serializers/account.py (NEWSLETTER_COUNTRY_REGION).
@@ -34,6 +35,8 @@ export default function DiscountPopup({ locale = "en", navigation }) {
   const enabled = settings.enabled !== false;
   const text = settings.text || "Enter Phone Number to get exclusive discount updates at very first";
   const image = settings.image || "/enfant/hero-gift-box-offer-v2.jpg";
+  const logo = navigation?.settings?.logo_url || DEFAULT_LOGO_SRC;
+  const brandName = navigation?.settings?.brand_name || "Enfant Organics";
   const isAr = locale === "ar";
   const [open, setOpen] = useState(false);
   const [consentDecided, setConsentDecided] = useState(false);
@@ -41,6 +44,16 @@ export default function DiscountPopup({ locale = "en", navigation }) {
   const [phone, setPhone] = useState("");
   const [status, setStatus] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  // The picture box follows the uploaded image's shape, from square (1:1) to wide (16:9),
+  // so landscape and square pictures fill it exactly and nothing is cropped. Only a
+  // taller portrait picture loses a little at the top and bottom.
+  const [imageRatio, setImageRatio] = useState(16 / 9);
+  const handleImageLoad = (event) => {
+    const { naturalWidth, naturalHeight } = event.currentTarget;
+    if (naturalWidth && naturalHeight) {
+      setImageRatio(Math.min(16 / 9, Math.max(1, naturalWidth / naturalHeight)));
+    }
+  };
 
   // Hold the popup until the visitor answers the cookie banner — both showing
   // at once buried the popup's form under the banner on phones. The event
@@ -167,7 +180,22 @@ export default function DiscountPopup({ locale = "en", navigation }) {
         >
           ×
         </button>
+        <div className="discount-popup-media" style={{ aspectRatio: imageRatio }}>
+          <SiteImage
+            src={image}
+            alt=""
+            fill
+            sizes="(max-width: 520px) 100vw, 480px"
+            loading="lazy"
+            className="discount-popup-media-img"
+            onLoad={handleImageLoad}
+          />
+        </div>
         <div className="discount-popup-copy">
+          <div className="discount-popup-brand">
+            <SiteImage src={logo} alt="" width={96} height={66} loading="lazy" className="discount-popup-logo" />
+            <strong>{brandName.toUpperCase()}</strong>
+          </div>
           <p>{text}</p>
           <form className="discount-popup-form" onSubmit={handleSubmit}>
             <div className="discount-popup-phone-row field-ltr">
@@ -198,9 +226,6 @@ export default function DiscountPopup({ locale = "en", navigation }) {
             </button>
           </form>
           {status ? <span className={`discount-popup-status is-${status.type}`}>{status.message}</span> : null}
-        </div>
-        <div className="discount-popup-media">
-          <SiteImage src={image} alt="" width={600} height={600} loading="lazy" sizes="(max-width: 700px) 100vw, 400px" />
         </div>
       </section>
     </div>

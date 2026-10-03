@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 
 import SiteImage from "@/components/ui/SiteImage";
-import ImageLightbox from "@/components/ui/ImageLightbox";
-import { ReviewMarquee, StarRow } from "@/components/store/product/ProductReviewShowcase";
+import ReviewPhotoLightbox from "@/components/store/product/ReviewPhotoLightbox";
+import { StarRow } from "@/components/store/product/ProductReviewShowcase";
 
 const FIRST_BATCH = 4;
 const NEXT_BATCH = 20;
@@ -50,12 +50,51 @@ function avatarColor(name) {
   return AVATAR_COLORS[code % AVATAR_COLORS.length];
 }
 
+// Swipeable row of customer photos; the arrows are for mouse users on desktop.
+function ReviewPhotoRail({ items, onOpen, isAr, label }) {
+  const railRef = useRef(null);
+  const scroll = (direction) => {
+    const rail = railRef.current;
+    if (!rail) return;
+    const sign = (isAr ? -1 : 1) * direction;
+    rail.scrollBy({ left: sign * rail.clientWidth * 0.8, behavior: "smooth" });
+  };
+  return (
+    <div className="reviews-gallery">
+      <div className="reviews-photo-rail" ref={railRef} role="group" aria-label={label}>
+        {items.map((item, index) => (
+          <button
+            key={`${item.src}-${index}`}
+            type="button"
+            className="reviews-photo-tile"
+            onClick={() => onOpen(index)}
+            aria-label={`${isAr ? "تكبير الصورة" : "Enlarge photo"} ${index + 1}`}
+          >
+            <SiteImage src={item.src} alt="" width={400} height={400} loading="lazy" sizes="(max-width: 640px) 132px, 200px" />
+          </button>
+        ))}
+      </div>
+      {items.length > 3 ? (
+        <>
+          <button type="button" className="reviews-photo-arrow is-prev" onClick={() => scroll(-1)} aria-label={isAr ? "السابقة" : "Previous"}>
+            ‹
+          </button>
+          <button type="button" className="reviews-photo-arrow is-next" onClick={() => scroll(1)} aria-label={isAr ? "التالية" : "Next"}>
+            ›
+          </button>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 export default function ProductReviewsSection({
   reviews,
   editorialReviews,
   rating,
   reviewCount,
-  photos,
+  productName,
+  productImage,
   isAr,
   onWrite,
   allReviewsHref,
@@ -71,10 +110,18 @@ export default function ProductReviewsSection({
   const { counts, total, recommendPercent } = summariseReviews(reviews);
   const heading = isAr ? "التقييمات" : "Reviews";
 
-  const gallery =
-    photos?.length
-      ? photos
-      : Array.from(new Set(reviews.flatMap((review) => (Array.isArray(review.images) ? review.images : [])))).slice(0, 14);
+  // Photos customers attached to THIS product's reviews, newest review first. A product
+  // with no photo reviews simply gets no strip.
+  const galleryItems = [];
+  const seen = new Set();
+  sortReviews(reviews, "recent").forEach((review) => {
+    (Array.isArray(review.images) ? review.images : []).forEach((src) => {
+      if (src && !seen.has(src)) {
+        seen.add(src);
+        galleryItems.push({ src, review });
+      }
+    });
+  });
 
   const filtered = sortReviews(
     reviews.filter(
@@ -104,22 +151,14 @@ export default function ProductReviewsSection({
 
   return (
     <section className="product-extra-section product-reviews-section" id="reviews">
-      <div className={`reviews-top${gallery.length ? " has-gallery" : ""}`}>
+      <div className={`reviews-top${galleryItems.length ? " has-gallery" : ""}`}>
         {reviewCount > 0 ? (
-          <div className="reviews-top-head">
-            <div className="reviews-score-head">
-              <strong className="reviews-score-value">{Number(rating || 5).toFixed(1)}</strong>
-              <StarRow rating={rating || 5} size={20} />
-              <span className="reviews-score-count">
-                {isAr ? `بناءً على ${reviewCount} مراجعة` : `Based on ${reviewCount} reviews`}
-              </span>
-            </div>
-            {total > 0 ? (
-              <p className="reviews-recommend">
-                <strong>{recommendPercent}%</strong>{" "}
-                <span>{isAr ? "يوصون بهذا المنتج" : "would recommend this product"}</span>
-              </p>
-            ) : null}
+          <div className="reviews-score-head">
+            <strong className="reviews-score-value">{Number(rating || 5).toFixed(1)}</strong>
+            <StarRow rating={rating || 5} size={24} />
+            <span className="reviews-score-count">
+              {isAr ? `بناءً على ${reviewCount} مراجعة` : `Based on ${reviewCount} reviews`}
+            </span>
           </div>
         ) : null}
 
@@ -129,7 +168,7 @@ export default function ProductReviewsSection({
               <li key={star} className="reviews-bar-row">
                 <span className="reviews-bar-label">
                   {star}
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                   </svg>
                 </span>
@@ -142,10 +181,20 @@ export default function ProductReviewsSection({
           </ul>
         ) : null}
 
-        {gallery.length ? (
-          <div className="reviews-gallery">
-            <ReviewMarquee images={gallery} reverse variant="photo" label={isAr ? "صور العملاء" : "Customer photos"} />
-          </div>
+        {reviewCount > 0 && total > 0 ? (
+          <p className="reviews-recommend">
+            <strong>{recommendPercent}%</strong>{" "}
+            <span>{isAr ? "يوصون بهذا المنتج" : "would recommend this product"}</span>
+          </p>
+        ) : null}
+
+        {galleryItems.length ? (
+          <ReviewPhotoRail
+            items={galleryItems}
+            isAr={isAr}
+            label={isAr ? "صور العملاء" : "Customer photos"}
+            onOpen={(index) => setLightbox({ index })}
+          />
         ) : null}
       </div>
 
@@ -271,7 +320,10 @@ export default function ProductReviewsSection({
                         <button
                           key={image}
                           type="button"
-                          onClick={() => setLightbox({ images, index: photoIndex })}
+                          onClick={() => {
+                            const at = galleryItems.findIndex((entry) => entry.src === image);
+                            if (at >= 0) setLightbox({ index: at });
+                          }}
                           aria-label={isAr ? "تكبير الصورة" : "Enlarge photo"}
                         >
                           <SiteImage src={image} alt="" width={160} height={160} loading="lazy" sizes="96px" />
@@ -335,11 +387,12 @@ export default function ProductReviewsSection({
       ) : null}
 
       {lightbox ? (
-        <ImageLightbox
-          images={lightbox.images}
+        <ReviewPhotoLightbox
+          items={galleryItems}
           index={lightbox.index}
           isAr={isAr}
-          closeLabel={isAr ? "إغلاق" : "Close"}
+          productName={productName}
+          productImage={productImage}
           onClose={() => setLightbox(null)}
         />
       ) : null}
