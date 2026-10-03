@@ -2,6 +2,9 @@
 
 .admin-shell,
 .admin-login-page {
+  /* staff panel keeps the previous system fonts and bold weight */
+  --font-sans: var(--font-sans-legacy);
+  --font-serif: var(--font-serif-legacy);
   min-height: 100vh;
   font-family: var(--font-sans, "DM Sans", "Helvetica Neue", Arial, sans-serif);
   color: #191817;
@@ -5478,4 +5481,11 @@
   .admin-linklist-actions {
     justify-content: flex-end;
   }
+}
+
+.admin-shell strong,
+.admin-shell b,
+.admin-login-page strong,
+.admin-login-page b {
+  font-weight: 700;
 }

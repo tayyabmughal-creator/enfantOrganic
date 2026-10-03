@@ -1,5 +1,5 @@
 import { headers } from "next/headers";
-import { Noto_Sans_Arabic } from "next/font/google";
+import { Noto_Sans_Arabic, Outfit } from "next/font/google";
 import LocaleHtmlAttributes from "@/components/seo/LocaleHtmlAttributes";
 import ChunkLoadRecovery from "@/components/system/ChunkLoadRecovery";
 import LocalServiceWorkerReset from "@/components/system/LocalServiceWorkerReset";
@@ -12,6 +12,15 @@ import { getBaseUrl, getLocaleDir } from "@/lib/seo";
 import { normalizeLocale } from "@/lib/storefront";
 
 import "./globals.css";
+
+// Site font (same family polynae.com uses). Outfit has no Arabic letters, so Arabic text
+// falls through to Noto Sans Arabic while Latin letters and digits stay in Outfit.
+const outfit = Outfit({
+  subsets: ["latin"],
+  variable: "--font-outfit",
+  display: "swap",
+  weight: ["400", "500", "600", "700"],
+});
 
 const notoArabic = Noto_Sans_Arabic({
   subsets: ["arabic"],
@@ -80,7 +89,7 @@ export default async function RootLayout({ children }) {
   const dir = getLocaleDir(locale);
 
   return (
-    <html lang={locale} dir={dir} className={`${notoArabic.variable}`}>
+    <html lang={locale} dir={dir} className={`${outfit.variable} ${notoArabic.variable}`}>
       <head>
         <meta name="facebook-domain-verification" content="sgzszmn3obmyyaaksxq0a70vd6ssvd" />
       </head>

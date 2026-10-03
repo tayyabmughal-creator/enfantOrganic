@@ -21,11 +21,16 @@
   --radius-2xl: 32px;
   --container: min(100% - 80px, 1360px);
   --focus-ring: 0 0 0 4px rgba(146, 171, 105, 0.18);
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+  /* Previous (system) font stacks, kept so the old look can be restored by pointing
+     --font-sans / --font-serif back at these two. The admin panel still uses them. */
+  --font-sans-legacy: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
     "Noto Sans", "Liberation Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
     "Segoe UI Symbol", "Noto Color Emoji";
-  --font-serif: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+  --font-serif-legacy: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
     "Noto Sans", "Liberation Sans", sans-serif;
+  /* Storefront font: Outfit, with the old stack as the fallback. */
+  --font-sans: var(--font-outfit), "Outfit", var(--font-sans-legacy);
+  --font-serif: var(--font-outfit), "Outfit", var(--font-serif-legacy);
   --font-arabic: "Noto Sans Arabic", "Segoe UI", Arial, sans-serif;
 }
 
@@ -55,6 +60,7 @@ body {
 .storefront-shell[dir="rtl"] body,
 [dir="rtl"] {
   font-family:
+    var(--font-outfit),
     var(--font-arabic),
     "Noto Sans Arabic",
     Arial,
@@ -74,11 +80,18 @@ h1, h2, h3, h4, h5, h6 {
 [dir="rtl"] h5,
 [dir="rtl"] h6 {
   font-family:
+    var(--font-outfit),
     var(--font-arabic),
     "Noto Sans Arabic",
     Arial,
     sans-serif;
   font-weight: 700;
+}
+
+/* Bold text is semibold, as on polynae.com (700 reads too heavy on the storefront). */
+strong,
+b {
+  font-weight: 600;
 }
 
 a {

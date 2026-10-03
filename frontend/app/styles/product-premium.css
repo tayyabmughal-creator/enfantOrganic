@@ -49,8 +49,8 @@
   -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(223, 231, 214, 0.6);
   color: var(--text-soft);
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 600;
   letter-spacing: 0.02em;
   opacity: 0;
   transition: opacity 0.3s ease;
@@ -129,7 +129,7 @@
   border-radius: 4px;
   background: rgba(25, 24, 23, 0.72);
   color: #fff;
-  font-size: 0.62rem;
+  font-size: 0.5625rem;
   line-height: 1.2;
 }
 
@@ -196,8 +196,8 @@
 
 .fbt-title {
   margin: 0;
-  font-size: 0.95rem;
-  font-weight: 800;
+  font-size: 0.9375rem;
+  font-weight: 700;
   color: var(--text);
   letter-spacing: 0.01em;
 }
@@ -249,8 +249,8 @@
   transform: translateX(-50%);
   background: #3d5c2d;
   color: #fff;
-  font-size: 0.65rem;
-  font-weight: 800;
+  font-size: 0.6875rem;
+  font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
   padding: 3px 10px;
@@ -289,7 +289,7 @@
 
 .fbt-plus {
   font-size: 1rem;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-soft);
   line-height: 1;
 }
@@ -311,19 +311,19 @@
 
 .fbt-price {
   font-size: 1rem;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--text);
 }
 
 .fbt-compare {
-  font-size: 0.8rem;
+  font-size: 0.8125rem;
   color: var(--text-soft);
   text-decoration: line-through;
 }
 
 .fbt-save {
-  font-size: 0.72rem;
-  font-weight: 800;
+  font-size: 0.75rem;
+  font-weight: 700;
   background: #e8304a;
   color: #fff;
   padding: 2px 7px;
@@ -347,7 +347,7 @@
 .fbt-item-pill em {
   font-style: normal;
   color: #3d5c2d;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .fbt-add-btn {
@@ -362,7 +362,7 @@
   background: linear-gradient(135deg, #3d5c2d 0%, #4a6b36 100%);
   color: #fff;
   font-size: 1rem;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.02em;
   cursor: pointer;
   transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
@@ -445,7 +445,7 @@
   margin: 0 0 8px;
   text-align: center;
   font-size: clamp(1.35rem, 2.4vw, 1.9rem);
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.2;
   letter-spacing: -0.02em;
   color: var(--text);
@@ -455,7 +455,7 @@
   margin: 0 auto 20px;
   max-width: 46ch;
   text-align: center;
-  font-size: 0.92rem;
+  font-size: 0.9375rem;
   line-height: 1.55;
   color: var(--text-soft);
 }
@@ -463,7 +463,7 @@
 .product-section-heading {
   margin: 0 0 14px;
   font-size: clamp(1.8rem, 3.6vw, 3.1rem);
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.12;
   letter-spacing: -0.025em;
   color: var(--text);
@@ -570,15 +570,15 @@
 }
 
 .product-feature-title {
-  font-size: 1.05rem;
-  font-weight: 800;
+  font-size: 1rem;
+  font-weight: 700;
   line-height: 1.3;
   color: var(--text);
 }
 
 .product-feature-text {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   line-height: 1.65;
   color: var(--text-soft);
 }
@@ -596,7 +596,7 @@
   }
 
   .product-feature-title {
-    font-size: 1.3rem;
+    font-size: 1.25rem;
   }
 
   .product-feature-text {
@@ -658,8 +658,8 @@
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.9);
   color: var(--text);
-  font-size: 0.86rem;
-  font-weight: 800;
+  font-size: 0.875rem;
+  font-weight: 700;
   box-shadow: 0 4px 14px rgba(20, 30, 10, 0.12);
 }
 
@@ -678,20 +678,20 @@
 
 .product-hiw-caption small {
   color: var(--text-soft);
-  font-size: 0.72rem;
-  font-weight: 800;
+  font-size: 0.75rem;
+  font-weight: 700;
   letter-spacing: 0.08em;
 }
 
 .product-hiw-caption strong {
-  font-size: 1.05rem;
-  font-weight: 800;
+  font-size: 1rem;
+  font-weight: 700;
   line-height: 1.3;
 }
 
 .product-hiw-caption p {
   margin: 2px 0 0;
-  font-size: 0.86rem;
+  font-size: 0.875rem;
   line-height: 1.5;
   color: var(--text-soft);
 }
@@ -704,8 +704,8 @@
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.88);
   color: var(--text);
-  font-size: 0.66rem;
-  font-weight: 800;
+  font-size: 0.6875rem;
+  font-weight: 700;
   letter-spacing: 0.1em;
   pointer-events: none;
 }
@@ -810,14 +810,14 @@
 
 .product-proof-item strong {
   font-size: clamp(1.25rem, 2.2vw, 1.75rem);
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.1;
   letter-spacing: -0.01em;
 }
 
 .product-proof-item span {
-  font-size: 0.74rem;
-  font-weight: 800;
+  font-size: 0.75rem;
+  font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: #5d7a4a;
@@ -891,7 +891,7 @@
   gap: 4px;
   padding: 16px 8px;
   text-align: center;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
 }
 
 /* the line lives on every cell, so the highlighted column shows it too */
@@ -908,7 +908,7 @@
   align-items: flex-start;
   padding-inline: 16px;
   text-align: start;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text);
 }
 
@@ -922,7 +922,7 @@
 
 .product-compare-head .product-compare-cell strong {
   font-size: 1rem;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .product-compare-badge {
@@ -930,9 +930,9 @@
   border-radius: 999px;
   background: #3d5c2d;
   color: #fff;
-  font-size: 0.58rem;
+  font-size: 0.5625rem;
   font-style: normal;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.08em;
 }
 
@@ -955,7 +955,7 @@
 }
 
 .product-compare-text {
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text);
 }
 
@@ -971,7 +971,7 @@
 
   .product-compare-cell {
     padding: 12px 6px;
-    font-size: 0.8rem;
+    font-size: 0.8125rem;
   }
 }
 
@@ -1122,15 +1122,15 @@
   flex-wrap: wrap;
   gap: 4px 10px;
   margin: 0;
-  font-size: 0.86rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 600;
   color: #d8e3cb;
 }
 
 .review-showcase-title {
   margin: 0;
   font-size: clamp(1.5rem, 2.8vw, 2.3rem);
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.18;
   letter-spacing: -0.015em;
   color: #fff;
@@ -1143,7 +1143,7 @@
 .review-showcase-subtitle {
   margin: 0;
   max-width: 52ch;
-  font-size: 0.92rem;
+  font-size: 0.9375rem;
   line-height: 1.55;
   color: #c3cfb7;
 }
@@ -1166,8 +1166,8 @@
   border-radius: 999px;
   background: #e5efd6;
   color: #24361a;
-  font-size: 0.74rem;
-  font-weight: 800;
+  font-size: 0.75rem;
+  font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   text-decoration: none;
@@ -1226,14 +1226,14 @@
 
 .reviews-score-value {
   font-size: 3rem;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1;
   letter-spacing: -0.03em;
   color: var(--text);
 }
 
 .reviews-score-count {
-  font-size: 0.95rem;
+  font-size: 0.9375rem;
   color: var(--text-soft);
 }
 
@@ -1259,7 +1259,7 @@
   align-items: center;
   gap: 3px;
   color: #f59e0b;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .reviews-bar-track {
@@ -1283,13 +1283,13 @@
 
 .reviews-recommend {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 1rem;
   color: var(--text-soft);
 }
 
 .reviews-recommend strong {
   font-size: 2rem;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--text);
 }
 
@@ -1315,8 +1315,8 @@
 
 .reviews-list-title {
   margin: 0;
-  font-size: 1.05rem;
-  font-weight: 800;
+  font-size: 1rem;
+  font-weight: 700;
   color: var(--text);
 }
 
@@ -1335,8 +1335,8 @@
   display: block;
   margin-top: 14px;
   text-align: center;
-  font-size: 0.86rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 600;
   color: var(--brand-dark);
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -1354,7 +1354,7 @@
 .reviews-page-head h1 {
   margin: 0 0 8px;
   font-size: clamp(1.6rem, 3.2vw, 2.4rem);
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.15;
 }
 
@@ -1363,14 +1363,14 @@
   align-items: center;
   gap: 8px;
   margin: 0;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   color: var(--text-soft);
 }
 
 .reviews-page-sub {
   margin: 8px auto 0;
   max-width: 50ch;
-  font-size: 0.92rem;
+  font-size: 0.9375rem;
   color: var(--text-soft);
 }
 
@@ -1406,14 +1406,14 @@
 
 .reviews-page-body h3 {
   margin: 0;
-  font-size: 0.92rem;
-  font-weight: 800;
+  font-size: 0.9375rem;
+  font-weight: 700;
   line-height: 1.3;
 }
 
 .reviews-page-body p {
   margin: 0;
-  font-size: 0.84rem;
+  font-size: 0.8125rem;
   line-height: 1.55;
   color: var(--text);
 }
@@ -1423,7 +1423,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  font-size: 0.78rem;
+  font-size: 0.75rem;
 }
 
 .reviews-page-verified {
@@ -1431,12 +1431,12 @@
   border-radius: 999px;
   background: #e6f0d8;
   color: #3d5c2d;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .reviews-page-product {
-  font-size: 0.78rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 600;
   color: var(--brand-dark);
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -1598,8 +1598,8 @@
   display: inline-block;
   padding-bottom: 10px;
   border-bottom: 2px solid var(--brand-dark);
-  font-size: 0.95rem;
-  font-weight: 800;
+  font-size: 0.9375rem;
+  font-weight: 700;
   color: var(--brand-dark);
 }
 
@@ -1627,8 +1627,8 @@
   background: #fff;
   color: var(--brand-dark);
   font: inherit;
-  font-size: 0.86rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -1663,8 +1663,8 @@
   background: #fff;
   color: var(--text);
   font: inherit;
-  font-size: 0.84rem;
-  font-weight: 700;
+  font-size: 0.8125rem;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -1678,7 +1678,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.86rem;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
 }
@@ -1693,7 +1693,7 @@
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 14px;
-  font-size: 0.86rem;
+  font-size: 0.875rem;
   color: var(--text-soft);
 }
 
@@ -1711,7 +1711,7 @@
   background-color: #fff;
   color: var(--text);
   font: inherit;
-  font-size: 0.86rem;
+  font-size: 0.875rem;
 }
 
 .review-card {
@@ -1735,8 +1735,8 @@
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  font-size: 1.05rem;
-  font-weight: 800;
+  font-size: 1rem;
+  font-weight: 700;
   color: #2f3b27;
 }
 
@@ -1758,8 +1758,8 @@
   border-radius: 999px;
   background: #e6f0d8;
   color: #3d5c2d;
-  font-size: 0.7rem;
-  font-weight: 800;
+  font-size: 0.6875rem;
+  font-weight: 700;
 }
 
 .review-card-meta {
@@ -1767,19 +1767,19 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   color: var(--text-soft);
 }
 
 .review-card-main h5 {
   margin: 2px 0 0;
-  font-size: 0.98rem;
-  font-weight: 800;
+  font-size: 1rem;
+  font-weight: 700;
 }
 
 .review-card-main p {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   line-height: 1.65;
   color: var(--text);
   overflow-wrap: anywhere;
@@ -1799,8 +1799,8 @@
   background: none;
   color: var(--brand-dark);
   font: inherit;
-  font-size: 0.82rem;
-  font-weight: 700;
+  font-size: 0.8125rem;
+  font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
@@ -1910,8 +1910,8 @@
 }
 
 .review-photos-label {
-  font-size: 0.86rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 600;
 }
 
 .review-photos-row {
@@ -1954,7 +1954,7 @@
   border-radius: 50%;
   background: #2b2f27;
   color: #fff;
-  font-size: 0.95rem;
+  font-size: 0.9375rem;
   line-height: 1;
   cursor: pointer;
 }
@@ -1981,13 +1981,13 @@
 }
 
 .review-photo-add span {
-  font-size: 1.4rem;
+  font-size: 1.5rem;
   line-height: 1;
 }
 
 .review-photo-add small {
-  font-size: 0.66rem;
-  font-weight: 700;
+  font-size: 0.6875rem;
+  font-weight: 600;
 }
 
 /* ── Typography ───────────────────────────────────────────────────────── */
@@ -1999,17 +1999,17 @@
 }
 
 .summary-eyebrow {
-  font-size: 0.7rem;
+  font-size: 0.6875rem;
   letter-spacing: 0.22em;
   color: var(--brand-dark);
-  font-weight: 750;
+  font-weight: 600;
 }
 
 .summary-badge {
   background: linear-gradient(135deg, var(--brand-pale), #eef5e4);
   color: #4a6332;
-  font-size: 0.76rem;
-  font-weight: 750;
+  font-size: 0.75rem;
+  font-weight: 600;
   letter-spacing: 0.04em;
   padding: 5px 14px;
   border-radius: 999px;
@@ -2031,7 +2031,7 @@
     font-size: clamp(1.5rem, 2vw, 1.9rem);
     line-height: 1.12;
     letter-spacing: -0.035em;
-    font-weight: 700;
+    font-weight: 600;
     color: #1a2314;
     text-shadow: none;
     -webkit-font-smoothing: antialiased;
@@ -2048,7 +2048,7 @@
 }
 
 .product-short-copy {
-  font-size: 0.8rem;
+  font-size: 0.8125rem;
   line-height: 1.6;
   color: var(--text-soft);
   margin: 4px 0 0;
@@ -2072,8 +2072,8 @@
 
 .review-count {
   color: var(--text);
-  font-size: 0.92rem;
-  font-weight: 700;
+  font-size: 0.9375rem;
+  font-weight: 600;
   margin-inline-start: 8px;
 }
 
@@ -2091,7 +2091,7 @@
 
 .product-pricing--premium strong {
   font-size: clamp(1.3rem, 1.8vw, 1.55rem);
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text);
   letter-spacing: -0.03em;
 }
@@ -2114,8 +2114,8 @@
   border-radius: 999px;
   background: var(--brand-dark, #607a42);
   color: #fff;
-  font-size: 0.78rem;
-  font-weight: 800;
+  font-size: 0.75rem;
+  font-weight: 700;
   letter-spacing: 0.03em;
   white-space: nowrap;
   /* Belt and braces: the strikethrough on the compare price sits on a shared
@@ -2131,8 +2131,8 @@
   border: 1.5px solid var(--line);
   background: #fff;
   color: var(--text);
-  font-size: 0.8rem;
-  font-weight: 650;
+  font-size: 0.8125rem;
+  font-weight: 600;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   letter-spacing: 0.01em;
@@ -2145,8 +2145,8 @@
 }
 
 .option-pill small {
-  font-size: 0.74rem;
-  font-weight: 750;
+  font-size: 0.75rem;
+  font-weight: 600;
   opacity: 0.82;
 }
 
@@ -2162,7 +2162,7 @@
   background: linear-gradient(135deg, var(--brand-dark), #4e6632);
   color: #fff;
   box-shadow: 0 6px 18px rgba(96, 122, 66, 0.3);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 /* A size that genuinely cannot be bought right now. Faded and not clickable,
@@ -2186,8 +2186,8 @@
 }
 
 .quantity-control span {
-  font-size: 0.9rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 600;
   min-width: 34px;
 }
 
@@ -2213,8 +2213,8 @@
 .product-option-block h4 {
   margin: 0;
   padding: 0;
-  font-size: 0.82rem;
-  font-weight: 700;
+  font-size: 0.8125rem;
+  font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--text-soft);
@@ -2247,8 +2247,8 @@
   border-radius: 999px;
   background: #e8304a;
   color: #fff;
-  font-size: 0.88rem;
-  font-weight: 800;
+  font-size: 0.875rem;
+  font-weight: 700;
   letter-spacing: 0.02em;
   white-space: nowrap;
   text-decoration: none;
@@ -2268,8 +2268,8 @@
   border: none;
   background: linear-gradient(135deg, #3d5c2d 0%, #4a6b36 100%);
   color: #fff;
-  font-size: 1.05rem;
-  font-weight: 700;
+  font-size: 1rem;
+  font-weight: 600;
   letter-spacing: 0.02em;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 10px 28px rgba(61, 92, 45, 0.28);
@@ -2308,8 +2308,8 @@
   border: 2px solid #3d5c2d;
   background: #fff;
   color: #3d5c2d;
-  font-size: 1.05rem;
-  font-weight: 700;
+  font-size: 1rem;
+  font-weight: 600;
   letter-spacing: 0.02em;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   width: 100%;
@@ -2406,8 +2406,8 @@
 
 .product-trust-item strong {
   display: block;
-  font-size: 0.96rem;
-  font-weight: 800;
+  font-size: 0.9375rem;
+  font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.25;
   color: #1d1e1b;
@@ -2415,7 +2415,7 @@
 
 .product-trust-item span {
   display: block;
-  font-size: 0.73rem;
+  font-size: 0.75rem;
   line-height: 1.45;
   color: rgba(24, 29, 22, 0.72);
 }
@@ -2428,9 +2428,9 @@
 .product-proof-pill {
   background: linear-gradient(180deg, #fff8f8, #fff);
   border: 1px solid rgba(231, 122, 138, 0.12);
-  font-size: 0.82rem;
+  font-size: 0.8125rem;
   padding: 6px 14px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.01em;
   box-shadow: 0 2px 8px rgba(25, 24, 23, 0.03);
   transition: all 0.2s ease;
@@ -2451,8 +2451,8 @@
 
 /* ── Payment ──────────────────────────────────────────────────────────── */
 .product-payment-block p {
-  font-size: 0.84rem;
-  font-weight: 750;
+  font-size: 0.8125rem;
+  font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--text-soft);
 }
@@ -2481,8 +2481,8 @@
   border: 1.5px solid var(--line);
   background: #fff;
   color: var(--text-soft);
-  font-size: 0.88rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 600;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   gap: 7px;
 }
@@ -2505,8 +2505,8 @@
 
 .product-continue-link {
   color: var(--brand-dark);
-  font-size: 0.88rem;
-  font-weight: 750;
+  font-size: 0.875rem;
+  font-weight: 600;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -2525,8 +2525,8 @@
 }
 
 .product-share-block h4 {
-  font-size: 0.92rem;
-  font-weight: 700;
+  font-size: 0.9375rem;
+  font-weight: 600;
 }
 
 .product-share-button {
@@ -2536,8 +2536,8 @@
   border: 1.5px solid var(--line);
   background: #fff;
   color: var(--text);
-  font-weight: 700;
-  font-size: 0.84rem;
+  font-weight: 600;
+  font-size: 0.8125rem;
   gap: 7px;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -2551,8 +2551,8 @@
 }
 
 .product-share-label {
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: 0.8125rem;
+  font-weight: 600;
 }
 
 /* ── Accordion ────────────────────────────────────────────────────────── */
@@ -2568,8 +2568,8 @@
 
 .detail-accordion-header {
   padding: 20px 28px;
-  font-size: 1.02rem;
-  font-weight: 650;
+  font-size: 1rem;
+  font-weight: 600;
   letter-spacing: 0.01em;
   transition: all 0.2s ease;
 }
@@ -2612,7 +2612,7 @@
 }
 
 .product-desc-text p {
-  font-size: 0.95rem;
+  font-size: 0.9375rem;
   line-height: 1.85;
   color: var(--text);
 }
@@ -2632,7 +2632,7 @@
 .product-desc-text b,
 .rich-html strong,
 .rich-html b {
-  font-weight: 850;
+  font-weight: 700;
   color: var(--text);
 }
 
@@ -2644,7 +2644,7 @@
 .product-desc-text a,
 .rich-html a {
   color: var(--brand-dark);
-  font-weight: 750;
+  font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -2655,7 +2655,7 @@
 }
 
 .detail-accordion-list li {
-  font-size: 0.94rem;
+  font-size: 0.9375rem;
   line-height: 1.7;
   color: var(--text-soft);
 }
@@ -2686,8 +2686,8 @@
 }
 
 .product-review-head strong {
-  font-weight: 750;
-  font-size: 0.95rem;
+  font-weight: 600;
+  font-size: 0.9375rem;
 }
 
 .product-review-rating {
@@ -2720,7 +2720,7 @@
   color: var(--brand);
   border-radius: 20px;
   padding: 8px 24px;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
   transition:
@@ -2744,7 +2744,7 @@
 
 .product-stock-notify-title {
   color: #9f1239;
-  font-weight: 750;
+  font-weight: 600;
   font-size: 1rem;
 }
 
@@ -2754,7 +2754,7 @@
   border: 1.5px solid var(--line);
   padding: 0 14px;
   background: #fff;
-  font-size: 0.92rem;
+  font-size: 0.9375rem;
   transition: all 0.2s ease;
 }
 
@@ -2766,7 +2766,7 @@
 .product-stock-notify-form .primary-action {
   min-height: 48px;
   border-radius: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 /* ── Mobile Sticky Bar ────────────────────────────────────────────────── */
@@ -2808,19 +2808,19 @@
 }
 
 .mobile-sticky-price strong {
-  font-size: 1.02rem;
-  font-weight: 700;
+  font-size: 1rem;
+  font-weight: 600;
   color: var(--text);
   letter-spacing: -0.02em;
 }
 
 .mobile-sticky-price .product-discount-badge {
   padding: 4px 9px;
-  font-size: 0.7rem;
+  font-size: 0.6875rem;
 }
 
 .mobile-sticky-compare {
-  font-size: 0.74rem;
+  font-size: 0.75rem;
   color: var(--text-soft);
   text-decoration: line-through;
 }
@@ -2844,15 +2844,15 @@
   justify-content: center;
   align-items: center;
   border-radius: 10px;
-  font-size: 0.9rem;
-  font-weight: 800;
+  font-size: 0.875rem;
+  font-weight: 700;
   white-space: nowrap;
 }
 
 /* ── Out of Stock Premium ─────────────────────────────────────────────── */
 .product-stock-notify-success {
   color: #1f7a4d;
-  font-weight: 700;
+  font-weight: 600;
   background: linear-gradient(180deg, #f0faf4, #fff);
   padding: 10px 14px;
   border-radius: 10px;
@@ -2861,7 +2861,7 @@
 
 .product-stock-notify-error {
   color: #b42318;
-  font-weight: 700;
+  font-weight: 600;
   background: linear-gradient(180deg, #fff5f5, #fff);
   padding: 10px 14px;
   border-radius: 10px;
@@ -2914,13 +2914,13 @@
   .product-buy-action {
     min-height: 60px;
     border-radius: 16px;
-    font-size: 1.05rem;
+    font-size: 1rem;
   }
 
   .product-cart-action {
     min-height: 60px;
     border-radius: 16px;
-    font-size: 1.05rem;
+    font-size: 1rem;
   }
 
   /* On desktop, thumb-list replaces the dots and corner preview */
@@ -2987,11 +2987,11 @@
   }
 
   .product-trust-item strong {
-    font-size: 0.9rem;
+    font-size: 0.875rem;
   }
 
   .product-trust-item span {
-    font-size: 0.72rem;
+    font-size: 0.75rem;
   }
 
   .detail-accordion-header {
@@ -3019,19 +3019,19 @@
   }
 
   .summary-block h1 {
-    font-size: 1.3rem;
+    font-size: 1.25rem;
   }
 
   .product-pricing--premium strong {
-    font-size: 1.45rem;
+    font-size: 1.5rem;
   }
 
   .product-pricing--premium .compare-price {
-    font-size: 0.95rem;
+    font-size: 0.9375rem;
   }
 
   .save-badge {
-    font-size: 0.7rem;
+    font-size: 0.6875rem;
   }
 
   .product-cta-stack {
@@ -3042,7 +3042,7 @@
   .product-cart-action {
     min-height: 52px;
     border-radius: 12px;
-    font-size: 0.98rem;
+    font-size: 1rem;
   }
 
   .quantity-control {
@@ -3109,7 +3109,7 @@
   border-radius: 10px;
   background: linear-gradient(90deg, #161a12 0%, #2c3721 100%);
   color: #fff;
-  font-size: 0.84rem;
+  font-size: 0.8125rem;
   font-weight: 600;
   line-height: 1.35;
 }
@@ -3122,7 +3122,7 @@
 .product-urgency-countdown {
   margin-inline-start: auto;
   font-variant-numeric: tabular-nums;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.03em;
   color: #fff;
   white-space: nowrap;
@@ -3139,8 +3139,8 @@
   border: 1px solid var(--brand-dark, #607a42);
   background: transparent;
   color: var(--brand-dark, #607a42);
-  font-size: 0.86rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -3156,8 +3156,8 @@
   background: none;
   color: var(--brand-dark, #607a42);
   font: inherit;
-  font-size: 0.82rem;
-  font-weight: 700;
+  font-size: 0.8125rem;
+  font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
@@ -3187,14 +3187,14 @@
 
 .review-summary-score > strong {
   font-size: 1.6rem;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1;
   color: var(--text, #2c3327);
   font-variant-numeric: tabular-nums;
 }
 
 .review-summary-count {
-  font-size: 0.82rem;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text-soft, #66705d);
 }
@@ -3232,15 +3232,15 @@
   border-radius: 50%;
   background: rgba(96, 122, 66, 0.1);
   color: var(--text, #2c3327);
-  font-size: 1.2rem;
+  font-size: 1.25rem;
   line-height: 1;
   cursor: pointer;
 }
 
 .review-modal-title {
   margin: 0;
-  font-size: 1.15rem;
-  font-weight: 800;
+  font-size: 1.125rem;
+  font-weight: 700;
   color: var(--text, #2c3327);
 }
 
@@ -3252,8 +3252,8 @@
 
 .review-star-picker legend {
   padding: 0;
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: 0.8125rem;
+  font-weight: 600;
   color: var(--text-soft, #66705d);
 }
 
@@ -3293,8 +3293,8 @@
 .review-form label {
   display: grid;
   gap: 6px;
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: 0.8125rem;
+  font-weight: 600;
   color: var(--text-soft, #66705d);
 }
 
@@ -3323,7 +3323,7 @@
 
 .review-form-help {
   color: var(--text-soft, #66705d);
-  font-size: 0.76rem;
+  font-size: 0.75rem;
 }
 
 .review-form-error {
@@ -3331,7 +3331,7 @@
   border-radius: 10px;
   background: #fbe9e4;
   color: #c0492f;
-  font-size: 0.82rem;
+  font-size: 0.8125rem;
 }
 
 .review-form-done {
@@ -3344,7 +3344,7 @@
 
 .review-form-done p {
   margin: 4px 0 14px;
-  font-size: 0.86rem;
+  font-size: 0.875rem;
 }
 
 @media (max-width: 640px) {
@@ -3493,8 +3493,8 @@
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.14);
   color: #fff;
-  font-size: 0.9rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -3606,7 +3606,7 @@
 
 .review-lightbox-ago {
   color: var(--text-soft);
-  font-size: 0.92rem;
+  font-size: 0.9375rem;
 }
 
 .review-lightbox-who {
@@ -3614,7 +3614,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 8px 18px;
-  font-size: 1.2rem;
+  font-size: 1.25rem;
 }
 
 .review-lightbox-verified {
@@ -3622,8 +3622,8 @@
   align-items: center;
   gap: 6px;
   color: var(--brand-dark);
-  font-size: 0.95rem;
-  font-weight: 700;
+  font-size: 0.9375rem;
+  font-weight: 600;
 }
 
 .review-lightbox-product {
@@ -3646,8 +3646,8 @@
 .review-lightbox-product small {
   display: block;
   color: var(--text-soft);
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 600;
   letter-spacing: 0.08em;
 }
 
@@ -3657,8 +3657,8 @@
 
 .review-lightbox-title {
   margin: 0;
-  font-size: 1.15rem;
-  font-weight: 800;
+  font-size: 1.125rem;
+  font-weight: 700;
 }
 
 .review-lightbox-comment {

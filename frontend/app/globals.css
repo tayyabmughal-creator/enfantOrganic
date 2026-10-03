@@ -8,6 +8,7 @@
 @import "./styles/admin-panel.css";
 @import "./styles/account.css";
 @import "./styles/analytics.css";
+@import "./styles/typography.css";
 
 @keyframes skeleton-pulse {
   0% { opacity: 1; }

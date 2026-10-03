@@ -152,7 +152,7 @@ export default async function ThankYouPage({ params, searchParams }) {
         <div className="thank-you-card">
           <div style={{ display: "flex", alignItems: "center", gap: "14px", flexWrap: "wrap", justifyContent: "space-between" }}>
             <div>
-              <p style={{ margin: "0 0 4px", fontSize: "0.84rem", color: "var(--text-soft)", fontWeight: 700 }}>
+              <p style={{ margin: "0 0 4px", fontSize: "0.84rem", color: "var(--text-soft)", fontWeight: 600 }}>
                 {isAr ? "رقم الطلب" : "Order number"}
               </p>
               <h2 style={{ margin: 0, fontFamily: "monospace", fontSize: "1.2rem", letterSpacing: "0.04em" }}>
@@ -223,7 +223,7 @@ export default async function ThankYouPage({ params, searchParams }) {
 
           {hasTracking ? (
             <div className="tracking-block">
-              <p style={{ margin: "0 0 8px", fontWeight: 700 }}>
+              <p style={{ margin: "0 0 8px", fontWeight: 600 }}>
                 {isAr ? "بيانات الشحنة" : "Shipment Tracking"}
               </p>
               {order.tracking_number ? (

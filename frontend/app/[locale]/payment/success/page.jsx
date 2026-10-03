@@ -71,7 +71,7 @@ export default async function PaymentSuccessPage({ params, searchParams }) {
                 border: "1px solid var(--line)",
               }}
             >
-              <p style={{ margin: "0 0 4px", fontSize: "0.84rem", color: "var(--text-soft)", fontWeight: 700 }}>
+              <p style={{ margin: "0 0 4px", fontSize: "0.84rem", color: "var(--text-soft)", fontWeight: 600 }}>
                 {isAr ? "رقم الطلب" : "Order number"}
               </p>
               <strong style={{ fontFamily: "monospace", fontSize: "1.1rem", letterSpacing: "0.04em" }}>

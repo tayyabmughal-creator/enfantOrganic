@@ -1,0 +1,191 @@
+/* Heading scale and weights taken from polynae.com (Outfit, semibold headings,
+   slightly tight tracking). Loaded last so it wins over the per-component sizes.
+   To go back to the old sizes, delete this file and its @import in globals.css. */
+
+/* h2 scale: section titles */
+.section-heading h3,
+.product-extra-title,
+.product-section-heading,
+.review-showcase-title,
+.newsletter-strip h3,
+.our-story-headline {
+  font-size: clamp(1.75rem, 3.5vw, 2.375rem);
+  line-height: 1.18;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* h1 scale: page titles */
+.page-hero h1,
+.static-page-header h1,
+.account-title,
+.blog-detail-header h1,
+.reviews-page-head h1 {
+  font-size: clamp(2rem, 4.2vw, 2.875rem);
+  line-height: 1.12;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* product page title */
+.summary-block h1,
+.product-summary-header.summary-block h1 {
+  font-size: clamp(1.75rem, 3.5vw, 2.375rem);
+  line-height: 1.18;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* the Instagram heading stays a small tracked label (reference "ON THE FEED") */
+.instagram-header h3 {
+  font-size: clamp(0.95rem, 1.4vw, 1.1rem);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  line-height: 1.3;
+}
+
+[dir="rtl"] .section-heading h3,
+[dir="rtl"] .product-extra-title,
+[dir="rtl"] .product-section-heading,
+[dir="rtl"] .review-showcase-title,
+[dir="rtl"] .newsletter-strip h3,
+[dir="rtl"] .our-story-headline,
+[dir="rtl"] .page-hero h1,
+[dir="rtl"] .static-page-header h1,
+[dir="rtl"] .account-title,
+[dir="rtl"] .blog-detail-header h1,
+[dir="rtl"] .reviews-page-head h1,
+[dir="rtl"] .summary-block h1,
+[dir="rtl"] .instagram-header h3 {
+  letter-spacing: 0;
+}
+
+/* ── Module by module (values from polynae.com) ─────────────────────────────
+   Every other text size in the storefront stylesheets was snapped to Polynae's
+   scale (11 / 12 / 13 / 14 / 15 / 16 / 18 / 20 / 24px); the lines below set the
+   headline-level text of each module to Polynae's own numbers. */
+
+/* header menu */
+.nav-trigger,
+.nav-link {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+@media (min-width: 1024px) {
+  .nav-trigger,
+  .nav-link {
+    font-size: 1rem;
+  }
+}
+
+/* product and category cards */
+.product-card-body h4,
+.category-round-title,
+.category-grid-title {
+  font-size: 1rem;
+  line-height: 1.35;
+  font-weight: 600;
+}
+
+.product-card .product-pricing strong {
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+@media (min-width: 768px) {
+  .product-card .product-pricing strong {
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+}
+
+/* product page price (the selector is as specific as the older .product-pricing.large rule) */
+.product-pricing.product-pricing--premium strong {
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  line-height: 1.1;
+  font-weight: 600;
+}
+
+.product-pricing.product-pricing--premium .compare-price {
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+
+@media (min-width: 1024px) {
+  .product-pricing.product-pricing--premium strong {
+    font-size: clamp(2.125rem, 3.25vw, 2.75rem);
+  }
+
+  .product-pricing.product-pricing--premium .compare-price {
+    font-size: 1.125rem;
+  }
+}
+
+/* the short description under the title is primary body text */
+.product-short-copy {
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+/* accordion titles, sticky add-to-cart price */
+.detail-accordion-header {
+  font-size: 1.125rem;
+  line-height: 1.6;
+  font-weight: 600;
+}
+
+.mobile-sticky-price strong {
+  font-size: 1.125rem;
+  line-height: 1.1;
+  font-weight: 600;
+}
+
+/* filter / toolbar headings */
+.cat-filter-head strong,
+.cat-toolbar-count strong,
+.cat-filters-drawer-head strong {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+/* cart drawer */
+.cart-drawer-header h3 {
+  font-size: 1.25rem;
+  line-height: 1.35;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.cart-recommendations-title {
+  font-size: 1.125rem;
+  line-height: 1.6;
+  font-weight: 600;
+}
+
+/* footer */
+.footer-column h4 {
+  font-size: 1.125rem;
+  line-height: 1.6;
+  font-weight: 600;
+}
+
+.footer-column h5 {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+[dir="rtl"] .footer-column h5,
+[dir="rtl"] .cart-drawer-header h3 {
+  letter-spacing: 0;
+}
+
+.footer-column p,
+.footer-links a {
+  font-size: 0.875rem;
+  line-height: 1.6;
+}

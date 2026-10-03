@@ -65,7 +65,7 @@ export default async function PaymentFailedPage({ params, searchParams }) {
                 border: "1px solid #fecaca",
               }}
             >
-              <p style={{ margin: "0 0 4px", fontSize: "0.84rem", color: "#991b1b", fontWeight: 700 }}>
+              <p style={{ margin: "0 0 4px", fontSize: "0.84rem", color: "#991b1b", fontWeight: 600 }}>
                 {isAr ? "رقم الطلب" : "Order number"}
               </p>
               <strong style={{ fontFamily: "monospace", fontSize: "1.1rem", letterSpacing: "0.04em" }}>

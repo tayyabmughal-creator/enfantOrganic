@@ -81,7 +81,7 @@
 .discount-popup-brand strong {
   color: var(--brand-dark);
   font-size: clamp(1.4rem, 6vw, 1.75rem);
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.1;
   letter-spacing: 0.1em;
 }
@@ -95,7 +95,7 @@
   color: var(--text);
   font-size: clamp(1.3rem, 5.4vw, 1.65rem);
   line-height: 1.2;
-  font-weight: 850;
+  font-weight: 700;
   text-align: center;
 }
 
@@ -112,7 +112,7 @@
   padding: 0 14px;
   background: #fff;
   color: var(--text);
-  font-size: 0.95rem;
+  font-size: 0.9375rem;
 }
 
 .discount-popup-phone-row {
@@ -132,7 +132,7 @@
   padding: 0 10px;
   background: #fff;
   color: var(--text);
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   max-width: 100%;
 }
 
@@ -142,7 +142,7 @@
   border-radius: 8px;
   background: var(--brand-dark);
   color: #fff;
-  font-weight: 850;
+  font-weight: 700;
 }
 
 .discount-popup-form button:disabled {
@@ -152,8 +152,8 @@
 
 .discount-popup-status {
   color: var(--text-soft);
-  font-size: 0.9rem;
-  font-weight: 750;
+  font-size: 0.875rem;
+  font-weight: 600;
   text-align: center;
 }
 
@@ -260,8 +260,8 @@
 
 .cart-recommendations-title {
   margin: 0 0 8px;
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: 0.8125rem;
+  font-weight: 600;
   color: var(--text, #2c3327);
 }
 
@@ -317,7 +317,7 @@
 }
 
 .cart-recommendation-name {
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   line-height: 1.3;
   color: inherit;
   text-decoration: none;
@@ -328,8 +328,8 @@
 }
 
 .cart-recommendation-price {
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: 0.8125rem;
+  font-weight: 600;
   color: var(--brand-dark, #607a42);
   font-variant-numeric: lining-nums tabular-nums;
 }
@@ -342,7 +342,7 @@
   background: transparent;
   color: var(--brand-dark, #607a42);
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
   touch-action: manipulation;
@@ -442,7 +442,7 @@
 
 .cart-line-unavailable {
   color: var(--color-error, #c0392b);
-  font-size: 0.76rem;
+  font-size: 0.75rem;
   font-weight: 600;
   line-height: 1.35;
 }
@@ -455,7 +455,7 @@
 }
 
 .cart-line-name {
-  font-size: 0.88rem;
+  font-size: 0.875rem;
   line-height: 1.35;
   /* Two lines, then an ellipsis. The full name is one tap away on the product
      page and an eight-word title otherwise pushes the stepper out of sight. */
@@ -469,7 +469,7 @@
 .cart-line-variant,
 .cart-line-unit {
   color: var(--text-soft);
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
@@ -497,15 +497,15 @@
 
 .cart-line-total {
   color: var(--text);
-  font-weight: 800;
-  font-size: 0.88rem;
+  font-weight: 700;
+  font-size: 0.875rem;
   font-variant-numeric: lining-nums tabular-nums;
   white-space: nowrap;
 }
 
 .cart-line-was {
   color: var(--text-soft);
-  font-size: 0.67rem;
+  font-size: 0.6875rem;
   white-space: nowrap;
   opacity: 0.75;
 }
@@ -548,9 +548,9 @@
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  font-size: 0.95rem;
+  font-size: 0.9375rem;
   line-height: 1;
-  font-weight: 700;
+  font-weight: 600;
   box-shadow: 0 1px 4px rgba(25, 24, 23, 0.1);
   cursor: pointer;
 }
@@ -558,8 +558,8 @@
 .cart-line-controls span {
   min-width: 20px;
   text-align: center;
-  font-size: 0.85rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 600;
   color: var(--text);
   font-variant-numeric: lining-nums tabular-nums;
 }
@@ -574,8 +574,8 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  font-size: 0.95rem;
-  font-weight: 700;
+  font-size: 0.9375rem;
+  font-weight: 600;
   color: var(--text);
 }
 
@@ -589,15 +589,15 @@
 }
 
 .cart-total-amounts strong {
-  font-size: 1.18rem;
-  font-weight: 850;
+  font-size: 1.125rem;
+  font-weight: 700;
   white-space: nowrap;
   font-variant-numeric: lining-nums tabular-nums;
 }
 
 .cart-total-was {
   color: var(--text-soft);
-  font-size: 0.86rem;
+  font-size: 0.875rem;
   font-weight: 500;
   white-space: nowrap;
   opacity: 0.8;
@@ -605,12 +605,12 @@
 
 .cart-saved-line {
   margin: -6px 0 0;
-  font-size: 0.82rem;
+  font-size: 0.8125rem;
   color: var(--brand-dark, #607a42);
 }
 
 .cart-saved-line strong {
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .cart-region-warning {
@@ -619,7 +619,7 @@
   border-radius: 10px;
   background: rgba(192, 57, 43, 0.07);
   color: var(--color-error, #c0392b);
-  font-size: 0.76rem;
+  font-size: 0.75rem;
   line-height: 1.4;
 }
 
@@ -643,7 +643,7 @@
 /* ── Message ── */
 .ms-msg {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   color: #607858;
   text-align: center;
   line-height: 1.4;
@@ -652,7 +652,7 @@
 
 .ms-msg strong {
   color: #2e5a38;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .ms-msg.ms-done {
@@ -795,15 +795,15 @@
 }
 
 .ms-pin-label strong {
-  font-size: 0.64rem;
-  font-weight: 700;
+  font-size: 0.6875rem;
+  font-weight: 600;
   color: #3e5e44;
   letter-spacing: -0.01em;
   line-height: 1.3;
 }
 
 .ms-pin-label span {
-  font-size: 0.58rem;
+  font-size: 0.5625rem;
   font-weight: 500;
   color: #8aaa8e;
   line-height: 1.3;
@@ -829,7 +829,7 @@
   border: none;
   background: transparent;
   color: var(--text-soft);
-  font-size: 0.82rem;
+  font-size: 0.8125rem;
   font-weight: 600;
   letter-spacing: 0.01em;
   cursor: pointer;
@@ -919,7 +919,7 @@
 
 .quick-view-options h4 {
   margin: 0 0 8px;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -927,7 +927,7 @@
 }
 
 .quick-view-selected-value {
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-primary, #1a1a1a);
   text-transform: none;
   letter-spacing: 0;
@@ -940,13 +940,13 @@
 }
 
 .quick-view-price {
-  font-size: 1.3rem;
-  font-weight: 700;
+  font-size: 1.25rem;
+  font-weight: 600;
   color: var(--color-primary, #4a7c59);
 }
 
 .quick-view-compare {
-  font-size: 0.95rem;
+  font-size: 0.9375rem;
   color: var(--text-soft);
   text-decoration: line-through;
 }
@@ -962,7 +962,7 @@
   border-radius: 20px;
   border: 1.5px solid var(--border-default, #ddd);
   background: transparent;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s, color 0.15s;
@@ -985,7 +985,7 @@
    the stylesheets happened to load in. */
 
 .quick-view-out-of-stock {
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   color: var(--color-error, #c0392b);
   font-weight: 500;
   margin: 0;
@@ -995,7 +995,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 0.8rem;
+  font-size: 0.8125rem;
   color: var(--text-soft);
   text-decoration: none;
   margin-top: -8px;
@@ -1104,7 +1104,7 @@
   padding: 10px 14px;
   background: #f7f8f3;
   border-radius: 12px;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
 }
 
 .apple-pay-quick-total span {
@@ -1113,7 +1113,7 @@
 }
 
 .apple-pay-quick-total strong {
-  font-weight: 750;
+  font-weight: 600;
   color: var(--text);
 }
 
@@ -1130,8 +1130,8 @@
 .apple-pay-quick-fields label {
   display: grid;
   gap: 4px;
-  font-size: 0.76rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 600;
   color: var(--text);
 }
 
@@ -1142,7 +1142,7 @@
   border-radius: 10px;
   padding: 8px 12px;
   background: #fafbf8;
-  font-size: 0.88rem;
+  font-size: 0.875rem;
   color: var(--text);
   transition: border-color 180ms ease, box-shadow 180ms ease;
 }
@@ -1162,7 +1162,7 @@
 
 .apple-pay-quick-note {
   margin: 0;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   color: var(--text-soft);
   text-align: center;
   line-height: 1.5;
@@ -1321,7 +1321,7 @@
   .mobile-lang-toggle {
     min-height: 30px;
     padding: 0 10px;
-    font-size: 0.74rem;
+    font-size: 0.75rem;
     gap: 5px;
   }
 
@@ -1331,7 +1331,7 @@
   }
 
   .mobile-region-select .control-select-value {
-    font-size: 0.7rem;
+    font-size: 0.6875rem;
     padding-inline-end: 12px;
   }
 
@@ -1476,11 +1476,11 @@
   }
 
   .cart-line-name {
-    font-size: 0.84rem;
+    font-size: 0.8125rem;
   }
 
   .cart-line-total {
-    font-size: 0.9rem;
+    font-size: 0.875rem;
   }
 }
 
@@ -1689,7 +1689,7 @@
 .region-suggestion__message {
   margin: 0;
   flex: 1 1 240px;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   line-height: 1.45;
   color: var(--text);
 }
@@ -1705,7 +1705,7 @@
   border-radius: 999px;
   cursor: pointer;
   font: inherit;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   padding: 9px 16px;
   white-space: nowrap;
 }

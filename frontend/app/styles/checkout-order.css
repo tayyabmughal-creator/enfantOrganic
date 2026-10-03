@@ -31,8 +31,8 @@
 .checkout-eyebrow {
   margin: 0 0 4px;
   color: var(--text-soft);
-  font-size: 0.7rem;
-  font-weight: 700;
+  font-size: 0.6875rem;
+  font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   opacity: 0.85;
@@ -49,8 +49,8 @@
 }
 
 [dir="rtl"] .checkout-title {
-  font-family: var(--font-arabic), "Noto Sans Arabic", Arial, sans-serif;
-  font-weight: 700;
+  font-family: var(--font-outfit), var(--font-arabic), "Noto Sans Arabic", Arial, sans-serif;
+  font-weight: 600;
 }
 
 /* ── Progress stepper ──────────────────────── */
@@ -73,8 +73,8 @@
   border: 1.5px solid var(--line);
   background: #fff;
   color: var(--text-soft);
-  font-size: 0.7rem;
-  font-weight: 700;
+  font-size: 0.6875rem;
+  font-weight: 600;
   white-space: nowrap;
   transition: border-color 260ms ease, background 260ms ease, color 260ms ease, box-shadow 260ms ease;
   box-shadow: 0 1px 2px rgba(25, 24, 23, 0.04);
@@ -101,8 +101,8 @@
   height: 22px;
   border-radius: 999px;
   background: rgba(25, 24, 23, 0.06);
-  font-size: 0.64rem;
-  font-weight: 800;
+  font-size: 0.6875rem;
+  font-weight: 700;
   font-variant-numeric: lining-nums tabular-nums;
   transition: background 260ms ease, color 260ms ease;
 }
@@ -207,8 +207,8 @@
 .checkout-sub-card-head h3 {
   margin: 0;
   font-family: var(--font-sans), "Helvetica Neue", Arial, sans-serif;
-  font-size: 0.92rem;
-  font-weight: 750;
+  font-size: 0.9375rem;
+  font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--text);
   line-height: 1.25;
@@ -217,7 +217,7 @@
 .checkout-sub-card-head p {
   margin: 2px 0 0;
   color: var(--text-soft);
-  font-size: 0.76rem;
+  font-size: 0.75rem;
   line-height: 1.45;
   font-weight: 500;
   opacity: 0.85;
@@ -231,7 +231,7 @@
   height: 34px;
   border-radius: 10px;
   background: linear-gradient(135deg, var(--brand-pale), #e4edd6);
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.6), 0 1px 3px rgba(146, 171, 105, 0.12);
   border: 1px solid rgba(146, 171, 105, 0.18);
 }
@@ -269,8 +269,8 @@
   gap: 4px 0;
   margin-bottom: 0;
   color: var(--text);
-  font-size: 0.76rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 600;
   letter-spacing: 0.008em;
   line-height: 1.3;
 }
@@ -299,7 +299,7 @@
   border-radius: 12px;
   padding: 8px 14px;
   background: linear-gradient(180deg, #fdfcfa, #f9f9f6);
-  font-size: 0.88rem;
+  font-size: 0.875rem;
   font-variant-numeric: lining-nums tabular-nums;
   color: var(--text);
   transition: border-color 220ms ease, box-shadow 220ms ease, background 220ms ease;
@@ -431,15 +431,15 @@
 
 .checkout-consent-card-body strong {
   display: block;
-  font-size: 0.78rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 600;
   color: var(--text);
   line-height: 1.3;
 }
 
 .checkout-consent-card-body small {
   display: block;
-  font-size: 0.68rem;
+  font-size: 0.6875rem;
   color: var(--text-muted, #888);
   line-height: 1.3;
   font-weight: 450;
@@ -489,8 +489,8 @@
   cursor: pointer;
   list-style: none;
   padding: 10px 14px;
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: 0.8125rem;
+  font-weight: 600;
   color: var(--text);
   display: flex;
   align-items: center;
@@ -500,7 +500,7 @@
 
 .checkout-disclosure summary::before {
   content: "+";
-  font-size: 1.1rem;
+  font-size: 1.125rem;
   font-weight: 500;
   color: var(--brand-dark);
   width: 18px;
@@ -539,8 +539,8 @@
   border-radius: 12px;
   border: 1.5px solid rgba(146, 171, 105, 0.28);
   padding: 10px 16px;
-  font-size: 0.82rem;
-  font-weight: 750;
+  font-size: 0.8125rem;
+  font-weight: 600;
   color: var(--brand-dark);
   gap: 10px;
   box-shadow: 0 1px 3px rgba(146, 171, 105, 0.08);
@@ -571,8 +571,8 @@
 .order-summary-heading {
   margin: 0 0 4px;
   font-family: var(--font-sans), "Helvetica Neue", Arial, sans-serif;
-  font-size: 0.96rem;
-  font-weight: 800;
+  font-size: 0.9375rem;
+  font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--text);
   line-height: 1.2;
@@ -627,22 +627,22 @@
 
 .summary-line strong {
   line-height: 1.3;
-  font-size: 0.84rem;
-  font-weight: 650;
+  font-size: 0.8125rem;
+  font-weight: 600;
   color: var(--text);
 }
 
 .summary-line span,
 .summary-line small {
   color: rgba(30, 30, 30, 0.5);
-  font-size: 0.74rem;
+  font-size: 0.75rem;
   line-height: 1.3;
   font-variant-numeric: lining-nums tabular-nums;
 }
 
 .summary-line > b {
-  font-size: 0.86rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 600;
   color: var(--text);
   white-space: nowrap;
   font-variant-numeric: lining-nums tabular-nums;
@@ -656,7 +656,7 @@
   justify-content: space-between;
   gap: 10px;
   padding: 4px 0;
-  font-size: 0.82rem;
+  font-size: 0.8125rem;
 }
 
 .subtotal-row > span {
@@ -666,7 +666,7 @@
 }
 
 .subtotal-row > strong {
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text);
   font-variant-numeric: lining-nums tabular-nums;
 }
@@ -684,7 +684,7 @@
   border-radius: 12px;
   background: linear-gradient(135deg, #eefbf0 0%, #d9f5e0 100%);
   border: 1.5px solid rgba(34, 139, 69, 0.22);
-  font-size: 0.82rem;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: #1a7a3a;
   letter-spacing: 0.01em;
@@ -694,11 +694,11 @@
   padding-top: 12px;
   margin-top: 4px;
   border-top: 1.5px solid rgba(30, 30, 30, 0.08);
-  font-size: 1.05rem;
+  font-size: 1rem;
 }
 
 .order-grand-total > strong {
-  font-size: 1.15rem;
+  font-size: 1.125rem;
   color: var(--brand-dark);
   font-variant-numeric: lining-nums tabular-nums;
   letter-spacing: -0.01em;
@@ -733,8 +733,8 @@
   border-radius: 999px;
   background: linear-gradient(180deg, #faf9f5, #f4f2ea);
   color: var(--text);
-  font-size: 0.8rem;
-  font-weight: 750;
+  font-size: 0.8125rem;
+  font-weight: 600;
   cursor: pointer;
   transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease, transform 140ms ease;
 }
@@ -761,8 +761,8 @@
   border-radius: 999px;
   background: rgba(96, 122, 66, 0.12);
   color: var(--brand-dark);
-  font-size: 0.66rem;
-  font-weight: 800;
+  font-size: 0.6875rem;
+  font-weight: 700;
   letter-spacing: 0.01em;
 }
 
@@ -770,8 +770,8 @@
   display: grid;
   gap: 8px;
   margin-bottom: 10px;
-  font-weight: 750;
-  font-size: 0.78rem;
+  font-weight: 600;
+  font-size: 0.75rem;
 }
 
 .checkout-inline-clear {
@@ -779,8 +779,8 @@
   border: 0;
   background: transparent;
   color: var(--brand-dark);
-  font-size: 0.78rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 600;
   padding: 0;
   cursor: pointer;
 }
@@ -800,7 +800,7 @@
   border-radius: 11px;
   padding: 8px 12px;
   background: linear-gradient(180deg, #fdfcfa, #f9f9f6);
-  font-size: 0.84rem;
+  font-size: 0.8125rem;
   min-height: 40px;
   font-variant-numeric: lining-nums tabular-nums;
   transition: border-color 200ms ease, box-shadow 200ms ease, background 200ms ease;
@@ -822,8 +822,8 @@
   min-height: 40px;
   padding: 0 16px;
   font: inherit;
-  font-weight: 750;
-  font-size: 0.8rem;
+  font-weight: 600;
+  font-size: 0.8125rem;
   cursor: pointer;
   transition: background 180ms ease, transform 140ms ease, box-shadow 180ms ease;
   box-shadow: 0 2px 8px rgba(200, 162, 50, 0.18), 0 1px 2px rgba(200, 162, 50, 0.1);
@@ -852,8 +852,8 @@
   border-radius: 11px;
   padding: 10px 14px;
   margin: 0;
-  font-weight: 650;
-  font-size: 0.84rem;
+  font-weight: 600;
+  font-size: 0.8125rem;
   line-height: 1.4;
   border: 1px solid rgba(180, 35, 24, 0.1);
 }
@@ -879,8 +879,8 @@
   border-radius: 11px;
   padding: 10px 14px;
   margin: 0;
-  font-size: 0.84rem;
-  font-weight: 650;
+  font-size: 0.8125rem;
+  font-weight: 600;
   border: 1px solid rgba(31, 122, 77, 0.1);
 }
 
@@ -901,7 +901,7 @@
 
 .saved-address-loading {
   color: var(--text-soft);
-  font-size: 0.82rem;
+  font-size: 0.8125rem;
 }
 
 /* ── Map section ───────────────────────────── */
@@ -917,14 +917,14 @@
 
 .map-address-card h3 {
   margin: 0;
-  font-size: 0.9rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 600;
 }
 
 .map-address-help {
   margin: 0;
   color: var(--text-soft);
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   line-height: 1.45;
 }
 
@@ -933,7 +933,7 @@
   flex-wrap: wrap;
   gap: 12px;
   color: var(--text-soft);
-  font-size: 0.8rem;
+  font-size: 0.8125rem;
   padding-top: 4px;
   font-weight: 500;
   opacity: 0.85;
@@ -946,7 +946,7 @@
   border: 1.5px dashed rgba(30, 30, 30, 0.12);
   border-radius: 12px;
   color: var(--text-soft);
-  font-size: 0.88rem;
+  font-size: 0.875rem;
   background: rgba(255, 255, 255, 0.5);
 }
 
@@ -958,12 +958,12 @@
   border-radius: 12px;
   padding: 12px 16px;
   color: #5a4400;
-  font-size: 0.86rem;
+  font-size: 0.875rem;
   line-height: 1.45;
 }
 
 .map-fallback-message strong {
-  font-size: 0.88rem;
+  font-size: 0.875rem;
 }
 
 .checkout-map-canvas {
@@ -986,7 +986,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  font-size: 0.92rem;
+  font-size: 0.9375rem;
 }
 
 .checkout-location-required {
@@ -997,7 +997,7 @@
   background: #fff1f1;
   color: #b1374b;
   border: 1px solid rgba(177, 55, 75, 0.25);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -1011,7 +1011,7 @@
   background: #eaf6ec;
   color: #1f6a3b;
   border: 1px solid rgba(31, 106, 59, 0.25);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 600;
 }
 
@@ -1056,7 +1056,7 @@
 }
 
 .map-method-tab-icon {
-  font-size: 1.4rem;
+  font-size: 1.5rem;
   flex-shrink: 0;
   line-height: 1;
 }
@@ -1069,15 +1069,15 @@
 
 .map-method-tab-text strong {
   display: block;
-  font-size: 0.84rem;
-  font-weight: 700;
+  font-size: 0.8125rem;
+  font-weight: 600;
   color: var(--text);
   white-space: nowrap;
 }
 
 .map-method-tab-text small {
   display: block;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   color: var(--text-soft);
   white-space: nowrap;
   overflow: hidden;
@@ -1118,7 +1118,7 @@
   border-radius: 10px;
   border: 1px solid var(--line);
   background: linear-gradient(180deg, #fdfcfa, #f4f5ef);
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -1128,7 +1128,7 @@
 .map-locate-btn--full {
   width: 100%;
   padding: 13px 18px;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   border-radius: 12px;
   justify-content: center;
 }
@@ -1145,14 +1145,14 @@
 
 .map-custom-address-hint {
   margin: 0;
-  font-size: 0.76rem;
+  font-size: 0.75rem;
   color: var(--text-soft);
   line-height: 1.45;
 }
 
 .map-inline-error {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.8125rem;
 }
 
 .map-geocoding-status {
@@ -1190,7 +1190,7 @@
   display: flex;
   align-items: center;
   text-align: center;
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   color: var(--muted, #8a8a8a);
   letter-spacing: 0.02em;
   text-transform: uppercase;
@@ -1302,15 +1302,15 @@
 }
 
 .payment-method-info strong {
-  font-size: 0.88rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 600;
   line-height: 1.25;
   color: var(--text);
 }
 
 .payment-method-info span {
   color: var(--text-soft);
-  font-size: 0.76rem;
+  font-size: 0.75rem;
   line-height: 1.35;
 }
 
@@ -1322,8 +1322,8 @@
   border-radius: 999px;
   background: linear-gradient(175deg, var(--brand-dark), #4e6632);
   color: white;
-  font-size: 0.7rem;
-  font-weight: 800;
+  font-size: 0.6875rem;
+  font-weight: 700;
   width: fit-content;
   box-shadow: 0 2px 6px rgba(96, 122, 66, 0.2);
   letter-spacing: 0.02em;
@@ -1353,8 +1353,8 @@
   border: 1px solid var(--line);
   background: #fff;
   color: var(--text);
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 600;
   padding: 5px 12px;
   line-height: 1;
   cursor: pointer;
@@ -1435,7 +1435,7 @@
   background: linear-gradient(135deg, var(--brand-pale), #e8f0d8);
   border: 1px solid rgba(146, 171, 105, 0.22);
   color: var(--brand-dark);
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   line-height: 1.45;
   font-weight: 500;
 }
@@ -1446,8 +1446,8 @@
 .primary-action.checkout-form-submit--mobile {
   min-height: 48px;
   padding: 0 24px;
-  font-size: 0.9rem;
-  font-weight: 800;
+  font-size: 0.875rem;
+  font-weight: 700;
   letter-spacing: 0.02em;
   border-radius: 13px;
   border: 1px solid rgba(96, 122, 66, 0.35);
@@ -1508,7 +1508,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.68rem;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: var(--text-soft);
   opacity: 0.85;
@@ -1642,7 +1642,7 @@
   }
 
   .order-grand-total {
-    font-size: 1.05rem;
+    font-size: 1rem;
   }
 }
 
@@ -1655,7 +1655,7 @@
   }
 
   .checkout-title {
-    font-size: 1.3rem;
+    font-size: 1.25rem;
   }
 
   .checkout-steps {
@@ -1663,14 +1663,14 @@
   }
 
   .checkout-step {
-    font-size: 0.68rem;
+    font-size: 0.6875rem;
     padding: 4px 10px 4px 4px;
   }
 
   .checkout-step-num {
     width: 20px;
     height: 20px;
-    font-size: 0.6rem;
+    font-size: 0.5625rem;
   }
 
   .form-card,
@@ -1687,7 +1687,7 @@
   .checkout-sub-card-icon {
     width: 30px;
     height: 30px;
-    font-size: 0.8rem;
+    font-size: 0.8125rem;
   }
 
   .checkout-sub-card-head {
@@ -1793,8 +1793,8 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 0.9rem;
-    font-weight: 750;
+    font-size: 0.875rem;
+    font-weight: 600;
     letter-spacing: -0.01em;
   }
 
@@ -1808,8 +1808,8 @@
   }
 
   .order-summary-toggle-total {
-    font-size: 1.02rem;
-    font-weight: 800;
+    font-size: 1rem;
+    font-weight: 700;
     color: var(--text);
     letter-spacing: -0.01em;
     white-space: nowrap;
@@ -1889,7 +1889,7 @@
   }
 
   .checkout-title {
-    font-size: 1.15rem;
+    font-size: 1.125rem;
   }
 
   /* The stepper never actually advances — it's the same three static pills
@@ -1917,7 +1917,7 @@
     width: 28px;
     height: 28px;
     border-radius: 8px;
-    font-size: 0.78rem;
+    font-size: 0.75rem;
   }
 
   .checkout-fields {
@@ -1980,16 +1980,16 @@
   }
 
   .checkout-mobile-cta-total span {
-    font-size: 0.66rem;
-    font-weight: 700;
+    font-size: 0.6875rem;
+    font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--text-soft);
   }
 
   .checkout-mobile-cta-total strong {
-    font-size: 1.02rem;
-    font-weight: 800;
+    font-size: 1rem;
+    font-weight: 700;
     letter-spacing: -0.02em;
     color: var(--text);
     white-space: nowrap;
@@ -2062,7 +2062,7 @@
   display: block;
   margin-bottom: 6px;
   color: var(--text-soft);
-  font-size: 0.8rem;
+  font-size: 0.8125rem;
   font-weight: 600;
 }
 
@@ -2114,8 +2114,8 @@
   display: grid;
   gap: 8px;
   margin-bottom: 16px;
-  font-weight: 700;
-  font-size: 0.82rem;
+  font-weight: 600;
+  font-size: 0.8125rem;
 }
 
 .track-order-card input {
@@ -2125,7 +2125,7 @@
   padding: 11px 14px;
   background: #fafbf8;
   font: inherit;
-  font-size: 0.94rem;
+  font-size: 0.9375rem;
   transition: border-color 180ms ease, box-shadow 180ms ease;
 }
 
@@ -2205,7 +2205,7 @@
 }
 
 .timeline-step.current p {
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .timeline-step p {
@@ -2222,8 +2222,8 @@
   gap: 6px;
   padding: 5px 12px;
   border-radius: 999px;
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: 0.8125rem;
+  font-weight: 600;
 }
 
 .payment-status-badge.status-paid {
@@ -2263,8 +2263,8 @@
   align-items: center;
   padding: 5px 12px;
   border-radius: 999px;
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: 0.8125rem;
+  font-weight: 600;
   background: var(--surface-soft);
   color: var(--text-soft);
   border: 1px solid var(--line);
@@ -2382,7 +2382,7 @@
   gap: 8px;
   align-items: start;
   color: var(--text-soft);
-  font-size: 0.84rem;
+  font-size: 0.8125rem;
   line-height: 1.45;
 }
 
@@ -2403,13 +2403,13 @@
   border-radius: 12px;
   background: rgba(96, 122, 66, 0.09);
   color: var(--brand-dark, #607a42);
-  font-size: 0.86rem;
+  font-size: 0.875rem;
   line-height: 1.4;
 }
 
 .checkout-savings-row strong,
 .cart-savings-row strong {
-  font-weight: 800;
+  font-weight: 700;
 }
 
 /* ── Discount code: one field, right under the items ───────────────── */
@@ -2454,8 +2454,8 @@
   background: #fff;
   color: var(--text);
   font: inherit;
-  font-size: 0.9rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 600;
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -2467,7 +2467,7 @@
 
 .checkout-end-applied {
   margin: 0 0 8px;
-  font-size: 0.84rem;
+  font-size: 0.8125rem;
   color: var(--brand-dark);
 }
 
@@ -2507,7 +2507,7 @@
 }
 
 .checkout-end-total-text small {
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   color: var(--text-soft);
 }
 
@@ -2515,8 +2515,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 1.05rem;
-  font-weight: 800;
+  font-size: 1rem;
+  font-weight: 700;
   white-space: nowrap;
 }
 
@@ -2534,7 +2534,7 @@
   padding: 10px 12px;
   border-radius: 12px;
   background: rgba(146, 171, 105, 0.08);
-  font-size: 0.86rem;
+  font-size: 0.875rem;
 }
 
 .checkout-end-breakdown-row {

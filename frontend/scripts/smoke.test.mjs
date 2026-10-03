@@ -462,6 +462,58 @@ test("sale countdown reads the clock only after mount (no server/client hydratio
   assert.match(detail, /hasDeadline && remaining !== null/);
 });
 
+test("site font is Outfit (like polynae.com), the old stacks are kept, admin keeps its old font, weights are lighter", () => {
+  const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+  const layout = read("../app/layout.jsx");
+  const tokens = read("../app/styles/tokens.css");
+  const admin = read("../app/styles/admin-panel.css");
+  const globals = read("../app/globals.css");
+  const typography = read("../app/styles/typography.css");
+  const home = read("../app/styles/home.css");
+
+  assert.match(layout, /Outfit\(\{[\s\S]*?variable: "--font-outfit"/);
+  assert.match(layout, /\$\{outfit\.variable\} \$\{notoArabic\.variable\}/);
+  // new storefront stack, with the previous stacks still defined for a quick way back
+  assert.match(tokens, /--font-sans:\s*var\(--font-outfit\), "Outfit", var\(--font-sans-legacy\)/);
+  assert.match(tokens, /--font-sans-legacy:\s*-apple-system/);
+  assert.match(tokens, /--font-serif-legacy:/);
+  // Arabic: Latin letters stay in Outfit, Arabic letters come from Noto Sans Arabic
+  assert.match(tokens, /\[dir="rtl"\] \{\s*font-family:\s*var\(--font-outfit\),\s*var\(--font-arabic\)/);
+  assert.match(tokens, /strong,\s*b\s*\{\s*font-weight:\s*600/);
+  // the staff admin panel is untouched
+  assert.match(admin, /--font-sans:\s*var\(--font-sans-legacy\)/);
+  // nothing on the storefront is heavier than 700 any more
+  for (const file of ["header", "home", "catalog-product", "product-premium", "overlays", "checkout-order", "account"]) {
+    const css = read(`../app/styles/${file}.css`);
+    assert.doesNotMatch(css, /font-weight:\s*(750|780|800|850|900)/, `${file}.css still has a heavy weight`);
+  }
+  // loaded after every other stylesheet so it wins over the per-component sizes
+  assert.ok(globals.indexOf("typography.css") > globals.indexOf("analytics.css"));
+  assert.match(typography, /\.section-heading h3[\s\S]*?clamp\(1\.75rem, 3\.5vw, 2\.375rem\)/);
+  assert.match(typography, /\.page-hero h1[\s\S]*?clamp\(2rem, 4\.2vw, 2\.875rem\)/);
+  // the old Instagram block that overrode the new design is gone
+  assert.equal((home.match(/^\.instagram-header \{/gm) || []).length, 1);
+});
+
+test("every storefront text size is one of Polynae's steps, and each module has Polynae's headline values", () => {
+  const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+  const steps = new Set([0.5625, 0.6875, 0.75, 0.8125, 0.875, 0.9375, 1, 1.125, 1.25, 1.5]);
+  for (const file of ["header", "home", "catalog-product", "product-premium", "overlays", "checkout-order", "account", "analytics"]) {
+    const css = read(`../app/styles/${file}.css`);
+    for (const match of css.matchAll(/font-size:\s*([\d.]+)rem/g)) {
+      const value = Number(match[1]);
+      assert.ok(value > 1.5 || steps.has(value), `${file}.css has an off-scale size ${value}rem`);
+    }
+  }
+  const typography = read("../app/styles/typography.css");
+  assert.match(typography, /\.nav-trigger,\s*\.nav-link\s*\{[^}]*font-size:\s*0\.875rem[^}]*font-weight:\s*500/);
+  assert.match(typography, /\.product-card-body h4[\s\S]*?font-size:\s*1rem[\s\S]*?font-weight:\s*600/);
+  assert.match(typography, /\.product-pricing\.product-pricing--premium strong\s*\{[^}]*clamp\(1\.75rem, 3vw, 2\.5rem\)/);
+  assert.match(typography, /\.detail-accordion-header\s*\{[^}]*font-size:\s*1\.125rem/);
+  assert.match(typography, /\.cart-drawer-header h3\s*\{[^}]*font-size:\s*1\.25rem/);
+  assert.match(typography, /\.footer-column h5\s*\{[^}]*font-size:\s*0\.75rem/);
+});
+
 test("home: Instagram section is a swipeable row of big rounded posts", () => {
   const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
   const page = read("../app/[locale]/page.jsx");
