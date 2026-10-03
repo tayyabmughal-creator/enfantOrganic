@@ -215,7 +215,7 @@ const FIELD_CONFIGS = {
     ["shopify_meta","Shopify/extra meta JSON","json"],
     ["image","Image URL","text"],["image_file","Image File","file"],
     ["hover_image","Hover image URL","text"],["hover_image_file","Hover Image File","file"],
-    ["fbt_slugs","Frequently bought together (JSON list of up to 2 product slugs, e.g. [\"complete-care-cream\"])","json"],
+    ["fbt_slugs","Frequently bought together (up to 2 product slugs, e.g. complete-care-cream, enfant-sur-cream)","json"],
     ["page_sections","Product page sections","page-sections"],
     ["gallery","Gallery images","gallery"],["variants","Variants","product-variants"],["option_groups_en","Options EN","option-groups"],["option_groups_ar","Options AR","option-groups"],
     ["details_en","Details EN JSON","json"],["details_ar","Details AR JSON","json"],
@@ -799,6 +799,19 @@ function buildOrdersDateFilterParams(filters) {
   return { dateFrom: "", dateTo: "" };
 }
 
+// Accepts a JSON list or plain slugs (comma / space / new-line separated).
+function parseSlugList(v) {
+  if (Array.isArray(v)) return v;
+  const text = String(v ?? "").trim();
+  if (!text) return [];
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) return parsed;
+    if (typeof parsed === "string") return [parsed];
+  } catch {}
+  return text.split(/[\s,;]+/).map((x) => x.replace(/^["'\[]+|["'\]]+$/g, "")).filter(Boolean);
+}
+
 function buildPayload(editor, key, mode) {
   // On edit we must transmit cleared text fields (empty string) so the admin can
   // actually blank out a value; on create we omit empties so model defaults apply.
@@ -818,7 +831,8 @@ function buildPayload(editor, key, mode) {
     for (const [k, v] of Object.entries(editor)) {
       const type = getFieldType(k, key);
       if (shouldSkip(k, v, type)) continue;
-      if (type === "product-variants") fd.append(k, JSON.stringify(cleanProductVariants(v)));
+      if (k === "fbt_slugs") fd.append(k, JSON.stringify(parseSlugList(v)));
+      else if (type === "product-variants") fd.append(k, JSON.stringify(cleanProductVariants(v)));
       else if (type === "option-groups") fd.append(k, JSON.stringify(cleanOptionGroups(v)));
       else if (type === "json" || type === "gallery" || type === "page-sections" || type === "reviews-showcase") fd.append(k, JSON.stringify(typeof v === "string" ? JSON.parse(v || "null") : v));
       else if (type === "link-list") fd.append(k, JSON.stringify(cleanLinkList(v)));
@@ -834,7 +848,8 @@ function buildPayload(editor, key, mode) {
   for (const [k, v] of Object.entries(editor)) {
     const type = getFieldType(k, key);
     if (shouldSkip(k, v, type)) continue;
-    if (type === "product-variants") payload[k] = cleanProductVariants(v);
+    if (k === "fbt_slugs") payload[k] = parseSlugList(v);
+    else if (type === "product-variants") payload[k] = cleanProductVariants(v);
     else if (type === "option-groups") payload[k] = cleanOptionGroups(v);
     else if (type === "json" || type === "gallery" || type === "page-sections" || type === "reviews-showcase") payload[k] = typeof v === "string" ? JSON.parse(v || "null") : v;
     else if (type === "link-list") payload[k] = cleanLinkList(v);

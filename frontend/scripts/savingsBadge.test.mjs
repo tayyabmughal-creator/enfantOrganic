@@ -41,7 +41,8 @@ test("nothing strikes through every span inside .product-pricing", () => {
 test("the compare price on a product card is still struck through", () => {
   // It has no class of its own, so the loose selector has to survive — only
   // narrowed, never deleted.
-  assert.match(home, /\.product-pricing span:not\(\.save-badge\)\s*\{/);
+  // More :not() exclusions (e.g. the discount badge) are fine; losing the rule is not.
+  assert.match(home, /\.product-pricing span:not\(\.save-badge\)(?::not\([^)]*\))*\s*\{/);
 });
 
 test("the savings badge cancels any inherited strike-through", () => {
