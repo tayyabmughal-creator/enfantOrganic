@@ -38,12 +38,13 @@
 }
 
 /* Phones: the client found the title too big there (long product names ran to four
-   lines). 18px keeps it a clear heading, close to the option/quantity text they liked. */
+   lines), and after 18px asked for a little smaller again: 16px, the same as the
+   option/quantity text they liked. */
 @media (max-width: 640px) {
   .summary-block h1,
   .product-summary-header.summary-block h1 {
-    font-size: 1.125rem;
-    line-height: 1.35;
+    font-size: 1rem;
+    line-height: 1.4;
   }
 }
 
