@@ -17,15 +17,6 @@ const carousel = readFileSync(
 );
 const home = readFileSync(new URL("../app/styles/home.css", import.meta.url), "utf8");
 
-/** The rail's column width: clamp(<min>, <fluid>, <max>). */
-function railColumns() {
-  const rule = home.match(/\.category-carousel-rail\s*\{[^}]*grid-auto-columns:\s*([^;]+);/);
-  assert.ok(rule, "grid-auto-columns not found on .category-carousel-rail");
-  const clamp = rule[1].match(/clamp\(\s*(\d+)px\s*,\s*[^,]+,\s*(\d+)px\s*\)/);
-  assert.ok(clamp, `expected a clamp() column width, got "${rule[1].trim()}"`);
-  return { min: Number(clamp[1]), max: Number(clamp[2]) };
-}
-
 function declaredSizes() {
   const match = carousel.match(/sizes=\{?["']([^"']+)["']\}?/);
   assert.ok(match, "CategoryCarousel declares no sizes");
@@ -40,14 +31,26 @@ test("the carousel does not declare a single fixed slot width", () => {
   );
 });
 
-test("the widest declared size matches the widest column the CSS can produce", () => {
-  const { max } = railColumns();
-  const widths = [...declaredSizes().matchAll(/(\d+)px/g)].map((m) => Number(m[1]));
-  assert.ok(widths.length, "sizes should name pixel widths");
-  assert.ok(
-    Math.max(...widths) >= max,
-    `sizes tops out at ${Math.max(...widths)}px but the column reaches ${max}px, so the image will be upscaled`,
-  );
+test("above phones the declared size is never smaller than the column the CSS produces", () => {
+  // The row spans the screen (container = 100% minus a 80-128px gutter) and is split
+  // into --cat-cards equal columns separated by --cat-gap = clamp(16px, 2.4vw, 36px).
+  assert.match(home, /--cat-cards:\s*6;/);
+  assert.match(home, /grid-auto-columns:\s*calc\(\(100% - \(var\(--cat-cards\) - 1\) \* var\(--cat-gap\)\) \/ var\(--cat-cards\)\)/);
+  const cardsAt = (vw) => (vw >= 1600 ? 7 : vw >= 1100 ? 6 : vw >= 820 ? 5 : 4);
+  const sizes = declaredSizes();
+  const vwFor = (vw) => {
+    for (const m of sizes.matchAll(/\(max-width:\s*(\d+)px\)\s*(\d+)vw/g)) {
+      if (vw <= Number(m[1])) return Number(m[2]);
+    }
+    return Number(sizes.match(/(\d+)vw\s*$/)[1]);
+  };
+  for (let vw = 660; vw <= 2560; vw += 20) {
+    const gutter = vw < 1100 ? 48 : Math.min(128, Math.max(80, vw * 0.05));
+    const gap = Math.min(36, Math.max(16, vw * 0.024));
+    const n = cardsAt(vw);
+    const column = (vw - gutter - (n - 1) * gap) / n;
+    assert.ok((vwFor(vw) / 100) * vw >= column - 1, `at ${vw}px the column is ${column.toFixed(0)}px but sizes declares ${((vwFor(vw) / 100) * vw).toFixed(0)}px`);
+  }
 });
 
 /** The phone override: four cards per screen, `calc((100% - <gaps>) / 4)`. */

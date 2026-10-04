@@ -27,13 +27,33 @@
   letter-spacing: -0.02em;
 }
 
-/* product page title */
+/* product page title: sized for long product names in the narrow summary column
+   (the client found the larger h2-scale title too big) */
 .summary-block h1,
 .product-summary-header.summary-block h1 {
-  font-size: clamp(1.75rem, 3.5vw, 2.375rem);
-  line-height: 1.18;
+  font-size: clamp(1.5rem, 1.9vw, 1.875rem);
+  line-height: 1.25;
   font-weight: 600;
   letter-spacing: -0.02em;
+}
+
+/* Phones: the client found the title too big there (long product names ran to four
+   lines). 18px keeps it a clear heading, close to the option/quantity text they liked. */
+@media (max-width: 640px) {
+  .summary-block h1,
+  .product-summary-header.summary-block h1 {
+    font-size: 1.125rem;
+    line-height: 1.35;
+  }
+}
+
+/* Tablets: between the phone and desktop sizes */
+@media (min-width: 641px) and (max-width: 1023px) {
+  .summary-block h1,
+  .product-summary-header.summary-block h1 {
+    font-size: 1.5rem;
+    line-height: 1.25;
+  }
 }
 
 /* the Instagram heading stays a small tracked label (reference "ON THE FEED") */
@@ -114,8 +134,9 @@
 }
 
 @media (min-width: 1024px) {
+  /* kept in step with the smaller title so the price leads without shouting */
   .product-pricing.product-pricing--premium strong {
-    font-size: clamp(2.125rem, 3.25vw, 2.75rem);
+    font-size: clamp(1.75rem, 2vw, 2.125rem);
   }
 
   .product-pricing.product-pricing--premium .compare-price {

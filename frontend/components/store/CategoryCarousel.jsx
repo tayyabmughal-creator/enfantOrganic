@@ -72,7 +72,7 @@ export default function CategoryCarousel({ categories, href, locale = "en" }) {
       {scrollable ? (
         <button
           type="button"
-          className="category-carousel-button"
+          className="category-carousel-button is-prev"
           onClick={() => scrollByCard(-1)}
           aria-label={isRtl ? "الفئة التالية" : "Previous categories"}
         >
@@ -84,17 +84,15 @@ export default function CategoryCarousel({ categories, href, locale = "en" }) {
         {categories.map((category) => (
           <Link key={category.slug} href={categoryHref(category)} className="category-round-card">
             <span className="category-round-image">
-              {/* Must track .category-carousel-rail's grid-auto-columns in
-                  home.css — clamp(150px, 15vw, 226px), and a quarter of the
-                  rail below 640px. Undersizing this had the browser fetch a
-                  128w or 256w variant for a card that is 226px wide and 452
-                  device pixels on a retina screen, so every category came out
-                  soft. */}
+              {/* Must track .category-carousel-rail in home.css: the row is split into
+                  --cat-cards equal columns (7 / 6 / 5 / 4 by screen width, a quarter
+                  of the rail below 640px). Undersizing this makes the browser fetch a
+                  small variant and stretch it, so the categories come out soft. */}
               <SiteImage
                 src={category.image}
                 alt={category.name}
                 fill
-                sizes="(max-width: 640px) 24vw, (max-width: 1500px) 15vw, 226px"
+                sizes="(max-width: 640px) 24vw, (max-width: 819px) 23vw, (max-width: 1599px) 18vw, 13vw"
               />
             </span>
             <span className="category-round-title">{category.name}</span>
@@ -105,7 +103,7 @@ export default function CategoryCarousel({ categories, href, locale = "en" }) {
       {scrollable ? (
         <button
           type="button"
-          className="category-carousel-button"
+          className="category-carousel-button is-next"
           onClick={() => scrollByCard(1)}
           aria-label={isRtl ? "الفئة السابقة" : "Next categories"}
         >

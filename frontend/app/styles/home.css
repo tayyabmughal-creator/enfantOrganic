@@ -910,8 +910,12 @@
   width: 100%;
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: clamp(150px, 15vw, 226px);
-  gap: clamp(16px, 2.4vw, 36px);
+  /* Cards share the full row equally (the row now spans the whole screen), so no card
+     hangs half off the edge: 7 across on wide screens down to 4 on tablets. */
+  --cat-cards: 6;
+  --cat-gap: clamp(16px, 2.4vw, 36px);
+  grid-auto-columns: calc((100% - (var(--cat-cards) - 1) * var(--cat-gap)) / var(--cat-cards));
+  gap: var(--cat-gap);
   /* `safe` keeps a short row (5 categories, no arrows) centred like the design,
      but falls back to start-alignment once the row overflows — plain `center`
      makes the leading cards unreachable inside a scroller. */
@@ -920,17 +924,38 @@
   overscroll-behavior-inline: contain;
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
-  padding: 4px 2px 10px;
+  padding: 4px 0 10px;
 }
 
 .category-carousel-rail::-webkit-scrollbar {
   display: none;
 }
 
+@media (min-width: 1600px) {
+  .category-carousel-rail {
+    --cat-cards: 7;
+  }
+}
+
+@media (max-width: 1099px) {
+  .category-carousel-rail {
+    --cat-cards: 5;
+  }
+}
+
+@media (max-width: 819px) {
+  .category-carousel-rail {
+    --cat-cards: 4;
+  }
+}
+
+/* arrows sit on the row edges instead of taking room beside it, so the cards line
+   up with the heading and "View All Categories" */
 .category-carousel-button {
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
+  position: absolute;
+  top: calc(50% - 40px);
+  width: 40px;
+  height: 40px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.86);
@@ -942,7 +967,16 @@
   font-size: 2rem;
   line-height: 1;
   box-shadow: var(--shadow-soft);
-  z-index: 1;
+  z-index: 2;
+  padding-bottom: 3px;
+}
+
+.category-carousel-button.is-prev {
+  inset-inline-start: -20px;
+}
+
+.category-carousel-button.is-next {
+  inset-inline-end: -20px;
 }
 
 .category-carousel-button:hover {
