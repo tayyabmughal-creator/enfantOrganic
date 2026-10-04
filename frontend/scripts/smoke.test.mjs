@@ -514,6 +514,26 @@ test("every storefront text size is one of Polynae's steps, and each module has 
   assert.match(typography, /\.footer-column h5\s*\{[^}]*font-size:\s*0\.75rem/);
 });
 
+test("home product rail fills the container: equal cards per screen, arrows on the edges, shadow room", () => {
+  const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+  const rail = read("../components/store/ProductRail.jsx");
+  const styles = read("../app/styles/home.css");
+
+  assert.match(rail, /product-rail-btn is-prev/);
+  assert.match(rail, /product-rail-btn is-next/);
+  // cards share the row equally instead of a fixed 286px width
+  assert.doesNotMatch(styles, /grid-auto-columns:\s*clamp\(240px, 22vw, 286px\)/);
+  assert.match(styles, /grid-auto-columns:\s*calc\(\(100% - \(var\(--rail-cards\) - 1\) \* var\(--rail-gap\)\) \/ var\(--rail-cards\)\)/);
+  assert.match(styles, /--rail-cards:\s*4;/);
+  assert.match(styles, /@media \(max-width: 1099px\)\s*\{\s*\.product-rail\s*\{\s*--rail-cards:\s*3;/);
+  assert.match(styles, /@media \(max-width: 819px\)\s*\{\s*\.product-rail\s*\{\s*--rail-cards:\s*2\.3;/);
+  // arrows no longer take room beside the row
+  assert.match(styles, /\.product-rail-btn\s*\{[^}]*position:\s*absolute/);
+  assert.match(styles, /\.product-rail-btn\.is-prev\s*\{\s*inset-inline-start:\s*-20px/);
+  // shadow room so the row does not show a boxed edge
+  assert.match(styles, /padding:\s*8px 20px 56px;\s*margin:\s*-8px -20px -44px/);
+});
+
 test("home: Instagram section is a swipeable row of big rounded posts", () => {
   const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
   const page = read("../app/[locale]/page.jsx");

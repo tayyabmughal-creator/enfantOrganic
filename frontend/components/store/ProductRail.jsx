@@ -76,7 +76,8 @@ export default function ProductRail({
     const rail = railRef.current;
     if (!rail) return;
     const card = rail.querySelector("article");
-    const cardWidth = (card ? card.offsetWidth : 270) + 24;
+    const gap = parseFloat(getComputedStyle(rail).columnGap) || 24;
+    const cardWidth = (card ? card.offsetWidth : 270) + gap;
     rail.scrollBy({ left: (isRtl ? -dir : dir) * cardWidth, behavior: "smooth" });
   }
 
@@ -93,7 +94,7 @@ export default function ProductRail({
       <div className="product-rail-track">
         <button
           type="button"
-          className="product-rail-btn"
+          className="product-rail-btn is-prev"
           onClick={() => scrollByCard(-1)}
           aria-label={isRtl ? "التالي" : "Previous"}
           disabled={!canPrev}
@@ -107,7 +108,7 @@ export default function ProductRail({
         </div>
         <button
           type="button"
-          className="product-rail-btn"
+          className="product-rail-btn is-next"
           onClick={() => scrollByCard(1)}
           aria-label={isRtl ? "السابق" : "Next"}
           disabled={!canNext}

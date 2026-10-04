@@ -19,7 +19,9 @@
   --radius-lg: 18px;
   --radius-xl: 24px;
   --radius-2xl: 32px;
-  --container: min(100% - 80px, 1360px);
+  /* Full screen width on every display (was capped at 1360px, which left wide empty
+     sides on big screens); only the side gutter grows a little with the screen. */
+  --container: calc(100% - clamp(80px, 5vw, 128px));
   --focus-ring: 0 0 0 4px rgba(146, 171, 105, 0.18);
   /* Previous (system) font stacks, kept so the old look can be restored by pointing
      --font-sans / --font-serif back at these two. The admin panel still uses them. */
