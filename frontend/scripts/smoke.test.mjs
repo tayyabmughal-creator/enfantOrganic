@@ -359,7 +359,7 @@ test("write-a-review accepts photos and the reviews section has filters, sort an
   assert.match(section, /ReviewPhotoLightbox/);
   // phone order: score, bars, recommend line, then photos (recommend sits above the photos)
   assert.match(styles, /grid-template-areas:\s*"score"\s*"bars"\s*"recommend"\s*"gallery"/);
-  assert.match(styles, /\.reviews-photo-tile\s*\{[^}]*flex:\s*0 0 132px/);
+  assert.match(styles, /\.reviews-photo-tile\s*\{[^}]*flex:\s*0 0 96px/);
   assert.match(styles, /\.review-lightbox-dialog\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1\.6fr\)/);
   const lightbox = readFileSync(new URL("../components/store/product/ReviewPhotoLightbox.jsx", import.meta.url), "utf8");
   assert.match(lightbox, /review-lightbox-counter/);
@@ -383,7 +383,9 @@ test("product page: features and how-it-works use the full width like the refere
   assert.match(rail, /product-hiw-caption/);
   assert.match(rail, /scrollBy/);
   // two columns on desktop: title + features on one side, the picture on the other
-  assert.match(styles, /\.product-features-section\.has-media\s*\{[^}]*grid-template-areas:\s*"title media"\s*"grid media"/);
+  assert.match(styles, /\.product-features-section\.has-media\s*\{[^}]*grid-template-areas:\s*"\. media"\s*"title media"\s*"grid media"\s*"\. media"/);
+  // phones: picture first, heading below it
+  assert.match(styles, /\.product-features-section\s*\{[^}]*grid-template-areas:\s*"media"\s*"title"\s*"grid"/);
   // no narrow centred column any more
   assert.doesNotMatch(styles, /\.product-hiw-frame\s*\{[^}]*max-width:\s*720px/);
   assert.doesNotMatch(styles, /\.product-features-grid\s*\{[^}]*max-width:\s*720px/);
@@ -537,6 +539,28 @@ test("home product rail fills the container: equal cards per screen, arrows on t
   assert.match(styles, /\.product-rail-btn\.is-prev\s*\{\s*inset-inline-start:\s*-20px/);
   // shadow room so the row does not show a boxed edge
   assert.match(styles, /padding:\s*8px 20px 56px;\s*margin:\s*-8px -20px -44px/);
+});
+
+test("product photos stay in view on desktop; the region bar has no empty gap on phones", () => {
+  const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+  const premium = read("../app/styles/product-premium.css");
+  const overlays = read("../app/styles/overlays.css");
+
+  const detail = read("../components/store/product/ProductDetailClient.jsx");
+  assert.match(detail, /className="product-gallery-column">\s*<div className=\{`gallery-layout/);
+  assert.match(premium, /\.product-layout > \.product-gallery-column\s*\{\s*align-self:\s*stretch;/);
+  assert.match(premium, /\.product-gallery-column > \.gallery-layout\s*\{\s*position:\s*sticky;/);
+  assert.match(overlays, /@media \(max-width: 520px\)\s*\{[\s\S]*?\.region-suggestion__message\s*\{\s*flex:\s*0 0 auto;/);
+});
+
+test("reviews summary uses polynae.com's review widget sizes", () => {
+  const styles = readFileSync(new URL("../app/styles/product-premium.css", import.meta.url), "utf8");
+  assert.match(styles, /\.reviews-score-value\s*\{\s*font-size:\s*2\.25rem/);
+  assert.match(styles, /\.reviews-bar-track\s*\{\s*height:\s*10px/);
+  assert.match(styles, /\.reviews-bars\s*\{[^}]*gap:\s*4px/);
+  assert.match(styles, /\.reviews-recommend strong\s*\{\s*font-size:\s*1\.5rem/);
+  assert.match(styles, /\.reviews-photo-tile\s*\{\s*flex-basis:\s*126px/);
+  assert.doesNotMatch(styles, /font-size:\s*3\.6rem/);
 });
 
 test("home: Instagram section is a swipeable row of big rounded posts", () => {

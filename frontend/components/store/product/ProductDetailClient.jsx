@@ -913,92 +913,96 @@ export default function ProductDetailClient({ locale, product, region, deliveryE
     <>
       <div className="product-layout">
         {/* ── Gallery ─────────────────────────────────────────── */}
-        <div className={`gallery-layout ${slideImages.length === 1 ? "is-single" : ""}`}>
-          {/* Vertical thumbnail strip — shown on desktop, hidden on mobile */}
-          {galleryImages.length > 1 ? (
-            <div className="thumb-list">
-              {galleryImages.map((image, index) => (
-                <button
-                  key={`thumb-${image}-${index}`}
-                  type="button"
-                  className={`thumb-button ${selectedImage === image ? "is-active" : ""}`}
-                  onClick={() => setSelectedImage(image)}
-                  aria-label={isAr ? `الصورة ${index + 1}` : `Image ${index + 1}`}
-                >
-                  <SiteImage src={image} alt="" width={120} height={120} loading="lazy" sizes="80px" />
-                </button>
-              ))}
+        {/* The column is as tall as the details beside it, so the photos inside can
+            stay in view on desktop while the details scroll, and let go at their end. */}
+        <div className="product-gallery-column">
+          <div className={`gallery-layout ${slideImages.length === 1 ? "is-single" : ""}`}>
+            {/* Vertical thumbnail strip — shown on desktop, hidden on mobile */}
+            {galleryImages.length > 1 ? (
+              <div className="thumb-list">
+                {galleryImages.map((image, index) => (
+                  <button
+                    key={`thumb-${image}-${index}`}
+                    type="button"
+                    className={`thumb-button ${selectedImage === image ? "is-active" : ""}`}
+                    onClick={() => setSelectedImage(image)}
+                    aria-label={isAr ? `الصورة ${index + 1}` : `Image ${index + 1}`}
+                  >
+                    <SiteImage src={image} alt="" width={120} height={120} loading="lazy" sizes="80px" />
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <div className="main-product-image-shell">
+              {/* Desktop shows only the active slide; phones get a swipe rail with
+                  the next image peeking in so shoppers know there is more. */}
+              <div
+                ref={galleryTrackRef}
+                className={`gallery-track ${slideImages.length === 1 ? "is-single" : ""}`}
+                onScroll={syncSlideFromScroll}
+              >
+                {slideImages.map((image, index) => (
+                  <div
+                    key={`${image}-${index}`}
+                    className={`main-product-image gallery-slide ${image === selectedImage ? "is-active" : ""} ${slideImages.length === 1 ? "is-single" : ""}`}
+                  >
+                    {/* First slide is the LCP element on product pages — must not be lazy. */}
+                    <SiteImage
+                      src={image}
+                      alt={index === 0 ? product.name : `${product.name} ${index + 1}`}
+                      width={900}
+                      height={900}
+                      priority={index === 0}
+                      loading={index === 0 ? undefined : "lazy"}
+                      sizes="(max-width: 640px) 88vw, (max-width: 900px) 100vw, 50vw"
+                    />
+                  </div>
+                ))}
+              </div>
+              {slideImages.length > 1 ? (() => {
+                const activeImageIndex = Math.max(0, slideImages.indexOf(selectedImage));
+                const nextImageIndex = (activeImageIndex + 1) % slideImages.length;
+                return (
+                  <button
+                    type="button"
+                    className="gallery-next-preview"
+                    onClick={() => showSlide(slideImages[nextImageIndex])}
+                    aria-label={isAr ? "عرض الصورة التالية" : "View next product image"}
+                  >
+                    <SiteImage
+                      src={slideImages[nextImageIndex]}
+                      alt=""
+                      width={112}
+                      height={112}
+                      loading="lazy"
+                      sizes="56px"
+                    />
+                    <span>{nextImageIndex + 1}/{slideImages.length}</span>
+                  </button>
+                );
+              })() : null}
+              <div className="image-zoom-hint">
+                <Icon name="search" size={14} />
+                <span>{isAr ? "تكبير" : "Hover to zoom"}</span>
+              </div>
             </div>
-          ) : null}
-          <div className="main-product-image-shell">
-            {/* Desktop shows only the active slide; phones get a swipe rail with
-                the next image peeking in so shoppers know there is more. */}
-            <div
-              ref={galleryTrackRef}
-              className={`gallery-track ${slideImages.length === 1 ? "is-single" : ""}`}
-              onScroll={syncSlideFromScroll}
-            >
-              {slideImages.map((image, index) => (
-                <div
-                  key={`${image}-${index}`}
-                  className={`main-product-image gallery-slide ${image === selectedImage ? "is-active" : ""} ${slideImages.length === 1 ? "is-single" : ""}`}
-                >
-                  {/* First slide is the LCP element on product pages — must not be lazy. */}
-                  <SiteImage
-                    src={image}
-                    alt={index === 0 ? product.name : `${product.name} ${index + 1}`}
-                    width={900}
-                    height={900}
-                    priority={index === 0}
-                    loading={index === 0 ? undefined : "lazy"}
-                    sizes="(max-width: 640px) 88vw, (max-width: 900px) 100vw, 50vw"
-                  />
-                </div>
-              ))}
-            </div>
-            {slideImages.length > 1 ? (() => {
-              const activeImageIndex = Math.max(0, slideImages.indexOf(selectedImage));
-              const nextImageIndex = (activeImageIndex + 1) % slideImages.length;
-              return (
-                <button
-                  type="button"
-                  className="gallery-next-preview"
-                  onClick={() => showSlide(slideImages[nextImageIndex])}
-                  aria-label={isAr ? "عرض الصورة التالية" : "View next product image"}
-                >
-                  <SiteImage
-                    src={slideImages[nextImageIndex]}
-                    alt=""
-                    width={112}
-                    height={112}
-                    loading="lazy"
-                    sizes="56px"
-                  />
-                  <span>{nextImageIndex + 1}/{slideImages.length}</span>
-                </button>
-              );
-            })() : null}
-            <div className="image-zoom-hint">
-              <Icon name="search" size={14} />
-              <span>{isAr ? "تكبير" : "Hover to zoom"}</span>
-            </div>
+            {slideImages.length > 1 ? (
+              <div className="gallery-image-indicators" role="group" aria-label={isAr ? "صور المنتج" : "Product gallery"}>
+                {slideImages.map((image, index) => (
+                  <button
+                    key={`${image}-${index}`}
+                    type="button"
+                    className={`gallery-image-indicator ${selectedImage === image ? "is-active" : ""}`}
+                    onClick={() => showSlide(image)}
+                    aria-label={isAr ? `الصورة ${index + 1} من ${slideImages.length}` : `View image ${index + 1} of ${slideImages.length}`}
+                    aria-pressed={selectedImage === image}
+                  >
+                    <span />
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
-          {slideImages.length > 1 ? (
-            <div className="gallery-image-indicators" role="group" aria-label={isAr ? "صور المنتج" : "Product gallery"}>
-              {slideImages.map((image, index) => (
-                <button
-                  key={`${image}-${index}`}
-                  type="button"
-                  className={`gallery-image-indicator ${selectedImage === image ? "is-active" : ""}`}
-                  onClick={() => showSlide(image)}
-                  aria-label={isAr ? `الصورة ${index + 1} من ${slideImages.length}` : `View image ${index + 1} of ${slideImages.length}`}
-                  aria-pressed={selectedImage === image}
-                >
-                  <span />
-                </button>
-              ))}
-            </div>
-          ) : null}
         </div>
 
         {/* ── Product Summary ─────────────────────────────────── */}

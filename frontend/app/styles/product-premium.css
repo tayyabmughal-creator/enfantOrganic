@@ -485,9 +485,10 @@
 .product-features-section {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  /* phones: the picture first, then the heading and the features (as on polynae.com) */
   grid-template-areas:
-    "title"
     "media"
+    "title"
     "grid";
   gap: 18px 0;
 }
@@ -496,6 +497,7 @@
   grid-area: title;
   margin: 0;
   text-align: start;
+  text-wrap: balance; /* no single word left alone on the last line */
 }
 
 .product-features-media {
@@ -522,18 +524,25 @@
 }
 
 @media (min-width: 900px) {
+  /* desktop: heading and features sit inside the picture's height, centred beside it
+     (the empty 1fr rows above and below share the spare room), as on polynae.com */
   .product-features-section.has-media {
     grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
     grid-template-areas:
+      ". media"
       "title media"
-      "grid media";
-    grid-template-rows: auto 1fr;
-    gap: clamp(28px, 3.6vw, 52px) clamp(32px, 5vw, 72px);
+      "grid media"
+      ". media";
+    grid-template-rows: 1fr auto auto 1fr;
+    gap: 0 clamp(32px, 5vw, 72px);
+  }
+
+  .product-features-section.has-media .product-features-title {
+    margin-bottom: clamp(28px, 3.2vw, 44px);
   }
 
   .product-features-section.has-media .product-features-media {
     align-self: start;
-    margin-top: clamp(8px, 3vw, 44px);
   }
 
   .product-features-section:not(.has-media) .product-features-grid {
@@ -1221,11 +1230,11 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px 14px;
+  gap: 12px;
 }
 
 .reviews-score-value {
-  font-size: 3rem;
+  font-size: 2.25rem;
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.03em;
@@ -1233,13 +1242,14 @@
 }
 
 .reviews-score-count {
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
   color: var(--text-soft);
 }
 
 .reviews-bars {
   display: grid;
-  gap: 12px;
+  gap: 4px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1247,10 +1257,11 @@
 
 .reviews-bar-row {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) 40px;
+  grid-template-columns: 32px minmax(0, 1fr) 40px;
   align-items: center;
   gap: 12px;
-  font-size: 1rem;
+  font-size: 0.875rem;
+  line-height: 1.6;
   color: var(--text-soft);
 }
 
@@ -1263,7 +1274,7 @@
 }
 
 .reviews-bar-track {
-  height: 13px;
+  height: 10px;
   overflow: hidden;
   border-radius: 999px;
   background: #e8ece3;
@@ -1283,12 +1294,13 @@
 
 .reviews-recommend {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.875rem;
   color: var(--text-soft);
 }
 
 .reviews-recommend strong {
-  font-size: 2rem;
+  font-size: 1.5rem;
+  line-height: 1;
   font-weight: 700;
   color: var(--text);
 }
@@ -1478,8 +1490,8 @@
 .reviews-top {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 20px;
-  margin-bottom: 26px;
+  gap: 16px;
+  margin-bottom: 16px;
 }
 
 .reviews-top .reviews-score-head {
@@ -1516,7 +1528,7 @@
 
 .reviews-photo-rail {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   overflow-x: auto;
   scroll-snap-type: x proximity;
   scrollbar-width: none;
@@ -1528,13 +1540,13 @@
 }
 
 .reviews-photo-tile {
-  flex: 0 0 132px;
-  width: 132px;
-  height: 132px;
+  flex: 0 0 96px;
+  width: 96px;
+  height: 96px;
   padding: 0;
   overflow: hidden;
-  border: 0;
-  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 12px;
   background: #f4f7ef;
   cursor: zoom-in;
   scroll-snap-align: start;
@@ -1556,27 +1568,27 @@
   position: absolute;
   top: 50%;
   display: none;
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   place-items: center;
   padding: 0 0 3px;
   border: 1px solid var(--line);
   border-radius: 50%;
   background: #fff;
   color: var(--text);
-  box-shadow: 0 6px 18px rgba(30, 40, 20, 0.18);
-  font-size: 1.6rem;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
+  font-size: 1.25rem;
   line-height: 1;
   cursor: pointer;
   transform: translateY(-50%);
 }
 
 .reviews-photo-arrow.is-prev {
-  inset-inline-start: -8px;
+  inset-inline-start: 4px;
 }
 
 .reviews-photo-arrow.is-next {
-  inset-inline-end: -8px;
+  inset-inline-end: 4px;
 }
 
 [dir="rtl"] .reviews-photo-arrow {
@@ -1590,16 +1602,17 @@
 }
 
 .reviews-tab {
+  margin-top: 16px;
   margin-bottom: 14px;
   border-bottom: 1px solid var(--line);
 }
 
 .reviews-tab span {
   display: inline-block;
-  padding-bottom: 10px;
+  padding-bottom: 12px;
   border-bottom: 2px solid var(--brand-dark);
-  font-size: 0.9375rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 600;
   color: var(--brand-dark);
 }
 
@@ -1620,8 +1633,8 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 40px;
-  padding: 0 18px;
+  min-height: 36px;
+  padding: 0 17px;
   border: 1.5px solid rgba(61, 92, 45, 0.45);
   border-radius: 999px;
   background: #fff;
@@ -1814,8 +1827,8 @@
 }
 
 .review-card-photos button {
-  width: 84px;
-  height: 84px;
+  width: 96px;
+  height: 96px;
   padding: 0;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -1862,31 +1875,25 @@
     text-align: end;
   }
 
-  .reviews-score-value {
-    font-size: 3.6rem;
-  }
-
   .reviews-top.has-gallery {
-    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.7fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
     grid-template-areas:
       "score recommend"
       "bars gallery";
-    align-items: center;
+    gap: 16px 24px;
+    align-items: stretch;
   }
 
   .reviews-top.has-gallery .reviews-bars {
     max-width: none;
+    align-self: center;
   }
 
-  .reviews-photo-rail {
-    gap: 14px;
-  }
-
+  /* five bar rows (5 x 22px + 4 x 4px gaps) = 126px, the photos match that height */
   .reviews-photo-tile {
-    flex-basis: 200px;
-    width: 200px;
-    height: 200px;
-    border-radius: 18px;
+    flex-basis: 126px;
+    width: 126px;
+    height: 126px;
   }
 }
 
@@ -2946,6 +2953,41 @@
 
   .product-share-actions {
     gap: 8px;
+  }
+}
+
+/* Desktop: the photos stay in view while the details on the right scroll past
+   them. The gallery column stretches to the height of the details column and the
+   photos stick inside it, so they are released where the details end and the
+   sections below scroll as normal.
+   top = fixed header (announcement bar + 72px bar, ~106px) + a little air. */
+@media (min-width: 1181px) {
+  .product-layout > .product-gallery-column {
+    align-self: stretch;
+  }
+
+  .product-gallery-column > .gallery-layout {
+    position: sticky;
+    top: 122px;
+  }
+
+  /* keep the photo within the screen height while it is held, so its lower edge
+     is never hidden on a short or very wide screen; the whole photo still shows */
+  .product-gallery-column .main-product-image {
+    max-height: calc(100vh - 150px);
+    margin-inline: auto;
+  }
+
+  /* the shell hugs the capped photo instead of leaving a white strip beside it */
+  .product-gallery-column .main-product-image-shell {
+    width: fit-content;
+    max-width: 100%;
+    justify-self: start; /* next to the thumbnails */
+  }
+
+  .product-gallery-column .main-product-image img {
+    max-height: calc(100vh - 150px);
+    object-fit: contain;
   }
 }
 

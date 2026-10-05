@@ -1804,6 +1804,11 @@
     align-items: stretch;
   }
 
+  /* In a column the 240px flex-basis became a 240px-tall empty box under the text. */
+  .region-suggestion__message {
+    flex: 0 0 auto;
+  }
+
   .region-suggestion__actions {
     justify-content: flex-end;
   }

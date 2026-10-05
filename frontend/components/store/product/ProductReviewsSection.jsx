@@ -70,7 +70,7 @@ function ReviewPhotoRail({ items, onOpen, isAr, label }) {
             onClick={() => onOpen(index)}
             aria-label={`${isAr ? "تكبير الصورة" : "Enlarge photo"} ${index + 1}`}
           >
-            <SiteImage src={item.src} alt="" width={400} height={400} loading="lazy" sizes="(max-width: 640px) 132px, 200px" />
+            <SiteImage src={item.src} alt="" width={400} height={400} loading="lazy" sizes="(max-width: 640px) 96px, 126px" />
           </button>
         ))}
       </div>
@@ -155,7 +155,7 @@ export default function ProductReviewsSection({
         {reviewCount > 0 ? (
           <div className="reviews-score-head">
             <strong className="reviews-score-value">{Number(rating || 5).toFixed(1)}</strong>
-            <StarRow rating={rating || 5} size={24} />
+            <StarRow rating={rating || 5} size={20} />
             <span className="reviews-score-count">
               {isAr ? `بناءً على ${reviewCount} مراجعة` : `Based on ${reviewCount} reviews`}
             </span>
@@ -168,7 +168,7 @@ export default function ProductReviewsSection({
               <li key={star} className="reviews-bar-row">
                 <span className="reviews-bar-label">
                   {star}
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                   </svg>
                 </span>
