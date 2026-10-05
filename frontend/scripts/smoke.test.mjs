@@ -406,7 +406,7 @@ test("product page: stat band ticker, roomy section gaps and a comparison table 
   assert.match(styles, /\.product-compare-heading\s*\{[^}]*margin-bottom:\s*30px/);
 });
 
-test("discount popup is one centred column: wide picture, brand, message, form", () => {
+test("discount popup: stacked on phones, two panels (picture left, form right) on desktop like polynae.com", () => {
   const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
   const popup = read("../components/store/DiscountPopup.jsx");
   const styles = read("../app/styles/overlays.css");
@@ -415,11 +415,15 @@ test("discount popup is one centred column: wide picture, brand, message, form",
   assert.match(popup, /discount-popup-media[\s\S]*?discount-popup-brand[\s\S]*?<p>\{text\}<\/p>[\s\S]*?discount-popup-form/);
   assert.match(styles, /\.discount-popup\s*\{[^}]*flex-direction:\s*column/);
   assert.match(styles, /\.discount-popup\s*\{[^}]*text-align:\s*center/);
-  assert.match(styles, /\.discount-popup-media\s*\{[^}]*aspect-ratio:\s*16 \/ 9/);
-  // the box follows the uploaded picture's shape (square to 16:9) and the picture fills it
+  // phones: always a wide 16:9 rectangle, as in the client's reference
+  assert.match(styles, /\.discount-popup-media\s*\{[^}]*aspect-ratio:\s*16 \/ 9;/);
+  assert.doesNotMatch(popup, /imageRatio|--popup-ratio/);
+  // desktop: picture panel on the left, full height
+  assert.match(styles, /@media \(min-width: 768px\)\s*\{\s*\.discount-popup\s*\{[^}]*flex-direction:\s*row/);
+  assert.match(styles, /\.discount-popup-media\s*\{\s*flex:\s*0 0 38%;\s*aspect-ratio:\s*auto;/);
+  // the picture fills the box
   assert.match(styles, /\.discount-popup-media img\s*\{[^}]*object-fit:\s*cover/);
   assert.doesNotMatch(styles, /discount-popup-media-blur|filter:\s*blur/);
-  assert.match(popup, /Math\.min\(16 \/ 9, Math\.max\(1,/);
 });
 
 test("reviews showcase: full width, big uncropped cards and a small button", () => {

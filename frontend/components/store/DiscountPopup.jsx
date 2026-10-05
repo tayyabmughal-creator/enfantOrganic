@@ -44,16 +44,6 @@ export default function DiscountPopup({ locale = "en", navigation }) {
   const [phone, setPhone] = useState("");
   const [status, setStatus] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  // The picture box follows the uploaded image's shape, from square (1:1) to wide (16:9),
-  // so landscape and square pictures fill it exactly and nothing is cropped. Only a
-  // taller portrait picture loses a little at the top and bottom.
-  const [imageRatio, setImageRatio] = useState(16 / 9);
-  const handleImageLoad = (event) => {
-    const { naturalWidth, naturalHeight } = event.currentTarget;
-    if (naturalWidth && naturalHeight) {
-      setImageRatio(Math.min(16 / 9, Math.max(1, naturalWidth / naturalHeight)));
-    }
-  };
 
   // Hold the popup until the visitor answers the cookie banner — both showing
   // at once buried the popup's form under the banner on phones. The event
@@ -180,15 +170,14 @@ export default function DiscountPopup({ locale = "en", navigation }) {
         >
           ×
         </button>
-        <div className="discount-popup-media" style={{ aspectRatio: imageRatio }}>
+        <div className="discount-popup-media">
           <SiteImage
             src={image}
             alt=""
             fill
-            sizes="(max-width: 520px) 100vw, 480px"
+            sizes="(max-width: 767px) 100vw, 320px"
             loading="lazy"
             className="discount-popup-media-img"
-            onLoad={handleImageLoad}
           />
         </div>
         <div className="discount-popup-copy">

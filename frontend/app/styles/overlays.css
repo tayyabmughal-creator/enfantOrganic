@@ -168,8 +168,8 @@
 .discount-popup-media {
   position: relative;
   flex: 0 0 auto;
+  /* always a wide rectangle, as in the reference, whatever shape the upload is */
   aspect-ratio: 16 / 9;
-  max-height: 44dvh;
   overflow: hidden;
   background: var(--surface-soft);
 }
@@ -177,6 +177,61 @@
 .discount-popup-media img {
   display: block;
   object-fit: cover;
+}
+
+/* Desktop, as on polynae.com: a wide two-panel card, the picture filling the left
+   panel top to bottom and the brand, message and form centred on the right. Phones
+   keep the stacked layout above. */
+@media (min-width: 768px) {
+  .discount-popup {
+    width: min(780px, 100%);
+    min-height: 460px;
+    flex-direction: row;
+    overflow: hidden;
+    border-radius: 16px;
+  }
+
+  .discount-popup-media {
+    flex: 0 0 38%;
+    aspect-ratio: auto;
+    max-height: none;
+  }
+
+  .discount-popup-copy {
+    flex: 1 1 auto;
+    align-content: center;
+    gap: 18px;
+    padding: 44px 48px;
+    overflow-y: auto;
+  }
+
+  .discount-popup-logo {
+    height: 56px;
+  }
+
+  .discount-popup-brand strong {
+    font-size: 1.5rem;
+  }
+
+  .discount-popup-copy p {
+    font-size: 1.5rem;
+    line-height: 1.25;
+  }
+
+  /* the close button now sits over the white panel, so it is a quiet grey × */
+  .discount-popup-close {
+    top: 12px;
+    inset-inline-end: 12px;
+    width: 32px;
+    height: 32px;
+    color: #8a8a86;
+    font-size: 1.6rem;
+    text-shadow: none;
+  }
+
+  .discount-popup-close:hover {
+    color: var(--text);
+  }
 }
 
 .cart-drawer {
