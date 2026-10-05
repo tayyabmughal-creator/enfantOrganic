@@ -166,6 +166,7 @@ def serialize_site_settings(settings, locale, region=None):
             "enabled": settings.discount_popup_enabled,
             "text": _loc("discount_popup_text"),
             "image": settings.discount_popup_image_url,
+            "image_mobile": settings.discount_popup_mobile_image_url,
         },
         "floating_video_url": settings.floating_video_url,
         "product_video_panel": {

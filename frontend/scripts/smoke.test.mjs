@@ -415,12 +415,13 @@ test("discount popup: stacked on phones, two panels (picture left, form right) o
   assert.match(popup, /discount-popup-media[\s\S]*?discount-popup-brand[\s\S]*?<p>\{text\}<\/p>[\s\S]*?discount-popup-form/);
   assert.match(styles, /\.discount-popup\s*\{[^}]*flex-direction:\s*column/);
   assert.match(styles, /\.discount-popup\s*\{[^}]*text-align:\s*center/);
-  // phones: always a wide 16:9 rectangle, as in the client's reference
-  assert.match(styles, /\.discount-popup-media\s*\{[^}]*aspect-ratio:\s*16 \/ 9;/);
-  assert.doesNotMatch(popup, /imageRatio|--popup-ratio/);
+  // nothing is cropped: the picture box takes the picture's own shape on phones and desktop
+  assert.match(styles, /\.discount-popup-media\s*\{[^}]*aspect-ratio:\s*var\(--popup-mobile-ratio, 16 \/ 9\)/);
+  assert.match(popup, /"--popup-desktop-ratio": desktopRatio, "--popup-mobile-ratio": mobileRatio/);
+  assert.match(popup, /src=\{mobileImage \|\| image\}/);
+  assert.match(styles, /flex:\s*0 0 calc\(460px \* var\(--popup-desktop-ratio, 0\.65\)\)/);
   // desktop: picture panel on the left, full height
-  assert.match(styles, /@media \(min-width: 768px\)\s*\{\s*\.discount-popup\s*\{[^}]*flex-direction:\s*row/);
-  assert.match(styles, /\.discount-popup-media\s*\{\s*flex:\s*0 0 38%;\s*aspect-ratio:\s*auto;/);
+  assert.match(styles, /@media \(min-width: 768px\)\s*\{[^{}]*\.discount-popup\s*\{[^}]*flex-direction:\s*row/);
   // the picture fills the box
   assert.match(styles, /\.discount-popup-media img\s*\{[^}]*object-fit:\s*cover/);
   assert.doesNotMatch(styles, /discount-popup-media-blur|filter:\s*blur/);

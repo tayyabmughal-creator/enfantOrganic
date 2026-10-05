@@ -1467,6 +1467,41 @@ class CheckoutAndPermsTestCase(TestCase):
         self.assertIsInstance(settings.why_choose_links, list)
         self.assertEqual(settings.why_choose_links[0]["href"], "/why")
 
+    def test_admin_settings_discount_popup_mobile_image_upload_and_navigation(self):
+        import io
+        import tempfile
+
+        from PIL import Image as PILImage
+
+        user = self._create_staff_user("settings-popup-mobile", role_name=ROLE_MANAGER)
+        self._site_settings_with_paymob()
+        self.api_client.force_authenticate(user)
+
+        buffer = io.BytesIO()
+        PILImage.new("RGB", (16, 9), "green").save(buffer, format="PNG")
+        buffer.seek(0)
+        buffer.name = "Wide Phone Banner.png"
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with self.settings(MEDIA_ROOT=media_root, MEDIA_URL="/media/"):
+                response = self.api_client.patch(
+                    "/api/admin/settings/",
+                    {"discount_popup_mobile_image_file": buffer},
+                    format="multipart",
+                )
+        self.assertEqual(response.status_code, 200, response.data)
+        settings = SiteSettings.objects.first()
+        self.assertTrue(
+            settings.discount_popup_mobile_image_url.startswith("/media/settings/popup/wide-phone-banner-"),
+            settings.discount_popup_mobile_image_url,
+        )
+        # the desktop picture is left alone
+        self.assertFalse(settings.discount_popup_image_url.startswith("/media/settings/popup/wide-phone-banner-"))
+
+        nav = self.client.get("/api/navigation/", {"locale": "en", "region": "om"})
+        self.assertEqual(nav.status_code, 200)
+        self.assertEqual(nav.data["settings"]["discount_popup"]["image_mobile"], settings.discount_popup_mobile_image_url)
+
     def test_admin_settings_discount_popup_rejects_non_image_upload(self):
         import io
 

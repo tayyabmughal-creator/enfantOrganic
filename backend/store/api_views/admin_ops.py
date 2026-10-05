@@ -5357,7 +5357,16 @@ class AdminSettingsView(APIView):
     def patch(self, request):
         settings = SiteSettings.objects.first()
         before_snapshot = snapshot_instance(settings) if settings else None
-        popup_upload = request.FILES.get("discount_popup_image_file")
+        # desktop picture and the optional wide phone picture are uploaded the same way
+        popup_upload_fields = {
+            "discount_popup_image_file": "discount_popup_image_url",
+            "discount_popup_mobile_image_file": "discount_popup_mobile_image_url",
+        }
+        popup_uploads = [
+            (target_field, request.FILES.get(upload_field))
+            for upload_field, target_field in popup_upload_fields.items()
+            if request.FILES.get(upload_field) is not None
+        ]
         video_upload_fields = {
             "floating_video_url": "floating_video_url",
             "product_video_1_url_file": "product_video_1_url",
@@ -5370,7 +5379,7 @@ class AdminSettingsView(APIView):
             if request.FILES.get(upload_field) is not None
         ]
         data = request.data
-        if popup_upload is not None or video_uploads:
+        if popup_uploads or video_uploads:
             import os
             import uuid
             import json as json_module
@@ -5379,10 +5388,10 @@ class AdminSettingsView(APIView):
             from django.db.models import JSONField
             from django.utils.text import slugify
 
-            uploaded_fields = {"discount_popup_image_file", *video_upload_fields}
+            uploaded_fields = {*popup_upload_fields, *video_upload_fields}
             data = {key: value for key, value in request.data.items() if key not in uploaded_fields}
 
-            if popup_upload is not None:
+            for target_field, popup_upload in popup_uploads:
                 from PIL import Image
 
                 try:
@@ -5404,7 +5413,7 @@ class AdminSettingsView(APIView):
                         {"detail": f"Could not save '{popup_upload.name}'. Please try a different file."},
                         status=400,
                     )
-                data["discount_popup_image_url"] = f"{dj_settings.MEDIA_URL.rstrip('/')}/{stored_path}"
+                data[target_field] = f"{dj_settings.MEDIA_URL.rstrip('/')}/{stored_path}"
 
             for video_field, video_upload in video_uploads:
                 base, ext = os.path.splitext(video_upload.name or "")

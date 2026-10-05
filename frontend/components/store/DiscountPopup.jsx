@@ -35,6 +35,8 @@ export default function DiscountPopup({ locale = "en", navigation }) {
   const enabled = settings.enabled !== false;
   const text = settings.text || "Enter Phone Number to get exclusive discount updates at very first";
   const image = settings.image || "/enfant/hero-gift-box-offer-v2.jpg";
+  // Optional wide picture for phones; without it the main picture is used there too.
+  const mobileImage = settings.image_mobile || "";
   const logo = navigation?.settings?.logo_url || DEFAULT_LOGO_SRC;
   const brandName = navigation?.settings?.brand_name || "Enfant Organics";
   const isAr = locale === "ar";
@@ -44,6 +46,16 @@ export default function DiscountPopup({ locale = "en", navigation }) {
   const [phone, setPhone] = useState("");
   const [status, setStatus] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  // The picture box takes the uploaded picture's own shape so nothing is cropped:
+  // a tall panel on the left on desktop, a wide band on top on phones.
+  const [desktopRatio, setDesktopRatio] = useState(0.65);
+  const [mobileRatio, setMobileRatio] = useState(16 / 9);
+  const readRatio = (setRatio, min, max) => (event) => {
+    const { naturalWidth, naturalHeight } = event.currentTarget;
+    if (naturalWidth && naturalHeight) {
+      setRatio(Math.min(max, Math.max(min, naturalWidth / naturalHeight)));
+    }
+  };
 
   // Hold the popup until the visitor answers the cookie banner — both showing
   // at once buried the popup's form under the banner on phones. The event
@@ -161,7 +173,13 @@ export default function DiscountPopup({ locale = "en", navigation }) {
 
   return (
     <div className="discount-popup-backdrop" role="presentation">
-      <section className="discount-popup" role="dialog" aria-modal="true" aria-label={isAr ? "تحديثات الخصومات" : "Discount updates"}>
+      <section
+        className="discount-popup"
+        role="dialog"
+        aria-modal="true"
+        aria-label={isAr ? "تحديثات الخصومات" : "Discount updates"}
+        style={{ "--popup-desktop-ratio": desktopRatio, "--popup-mobile-ratio": mobileRatio }}
+      >
         <button
           type="button"
           className="discount-popup-close"
@@ -172,12 +190,22 @@ export default function DiscountPopup({ locale = "en", navigation }) {
         </button>
         <div className="discount-popup-media">
           <SiteImage
+            src={mobileImage || image}
+            alt=""
+            fill
+            sizes="(max-width: 767px) 100vw, 1px"
+            loading="lazy"
+            className="discount-popup-media-img is-mobile"
+            onLoad={readRatio(setMobileRatio, mobileImage ? 1.2 : 0.75, 2.4)}
+          />
+          <SiteImage
             src={image}
             alt=""
             fill
-            sizes="(max-width: 767px) 100vw, 320px"
+            sizes="(max-width: 767px) 1px, 560px"
             loading="lazy"
-            className="discount-popup-media-img"
+            className="discount-popup-media-img is-desktop"
+            onLoad={readRatio(setDesktopRatio, 0.55, 1.2)}
           />
         </div>
         <div className="discount-popup-copy">

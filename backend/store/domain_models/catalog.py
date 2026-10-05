@@ -371,6 +371,12 @@ class SiteSettings(models.Model):
         blank=True,
         default="/enfant/hero-gift-box-offer-v2.jpg",
     )
+    discount_popup_mobile_image_url = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        help_text="Optional wide picture for the popup on phones (e.g. 1600x900). Leave empty to use the main popup image.",
+    )
     floating_video_url = models.CharField(max_length=500, blank=True, default="")
     product_video_panel_enabled = models.BooleanField(default=False)
     product_video_1_url = models.CharField(max_length=500, blank=True, default="")
