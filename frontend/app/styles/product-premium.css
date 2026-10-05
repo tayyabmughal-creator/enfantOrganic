@@ -705,20 +705,6 @@
   color: var(--text-soft);
 }
 
-.product-hiw-hint {
-  position: absolute;
-  top: 18px;
-  inset-inline-end: 22px;
-  padding: 5px 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.88);
-  color: var(--text);
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  pointer-events: none;
-}
-
 .product-hiw-arrow {
   position: absolute;
   top: 50%;
@@ -772,7 +758,12 @@
     border-radius: 24px;
   }
 
-  .product-hiw-hint {
+  /* up to three steps all fit: centre them with equal room on both sides, no arrows */
+  .product-hiw-frame.is-few .product-hiw-rail {
+    justify-content: center;
+  }
+
+  .product-hiw-frame.is-few .product-hiw-arrow {
     display: none;
   }
 }
@@ -874,7 +865,8 @@
 }
 
 .product-compare-table {
-  max-width: 860px;
+  /* the full width of the page, like the sections above and below it */
+  width: 100%;
   margin: 0 auto;
   overflow: hidden;
   border: 1px solid rgba(146, 171, 105, 0.3);
@@ -961,6 +953,41 @@
 
 .product-compare-mark.is-yes.is-brand {
   background: #3d5c2d;
+}
+
+/* desktop: a full-width table gets roomier rows, larger text and marks */
+@media (min-width: 900px) {
+  .product-compare-row {
+    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .product-compare-cell {
+    padding: 20px 16px;
+    font-size: 1rem;
+  }
+
+  .product-compare-label {
+    padding-inline: 32px;
+  }
+
+  .product-compare-head .product-compare-cell {
+    padding-top: 26px;
+    padding-bottom: 26px;
+  }
+
+  .product-compare-head .product-compare-cell strong {
+    font-size: 1.125rem;
+  }
+
+  .product-compare-mark {
+    width: 32px;
+    height: 32px;
+  }
+
+  .product-compare-mark svg {
+    width: 16px;
+    height: 16px;
+  }
 }
 
 .product-compare-text {

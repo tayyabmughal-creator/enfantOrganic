@@ -563,6 +563,22 @@ test("reviews summary uses polynae.com's review widget sizes", () => {
   assert.doesNotMatch(styles, /font-size:\s*3\.6rem/);
 });
 
+test("how it works: three steps are centred on desktop, no SWIPE label", () => {
+  const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+  const rail = read("../components/store/product/ProductHowItWorksRail.jsx");
+  const styles = read("../app/styles/product-premium.css");
+  assert.doesNotMatch(rail, /SWIPE|product-hiw-hint/);
+  assert.doesNotMatch(styles, /product-hiw-hint/);
+  assert.match(rail, /steps\.length <= 3 \? " is-few"/);
+  assert.match(styles, /\.product-hiw-frame\.is-few \.product-hiw-rail\s*\{\s*justify-content:\s*center;/);
+});
+
+test("comparison table spans the full page width on desktop", () => {
+  const styles = readFileSync(new URL("../app/styles/product-premium.css", import.meta.url), "utf8");
+  assert.match(styles, /\.product-compare-table\s*\{[^}]*width:\s*100%/);
+  assert.doesNotMatch(styles, /\.product-compare-table\s*\{[^}]*max-width:\s*860px/);
+});
+
 test("home: Instagram section is a swipeable row of big rounded posts", () => {
   const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
   const page = read("../app/[locale]/page.jsx");

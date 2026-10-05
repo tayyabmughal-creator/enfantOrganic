@@ -17,7 +17,7 @@ export default function ProductHowItWorksRail({ steps, heading, isAr }) {
   };
 
   return (
-    <div className="product-hiw-frame">
+    <div className={`product-hiw-frame${steps.length <= 3 ? " is-few" : ""}`}>
       <div className="product-hiw-rail" ref={railRef} tabIndex={0} role="group" aria-label={heading}>
         {steps.map((step, index) => {
           const number = String(index + 1).padStart(2, "0");
@@ -44,9 +44,6 @@ export default function ProductHowItWorksRail({ steps, heading, isAr }) {
       </div>
       {steps.length > 1 ? (
         <>
-          <span className="product-hiw-hint" aria-hidden="true">
-            {isAr ? "اسحب" : "SWIPE"}
-          </span>
           <button type="button" className="product-hiw-arrow is-prev" onClick={() => scroll(-1)} aria-label={isAr ? "السابقة" : "Previous"}>
             ‹
           </button>
