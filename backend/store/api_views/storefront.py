@@ -490,9 +490,9 @@ class ProductDetailView(StorefrontContextMixin, APIView):
         # category cannot fill the row on its own.
         related = related_products_for(product, region, limit=8)
 
-        # Frequently Bought Together — fetch companion products in slug order,
-        # limited to 2 so the bundle UI stays legible.
-        fbt_slugs = list(product.fbt_slugs or [])[:2]
+        # Frequently Bought Together — companion products in the admin's order, up to
+        # three, each shown as its own row. The product itself is never listed.
+        fbt_slugs = [slug for slug in (product.fbt_slugs or []) if slug and slug != product.slug][:3]
         fbt_products = []
         if fbt_slugs:
             companions = products_available_for_region(

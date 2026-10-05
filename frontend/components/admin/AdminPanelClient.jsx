@@ -215,7 +215,7 @@ const FIELD_CONFIGS = {
     ["shopify_meta","Shopify/extra meta JSON","json"],
     ["image","Image URL","text"],["image_file","Image File","file"],
     ["hover_image","Hover image URL","text"],["hover_image_file","Hover Image File","file"],
-    ["fbt_slugs","Frequently bought together (up to 2 product slugs, e.g. complete-care-cream, enfant-sur-cream)","json"],
+    ["fbt_slugs","Frequently bought together (up to 3 OTHER product slugs, one row each, e.g. baby-shampoo, moisture-lotion)","json"],
     ["page_sections","Product page sections","page-sections"],
     ["gallery","Gallery images","gallery"],["variants","Variants","product-variants"],["option_groups_en","Options EN","option-groups"],["option_groups_ar","Options AR","option-groups"],
     ["details_en","Details EN JSON","json"],["details_ar","Details AR JSON","json"],

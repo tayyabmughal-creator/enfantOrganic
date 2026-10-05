@@ -155,6 +155,18 @@ class PageSectionsApiTests(TestCase):
         self.assertEqual(sections["comparison"]["rows"][0]["label"], "Organic")
         self.assertNotIn("how_it_works", sections)
 
+    def test_frequently_bought_together_lists_up_to_three_other_products_in_order(self):
+        for slug in ("fbt-a", "fbt-b", "fbt-c", "fbt-d"):
+            companion = Product.objects.create(slug=slug, name_en=slug, name_ar=slug, is_published=True)
+            ProductPrice.objects.create(product=companion, region=self.region, price=Decimal("2.00"))
+        # the product's own slug is ignored, the order is kept, and only three are shown
+        Product.objects.filter(pk=self.product.pk).update(
+            fbt_slugs=["sections-cream", "fbt-c", "fbt-a", "fbt-b", "fbt-d"]
+        )
+        response = self.client.get("/api/products/sections-cream/", {"locale": "en", "region": "om"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([item["slug"] for item in response.data["fbt_products"]], ["fbt-c", "fbt-a", "fbt-b"])
+
     def test_product_without_sections_returns_empty_object(self):
         Product.objects.filter(pk=self.product.pk).update(page_sections={})
         response = self.client.get("/api/products/sections-cream/", {"locale": "en", "region": "om"})

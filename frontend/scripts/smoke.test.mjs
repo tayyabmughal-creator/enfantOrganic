@@ -579,6 +579,23 @@ test("comparison table spans the full page width on desktop", () => {
   assert.doesNotMatch(styles, /\.product-compare-table\s*\{[^}]*max-width:\s*860px/);
 });
 
+test("frequently bought together: one other product per row, each with its own Add to cart and link", () => {
+  const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+  const detail = read("../components/store/product/ProductDetailClient.jsx");
+  const styles = read("../app/styles/product-premium.css");
+
+  // never the product itself, at most three
+  assert.match(detail, /item\.slug !== product\.slug\)\s*\.slice\(0, 3\)/);
+  // no bundles, badges or a single bottom button
+  assert.doesNotMatch(detail, /fbt-add-btn|addFbtBundle|fbtTier|MOST POPULAR|BEST VALUE|fbt-plus/);
+  assert.match(detail, /className="fbt-item-link"/);
+  assert.match(detail, /href=\{href\}/);
+  assert.match(detail, /className="fbt-item-add"/);
+  assert.match(detail, /addFbtItem\(companion, event\.currentTarget\)/);
+  assert.match(styles, /\.fbt-item-link::after\s*\{[^}]*position:\s*absolute;[^}]*inset:\s*0/);
+  assert.match(styles, /\.fbt-item-add\s*\{[^}]*z-index:\s*1/);
+});
+
 test("home: Instagram section is a swipeable row of big rounded posts", () => {
   const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
   const page = read("../app/[locale]/page.jsx");
