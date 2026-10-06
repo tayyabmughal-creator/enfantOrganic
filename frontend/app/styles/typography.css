@@ -9,8 +9,8 @@
 .review-showcase-title,
 .newsletter-strip h3,
 .our-story-headline {
-  font-size: clamp(1.75rem, 3.5vw, 2.375rem);
-  line-height: 1.18;
+  font-size: clamp(1.375rem, 2.6vw, 1.875rem);
+  line-height: 1.2;
   font-weight: 600;
   letter-spacing: -0.02em;
 }
@@ -21,8 +21,8 @@
 .account-title,
 .blog-detail-header h1,
 .reviews-page-head h1 {
-  font-size: clamp(2rem, 4.2vw, 2.875rem);
-  line-height: 1.12;
+  font-size: clamp(1.5rem, 3vw, 2.25rem);
+  line-height: 1.15;
   font-weight: 600;
   letter-spacing: -0.02em;
 }
@@ -124,7 +124,7 @@
 
 /* product page price (the selector is as specific as the older .product-pricing.large rule) */
 .product-pricing.product-pricing--premium strong {
-  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  font-size: clamp(1.25rem, 2.2vw, 1.5rem);
   line-height: 1.1;
   font-weight: 600;
 }
@@ -137,11 +137,11 @@
 @media (min-width: 1024px) {
   /* kept in step with the smaller title so the price leads without shouting */
   .product-pricing.product-pricing--premium strong {
-    font-size: clamp(1.75rem, 2vw, 2.125rem);
+    font-size: 1.5rem;
   }
 
   .product-pricing.product-pricing--premium .compare-price {
-    font-size: 1.125rem;
+    font-size: 0.9375rem;
   }
 }
 
@@ -210,4 +210,132 @@
 .footer-links a {
   font-size: 0.875rem;
   line-height: 1.6;
+}
+
+/* ── Smaller type across the storefront ─────────────────────────────────────
+   The client liked the smaller product title and asked for the rest of the
+   text to follow it: prices, ratings, labels, buttons, section titles and
+   card text all step down one size, most of all on phones. */
+
+/* the short description, accordion titles, sticky bar price */
+.product-short-copy {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+.detail-accordion-header {
+  font-size: 1rem;
+}
+
+.mobile-sticky-price strong {
+  font-size: 1rem;
+}
+
+/* product cards */
+.product-card-body h4,
+.category-round-title,
+.category-grid-title {
+  font-size: 0.9375rem;
+}
+
+/* footer brand title */
+.footer-column h4 {
+  font-size: 1rem;
+}
+
+/* section intro lines under the titles */
+.section-heading p,
+.product-extra-subtitle {
+  font-size: 0.9375rem;
+}
+
+@media (max-width: 640px) {
+  /* rating row: stars, "24 reviews", "Write a review" */
+  .product-reviews--premium svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .product-reviews--premium .review-count {
+    font-size: 0.8125rem;
+  }
+
+  .product-review-caption,
+  .review-write-link {
+    font-size: 0.75rem;
+  }
+
+  .product-pricing.product-pricing--premium .compare-price {
+    font-size: 0.8125rem;
+  }
+
+  .product-pricing--premium .product-discount-badge {
+    padding: 4px 10px;
+    font-size: 0.75rem;
+  }
+
+  /* the dark sale bar under the price */
+  .product-urgency-strip {
+    padding: 8px 12px;
+    font-size: 0.75rem;
+  }
+
+  .product-short-copy {
+    font-size: 0.875rem;
+  }
+
+  /* size / quantity labels, option pills, quantity, buttons */
+  .product-option-block .summary-label-row,
+  .product-option-block .summary-label-row *,
+  .product-quantity-block .summary-label-row,
+  .product-quantity-block .summary-label-row *,
+  .product-quantity-block > strong {
+    font-size: 0.875rem;
+  }
+
+  .option-pills button,
+  .quantity-control,
+  .quantity-control button,
+  .quantity-control input {
+    font-size: 0.875rem;
+  }
+
+  .product-cart-action,
+  .product-buy-action {
+    font-size: 0.9375rem;
+  }
+
+  .fbt-title {
+    font-size: 0.875rem;
+  }
+
+  .detail-accordion-header {
+    font-size: 0.9375rem;
+  }
+
+  .product-card-body h4,
+  .category-round-title {
+    font-size: 0.875rem;
+  }
+
+  .section-heading p,
+  .product-extra-subtitle {
+    font-size: 0.875rem;
+  }
+}
+
+/* Product cards: the client found the names too big and wants the name and the
+   price the same size. 13px on phones (two cards side by side), 15px above. */
+.product-card-body h4,
+.product-card .product-pricing strong {
+  font-size: 0.9375rem;
+  line-height: 1.4;
+}
+
+@media (max-width: 640px) {
+  .product-card-body h4,
+  .product-card .product-pricing strong {
+    font-size: 0.8125rem;
+    line-height: 1.35;
+  }
 }

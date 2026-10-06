@@ -318,8 +318,6 @@ test("reviews: showcase strip, full review section, all-reviews page and urgency
   assert.match(showcase, /Read more reviews/);
   assert.match(reviewsPage, /getAllReviews/);
   assert.match(admin, /"reviews-showcase"/);
-  assert.match(styles, /\[dir="rtl"\] \.review-marquee-track\s*\{[^}]*review-marquee-left-rtl/);
-  assert.match(styles, /\.review-marquee\.is-reverse \.review-marquee-track\s*\{[^}]*review-marquee-right/);
   // urgency banner sits right after the price, before the short copy
   assert.match(detail, /product-pricing large product-pricing--premium[\s\S]*?<UrgencyStrip[\s\S]*?product-short-copy/);
   assert.match(styles, /\.product-urgency-strip\s*\{[^}]*background:\s*linear-gradient\(90deg,\s*#161a12/);
@@ -496,8 +494,8 @@ test("site font is Outfit (like polynae.com), the old stacks are kept, admin kee
   }
   // loaded after every other stylesheet so it wins over the per-component sizes
   assert.ok(globals.indexOf("typography.css") > globals.indexOf("analytics.css"));
-  assert.match(typography, /\.section-heading h3[\s\S]*?clamp\(1\.75rem, 3\.5vw, 2\.375rem\)/);
-  assert.match(typography, /\.page-hero h1[\s\S]*?clamp\(2rem, 4\.2vw, 2\.875rem\)/);
+  assert.match(typography, /\.section-heading h3[\s\S]*?clamp\(1\.375rem, 2\.6vw, 1\.875rem\)/);
+  assert.match(typography, /\.page-hero h1[\s\S]*?clamp\(1\.5rem, 3vw, 2\.25rem\)/);
   // the old Instagram block that overrode the new design is gone
   assert.equal((home.match(/^\.instagram-header \{/gm) || []).length, 1);
 });
@@ -515,7 +513,7 @@ test("every storefront text size is one of Polynae's steps, and each module has 
   const typography = read("../app/styles/typography.css");
   assert.match(typography, /\.nav-trigger,\s*\.nav-link\s*\{[^}]*font-size:\s*0\.875rem[^}]*font-weight:\s*500/);
   assert.match(typography, /\.product-card-body h4[\s\S]*?font-size:\s*1rem[\s\S]*?font-weight:\s*600/);
-  assert.match(typography, /\.product-pricing\.product-pricing--premium strong\s*\{[^}]*clamp\(1\.75rem, 3vw, 2\.5rem\)/);
+  assert.match(typography, /\.product-pricing\.product-pricing--premium strong\s*\{[^}]*clamp\(1\.25rem, 2\.2vw, 1\.5rem\)/);
   assert.match(typography, /\.detail-accordion-header\s*\{[^}]*font-size:\s*1\.125rem/);
   assert.match(typography, /\.cart-drawer-header h3\s*\{[^}]*font-size:\s*1\.25rem/);
   assert.match(typography, /\.footer-column h5\s*\{[^}]*font-size:\s*0\.75rem/);
@@ -594,6 +592,34 @@ test("frequently bought together: one other product per row, each with its own A
   assert.match(detail, /addFbtItem\(companion, event\.currentTarget\)/);
   assert.match(styles, /\.fbt-item-link::after\s*\{[^}]*position:\s*absolute;[^}]*inset:\s*0/);
   assert.match(styles, /\.fbt-item-add\s*\{[^}]*z-index:\s*1/);
+});
+
+test("review marquee keeps moving after a touch and can be swiped", () => {
+  const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+  const marquee = read("../components/store/product/ReviewMarquee.jsx");
+  const styles = read("../app/styles/product-premium.css");
+  // no CSS :hover pause (it stuck on phones after a tap) and no CSS keyframe drift
+  assert.doesNotMatch(styles, /\.review-marquee:hover/);
+  assert.doesNotMatch(styles, /@keyframes review-marquee/);
+  assert.match(styles, /\.review-marquee\s*\{[^}]*overflow-x:\s*auto/);
+  // JS drift that resumes after the visitor lets go, with a seamless loop
+  assert.match(marquee, /requestAnimationFrame\(tick\)/);
+  assert.match(marquee, /RESUME_AFTER_MS/);
+  assert.match(marquee, /touchend", release/);
+  assert.match(marquee, /if \(x >= h\) return x - h;/);
+});
+
+test("storefront type steps down a size (client asked for smaller text across the site)", () => {
+  const typography = readFileSync(new URL("../app/styles/typography.css", import.meta.url), "utf8");
+  assert.match(typography, /Smaller type across the storefront/);
+  assert.match(typography, /@media \(max-width: 640px\)\s*\{\s*\/\* rating row[\s\S]*?\.product-reviews--premium \.review-count\s*\{\s*font-size:\s*0\.8125rem/);
+  assert.doesNotMatch(typography, /clamp\(1\.75rem, 3\.5vw, 2\.375rem\)/);
+});
+
+test("product cards: name and price are the same, smaller size", () => {
+  const typography = readFileSync(new URL("../app/styles/typography.css", import.meta.url), "utf8");
+  assert.match(typography, /\.product-card-body h4,\s*\.product-card \.product-pricing strong\s*\{\s*font-size:\s*0\.9375rem/);
+  assert.match(typography, /@media \(max-width: 640px\)\s*\{\s*\.product-card-body h4,\s*\.product-card \.product-pricing strong\s*\{\s*font-size:\s*0\.8125rem/);
 });
 
 test("home: Instagram section is a swipeable row of big rounded posts", () => {

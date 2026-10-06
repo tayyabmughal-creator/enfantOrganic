@@ -1016,20 +1016,35 @@
 }
 
 .review-marquee {
-  overflow: hidden;
+  /* scrolled by ReviewMarquee.jsx: drifts on its own and can be swiped */
+  overflow-x: auto;
+  overflow-y: hidden;
   max-width: 100%;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
   mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+}
+
+.review-marquee::-webkit-scrollbar {
+  display: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .review-marquee {
+    cursor: grab;
+  }
+
+  .review-marquee.is-dragging {
+    cursor: grabbing;
+    user-select: none;
+  }
 }
 
 .review-marquee-track {
   display: flex;
   width: max-content;
-  animation: review-marquee-left 38s linear infinite;
-}
-
-.review-marquee:hover .review-marquee-track {
-  animation-play-state: paused;
 }
 
 .review-marquee-list {
@@ -1080,54 +1095,6 @@
   .review-marquee--card .review-marquee-item {
     width: 304px;
     border-radius: 22px;
-  }
-}
-
-.review-marquee.is-reverse .review-marquee-track {
-  animation-name: review-marquee-right;
-}
-
-[dir="rtl"] .review-marquee-track {
-  animation-name: review-marquee-left-rtl;
-}
-
-[dir="rtl"] .review-marquee.is-reverse .review-marquee-track {
-  animation-name: review-marquee-right-rtl;
-}
-
-@keyframes review-marquee-left {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
-}
-
-@keyframes review-marquee-right {
-  from { transform: translateX(-50%); }
-  to { transform: translateX(0); }
-}
-
-@keyframes review-marquee-left-rtl {
-  from { transform: translateX(0); }
-  to { transform: translateX(50%); }
-}
-
-@keyframes review-marquee-right-rtl {
-  from { transform: translateX(50%); }
-  to { transform: translateX(0); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .review-marquee-track {
-    animation: none;
-  }
-
-  .review-marquee {
-    overflow-x: auto;
-    -webkit-mask-image: none;
-    mask-image: none;
-  }
-
-  .review-marquee-list[aria-hidden="true"] {
-    display: none;
   }
 }
 

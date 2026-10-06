@@ -1,6 +1,8 @@
 import Link from "next/link";
 
-import SiteImage from "@/components/ui/SiteImage";
+import { ReviewMarquee } from "@/components/store/product/ReviewMarquee";
+
+export { ReviewMarquee };
 
 export function StarRow({ rating = 5, size = 16 }) {
   const full = Math.max(0, Math.min(5, Math.round(Number(rating) || 0)));
@@ -21,27 +23,6 @@ export function StarRow({ rating = 5, size = 16 }) {
         </svg>
       ))}
     </span>
-  );
-}
-
-// A strip of designer-made images that drifts sideways forever. `reverse` runs it
-// the opposite way, so two strips on one page never move in lockstep.
-export function ReviewMarquee({ images, reverse = false, label, variant = "card" }) {
-  if (!images?.length) return null;
-  return (
-    <div className={`review-marquee review-marquee--${variant}${reverse ? " is-reverse" : ""}`} role="group" aria-label={label}>
-      <div className="review-marquee-track">
-        {[0, 1].map((copy) => (
-          <ul key={copy} className="review-marquee-list" aria-hidden={copy === 1 ? "true" : undefined}>
-            {images.map((image, index) => (
-              <li key={`${copy}-${index}`} className="review-marquee-item">
-                <SiteImage src={image} alt="" width={360} height={480} loading="lazy" sizes="200px" />
-              </li>
-            ))}
-          </ul>
-        ))}
-      </div>
-    </div>
   );
 }
 
